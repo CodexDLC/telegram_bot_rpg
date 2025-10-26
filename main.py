@@ -22,6 +22,7 @@ async def main()-> None:
 
     if BOT_TOKEN is not None:
         bot, dp = build_app(token=BOT_TOKEN)
+        log.info("Бот создан")
         dp.include_router(router)
         log.info("Бот стартует")
         await dp.start_polling(bot)

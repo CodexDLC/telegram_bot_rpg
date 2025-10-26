@@ -34,7 +34,6 @@ class UsersRepo(IUserRepo):
                         last_name = excluded.last_name,
                         language_code = excluded.language_code,
                         is_premium = excluded.is_premium,
-                        -- Наш триггер сам обновит updated_at
                         updated_at = (STRFTIME('%Y-%m-%d %H:%M:%f', 'now'))
         """
         user_data_dict = asdict(user)

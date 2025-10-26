@@ -5,10 +5,6 @@ from typing import Optional, List
 from app.resources.models.user_dto import UserUpsertDTO, UserDTO
 
 
-# Импортируем обе модели
-
-
-
 class IUserRepo(ABC):
 
     @abstractmethod
