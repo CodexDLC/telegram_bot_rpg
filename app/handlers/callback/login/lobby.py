@@ -38,6 +38,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext):
         characters = await char_repo.get_characters(user.id)
 
     if characters:
+        # TODO: организовать выбор персонажа через функцию которая вернет текст для сообщения и данные для КБ
         log.debug(f"Персонажи найдены: {characters} выводим меню выбора персонажа")
     else:
         log.warning("Персонажей нету запускаем цепочку инициализации персонажа")
