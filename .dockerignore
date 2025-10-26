@@ -1,0 +1,11 @@
+.git
+__pycache__/
+*.pyc
+.venv/
+.env
+tests/
+
+/data/
+# Файлы базы данных
+*.db
+*.db-journal
