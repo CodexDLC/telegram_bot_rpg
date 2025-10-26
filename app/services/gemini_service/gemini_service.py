@@ -11,7 +11,14 @@ from app.services.gemini_service.gemini_service_build import BUILDERS_GEMINI as 
 
 log = logging.getLogger(__name__)
 
-GEMINI_MODEL_DEFAULT = "gemini-2.5-flash-lite" # или "gemini-2.5-pro"
+
+GEMINI_MODEL_ALIASES = {
+    "fast": "gemini-2.5-flash-lite",
+    "pro": "gemini-2.5-pro",
+    # можно добавить еще, если понадобится
+}
+
+DEFAULT_MODEL_NAME = GEMINI_MODEL_ALIASES["fast"]
 
 _client = genai.Client(
     api_key=GEMINI_TOKEN,
@@ -32,7 +39,9 @@ async def gemini_answer(mode: ChatMode, user_text: str, **kw: Any) -> str:
 
     temperature = kw.get("temperature", preset["temperature"])
     max_tokens  = kw.get("max_tokens",  preset["max_tokens"])
-    model       = kw.get("model", GEMINI_MODEL_DEFAULT)
+    model_alias = preset.get("model_alias", "fast")
+    model_name  = GEMINI_MODEL_ALIASES.get(model_alias, DEFAULT_MODEL_NAME)
+    model       = kw.get("model", model_name)
 
     try:
         resp = await _client.aio.models.generate_content(
