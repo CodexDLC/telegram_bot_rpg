@@ -10,3 +10,13 @@ class CharacterCreation(StatesGroup):
     choosing_name = State()
     confirm = State()
 
+class StartTutorial(StatesGroup):
+    """
+        Состояния для "квеста" старта туториала.
+    """
+    start = State()
+    in_progress = State()
+    confirmation = State()
+
+
+

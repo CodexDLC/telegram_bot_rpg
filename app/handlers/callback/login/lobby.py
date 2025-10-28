@@ -4,10 +4,12 @@ from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from app.resources.fsm_states.states import CharacterCreation
-from app.resources.keyboards.inline_kb.loggin_und_new_character import gender_kb
+from app.resources.fsm_states.states import CharacterCreation, StartTutorial
+from app.resources.keyboards.inline_kb.loggin_und_new_character import gender_kb, tutorial_kb
 from app.resources.texts.buttons_callback import START_ADVENTURE_CALLBACK
-from app.resources.texts.lobby_text import GENDER_CHOICE_MESSAGE_HTML
+from app.resources.texts.game_messages.lobby_messages import LobbyMessages
+from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
+
 from database.db import get_db_connection
 from database.repositories import get_character_repo
 
@@ -39,9 +41,11 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext):
 
     if characters:
         # TODO: организовать выбор персонажа через функцию которая вернет текст для сообщения и данные для КБ
+        # заглушка что бы не пересоздавать персонажа потом заменить на другой стартовый текст
+        # брать например и дискрипшена локации где находиться или придумать что то другое
         log.debug(f"Персонажи найдены: {characters} выводим меню выбора персонажа")
     else:
         log.warning("Персонажей нету запускаем цепочку инициализации персонажа")
         await state.set_state(CharacterCreation.choosing_gender)
         if isinstance(call.message, Message):
-            await call.message.edit_text(GENDER_CHOICE_MESSAGE_HTML, parse_mode='HTML', reply_markup=gender_kb())
+            await call.message.edit_text(text=LobbyMessages.NewCharacter.GENDER_CHOICE, parse_mode='HTML', reply_markup=gender_kb())

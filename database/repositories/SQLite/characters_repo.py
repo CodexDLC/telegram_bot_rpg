@@ -1,9 +1,13 @@
+import logging
 from dataclasses import asdict
 
 import aiosqlite
 
-from app.resources.models.character_dto import CharacterReadDTO, CharacterCreateDTO
-from database.db_contract.i_characters_repo import ICharactersRepo
+from app.resources.models.character_dto import CharacterReadDTO, CharacterCreateDTO, CharacterStatsReadDTO, \
+    CharacterStatsUpdateDTO
+from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStats
+
+log = logging.getLogger(__name__)
 
 
 class CharacterRepo(ICharactersRepo):
@@ -11,7 +15,7 @@ class CharacterRepo(ICharactersRepo):
         self.db = db
 
 
-    async def create_character(self, character_data: CharacterCreateDTO) -> None:
+    async def create_character(self, character_data: CharacterCreateDTO) -> int:
         """
         Создает персонажа.
         """
@@ -22,8 +26,8 @@ class CharacterRepo(ICharactersRepo):
                 """
 
         character_data_dict = asdict(character_data)
-        await self.db.execute(sql, character_data_dict)
-
+        cursor = await self.db.execute(sql, character_data_dict)
+        return cursor.lastrowid
 
     async def get_character(self, character_id: int) -> CharacterReadDTO | None:
         """
@@ -65,3 +69,44 @@ class CharacterRepo(ICharactersRepo):
 
 
 
+class CharacterStats(ICharacterStats):
+    def __init__(self, db: aiosqlite.Connection):
+        self.db = db
+
+
+    async def get_stats(self, character_id: int) -> CharacterStatsReadDTO | None:
+        """
+        Возвращает персонажа.
+        """
+        sql = """
+                SELECT * FROM character_stats WHERE character_id = ?                        
+        """
+
+        async with self.db.execute(sql, (character_id,)) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                log.debug(f"Данные получены {row}")
+                return CharacterStatsReadDTO(**row)
+            return None
+
+    async def update_stats(self,character_id: int, stats_data: CharacterStatsUpdateDTO):
+        """
+        Обновляет персонажа.
+        """
+        sql = """
+                UPDATE character_stats
+                SET strength = :strength
+                , dexterity = :dexterity
+                , endurance = :endurance
+                , charisma = :charisma
+                , intelligence = :intelligence
+                , perception = :perception
+                , luck = :luck
+                WHERE character_id = :character_id
+        """
+
+        stats_data_dict = asdict(stats_data)
+        stats_data_dict['character_id'] = character_id
+
+        await self.db.execute(sql, stats_data_dict)
+        log.debug(f"Stats персонажа были обновлены; {stats_data_dict}")

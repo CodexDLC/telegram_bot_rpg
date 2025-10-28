@@ -1,16 +1,21 @@
 # app/handlers/fsn_callback/char_creation.py
-
+import asyncio
 import logging
 from aiogram import Router, F, Bot
 
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from app.resources.fsm_states.states import CharacterCreation
-from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb
+from app.resources.fsm_states.states import CharacterCreation, StartTutorial
+from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb, tutorial_kb
 from app.resources.models.character_dto import CharacterCreateDTO
 from app.resources.texts.buttons_callback import GENDER_MAP
-from app.resources.texts.lobby_text import NAME_INPUT_MESSAGE_HTML, FINAL_CONFIRMATION_MESSAGE_HTML
+
+
+from app.resources.texts.game_messages.lobby_messages import LobbyMessages
+from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
+
+
 from app.services.helpers_module.game_validator import validate_character_name
 from database.db import get_db_connection
 from database.repositories import get_character_repo
@@ -19,25 +24,22 @@ log = logging.getLogger(__name__)
 
 router = Router(name="character_creation_fsm")
 
+
 @router.callback_query(CharacterCreation.choosing_gender, F.data.startswith("gender:"))
 async def choose_gender(call: CallbackQuery, state: FSMContext):
     """
     Обрабатывает выбор пола.
-
     """
     await call.answer()
-    # Получаем пол из callback-данных и сохраняем его в состоянии
     gender_value = call.data.split(":")[-1]
     gender_text_ru = GENDER_MAP.get(gender_value, "Неизвестный")
 
-    # Сохраняем пол в состоянии FSM и переходим к выбору имени
     await state.update_data(gender_db=gender_value, gender_display=gender_text_ru)
     await state.set_state(CharacterCreation.choosing_name)
 
-    # редактируем сообщение с выбором пола и скрываем клавиатуру
     if isinstance(call.message, Message):
         last_message_id = await call.message.edit_text(
-            NAME_INPUT_MESSAGE_HTML,
+            LobbyMessages.NewCharacter.NAME_INPUT,
             parse_mode='HTML',
             reply_markup=None
         )
@@ -50,14 +52,13 @@ async def choose_gender(call: CallbackQuery, state: FSMContext):
 async def choosing_name(m: Message, state: FSMContext, bot: Bot):
     """
     Обрабатывает ввод имени.
-
     """
     name = m.text.strip()
     test, error_msg = validate_character_name(name)
 
     data = await state.get_data()
     chat_id = m.chat.id
-    gender = data.get("gender_db")
+
     previous_bot_message_id = data.get("last_message_id")
 
     try:
@@ -71,20 +72,20 @@ async def choosing_name(m: Message, state: FSMContext, bot: Bot):
         await bot.edit_message_text(
             chat_id=chat_id,
             message_id=previous_bot_message_id,
-            text=FINAL_CONFIRMATION_MESSAGE_HTML.format(name=name, gender=data['gender_display']),
+            text=LobbyMessages.NewCharacter.FINAL_CONFIRMATION.format(name=name, gender=data['gender_display']),
             parse_mode='HTML',
-            reply_markup=confirm_kb(gender=gender)
+            reply_markup=confirm_kb()
+
         )
     else:
         await bot.edit_message_text(
             chat_id=chat_id,
             message_id=previous_bot_message_id,
             text=f"<b>⚠️ Ошибка:</b> {error_msg}\n\n"
-                 f"{NAME_INPUT_MESSAGE_HTML}",
+                 f"{LobbyMessages.NewCharacter.NAME_INPUT}",
             parse_mode='HTML',
             reply_markup=None
         )
-
 
 
 @router.callback_query(CharacterCreation.confirm, F.data == "confirm")
@@ -108,13 +109,36 @@ async def confirm_creation(call: CallbackQuery, state: FSMContext):
         )
         log.debug(f"данный для сохранения {data_to_save}")
 
+
         async with get_db_connection() as db:
             char_repo = get_character_repo(db)
-            await char_repo.create_character(data_to_save)
+            new_char_id = await char_repo.create_character(data_to_save)
+            log.info(f"Айди персонажа {new_char_id}")
 
         await state.clear()
-        if isinstance(call.message, Message):
-            # TODO: заглушка завтра реализовать появление в игре игрока
-            return await call.message.edit_text("Персонаж успешно создан!")
-        return None
 
+        await state.update_data(character_id=new_char_id)
+
+        await state.set_state(StartTutorial.start)
+
+        message_to_edit = None
+        for text_line, pause_duration in TutorialMessages.WAKING_UP_SEQUENCE:
+            if message_to_edit is None:
+                # В первую итерацию создаем сообщение
+                message_to_edit = await call.message.edit_text(text_line, parse_mode='HTML')
+            else:
+                # В последующие - редактируем
+                await call.message.edit_text(text_line, parse_mode='HTML')
+
+            await asyncio.sleep(pause_duration)
+
+        # (Конец цикла)
+
+        # А после цикла - твой код, который выводит TUTORIAL_PROMPT_TEXT
+        text = TutorialMessages.TUTORIAL_START_BUTTON
+        await call.message.edit_text(
+            TutorialMessages.TUTORIAL_PROMPT_TEXT,
+            parse_mode='HTML',
+            reply_markup=tutorial_kb(text)
+        )
+        return None

@@ -1,6 +1,5 @@
 
 
-
 FORBIDDEN_WORDS = {
     "admin",
     "gm",

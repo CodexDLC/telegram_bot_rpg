@@ -2,12 +2,15 @@
 
 from abc import abstractmethod, ABC
 
-from app.resources.models.character_dto import CharacterReadDTO, CharacterCreateDTO
+from app.resources.models.character_dto import (
+    CharacterReadDTO, CharacterCreateDTO,
+    CharacterStatsReadDTO, CharacterStatsUpdateDTO
+)
 
 
 class ICharactersRepo(ABC):
     @abstractmethod
-    async def create_character(self, character_data: CharacterCreateDTO) -> None:
+    async def create_character(self, character_data: CharacterCreateDTO) -> int:
         """
         Создает персонажа.
         """
@@ -32,5 +35,21 @@ class ICharactersRepo(ABC):
     async def delete_characters(self,character_id: int):
         """
         Удаляет персонажа.
+        """
+        pass
+
+class ICharacterStats(ABC):
+
+    @abstractmethod
+    async def get_stats(self, character_id: int) -> CharacterStatsReadDTO | None:
+        """
+        Возвращает персонажа.
+        """
+        pass
+
+    @abstractmethod
+    async def update_stats(self,character_id: int, stats_data: CharacterStatsUpdateDTO):
+        """
+        Обновляет персонажа.
         """
         pass

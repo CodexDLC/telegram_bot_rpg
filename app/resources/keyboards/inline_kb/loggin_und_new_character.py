@@ -33,14 +33,29 @@ def gender_kb() -> InlineKeyboardMarkup:
 
     return kb.as_markup()
 
-def confirm_kb(gender: str) -> InlineKeyboardMarkup:
+def confirm_kb() -> InlineKeyboardMarkup:
     """
     Возвращает Inline-клавиатуру с кнопкой подтверждения.
     """
     kb = InlineKeyboardBuilder()
-    if gender == "male":
-        kb.button(text="Я готов", callback_data="confirm")
-    else:
-        kb.button(text="Я готова", callback_data="confirm")
+
+    kb.button(text="Принять эту форму", callback_data="confirm")
 
     return kb.as_markup()
+
+
+def tutorial_kb(data: dict[str, str]) -> InlineKeyboardMarkup:
+    """
+    Возвращает Inline-клавиатуру с кнопкой для туториала.
+    """
+
+    kb = InlineKeyboardBuilder()
+    if data:
+        for key, value in data.items():
+            kb.button(text=value, callback_data=key)
+            kb.adjust(1)
+
+    return kb.as_markup()
+
+
+

@@ -45,6 +45,13 @@ async def cmd_start(m: Message)-> None:
         START_GREETING.format(first_name=user.first_name),
         reply_markup=get_start_adventure_kb())
 
+    # 5. Удаляем команду /start, отправленную пользователем
+    try:
+        await m.delete()
+    except Exception as e:
+        # (На всякий случай, если у бота нет прав или сообщение старое)
+        log.warning(f"Не удалось удалить сообщение /start: {e}")
+
 
 @router.message(Command("setting"))
 async def cmd_setting(m: Message)->None:

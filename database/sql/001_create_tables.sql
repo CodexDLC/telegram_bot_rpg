@@ -19,3 +19,20 @@ CREATE TABLE IF NOT EXISTS characters(
 
     FOREIGN KEY (user_id) REFERENCES users (telegram_id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS character_stats(
+    character_id INTEGER PRIMARY KEY,
+    strength INTEGER DEFAULT 4,
+    dexterity INTEGER DEFAULT 4,
+    endurance INTEGER DEFAULT 4,
+    charisma INTEGER DEFAULT 4,
+    intelligence INTEGER DEFAULT 4,
+    perception INTEGER DEFAULT 4,
+    luck INTEGER DEFAULT 4,
+    created_at  TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'now')),
+    updated_at  TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'now')),
+
+    FOREIGN KEY (character_id) REFERENCES characters (character_id) ON DELETE CASCADE
+);
+
+
