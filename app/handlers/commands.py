@@ -3,6 +3,7 @@ import logging
 
 from aiogram import Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from app.resources.keyboards.inline_kb.loggin_und_new_character import get_start_adventure_kb
@@ -17,11 +18,25 @@ router = Router(name="commands_router")
 
 
 @router.message(Command("start"))
-async def cmd_start(m: Message)-> None:
+async def cmd_start(m: Message, state: FSMContext)-> None:
     log.info("Команда /start")
     # 1. Мы не можем продолжать, если нет message.from_user
     if not m.from_user:
-        return
+        return None
+
+    current_state = await state.get_state()
+
+    try:
+        await m.delete()
+    except Exception as e:
+        # (На всякий случай, если у бота нет прав или сообщение старое)
+        log.warning(f"Не удалось удалить сообщение /start: {e}")
+
+    if current_state is not None:
+        #TODO: написать реализацию очистки FSM state если игрок не стадии создания персонажа или Tutorial.
+        return None
+
+    await state.clear()
 
     user = m.from_user
 
@@ -44,13 +59,8 @@ async def cmd_start(m: Message)-> None:
     await m.answer(
         START_GREETING.format(first_name=user.first_name),
         reply_markup=get_start_adventure_kb())
+    return None
 
-    # 5. Удаляем команду /start, отправленную пользователем
-    try:
-        await m.delete()
-    except Exception as e:
-        # (На всякий случай, если у бота нет прав или сообщение старое)
-        log.warning(f"Не удалось удалить сообщение /start: {e}")
 
 
 @router.message(Command("setting"))

@@ -69,7 +69,7 @@ class CharacterRepo(ICharactersRepo):
 
 
 
-class CharacterStats(ICharacterStats):
+class CharacterStatsRepo(ICharacterStats):
     def __init__(self, db: aiosqlite.Connection):
         self.db = db
 
@@ -110,3 +110,60 @@ class CharacterStats(ICharacterStats):
 
         await self.db.execute(sql, stats_data_dict)
         log.debug(f"Stats персонажа были обновлены; {stats_data_dict}")
+
+    async def add_stats(self, character_id: int, stats_to_add: Dict[str, int]):
+        """
+        Атомарно добавляет значения к существующим статам, используя
+        динамический SQL-запрос.
+        """
+
+        # 1. Проверяем, есть ли что добавлять
+        if not stats_to_add:
+            log.warning("Вызван add_stats с пустым словарем бонусов.")
+            return
+
+        # 2. Белый список статов (для безопасности)
+        ALLOWED_STATS = {
+            "strength", "dexterity", "endurance",
+            "charisma", "intelligence", "perception", "luck"
+        }
+
+        # 3. Готовим части SQL-запроса
+        set_clauses = []  # Список "strength = strength + ?"
+        params = []  # Список значений [2, 1, ...]
+
+        for stat, value in stats_to_add.items():
+            if stat in ALLOWED_STATS:
+                set_clauses.append(f"{stat} = {stat} + ?")
+                params.append(value)
+            else:
+                log.warning(f"Проигнорирован неизвестный стат в add_stats: {stat}")
+
+        # 4. Если (по какой-то причине) не осталось валидных статов
+        if not set_clauses:
+            return
+
+        # 5. Собираем запрос
+        # ("strength = strength + ?, dexterity = dexterity + ?")
+        query_set_part = ", ".join(set_clauses)
+
+        # Добавляем ID персонажа в конец списка параметров
+        params.append(character_id)
+
+        sql = f"""
+            UPDATE character_stats
+            SET {query_set_part}
+            WHERE character_id = ?
+        """
+
+        # 6. Выполняем
+        log.debug(f"Выполняем атомарное добавление статов для {character_id}: {stats_to_add}")
+        async with self.db.execute(sql, tuple(params)) as cursor:
+            row = await cursor.fetchone()
+
+            if row:
+                # Мы вернули обновленные данные и сразу пакуем их в DTO
+                return CharacterStatsReadDTO(**row)
+
+            # (Если по какой-то причине update не вернул строку)
+            return None

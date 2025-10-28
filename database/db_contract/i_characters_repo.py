@@ -1,6 +1,7 @@
 # database/db_contract/i_characters_repo.py
 
 from abc import abstractmethod, ABC
+from typing import Dict, Optional
 
 from app.resources.models.character_dto import (
     CharacterReadDTO, CharacterCreateDTO,
@@ -38,7 +39,7 @@ class ICharactersRepo(ABC):
         """
         pass
 
-class ICharacterStats(ABC):
+class CharacterStatsRepo(ABC):
 
     @abstractmethod
     async def get_stats(self, character_id: int) -> CharacterStatsReadDTO | None:
@@ -51,5 +52,13 @@ class ICharacterStats(ABC):
     async def update_stats(self,character_id: int, stats_data: CharacterStatsUpdateDTO):
         """
         Обновляет персонажа.
+        """
+        pass
+
+    @abstractmethod
+    async def add_stats(self, character_id: int, stats_to_add: Dict[str, int]) -> Optional[CharacterStatsReadDTO]:
+        """
+        Атомарно добавляет значения к существующим статам И
+        ВОЗВРАЩАЕТ обновленные данные.
         """
         pass

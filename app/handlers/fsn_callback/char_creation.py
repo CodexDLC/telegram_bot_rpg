@@ -142,3 +142,4 @@ async def confirm_creation(call: CallbackQuery, state: FSMContext):
             reply_markup=tutorial_kb(text)
         )
         return None
+
