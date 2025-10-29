@@ -27,8 +27,8 @@ async def start_tutorial_handler(call: CallbackQuery, state: FSMContext):
     """
     await call.answer()
 
-    data = await state.get_data()
-    char_id = data.get("character_id")
+    state_data = await state.get_data()
+    char_id = state_data.get("character_id")
     sim_text_count = 0
     event_pool = []
 
@@ -40,12 +40,18 @@ async def start_tutorial_handler(call: CallbackQuery, state: FSMContext):
 
     text, kb, sim_text_count, event_pool = prepare_tutorial_step(event_pool,sim_text_count)
 
-    await state.update_data(event_pool=event_pool, sim_text_count=sim_text_count, bonus_dict= {})
+    log.info(f" Мы видим текс который вернулся {text} ")
+
+    await state.update_data(
+        char_id=char_id,
+        event_pool=event_pool,
+        sim_text_count=sim_text_count,
+        bonus_dict= {})
 
     await state.set_state(StartTutorial.in_progress)
 
     if isinstance(call.message, Message):
-        await call.message.edit_text(text, reply_markup=kb)
+        await call.message.edit_text(text, parse_mode='HTML', reply_markup=kb)
 
     return None
 
@@ -61,6 +67,7 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext):
     event_pool = state_data.get("event_pool")
     sim_text_count = state_data.get("sim_text_count")
     bonus_dict = state_data.get("bonus_dict")
+    char_id = state_data.get("character_id")
 
     if not choice:
         return await call.message.edit_text(
@@ -71,6 +78,7 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext):
     text, kb, sim_text_count, event_pool = prepare_tutorial_step(event_pool, sim_text_count)
 
     await state.update_data(
+        char_id=char_id,
         event_pool=event_pool,
         sim_text_count=sim_text_count,
         bonus_dict=bonus_dict
@@ -115,7 +123,7 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext):
 
 
         if isinstance(call.message, Message):
-            await call.message.edit_text(text, reply_markup=kb)
+            await call.message.edit_text(text, parse_mode='HTML', reply_markup=kb)
 
     return None
 
@@ -130,9 +138,9 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext):
     call_data = call.data
 
 
-    data = await state.get_data()
-    char_id = data.get("character_id")
-    bonus_dict = data.get("bonus_dict")
+    state_data = await state.get_data()
+    char_id = state_data.get("character_id")
+    bonus_dict = state_data.get("bonus_dict")
 
     if call_data == "tut:restart":
         await state.clear()

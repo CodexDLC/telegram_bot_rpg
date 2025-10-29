@@ -23,7 +23,7 @@ def get_character_repo(db: aiosqlite.Connection) -> CharacterRepo:
     # Сейчас мы жестко возвращаем SQLite-реализацию
     return CharacterRepo(db)
 
-def get_character_stats_repo(db: aiosqlite.Connection) -> CharacterStats:
+def get_character_stats_repo(db: aiosqlite.Connection) -> CharacterStatsRepo:
     """
     Эта функция - ЕДИНСТВЕННОЕ
     место, которое знает,

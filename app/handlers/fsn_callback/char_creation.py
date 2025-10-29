@@ -136,6 +136,7 @@ async def confirm_creation(call: CallbackQuery, state: FSMContext):
 
         # А после цикла - твой код, который выводит TUTORIAL_PROMPT_TEXT
         text = TutorialMessages.TUTORIAL_START_BUTTON
+
         await call.message.edit_text(
             TutorialMessages.TUTORIAL_PROMPT_TEXT,
             parse_mode='HTML',

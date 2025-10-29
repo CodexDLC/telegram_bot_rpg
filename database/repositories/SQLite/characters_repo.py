@@ -1,11 +1,12 @@
 import logging
 from dataclasses import asdict
+from typing import Dict
 
 import aiosqlite
 
 from app.resources.models.character_dto import CharacterReadDTO, CharacterCreateDTO, CharacterStatsReadDTO, \
     CharacterStatsUpdateDTO
-from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStats
+from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +70,8 @@ class CharacterRepo(ICharactersRepo):
 
 
 
-class CharacterStatsRepo(ICharacterStats):
+
+class CharacterStatsRepo(ICharacterStatsRepo):
     def __init__(self, db: aiosqlite.Connection):
         self.db = db
 
@@ -96,7 +98,7 @@ class CharacterStatsRepo(ICharacterStats):
         sql = """
                 UPDATE character_stats
                 SET strength = :strength
-                , dexterity = :dexterity
+                , agility = :agility
                 , endurance = :endurance
                 , charisma = :charisma
                 , intelligence = :intelligence
@@ -120,11 +122,11 @@ class CharacterStatsRepo(ICharacterStats):
         # 1. Проверяем, есть ли что добавлять
         if not stats_to_add:
             log.warning("Вызван add_stats с пустым словарем бонусов.")
-            return
+            return None
 
         # 2. Белый список статов (для безопасности)
         ALLOWED_STATS = {
-            "strength", "dexterity", "endurance",
+            "strength", "agility", "endurance",
             "charisma", "intelligence", "perception", "luck"
         }
 
@@ -141,10 +143,10 @@ class CharacterStatsRepo(ICharacterStats):
 
         # 4. Если (по какой-то причине) не осталось валидных статов
         if not set_clauses:
-            return
+            return None
 
         # 5. Собираем запрос
-        # ("strength = strength + ?, dexterity = dexterity + ?")
+        # ("strength = strength + ?, agility = agility + ?")
         query_set_part = ", ".join(set_clauses)
 
         # Добавляем ID персонажа в конец списка параметров
@@ -154,6 +156,7 @@ class CharacterStatsRepo(ICharacterStats):
             UPDATE character_stats
             SET {query_set_part}
             WHERE character_id = ?
+            RETURNING *
         """
 
         # 6. Выполняем
@@ -165,5 +168,4 @@ class CharacterStatsRepo(ICharacterStats):
                 # Мы вернули обновленные данные и сразу пакуем их в DTO
                 return CharacterStatsReadDTO(**row)
 
-            # (Если по какой-то причине update не вернул строку)
             return None

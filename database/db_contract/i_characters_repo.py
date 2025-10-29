@@ -39,7 +39,7 @@ class ICharactersRepo(ABC):
         """
         pass
 
-class CharacterStatsRepo(ABC):
+class ICharacterStatsRepo(ABC):
 
     @abstractmethod
     async def get_stats(self, character_id: int) -> CharacterStatsReadDTO | None:

@@ -16,7 +16,7 @@ GARBAGE_TEXT_STATES = [
 
 
 
-@router.message(GARBAGE_TEXT_STATES, F.text)
+@router.message(F.text, *GARBAGE_TEXT_STATES)
 async def delete_garbage_text(m: Message):
     """
     Этот хэндлер ловит ЛЮБОЙ "мусорный" текст во всех состояниях,

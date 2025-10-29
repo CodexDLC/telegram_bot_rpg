@@ -32,7 +32,7 @@ class CharacterStatsUpdateDTO:
     DTO для обновления данных.
     """
     strength: int
-    dexterity: int
+    agility: int
     endurance: int
     charisma: int
     intelligence: int
@@ -48,7 +48,7 @@ class CharacterStatsReadDTO:
     """
     character_id: int
     strength: int
-    dexterity: int
+    agility: int
     endurance: int
     charisma: int
     intelligence: int

@@ -80,17 +80,17 @@ class TutorialEventsData:
     TUTORIAL_LOGIC_POOL: Dict[str, StatPayload] = {
         # Event 1
         "tut_ev1:might": {"strength": 1, "endurance": 1},
-        "tut_ev1:finesse": {"dexterity": 1, "perception": 1},
+        "tut_ev1:finesse": {"agility": 1, "perception": 1},
         "tut_ev1:wits": {"intelligence": 1, "perception": 1},
 
         # Event 2
-        "tut_ev2:might": {"strength": 1, "dexterity": 1},
+        "tut_ev2:might": {"strength": 1, "agility": 1},
         "tut_ev2:social": {"charisma": 1, "intelligence": 1},
-        "tut_ev2:finesse": {"dexterity": 1, "perception": 1},
+        "tut_ev2:finesse": {"agility": 1, "perception": 1},
 
         # Event 3
         "tut_ev3:might": {"strength": 1, "endurance": 1},
-        "tut_ev3:finesse": {"dexterity": 1, "intelligence": 1},
+        "tut_ev3:finesse": {"agility": 1, "intelligence": 1},
         "tut_ev3:wits": {"perception": 1, "endurance": 1},
 
         # Event 4
@@ -148,7 +148,8 @@ class TutorialMessages:
 <b>Выносливость:</b> {endurance}
 <b>Харизма:</b> {charisma}
 <b>Интеллект:</b> {intelligence}
-<b>Ловкость:</b> {dexterity}
+<b>Ловкость:</b> {agility}
+<b>Удача:</b> {luck}
 """
 
     TUTORIAL_CONFIRM_PROMPT: str = """<b>[СИСТЕМА]:</b> Калибровка завершена. Твой 'Якорь' стабилен.
