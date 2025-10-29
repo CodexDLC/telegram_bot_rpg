@@ -21,9 +21,6 @@ router = Router(name="commands_router")
 async def cmd_start(m: Message, state: FSMContext)-> None:
     log.info("Команда /start")
 
-
-
-
     # 1. Мы не можем продолжать, если нет message.from_user
     if not m.from_user:
         return None

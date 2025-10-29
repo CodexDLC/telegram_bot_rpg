@@ -167,13 +167,13 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext):
         if final_stats_obj:
             # Превращаем DTO в словарь для .format()
             final_stats_for_text = {
-                "strength": final_stats_obj.strength,
-                "perception": final_stats_obj.perception,
-                "endurance": final_stats_obj.endurance,
-                "charisma": final_stats_obj.charisma,
-                "intelligence": final_stats_obj.intelligence,
-                "dexterity": final_stats_obj.dexterity,
-                "luck"     : final_stats_obj.luck,
+                "strength"      : final_stats_obj.strength,
+                "perception"    : final_stats_obj.perception,
+                "endurance"     : final_stats_obj.endurance,
+                "charisma"      : final_stats_obj.charisma,
+                "intelligence"  : final_stats_obj.intelligence,
+                "agility"       : final_stats_obj.agility,
+                "luck"          : final_stats_obj.luck,
             }
         else:
             await state.clear()

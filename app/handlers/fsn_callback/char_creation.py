@@ -6,11 +6,10 @@ from aiogram import Router, F, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from app.resources.fsm_states.states import CharacterCreation, StartTutorial
-from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb, tutorial_kb
+from app.resources.fsm_states.states import CharacterCreation, StartTutorial, CharacterLobby
+from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb, tutorial_kb, gender_kb
 from app.resources.models.character_dto import CharacterCreateDTO
-from app.resources.texts.buttons_callback import GENDER_MAP
-
+from app.resources.texts.buttons_callback import GENDER_MAP, LOBBY_CREATE
 
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
@@ -26,7 +25,7 @@ router = Router(name="character_creation_fsm")
 
 
 @router.callback_query(CharacterCreation.choosing_gender, F.data.startswith("gender:"))
-async def choose_gender(call: CallbackQuery, state: FSMContext):
+async def choose_gender_handler(call: CallbackQuery, state: FSMContext):
     """
     Обрабатывает выбор пола.
     """
@@ -49,7 +48,7 @@ async def choose_gender(call: CallbackQuery, state: FSMContext):
 
 
 @router.message(CharacterCreation.choosing_name)
-async def choosing_name(m: Message, state: FSMContext, bot: Bot):
+async def choosing_name_handler(m: Message, state: FSMContext, bot: Bot):
     """
     Обрабатывает ввод имени.
     """
@@ -89,7 +88,7 @@ async def choosing_name(m: Message, state: FSMContext, bot: Bot):
 
 
 @router.callback_query(CharacterCreation.confirm, F.data == "confirm")
-async def confirm_creation(call: CallbackQuery, state: FSMContext):
+async def confirm_creation_handler(call: CallbackQuery, state: FSMContext):
     """
     Обрабатывает подтверждение создания персонажа.
 
@@ -144,3 +143,14 @@ async def confirm_creation(call: CallbackQuery, state: FSMContext):
         )
         return None
 
+
+@router.callback_query(CharacterLobby.selection, F.data == LOBBY_CREATE)
+async def start_creation_handler(call: CallbackQuery, state: FSMContext):
+    """
+        Инициирует создание персонажа
+
+    """
+    await state.set_state(CharacterCreation.choosing_gender)
+    if isinstance(call.message, Message):
+        await call.message.edit_text(text=LobbyMessages.NewCharacter.GENDER_CHOICE, parse_mode='HTML',
+                                     reply_markup=gender_kb())

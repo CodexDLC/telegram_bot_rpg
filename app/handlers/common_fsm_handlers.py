@@ -2,16 +2,17 @@ import logging
 from aiogram import Router, F
 from aiogram.types import Message
 
-from app.resources.fsm_states.states import StartTutorial, CharacterCreation
+from app.resources.fsm_states.states import StartTutorial, CharacterCreation, CharacterLobby
 
 log = logging.getLogger(__name__)
 
 router = Router(name="common_fsm_router")
 
 GARBAGE_TEXT_STATES = [
-    StartTutorial,  # Весь класс (start, in_progress, confirmation)
-    CharacterCreation.choosing_gender,  # Конкретное состояние
-    CharacterCreation.confirm         # Конкретное состояние
+    StartTutorial,
+    CharacterLobby,
+    CharacterCreation.choosing_gender,
+    CharacterCreation.confirm
 ]
 
 

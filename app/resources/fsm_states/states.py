@@ -19,4 +19,6 @@ class StartTutorial(StatesGroup):
     confirmation = State()
 
 
-
+class CharacterLobby(StatesGroup):
+    selection = State()
+    start_logging = State()
