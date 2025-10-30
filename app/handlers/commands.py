@@ -6,6 +6,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+
 from app.resources.keyboards.inline_kb.loggin_und_new_character import get_start_adventure_kb
 from app.resources.models.user_dto import UserUpsertDTO
 from app.resources.texts.ui_messages import START_GREETING
@@ -20,6 +21,8 @@ router = Router(name="commands_router")
 @router.message(Command("start"))
 async def cmd_start(m: Message, state: FSMContext)-> None:
     log.info("Команда /start")
+
+
 
     # 1. Мы не можем продолжать, если нет message.from_user
     if not m.from_user:
@@ -45,9 +48,16 @@ async def cmd_start(m: Message, state: FSMContext)-> None:
         await user_repo.upsert_user(user_dto)
 
     # 4. Отправляем сообщение пользователю
-    await m.answer(
+    mes = await m.answer(
         START_GREETING.format(first_name=user.first_name),
         reply_markup=get_start_adventure_kb())
+
+    message_menu = {
+        "message_id": mes.message_id,
+        "chat_id": mes.chat.id
+    }
+
+    await state.update_data(message_menu=message_menu)
 
     try:
         await m.delete()

@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, Message
 from app.resources.fsm_states.states import CharacterCreation, StartTutorial, CharacterLobby
 from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb, tutorial_kb, gender_kb
 from app.resources.models.character_dto import CharacterCreateDTO
-from app.resources.texts.buttons_callback import GENDER_MAP, LOBBY_CREATE
+from app.resources.texts.buttons_callback import Buttons
 
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
@@ -31,7 +31,7 @@ async def choose_gender_handler(call: CallbackQuery, state: FSMContext):
     """
     await call.answer()
     gender_value = call.data.split(":")[-1]
-    gender_text_ru = GENDER_MAP.get(gender_value, "Неизвестный")
+    gender_text_ru = Buttons.GENDER.get(f"gender:{gender_value}", "Не указан")
 
     await state.update_data(gender_db=gender_value, gender_display=gender_text_ru)
     await state.set_state(CharacterCreation.choosing_name)
@@ -91,7 +91,6 @@ async def choosing_name_handler(m: Message, state: FSMContext, bot: Bot):
 async def confirm_creation_handler(call: CallbackQuery, state: FSMContext):
     """
     Обрабатывает подтверждение создания персонажа.
-
     """
     await call.answer()
     data = await state.get_data()
@@ -131,10 +130,8 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext):
 
             await asyncio.sleep(pause_duration)
 
-        # (Конец цикла)
-
         # А после цикла - твой код, который выводит TUTORIAL_PROMPT_TEXT
-        text = TutorialMessages.TUTORIAL_START_BUTTON
+        text = Buttons.CONFIRM
 
         await call.message.edit_text(
             TutorialMessages.TUTORIAL_PROMPT_TEXT,
@@ -144,7 +141,7 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext):
         return None
 
 
-@router.callback_query(CharacterLobby.selection, F.data == LOBBY_CREATE)
+@router.callback_query(CharacterLobby.selection, F.data == "lobby:create")
 async def start_creation_handler(call: CallbackQuery, state: FSMContext):
     """
         Инициирует создание персонажа
@@ -152,5 +149,6 @@ async def start_creation_handler(call: CallbackQuery, state: FSMContext):
     """
     await state.set_state(CharacterCreation.choosing_gender)
     if isinstance(call.message, Message):
-        await call.message.edit_text(text=LobbyMessages.NewCharacter.GENDER_CHOICE, parse_mode='HTML',
-                                     reply_markup=gender_kb())
+        await call.message.edit_text(
+            text=LobbyMessages.NewCharacter.GENDER_CHOICE, parse_mode='HTML',
+            reply_markup=gender_kb())

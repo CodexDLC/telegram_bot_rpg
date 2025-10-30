@@ -41,7 +41,7 @@ class UsersRepo(IUserRepo):
         await self.db.execute(sql, user_data_dict)
 
 
-    async def get_user(self, telegram_id: int) -> Optional[UserDTO]:
+    async def get_user(self, telegram_id: int, **kwargs) -> Optional[UserDTO]:
         """
         Возвращает 'полную' DTO пользователя из БД.
         """

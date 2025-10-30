@@ -3,7 +3,6 @@ import logging
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-
 from app.resources.texts.buttons_callback import Buttons
 
 
@@ -71,6 +70,10 @@ def get_character_lobby_kb(
     max_slots: int = 4
 ) -> InlineKeyboardMarkup:
 
+    """
+        Клавиатура стартового меню лобби выбора персонажа
+    """
+
     kb = InlineKeyboardBuilder()
     lobby_data = Buttons.LOBBY
 
@@ -88,12 +91,30 @@ def get_character_lobby_kb(
     kb.adjust(2, 2)
 
     # === Блок действий (по одной на строку) ===
-    actions = ["lobby:action:login", "logout"]
+    actions = ["logout",]
     for cb in actions:
         kb.row(InlineKeyboardButton(text=lobby_data[cb], callback_data=cb))
 
     return kb.as_markup()
 
+def get_character_data_bio()-> InlineKeyboardMarkup:
+    """
+    Клавиатура логина и показа информации о персонаже
+    """
 
+    lobby_data = Buttons.LOBBY
 
+    kb = InlineKeyboardBuilder()
+
+    for key, value in Buttons.LOBBY_ACTION.items():
+        kb.button(text=value, callback_data=key)
+
+    kb.adjust(2)
+
+    actions = ["lobby:action:login",]
+
+    for cb in actions:
+        kb.row(InlineKeyboardButton(text=lobby_data[cb], callback_data=cb))
+
+    return kb.as_markup()
 

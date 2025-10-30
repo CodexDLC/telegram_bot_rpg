@@ -15,14 +15,14 @@ class IUserRepo(ABC):
         pass
 
     @abstractmethod
-    async def get_user(self, telegram_id: int) -> Optional[UserDTO]:
+    async def get_user(self, telegram_id: int, **kwargs) -> Optional[UserDTO]:
         """
         Возвращает 'полную' DTO пользователя из БД.
         """
         pass
 
     @abstractmethod
-    async def get_users(self) -> List[UserDTO]:
+    async def get_users(self, **kwargs) -> List[UserDTO]:
         """
         Возвращает список 'полных' DTO (для админки).
         """

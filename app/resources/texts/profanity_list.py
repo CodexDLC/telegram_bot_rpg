@@ -5,5 +5,4 @@ FORBIDDEN_WORDS = {
     "gm",
     "root",
     "администратор",
-
 }

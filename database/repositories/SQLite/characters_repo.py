@@ -30,7 +30,7 @@ class CharacterRepo(ICharactersRepo):
         cursor = await self.db.execute(sql, character_data_dict)
         return cursor.lastrowid
 
-    async def get_character(self, character_id: int) -> CharacterReadDTO | None:
+    async def get_character(self, character_id: int, **kwargs) -> CharacterReadDTO | None:
         """
         Возвращает персонажа.
         """
@@ -44,7 +44,7 @@ class CharacterRepo(ICharactersRepo):
                 return CharacterReadDTO(**row)
             return None
 
-    async def get_characters(self, user_id: int) -> list:
+    async def get_characters(self, user_id: int, **kwargs) -> list:
         """
         Возвращает список персонажей.
         """
@@ -76,7 +76,7 @@ class CharacterStatsRepo(ICharacterStatsRepo):
         self.db = db
 
 
-    async def get_stats(self, character_id: int) -> CharacterStatsReadDTO | None:
+    async def get_stats(self, character_id: int, **kwargs) -> CharacterStatsReadDTO | None:
         """
         Возвращает персонажа.
         """

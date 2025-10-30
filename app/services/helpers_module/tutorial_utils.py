@@ -29,10 +29,8 @@ def prepare_tutorial_step(event_pool: list, sim_text_count: int, count_event: in
     if sim_text_count == 0:
         event_pool = get_event_pool()
 
-
     # 1. Увеличиваем счетчик шага
     sim_text_count += 1
-
 
     # 2. (БЕЗ ELSE) Извлекаем СЛЕДУЮЩИЙ ивент из пула
     try:

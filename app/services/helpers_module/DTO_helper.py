@@ -3,14 +3,14 @@ import logging
 from dataclasses import asdict, is_dataclass
 
 
-from app.resources.models.character_dto import CharacterReadDTO
-
+from app.resources.models.character_dto import CharacterReadDTO, CharacterStatsReadDTO
 
 log = logging.getLogger(__name__)
 
 DTO_MAP = {
     "character": CharacterReadDTO,
     "characters": CharacterReadDTO, # для списка
+    "characters_stats": CharacterStatsReadDTO
 
 }
 
@@ -18,8 +18,10 @@ DTO_MAP = {
 async def fsm_store(value)-> dict | list[dict]:
     """Сохраняет dataclass, список dataclass'ов или обычные данные в FSM."""
     if is_dataclass(value):
+        log.debug(f"fsm_store вернул {asdict(value)}")
         value = asdict(value)
     elif isinstance(value, list):
+        log.debug(f"fsm_store вернул список {value}")
         value = [asdict(v) if is_dataclass(v) else v for v in value]
     return value
 

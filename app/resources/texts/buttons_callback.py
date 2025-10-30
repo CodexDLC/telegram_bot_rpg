@@ -1,43 +1,5 @@
 
 
-callbacks_dict_button = {
-
-
-
-
-}
-
-# Кнопка LOGAUT
-
-LOGAUT_TEXT = "[❌ Выйти из мира ❌]"
-
-
-# клавиатура вызывается при команде /start
-START_ADVENTURE = "🧭 Начать приключение!"
-START_ADVENTURE_CALLBACK = "start_adventure"
-
-# клавиатура для выбора пола
-
-# --- КНОПКИ (Текст, соответствующий ЛОРу) ---
-GENDER_MALE_TEXT = "⚓ Облик Мужчины"
-GENDER_FEMALE_TEXT = "✨ Облик Женщины"
-
-GENDER_MAP = {
-    "male": "Мужчина",
-    "female": "Женщина",
-}
-
-
-# Каллбеки
-LOBBY_SELECT = "lobby:select"
-LOBBY_CREATE = "lobby:create"
-LOBBY_ACTION_INSPECT="lobby:action:inspect"
-LOBBY_ACTION_LOGIN="lobby:action:login"
-
-# Кнопки
-LOBBY_LOGIN_TEXT = "[ ⚔️ Войти в мир ]"
-
-
 
 class Buttons:
     # Стартовое приключение
@@ -47,8 +9,8 @@ class Buttons:
 
     # Выбор пола
     GENDER = {
-        "gender:male": "⚓ Облик Мужчины",
-        "gender:female": "✨ Облик Женщины"
+        "gender:male": "⚓ Мужчина",
+        "gender:female": "✨ Женщина"
     }
 
     # Лобби
@@ -59,6 +21,13 @@ class Buttons:
         "logout": "[❌ Выйти из мира ❌]"
     }
 
+    LOBBY_ACTION = {
+
+        "lobby:action:bio" : "✔️ Базовая инфо",
+        "lobby:action:stats" : "🔤 SPECIAL - STATS",
+
+    }
+
     # Подтверждение
     CONFIRM = {
         "confirm": "Принять эту форму"
@@ -67,3 +36,4 @@ class Buttons:
     TUTORIAL_START_BUTTON = {
         "tut:start": """[ 🧠 ] "Я готов. Начинай." """
     }
+

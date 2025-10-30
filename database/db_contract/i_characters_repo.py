@@ -18,15 +18,16 @@ class ICharactersRepo(ABC):
         pass
 
     @abstractmethod
-    async def get_character(self, character_id: int) -> CharacterReadDTO | None:
+    async def get_character(self, character_id: int, **kwargs) -> CharacterReadDTO | None:
         """
         Возвращает персонажа.
         """
         pass
+
     @abstractmethod
 
 
-    async def get_characters(self, user_id: int) -> list | None:
+    async def get_characters(self, user_id: int, **kwargs) -> list | None:
         """
         Возвращает список персонажей.
         """
@@ -42,7 +43,7 @@ class ICharactersRepo(ABC):
 class ICharacterStatsRepo(ABC):
 
     @abstractmethod
-    async def get_stats(self, character_id: int) -> CharacterStatsReadDTO | None:
+    async def get_stats(self, character_id: int, **kwargs) -> CharacterStatsReadDTO | None:
         """
         Возвращает персонажа.
         """
