@@ -32,14 +32,14 @@ async def select_character_handler(call: CallbackQuery, state: FSMContext, bot: 
     if characters is None:
         log.info("Данных 'characters' нет в FSM, загружаю из БД...")
         get_data = await load_data_auto(
-            ["characters", "characters_stats"],
+            ["characters", "character_stats"],
             character_id=char_id,
             user_id=call.from_user.id
         )
         # Сразу сохраняем в FSM и перезаписываем локальные переменные
         characters = await fsm_store(value=get_data.get("characters"))
-        characters_stats = await fsm_store(value=get_data.get("characters_stats"))
-        await state.update_data(characters=characters, characters_stats=characters_stats)
+        character_stats = await fsm_store(value=get_data.get("character_stats"))
+        await state.update_data(characters=characters, character_stats=character_stats)
 
     # 3. ПОЛУЧАЕМ АКТУАЛЬНЫЕ ДАННЫЕ FSM (включая message_content от *прошлых* кликов)
     state_data = await state.get_data()
@@ -120,12 +120,12 @@ async def start_edit_content_bio_handler(call: CallbackQuery, state: FSMContext,
     if bd_data_by_id:
         log.info(f"Ветка когда bd_data_by_id None")
         get_data = await load_data_auto(
-            ["character", "characters_stats"],
+            ["character", "character_stats"],
             character_id =char_id,
             user_id = call.from_user.id
         )
         character = await fsm_store(value=get_data.get("character"))
-        characters_stats = await fsm_store(value=get_data.get("characters_stats"))
+        character_stats = await fsm_store(value=get_data.get("character_stats"))
 
         log.debug(f"""
         --------------
@@ -133,7 +133,7 @@ async def start_edit_content_bio_handler(call: CallbackQuery, state: FSMContext,
         --------------
         {character}
         --------------
-        {characters_stats}     
+        {character_stats}     
 
         """
         )
@@ -141,7 +141,7 @@ async def start_edit_content_bio_handler(call: CallbackQuery, state: FSMContext,
         bd_data_by_id = {
                 "id": char_id,
                 "character": character,
-                "characters_stats" : characters_stats
+                "character_stats" : character_stats
 
         }
         await state.update_data(bd_data_by_id=bd_data_by_id)
@@ -150,7 +150,7 @@ async def start_edit_content_bio_handler(call: CallbackQuery, state: FSMContext,
     state_data = await state.get_data()
     bd_data_by_id = state_data.get("bd_data_by_id")
     character = bd_data_by_id.get("character")
-    characters_stats = bd_data_by_id.get("characters_stats")
+    character_stats = bd_data_by_id.get("character_stats")
 
     log.debug(
         f"""
@@ -162,7 +162,7 @@ async def start_edit_content_bio_handler(call: CallbackQuery, state: FSMContext,
         {character} {type(character)}
             
         ---------------------------
-        {characters_stats}  {type(characters_stats)}     
+        {character_stats}  {type(character_stats)}     
         
         ===========================
         
@@ -184,7 +184,7 @@ async def start_edit_content_bio_handler(call: CallbackQuery, state: FSMContext,
         await bot.edit_message_text(
             chat_id=message_content.get("chat_id"),
             message_id=message_content.get("message_id"),
-            text=LobbyFormatter.format_character_stats(characters_stats),
+            text=LobbyFormatter.format_character_stats(character_stats),
             parse_mode='HTML',
             reply_markup=get_character_data_bio()
         )
