@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, Message
 from app.resources.fsm_states.states import CharacterCreation, StartTutorial, CharacterLobby
 from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb, tutorial_kb, gender_kb
 from app.resources.models.character_dto import CharacterCreateDTO
-from app.resources.texts.buttons_callback import Buttons
+from app.resources.texts.buttons_callback import Buttons, GameStage
 
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
@@ -103,7 +103,9 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext):
         data_to_save = CharacterCreateDTO(
             user_id=call.from_user.id,
             name=data.get("name"),
-            gender=data.get("gender_db")
+            gender=data.get("gender_db"),
+            game_stage=GameStage.TUTORIAL_STATS
+
         )
         log.debug(f"данный для сохранения {data_to_save}")
 

@@ -1,4 +1,4 @@
-
+from enum import StrEnum
 
 
 class Buttons:
@@ -37,3 +37,10 @@ class Buttons:
         "tut:start": """[ 🧠 ] "Я готов. Начинай." """
     }
 
+
+class GameStage(StrEnum):
+    CREATION = "creation"                   # Стадия по умолчанию в БД
+    TUTORIAL_STATS = "tutorial_stats"       # "tutorial_1"
+    TUTORIAL_SKILL = "tutorial_skill"       # "tutorial_skill"
+    TUTORIAL_WORLD = "tutorial_world"       # На будущее
+    IN_GAME = "in_game"                     # Обычная игра

@@ -40,6 +40,14 @@ class ICharactersRepo(ABC):
         """
         pass
 
+    @abstractmethod
+    async def update_character_game_stage(self, character_id: int, character_game_stage: str):
+        """
+        Обновляет стадию персонажа.
+        """
+        pass
+
+
 class ICharacterStatsRepo(ABC):
 
     @abstractmethod

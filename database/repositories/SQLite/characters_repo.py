@@ -22,8 +22,8 @@ class CharacterRepo(ICharactersRepo):
         """
         sql = """
                     -- Простой INSERT, без ON CONFLICT
-                    INSERT INTO characters (user_id, name, gender)
-                    VALUES (:user_id, :name, :gender)
+                    INSERT INTO characters (user_id, name, gender, game_stage)
+                    VALUES (:user_id, :name, :gender, :game_stage)
                 """
 
         character_data_dict = asdict(character_data)
@@ -68,7 +68,21 @@ class CharacterRepo(ICharactersRepo):
 
         await self.db.execute(sql, (character_id,))
 
-
+    async def update_character_game_stage(self, character_id: int, game_stage: str):
+        """
+        Обновляет стадию персонажа.
+        """
+        sql = """
+                UPDATE characters
+                SET game_stage = :game_stage
+                WHERE character_id = :character
+                """
+        data = {
+            'game_stage': game_stage,
+            'character': character_id
+        }
+        await self.db.execute(sql, data)
+        log.debug(f"Стадия персонажа {character_id} была обновлена на: {game_stage}")
 
 
 class CharacterStatsRepo(ICharacterStatsRepo):
@@ -112,6 +126,9 @@ class CharacterStatsRepo(ICharacterStatsRepo):
 
         await self.db.execute(sql, stats_data_dict)
         log.debug(f"Stats персонажа были обновлены; {stats_data_dict}")
+
+
+
 
     async def add_stats(self, character_id: int, stats_to_add: Dict[str, int]):
         """

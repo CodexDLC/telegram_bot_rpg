@@ -12,6 +12,8 @@ class CharacterCreateDTO:
     user_id: int
     name: str
     gender: Gender
+    game_stage: str
+
 
 @dataclass(frozen=True, slots=True)
 class CharacterReadDTO:
@@ -25,6 +27,7 @@ class CharacterReadDTO:
     gender: Gender
     created_at: str
     updated_at: str
+    game_stage: str
 
 @dataclass(frozen=True, slots=True)
 class CharacterStatsUpdateDTO:

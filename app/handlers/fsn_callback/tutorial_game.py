@@ -1,6 +1,8 @@
 # app/handlers/fsn_callback/tutorial_game.py
 import asyncio
 import logging
+from tkinter import Button
+
 from aiogram import Router, F
 
 from aiogram.fsm.context import FSMContext
@@ -9,10 +11,11 @@ from aiogram.types import CallbackQuery, Message
 
 from app.resources.fsm_states.states import StartTutorial
 from app.resources.keyboards.inline_kb.loggin_und_new_character import tutorial_kb
+from app.resources.texts.buttons_callback import Buttons, GameStage
 from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
 from app.services.helpers_module.tutorial_utils import prepare_tutorial_step, summ_stat_bonus
 from database.db import get_db_connection
-from database.repositories import get_character_stats_repo
+from database.repositories import get_character_stats_repo, get_character_repo
 
 log = logging.getLogger(__name__)
 
@@ -114,7 +117,7 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext):
                     reply_markup=reply_markup
                 )
 
-            # Если это был последний шаг, меняем стейт (как ты и хотел)
+            # Если это был последний шаг, меняем стейт
             if is_last_step:
                 await state.set_state(StartTutorial.confirmation)
 
@@ -146,7 +149,7 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext):
         await state.clear()
         await state.set_state(StartTutorial.start)
         await state.update_data(char_id=char_id)
-        text = TutorialMessages.TUTORIAL_START_BUTTON
+        text = Buttons.TUTORIAL_START_BUTTON
         await call.message.edit_text(
             TutorialMessages.TUTORIAL_PROMPT_TEXT,
             parse_mode='HTML',
@@ -162,7 +165,10 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext):
 
         async with get_db_connection() as db:
             char_stats_repo = get_character_stats_repo(db)
+            char_repo = get_character_repo(db)
             final_stats_obj = await char_stats_repo.add_stats(char_id, bonus_dict)
+            await char_repo.update_character_game_stage(char_id, GameStage.TUTORIAL_SKILL)
+
 
         if final_stats_obj:
             # Превращаем DTO в словарь для .format()
@@ -188,6 +194,7 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext):
                 parse_mode='HTML',
                 reply_markup=tutorial_kb(TutorialMessages.TUTORIAL_CONFIRM_BUTTONS)
             )
+
     elif call_data == "tut:finish":
         # TODO: доделать
         await state.clear()
