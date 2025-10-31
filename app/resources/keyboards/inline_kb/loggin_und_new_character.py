@@ -111,7 +111,7 @@ def get_character_data_bio()-> InlineKeyboardMarkup:
 
     kb.adjust(2)
 
-    actions = ["lobby:action:login",]
+    actions = ["lobby:login", "logout"]
 
     for cb in actions:
         kb.row(InlineKeyboardButton(text=lobby_data[cb], callback_data=cb))

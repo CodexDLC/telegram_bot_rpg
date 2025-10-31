@@ -76,30 +76,37 @@ class LobbyFormatter:
         return text
 
     @staticmethod
-    def format_character_stats(stats: dict[str, int]) -> str:
+    def format_character_stats(stats: dict[str, int] | CharacterStatsReadDTO) -> str:
         """
-        [ТВОЯ ЗАДАЧА 3, НА БУДУЩЕЕ]
-        Форматирует "Статы" (для информации, когда игрок нажмет
-        на клавиатуре "Статы").
+        Форматирует "Статы" S.P.E.C.I.A.L.
         """
 
+        # Если это DTO, получаем значения через getattr, иначе через .get()
+        # Но для простоты, если stats это dict (как в логах), .get() безопасен.
+        # Если stats *гарантированно* DTO, getattr(stats, 'strength', 0) был бы лучше.
+        # Оставим .get() для универсальности, как ты и делал.
+
+        s = stats.get("strength", 0)
+        p = stats.get("perception", 0)
+        e = stats.get("endurance", 0)
+        c = stats.get("charisma", 0)
+        i = stats.get("intelligence", 0)
+        a = stats.get("agility", 0)
+        l = stats.get("luck", 0)
+
+        # Используем <code> для моноширинного выравнивания
+        # Длина "E (Выносливость) " = 17 символов, остальные подогнаны
         text = f"""
-
-        ℹ️ Статус персонажа: S.P.E.C.I.A.L
-        
-                <b>Сила:</b>             <i>{stats.get("strength")}</i>
-                   отвечает за:
-                <b>Ловкость:</b>         <i>{stats.get("agility")}</i>
-                   отвечает за:
-                <b>Выносливость:</b>     <i>{stats.get("endurance")}</i>
-                   отвечает за:
-                <b>Харизма:</b>          <i>{stats.get("charisma")}</i>
-                   отвечает за:
-                <b>Интеллект:</b>        <i>{stats.get("intelligence")}</i>
-                   отвечает за:
-                <b>Выносливость:</b>     <i>{stats.get("perception")}</i>
-                   отвечает за:
-                <b>Ловкость:</b>         <i>{stats.get("luck")}</i>   
-
-        """
+    ℹ️ Статус персонажа: S.P.E.C.I.A.L
+    <code>
+    S (Сила)         : {s}
+    P (Восприятие)   : {p}
+    E (Выносливость) : {e}
+    C (Харизма)      : {c}
+    I (Интеллект)    : {i}
+    A (Ловкость)     : {a}
+    L (Удача)        : {l}
+    </code>
+    <i>(Тут будет описание, за что отвечает каждый стат)</i>
+    """
         return text

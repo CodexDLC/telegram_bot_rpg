@@ -17,7 +17,7 @@ class Buttons:
     LOBBY = {
         "lobby:select": "Выбор персонажа",  # текст можно динамически формировать
         "lobby:create": "[ ➕ Создать ]",
-        "lobby:action:login": "[ ⚔️ Войти в мир ]",
+        "lobby:login": "[ ⚔️ Войти в мир ]",
         "logout": "[❌ Выйти из мира ❌]"
     }
 

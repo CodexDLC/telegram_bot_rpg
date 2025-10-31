@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS characters(
     user_id INTEGER NOT NULL,
     name TEXT DEFAULT 'Новый персонаж',
     gender TEXT DEFAULT 'other',
+    game_stage TEXT NOT NULL DEFAULT 'creation',
     created_at  TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'now')),
     updated_at  TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'now')),
 
