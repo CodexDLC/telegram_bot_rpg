@@ -25,6 +25,7 @@ if not DB_NAME:
         "DB_NAME_SQLITE не найден. Проверьте .env файл или переменные окружения."
         )
 
+DB_URL_SQLALCHEMY = f"sqlite+aiosqlite:///{DB_NAME}"
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))

@@ -1,7 +1,7 @@
 # app/services/helpers_module/ui/lobby_formatters.py
 
 
-from app.resources.models.character_dto import CharacterReadDTO, CharacterStatsReadDTO
+from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterStatsReadDTO
 from app.resources.texts.buttons_callback import Buttons
 
 

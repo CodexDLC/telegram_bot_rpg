@@ -2,7 +2,7 @@
 from abc import abstractmethod, ABC
 from typing import Optional, List
 
-from app.resources.models.user_dto import UserUpsertDTO, UserDTO
+from app.resources.schemas_dto.user_dto import UserUpsertDTO, UserDTO
 
 
 class IUserRepo(ABC):

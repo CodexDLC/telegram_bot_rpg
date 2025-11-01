@@ -16,6 +16,7 @@ from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
 from app.services.helpers_module.tutorial_utils import prepare_tutorial_step, summ_stat_bonus
 from database.db import get_db_connection
 from database.repositories import get_character_stats_repo, get_character_repo
+from database.session import get_async_session
 
 log = logging.getLogger(__name__)
 
@@ -163,9 +164,9 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext):
             return await call.message.edit_text(
                 f"⚠️ Ошибка: Данные создания утеряны. Начните заново цепочку создания персонажа")
 
-        async with get_db_connection() as db:
-            char_stats_repo = get_character_stats_repo(db)
-            char_repo = get_character_repo(db)
+        async with get_async_session() as session:
+            char_stats_repo = get_character_stats_repo(session)
+            char_repo = get_character_repo(session)
             final_stats_obj = await char_stats_repo.add_stats(char_id, bonus_dict)
             await char_repo.update_character_game_stage(char_id, GameStage.TUTORIAL_SKILL)
 

@@ -1,9 +1,11 @@
-# app/resources/models/user_dto.py
-from dataclasses import dataclass
+# app/resources/schemas_dto/user_dto.py
+
 from typing import Optional
 
-@dataclass(frozen=True, slots=True)
-class UserUpsertDTO:
+from pydantic import BaseModel, ConfigDict
+
+
+class UserUpsertDTO(BaseModel):
     """
     DTO для 'ввода' (создания/обновления).
     Содержит только то, что мы получаем от Telegram API.
@@ -16,7 +18,7 @@ class UserUpsertDTO:
     is_premium: bool
 
 
-@dataclass(frozen=True, slots=True)
+
 class UserDTO(UserUpsertDTO):
     """
     DTO для 'вывода' (чтения из БД).
@@ -24,3 +26,5 @@ class UserDTO(UserUpsertDTO):
     """
     created_at: str
     updated_at: str
+
+    model_config = ConfigDict(from_attributes=True)

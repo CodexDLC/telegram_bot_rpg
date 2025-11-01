@@ -1,9 +1,11 @@
 #
 import logging
+
+from pydantic import BaseModel
 from dataclasses import asdict, is_dataclass
 
 
-from app.resources.models.character_dto import CharacterReadDTO, CharacterStatsReadDTO
+from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterStatsReadDTO
 
 log = logging.getLogger(__name__)
 
@@ -17,12 +19,12 @@ DTO_MAP = {
 
 async def fsm_store(value)-> dict | list[dict]:
     """Сохраняет dataclass, список dataclass'ов или обычные данные в FSM."""
-    if is_dataclass(value):
-        log.debug(f"fsm_store вернул {asdict(value)}")
-        value = asdict(value)
-    elif isinstance(value, list):
+    if isinstance(value, BaseModel):
+        value = value.model_dump()
+        log.debug(f"fsm_store вернул {value}")
+    elif isinstance(value, list) and all(isinstance(list_item, BaseModel) for list_item in value):
         log.debug(f"fsm_store вернул список {value}")
-        value = [asdict(v) if is_dataclass(v) else v for v in value]
+        value = [v.model_dump() for v in value]
     return value
 
 
@@ -38,8 +40,8 @@ async def fsm_load_auto(state, key: str):
 
     if isinstance(value, list):
         log.debug(f"fsm_load_auto вернул список {dto_class}")
-        return [dto_class(**v) if isinstance(v, dict) else v for v in value]
+        return [dto_class.model_validate(v) if isinstance(v, dict) else v for v in value]
     elif isinstance(value, dict):
         log.debug(f"fsm_load_auto вернул {dto_class}")
-        return dto_class(**value)
+        return dto_class.model_validate(value)
     return value

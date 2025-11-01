@@ -8,10 +8,11 @@ from aiogram.types import Message
 
 
 from app.resources.keyboards.inline_kb.loggin_und_new_character import get_start_adventure_kb
-from app.resources.models.user_dto import UserUpsertDTO
+from app.resources.schemas_dto.user_dto import UserUpsertDTO
 from app.resources.texts.ui_messages import START_GREETING
 from database.db import get_db_connection
 from database.repositories import get_user_repo
+from database.session import get_async_session
 
 log = logging.getLogger(__name__)
 
@@ -43,8 +44,8 @@ async def cmd_start(m: Message, state: FSMContext)-> None:
         is_premium=bool(user.is_premium)
     )
     # 3. Используем DTO для записи в БД
-    async with get_db_connection() as db:
-        user_repo = get_user_repo(db)
+    async with get_async_session() as session:
+        user_repo = get_user_repo(session)
         await user_repo.upsert_user(user_dto)
 
     # 4. Отправляем сообщение пользователю

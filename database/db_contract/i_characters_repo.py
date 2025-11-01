@@ -3,7 +3,7 @@
 from abc import abstractmethod, ABC
 from typing import Dict, Optional
 
-from app.resources.models.character_dto import (
+from app.resources.schemas_dto.character_dto import (
     CharacterReadDTO, CharacterCreateDTO,
     CharacterStatsReadDTO, CharacterStatsUpdateDTO
 )

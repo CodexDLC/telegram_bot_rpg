@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app.resources.fsm_states.states import CharacterCreation, StartTutorial, CharacterLobby
 from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb, tutorial_kb, gender_kb
-from app.resources.models.character_dto import CharacterCreateDTO
+from app.resources.schemas_dto.character_dto import CharacterCreateDTO
 from app.resources.texts.buttons_callback import Buttons, GameStage
 
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
@@ -18,6 +18,7 @@ from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
 from app.services.helpers_module.game_validator import validate_character_name
 from database.db import get_db_connection
 from database.repositories import get_character_repo
+from database.session import get_async_session
 
 log = logging.getLogger(__name__)
 
@@ -110,8 +111,8 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext):
         log.debug(f"данный для сохранения {data_to_save}")
 
 
-        async with get_db_connection() as db:
-            char_repo = get_character_repo(db)
+        async with get_async_session() as session:
+            char_repo = get_character_repo(session)
             new_char_id = await char_repo.create_character(data_to_save)
             log.info(f"Айди персонажа {new_char_id}")
 

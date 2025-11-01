@@ -1,10 +1,9 @@
 import logging
-from dataclasses import asdict
 from typing import Dict
 
 import aiosqlite
 
-from app.resources.models.character_dto import CharacterReadDTO, CharacterCreateDTO, CharacterStatsReadDTO, \
+from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterCreateDTO, CharacterStatsReadDTO, \
     CharacterStatsUpdateDTO
 from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
 
@@ -26,7 +25,7 @@ class CharacterRepo(ICharactersRepo):
                     VALUES (:user_id, :name, :gender, :game_stage)
                 """
 
-        character_data_dict = asdict(character_data)
+        character_data_dict = character_data.model_dump()
         cursor = await self.db.execute(sql, character_data_dict)
         return cursor.lastrowid
 
@@ -41,7 +40,7 @@ class CharacterRepo(ICharactersRepo):
         async with self.db.execute(sql, (character_id,)) as cursor:
             row = await cursor.fetchone()
             if row:
-                return CharacterReadDTO(**row)
+                return CharacterReadDTO.model_validate(row)
             return None
 
     async def get_characters(self, user_id: int, **kwargs) -> list:
@@ -54,7 +53,7 @@ class CharacterRepo(ICharactersRepo):
 
         async with self.db.execute(sql, (user_id,)) as cursor:
             rows = await cursor.fetchall()
-            return [CharacterReadDTO(**row) for row in rows]
+            return [CharacterReadDTO.model_validate(row) for row in rows]
 
 
     async def delete_characters(self,character_id: int):
@@ -102,7 +101,7 @@ class CharacterStatsRepo(ICharacterStatsRepo):
             row = await cursor.fetchone()
             if row:
                 log.debug(f"Данные получены {row}")
-                return CharacterStatsReadDTO(**row)
+                return CharacterStatsReadDTO.model_validate(row)
             return None
 
     async def update_stats(self,character_id: int, stats_data: CharacterStatsUpdateDTO):
@@ -121,7 +120,7 @@ class CharacterStatsRepo(ICharacterStatsRepo):
                 WHERE character_id = :character_id
         """
 
-        stats_data_dict = asdict(stats_data)
+        stats_data_dict = stats_data.model_dump()
         stats_data_dict['character_id'] = character_id
 
         await self.db.execute(sql, stats_data_dict)
@@ -183,6 +182,6 @@ class CharacterStatsRepo(ICharacterStatsRepo):
 
             if row:
                 # Мы вернули обновленные данные и сразу пакуем их в DTO
-                return CharacterStatsReadDTO(**row)
+                return CharacterStatsReadDTO.model_validate(row)
 
             return None

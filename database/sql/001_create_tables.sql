@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users(
     updated_at TEXT DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'now'))
 );
 
-CREATE TABLE IF NOT EXISTS characters(
+CREATE TABLE IF NOT EXISTS characters (
     character_id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     name TEXT DEFAULT 'Новый персонаж',

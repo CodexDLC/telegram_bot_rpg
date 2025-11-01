@@ -1,12 +1,13 @@
 # app/services/data_loader_service.py
 import asyncio
 
-from database.db import get_db_connection
+
 from database.repositories import (
     get_user_repo,
     get_character_repo,
     get_character_stats_repo
 )
+from database.session import get_async_session
 
 DATA_LOADERS_MAP = {
 
@@ -29,14 +30,14 @@ async def load_data_auto(
 
     results = {}
 
-    async with get_db_connection() as db:
+    async with get_async_session() as session:
         tasks = []
         for key in include:
             if key not in DATA_LOADERS_MAP:
                 continue
 
             get_repo_func, method_name = DATA_LOADERS_MAP[key]
-            repo = get_repo_func(db)
+            repo = get_repo_func(session)
             method = getattr(repo, method_name)
 
             async def run_method(k=key, m=method):
