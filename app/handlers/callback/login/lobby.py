@@ -36,17 +36,21 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext):
     characters = None
 
     if user is not None:
-        characters = await load_data_auto(["characters"], user_id=user.id)
+        # 1. Загружаем словарь (как и раньше)
+        characters_data = await load_data_auto(["characters"], user_id=user.id)
+    else:
+        characters_data = {}
 
+    character_list = characters_data.get("characters")
 
-    if characters:
+    if character_list:
         await state.set_state(CharacterLobby.selection)
         await state.update_data(selected_char_id=None, message_content=None)
 
         await call.message.edit_text(
-            text=LobbyFormatter.format_character_list(characters.get("characters")),
+            text=LobbyFormatter.format_character_list(character_list),
             parse_mode='HTML',
-            reply_markup=get_character_lobby_kb(characters.get("characters"), selected_char_id=None)
+            reply_markup=get_character_lobby_kb(character_list, selected_char_id=None)
         )
         log.debug(f"Персонажи найдены: {characters} выводим меню выбора персонажа")
 

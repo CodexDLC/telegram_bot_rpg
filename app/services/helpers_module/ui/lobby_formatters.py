@@ -1,9 +1,10 @@
 # app/services/helpers_module/ui/lobby_formatters.py
-
+import logging
 
 from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterStatsReadDTO
 from app.resources.texts.buttons_callback import Buttons
 
+log = logging.getLogger(__name__)
 
 class LobbyFormatter:
     """
@@ -19,8 +20,8 @@ class LobbyFormatter:
 
         """
 
-
         char_list_text = []
+
         for char in characters:
             name   = char.name or "- Пусто -"
             gender = Buttons.GENDER.get(f"gender:{char.gender}", "Не указан")
@@ -81,18 +82,28 @@ class LobbyFormatter:
         Форматирует "Статы" S.P.E.C.I.A.L.
         """
 
+        log.debug(f"stats: {stats}")
         # Если это DTO, получаем значения через getattr, иначе через .get()
         # Но для простоты, если stats это dict (как в логах), .get() безопасен.
         # Если stats *гарантированно* DTO, getattr(stats, 'strength', 0) был бы лучше.
         # Оставим .get() для универсальности, как ты и делал.
+        if isinstance(stats, dict):
+            s = stats.get("strength", 0)
+            p = stats.get("perception", 0)
+            e = stats.get("endurance", 0)
+            c = stats.get("charisma", 0)
+            i = stats.get("intelligence", 0)
+            a = stats.get("agility", 0)
+            l = stats.get("luck", 0)
+        else:
+            s = getattr(stats, 'strength', 0)
+            p = getattr(stats, 'perception', 0)
+            e = getattr(stats, 'endurance', 0)
+            c = getattr(stats, 'charisma', 0)
+            i = getattr(stats, 'intelligence', 0)
+            a = getattr(stats, 'agility', 0)
+            l = getattr(stats, 'luck', 0)
 
-        s = stats.get("strength", 0)
-        p = stats.get("perception", 0)
-        e = stats.get("endurance", 0)
-        c = stats.get("charisma", 0)
-        i = stats.get("intelligence", 0)
-        a = stats.get("agility", 0)
-        l = stats.get("luck", 0)
 
         # Используем <code> для моноширинного выравнивания
         # Длина "E (Выносливость) " = 17 символов, остальные подогнаны

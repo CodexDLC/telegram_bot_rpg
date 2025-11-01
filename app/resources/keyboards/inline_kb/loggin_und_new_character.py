@@ -41,7 +41,7 @@ def confirm_kb() -> InlineKeyboardMarkup:
     """
     kb = InlineKeyboardBuilder()
 
-    for key, value in Buttons.TUTORIAL_START_BUTTON.items():
+    for key, value in Buttons.CONFIRM.items():
         kb.button(text=value, callback_data=key)
 
     return kb.as_markup()

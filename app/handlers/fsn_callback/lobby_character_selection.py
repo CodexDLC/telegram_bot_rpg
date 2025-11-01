@@ -46,9 +46,10 @@ async def select_character_handler(call: CallbackQuery, state: FSMContext, bot: 
             user_id=call.from_user.id
         )
         # Сохраняем полученные данные в FSM для последующих обращений.
-        characters = await fsm_store(value=get_data.get("characters"))
-        character_stats = await fsm_store(value=get_data.get("character_stats"))
-        await state.update_data(characters=characters, character_stats=character_stats)
+        await state.update_data(
+            characters=await fsm_store(value=get_data.get("characters")),
+            character_stats=await fsm_store(value=get_data.get("character_stats"))
+        )
 
     # --- 3. ПОЛУЧЕНИЕ АКТУАЛЬНЫХ ДАННЫХ FSM ---
     # Загружаем все данные из FSM, включая информацию о сообщениях, отправленных ранее.
@@ -148,6 +149,13 @@ async def start_edit_content_bio_handler(call: CallbackQuery, state: FSMContext,
         character = await fsm_store(value=get_data.get("character"))
         character_stats = await fsm_store(value=get_data.get("character_stats"))
 
+        log.debug(f"""
+            2. ЗАГРУЗКА ДАННЫХ ИЗ БД (ЕСЛИ НЕОБХОДИМО)
+            character: {character}
+            character_stats: {character_stats}
+
+        """)
+
         # Формируем и сохраняем пакет данных по персонажу.
         bd_data_by_id = {
             "id": char_id,
@@ -183,6 +191,7 @@ async def start_edit_content_bio_handler(call: CallbackQuery, state: FSMContext,
                 parse_mode='HTML',
                 reply_markup=get_character_data_bio()
             )
+
     except TelegramBadRequest as e:
         # Игнорируем ошибку, если пытаемся отправить тот же самый текст.
         if "message is not modified" in str(e):

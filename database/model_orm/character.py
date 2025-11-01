@@ -39,7 +39,7 @@ class CharacterStats(Base, TimestampMixin):
     agility: Mapped[int] = mapped_column(default=4)
     luck: Mapped[int] = mapped_column(default=4)
 
-    character: Mapped["Characters"] = relationship("stats")
+    character: Mapped["Characters"] = relationship(back_populates="stats")
 
     def __repr__(self):
         return f"<CharacterStats (id={self.character_id})>"

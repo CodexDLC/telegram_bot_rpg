@@ -23,7 +23,7 @@ class CharacterReadDTO(CharacterCreateDTO):
     DTO для выхода
 
     """
-
+    character_id: int
     created_at: str
     updated_at: str
 

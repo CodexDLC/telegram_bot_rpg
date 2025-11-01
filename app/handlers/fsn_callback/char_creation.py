@@ -16,7 +16,6 @@ from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
 
 
 from app.services.helpers_module.game_validator import validate_character_name
-from database.db import get_db_connection
 from database.repositories import get_character_repo
 from database.session import get_async_session
 
@@ -95,6 +94,7 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext):
     """
     await call.answer()
     data = await state.get_data()
+    message_menu = data.get("message_menu")
 
     if not data.get("name") or not data.get("gender_db"):
         await state.clear()
@@ -118,7 +118,10 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext):
 
         await state.clear()
 
-        await state.update_data(character_id=new_char_id)
+        await state.update_data(
+            character_id=new_char_id,
+            message_menu=message_menu
+        )
 
         await state.set_state(StartTutorial.start)
 
@@ -134,7 +137,7 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext):
             await asyncio.sleep(pause_duration)
 
         # А после цикла - твой код, который выводит TUTORIAL_PROMPT_TEXT
-        text = Buttons.CONFIRM
+        text = Buttons.TUTORIAL_START_BUTTON
 
         await call.message.edit_text(
             TutorialMessages.TUTORIAL_PROMPT_TEXT,
