@@ -110,41 +110,43 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext):
         )
         log.debug(f"данный для сохранения {data_to_save}")
 
+        try:
+            async with get_async_session() as session:
+                char_repo = get_character_repo(session)
+                new_char_id = await char_repo.create_character(data_to_save)
+                log.info(f"Айди персонажа {new_char_id}")
+        except Exception as e:
+            log.warning(f"Ошибка создания персонажа: {e}")
 
-        async with get_async_session() as session:
-            char_repo = get_character_repo(session)
-            new_char_id = await char_repo.create_character(data_to_save)
-            log.info(f"Айди персонажа {new_char_id}")
+    await state.clear()
 
-        await state.clear()
-
-        await state.update_data(
+    await state.update_data(
             character_id=new_char_id,
             message_menu=message_menu
         )
 
-        await state.set_state(StartTutorial.start)
+    await state.set_state(StartTutorial.start)
 
-        message_to_edit = None
-        for text_line, pause_duration in TutorialMessages.WAKING_UP_SEQUENCE:
-            if message_to_edit is None:
+    message_to_edit = None
+    for text_line, pause_duration in TutorialMessages.WAKING_UP_SEQUENCE:
+        if message_to_edit is None:
                 # В первую итерацию создаем сообщение
-                message_to_edit = await call.message.edit_text(text_line, parse_mode='HTML')
-            else:
-                # В последующие - редактируем
-                await call.message.edit_text(text_line, parse_mode='HTML')
+            message_to_edit = await call.message.edit_text(text_line, parse_mode='HTML')
+        else:
+            # В последующие - редактируем
+            await call.message.edit_text(text_line, parse_mode='HTML')
 
-            await asyncio.sleep(pause_duration)
+        await asyncio.sleep(pause_duration)
 
         # А после цикла - твой код, который выводит TUTORIAL_PROMPT_TEXT
-        text = Buttons.TUTORIAL_START_BUTTON
+    text = Buttons.TUTORIAL_START_BUTTON
 
-        await call.message.edit_text(
+    await call.message.edit_text(
             TutorialMessages.TUTORIAL_PROMPT_TEXT,
             parse_mode='HTML',
             reply_markup=tutorial_kb(text)
         )
-        return None
+    return None
 
 
 @router.callback_query(CharacterLobby.selection, F.data == "lobby:create")

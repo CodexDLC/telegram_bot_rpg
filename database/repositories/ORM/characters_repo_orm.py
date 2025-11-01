@@ -34,6 +34,7 @@ class CharactersRepoORM(ICharactersRepo):
 
         # noinspection PyArgumentList
         orm_character = Characters(**character_data_dict)
+        orm_character.stats = CharacterStats()
 
         self.session.add(orm_character)
         log.debug(f"Выполнен Merge для Character: {orm_character.character_id}")

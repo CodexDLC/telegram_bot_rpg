@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery
 from app.resources.fsm_states.states import CharacterLobby
 from app.resources.keyboards.inline_kb.loggin_und_new_character import get_character_lobby_kb, get_character_data_bio
 from app.services.data_loader_service import load_data_auto
-from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store
+from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store, fsm_convector
 from app.services.helpers_module.ui.lobby_formatters import LobbyFormatter
 
 
@@ -51,11 +51,12 @@ async def select_character_handler(call: CallbackQuery, state: FSMContext, bot: 
             character_stats=await fsm_store(value=get_data.get("character_stats"))
         )
 
+
     # --- 3. ПОЛУЧЕНИЕ АКТУАЛЬНЫХ ДАННЫХ FSM ---
     # Загружаем все данные из FSM, включая информацию о сообщениях, отправленных ранее.
     state_data = await state.get_data()
     mes_content_data = state_data.get("message_content") or {}
-
+    characters = await  fsm_load_auto(state=state, key="characters") or state_data.get("characters")
     # --- 4. ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ---
     # Этот блок выполняется всегда, когда есть данные о персонажах.
     if characters:
@@ -146,29 +147,20 @@ async def start_edit_content_bio_handler(call: CallbackQuery, state: FSMContext,
             character_id=char_id,
             user_id=call.from_user.id
         )
-        character = await fsm_store(value=get_data.get("character"))
-        character_stats = await fsm_store(value=get_data.get("character_stats"))
-
-        log.debug(f"""
-            2. ЗАГРУЗКА ДАННЫХ ИЗ БД (ЕСЛИ НЕОБХОДИМО)
-            character: {character}
-            character_stats: {character_stats}
-
-        """)
-
         # Формируем и сохраняем пакет данных по персонажу.
         bd_data_by_id = {
             "id": char_id,
-            "character": character,
-            "character_stats": character_stats
+            "character": await fsm_store(value=get_data.get("character")),
+            "character_stats": await fsm_store(value=get_data.get("character_stats"))
         }
+
         await state.update_data(bd_data_by_id=bd_data_by_id)
 
     # --- 3. ПОЛУЧЕНИЕ АКТУАЛЬНЫХ ДАННЫХ ИЗ FSM ---
     state_data = await state.get_data()
     bd_data_by_id = state_data.get("bd_data_by_id")
-    character = bd_data_by_id.get("character")
-    character_stats = bd_data_by_id.get("character_stats")
+    character = await fsm_convector(bd_data_by_id.get("character"),"character")
+    character_stats = await fsm_convector(bd_data_by_id.get("character_stats"), "character_stats")
 
     # --- 4. ОБНОВЛЕНИЕ СООБЩЕНИЯ В ЗАВИСИМОСТИ ОТ ДЕЙСТВИЯ ---
     try:
@@ -181,6 +173,7 @@ async def start_edit_content_bio_handler(call: CallbackQuery, state: FSMContext,
                 parse_mode='HTML',
                 reply_markup=get_character_data_bio()
             )
+
 
         elif type_action == "stats":
             # Показываем характеристики
@@ -202,7 +195,8 @@ async def start_edit_content_bio_handler(call: CallbackQuery, state: FSMContext,
         log.exception(f"Критическая ошибка при обновлении БИО/Статов: {e}")
 
 
-@router.callback_query(CharacterLobby.start_logging, F.data=="lobby:login")
+
+@router.callback_query(CharacterLobby.selection, F.data=="lobby:login")
 async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
     """
     Обрабатывает нажатие кнопки "Войти в игру".
@@ -211,6 +205,7 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     логика входа персонажа в игровой мир, включая проверку туториалов и
     загрузку соответствующего игрового состояния.
     """
+    log.debug(f"Начало работы start_logging_handler ")
     await call.answer()
     state_data = await state.get_data()
     message_content = state_data.get("message_content")

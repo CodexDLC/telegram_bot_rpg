@@ -38,6 +38,16 @@ async def fsm_load_auto(state, key: str):
     if not dto_class or value is None:
         return value
 
+    return await fsm_convector(value, key)
+
+
+async def fsm_convector(value: dict, key: str):
+
+    dto_class = DTO_MAP.get(key)
+
+    if not dto_class or value is None:
+        return value
+
     if isinstance(value, list):
         log.debug(f"fsm_load_auto вернул список {dto_class}")
         return [dto_class.model_validate(v) if isinstance(v, dict) else v for v in value]

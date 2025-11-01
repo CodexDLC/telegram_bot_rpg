@@ -40,25 +40,16 @@ class LobbyFormatter:
 
 
     @staticmethod
-    def format_character_bio(character: dict[str, str] | CharacterReadDTO) -> str:
+    def format_character_bio(character: CharacterReadDTO) -> str:
         """
         [ТВОЯ ЗАДАЧА 2]
         Форматирует детальное "Био" (для "Якоря" ПОСЛЕ выбора).
         Это представление по умолчанию при инспекции.
         """
-        if isinstance(character, CharacterReadDTO):
-            name = character.name
-            gender = Buttons.GENDER.get(f"gender:{character.gender}", "Не указан")
-            data = character.created_at
-        else:
-            name = character.get("name")
-            gender = Buttons.GENDER.get(f"gender:{character.get('gender')}", "Не указан")
-            data = character.get("created_at")
 
-
-
-
-
+        name = character.name
+        gender = Buttons.GENDER.get(f"gender:{character.gender}", "Не указан")
+        data = character.created_at
 
         text = f"""
         

@@ -8,6 +8,9 @@ from database.model_orm.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from .user import User
+    from .skill import CharacterSkillRate, CharacterSkillProgress
+
+
 
 class Characters(Base, TimestampMixin):
     __tablename__ = "characters"
@@ -40,6 +43,13 @@ class CharacterStats(Base, TimestampMixin):
     luck: Mapped[int] = mapped_column(default=4)
 
     character: Mapped["Characters"] = relationship(back_populates="stats")
+
+    skill_rates: Mapped[list["CharacterSkillRate"]] = relationship(
+        back_populates="character", cascade="all, delete-orphan"
+    )
+    skill_progress: Mapped[list["CharacterSkillProgress"]] = relationship(
+        back_populates="character", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<CharacterStats (id={self.character_id})>"
