@@ -1,7 +1,7 @@
 # app/handlers/fsn_callback/tutorial_game.py
 import asyncio
 import logging
-from tkinter import Button
+
 
 from aiogram import Router, F
 
@@ -15,7 +15,6 @@ from app.resources.texts.buttons_callback import Buttons, GameStage
 from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
 from app.services.game_service.skill.skill_service import CharacterSkillsService
 from app.services.helpers_module.tutorial_utils import prepare_tutorial_step, summ_stat_bonus
-from database.db import get_db_connection
 from database.repositories import get_character_stats_repo, get_character_repo, get_skill_rate_repo, \
     get_skill_progress_repo
 from database.session import get_async_session

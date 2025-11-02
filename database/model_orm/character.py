@@ -25,6 +25,13 @@ class Characters(Base, TimestampMixin):
 
     user: Mapped["User"] = relationship(back_populates="characters")
 
+    skill_rate: Mapped[list["CharacterSkillRate"]] = relationship(
+        back_populates="character", cascade="all, delete-orphan"
+    )
+    skill_progress: Mapped[list["CharacterSkillProgress"]] = relationship(
+        back_populates="character", cascade="all, delete-orphan"
+    )
+
     def __repr__(self):
         return f"<Character (id={self.character_id}, name='{self.name}')>"
 
@@ -44,12 +51,7 @@ class CharacterStats(Base, TimestampMixin):
 
     character: Mapped["Characters"] = relationship(back_populates="stats")
 
-    skill_rates: Mapped[list["CharacterSkillRate"]] = relationship(
-        back_populates="character", cascade="all, delete-orphan"
-    )
-    skill_progress: Mapped[list["CharacterSkillProgress"]] = relationship(
-        back_populates="character", cascade="all, delete-orphan"
-    )
+
 
     def __repr__(self):
         return f"<CharacterStats (id={self.character_id})>"
