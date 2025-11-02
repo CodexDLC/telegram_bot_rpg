@@ -21,13 +21,6 @@ class Buttons:
         "logout": "[❌ Выйти из мира ❌]"
     }
 
-    LOBBY_ACTION = {
-
-        "lobby:action:bio" : "✔️ Базовая инфо",
-        "lobby:action:stats" : "🔤 SPECIAL - STATS",
-
-    }
-
     # Подтверждение
     CONFIRM = {
         "confirm": "Принять эту форму"

@@ -2,29 +2,30 @@
 import logging
 
 from pydantic import BaseModel
-from dataclasses import asdict, is_dataclass
-
 
 from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterStatsReadDTO
+from app.resources.schemas_dto.skill import SkillProgressDTO
 
 log = logging.getLogger(__name__)
 
 DTO_MAP = {
     "character": CharacterReadDTO,
     "characters": CharacterReadDTO, # для списка
-    "characters_stats": CharacterStatsReadDTO
+    "characters_stats": CharacterStatsReadDTO,
+    "character_progress" : SkillProgressDTO
 
 }
 
 
-async def fsm_store(value)-> dict | list[dict]:
+async def fsm_store(value) -> dict | list[dict]:
     """Сохраняет dataclass, список dataclass'ов или обычные данные в FSM."""
+
     if isinstance(value, BaseModel):
-        value = value.model_dump()
+        value = value.model_dump(mode='json')
         log.debug(f"fsm_store вернул {value}")
     elif isinstance(value, list) and all(isinstance(list_item, BaseModel) for list_item in value):
+        value = [v.model_dump(mode='json') for v in value]  # Применяем и для списков
         log.debug(f"fsm_store вернул список {value}")
-        value = [v.model_dump() for v in value]
     return value
 
 
@@ -49,9 +50,9 @@ async def fsm_convector(value: dict, key: str):
         return value
 
     if isinstance(value, list):
-        log.debug(f"fsm_load_auto вернул список {dto_class}")
+        log.debug(f"fsm_convector вернул список {dto_class}")
         return [dto_class.model_validate(v) if isinstance(v, dict) else v for v in value]
     elif isinstance(value, dict):
-        log.debug(f"fsm_load_auto вернул {dto_class}")
+        log.debug(f"fsm_convector вернул {dto_class}")
         return dto_class.model_validate(value)
     return value

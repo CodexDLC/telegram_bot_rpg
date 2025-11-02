@@ -4,9 +4,10 @@ import asyncio
 
 from database.repositories import (
     get_user_repo,
-    get_character_repo,
-    get_character_stats_repo
+    get_character_repo, get_character_stats_repo,
+    get_skill_rate_repo, get_skill_progress_repo
 )
+
 from database.session import get_async_session
 
 DATA_LOADERS_MAP = {
@@ -14,8 +15,8 @@ DATA_LOADERS_MAP = {
     "user" : (get_user_repo, "get_user"),
     "character": (get_character_repo, "get_character"),
     "characters" : (get_character_repo, "get_characters"),
-    "character_stats" : (get_character_stats_repo, "get_stats")
-
+    "character_stats" : (get_character_stats_repo, "get_stats"),
+    "character_progress" : (get_skill_progress_repo, "get_all_skills_progress")
 }
 
 

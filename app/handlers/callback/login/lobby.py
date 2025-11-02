@@ -11,7 +11,6 @@ from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from app.services.data_loader_service import load_data_auto
 from app.services.helpers_module.ui.lobby_formatters import LobbyFormatter
 
-
 log = logging.getLogger(__name__)
 
 router = Router(name="login_lobby_router")

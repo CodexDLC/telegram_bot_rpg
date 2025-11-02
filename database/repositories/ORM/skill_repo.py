@@ -42,7 +42,7 @@ class SkillRateRepo(ISkillRateRepo):
 
         await self.session.execute(stmt)
 
-    async def get_all_skill_rates(self, character_id: int) -> List[SkillRateDTO]:
+    async def get_all_skill_rates(self, character_id: int, **kwargs) -> List[SkillRateDTO]:
         """
         Возвращает ВСЕ рассчитанные ставки БСО для персонажа.
         """
@@ -123,7 +123,7 @@ class SkillProgressRepo(ISkillProgressRepo):
         await self.session.execute(stmt)
 
 
-    async def get_all_skills_progress(self, character_id: int) -> List[SkillProgressDTO]:
+    async def get_all_skills_progress(self, character_id: int, **kwargs) -> List[SkillProgressDTO]:
 
         """
         Возвращает прогресс ВСЕХ навыков персонажа.
