@@ -2,6 +2,7 @@
 from aiogram.fsm.state import StatesGroup, State
 
 
+
 class CharacterCreation(StatesGroup):
     """
         Состояния для "квеста" создания персонажа.
@@ -22,3 +23,9 @@ class StartTutorial(StatesGroup):
 class CharacterLobby(StatesGroup):
     selection = State()
     start_logging = State()
+
+
+FSM_CONTEX_CHARACTER_STATUS = [
+    CharacterLobby,
+
+]

@@ -5,7 +5,7 @@ from aiogram import Router, F, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
-from app.handlers.callback.ui.character_status_menu import status_menu_start_handler
+from app.handlers.callback.ui.status_menu.character_status import status_menu_start_handler
 from app.resources.fsm_states.states import CharacterLobby
 from app.resources.keyboards.inline_kb.loggin_und_new_character import get_character_lobby_kb
 from app.services.data_loader_service import load_data_auto

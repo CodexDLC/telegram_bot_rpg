@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 DTO_MAP = {
     "character": CharacterReadDTO,
     "characters": CharacterReadDTO, # для списка
-    "characters_stats": CharacterStatsReadDTO,
+    "character_stats": CharacterStatsReadDTO,
     "character_progress" : SkillProgressDTO
 
 }

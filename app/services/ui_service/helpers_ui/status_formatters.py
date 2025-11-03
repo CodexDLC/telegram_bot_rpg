@@ -1,4 +1,4 @@
-#app/services/helpers_module/ui/lobby_formatters.py
+#app/services/helpers_module/ui/status_formatters.py
 import logging
 
 from aiogram.types import InlineKeyboardMarkup
