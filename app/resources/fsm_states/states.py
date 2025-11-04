@@ -26,6 +26,12 @@ class CharacterLobby(StatesGroup):
 
 
 FSM_CONTEX_CHARACTER_STATUS = [
-    CharacterLobby,
+    CharacterLobby.start_logging, CharacterLobby.selection
 
+]
+
+GARBAGE_TEXT_STATES = [
+    StartTutorial.start, StartTutorial.confirmation, StartTutorial.in_progress,
+    CharacterLobby.selection, CharacterLobby.start_logging,
+    CharacterCreation.choosing_gender, CharacterCreation.confirm
 ]

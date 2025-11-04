@@ -1,52 +1,78 @@
 # skill_formatters
 import logging
-from typing import Any
+from typing import Any, Dict, Union
 
 log = logging.getLogger(__name__)
 
 
 class SkillFormatters:
 
-
     @staticmethod
-    def group_skill(data: dict[str, dict[str, str]], char_name: str) -> str | None:
+    def group_skill(data: Dict[str, Dict[str, str]], char_name: str) -> Union[str, None]:
         """
-        Форматирует текс для первого сообщения навыков.
-        Выводим список группы навыков
-
-        :return: text
+        Форматирует текст для первого сообщения навыков.
+        Использует идею "числа впереди" для надежного выравнивания.
+        Число навыков выравнивается по правому краю,
+        затем идет разделитель и название группы.
         """
         if data is None:
-            log.error(f"данных нету внутри словаря")
+            log.error("Нет данных в словаре.")
             return None
 
+        # --- Новая, упрощенная логика ---
+
+        # Задаем ширину колонки для чисел.
+        # 3 знака = безопасно для чисел до 999.
+        number_width = 3
+        separator = " | "
+
         formatted_lines = []
-
         formatted_lines.append("<code>")
-        formatted_lines.append(f"{'Группа':<25} | Количество")
-        formatted_lines.append("-" * 31)
 
+        # 1. Заголовок
+        header_num = "№"
+        header_title = "Группа"
+        # Выравниваем "№" по правому краю, так же, как будут идти числа
+        header_line = f"{header_num:>{number_width}}{separator}{header_title}"
+        formatted_lines.append(header_line)
+
+        # 2. Разделительная линия
+        # Делаем ее простой, на основе ширины заголовка
+        # (Можно и убрать, если не нравится)
+        separator_line = f"{'─' * number_width}{separator}{'─' * 15}"
+        formatted_lines.append(separator_line)
+
+        # 3. Данные
         for group, value in data.items():
-            line = f"{value.get('title_ru'):<25} | {len(value.get('skills'))}"
+            title = value.get("title_ru", "Без имени")  # Добавим "Без имени" на всякий случай
+            skills_count = len(value.get("skills", {}))
 
+            # Опционально: обрезка слишком длинных названий, чтобы они не переносились
+            # Можно увеличить лимит или убрать, если перенос строк - это нормально
+            max_title_width = 35
+            if len(title) > max_title_width:
+                title = title[:max_title_width - 1] + "…"
+
+            line = f"{skills_count:>{number_width}}{separator}{title}"
             formatted_lines.append(line)
 
         formatted_lines.append("</code>")
 
         table_text = "\n".join(formatted_lines)
 
+        # Текст самого сообщения не меняем
         final_message_text = f"""
         
-        Персонаж: <b>{char_name}</b>
+    <b>Персонаж:</b> {char_name}
 
-    Твои способности сгруппированы в {len(data)} основных категорий.
-    Выбери группу ниже, чтобы увидеть состав и прогресс навыков группы.
-    
+    Твои способности сгруппированы в {len(data)} основных категория.
+    Число в начале это количество навыков внутри группы. 
     {table_text}
+    
+    
+    """
 
-        """
         return final_message_text
-
 
     @staticmethod
     def format_skill_list_in_group(
@@ -56,10 +82,10 @@ class SkillFormatters:
             character_skill: list[dict[str, Any]]
     ):
         """
-        :return: Текс для сообщения со скилами группы
+        Форматирует сообщение со списком навыков выбранной группы
         """
         if data is None:
-            log.error(f"данных нету внутри словаря")
+            log.error("Нет данных в словаре.")
             return None
 
         group_dict = data.get(group_type)
@@ -67,15 +93,17 @@ class SkillFormatters:
 
         formatted_lines = []
 
+        # Используем ровную псевдографику │ вместо обычного |
         formatted_lines.append("<code>")
-        formatted_lines.append(f"{'Навык':<25} | Прогрессия")
-        formatted_lines.append("-" * 37)
+        formatted_lines.append(f"{'Навык':<25} │ Прогрессия")
+        formatted_lines.append("─" * 37)
 
         for skill in character_skill:
             skill_key = skill["skill_key"]
             if skill_key in skill_dict:
-                line = f"{skill_dict.get(skill_key):<25} | {skill.get('progress_state')}"
-
+                skill_name = skill_dict.get(skill_key)
+                progress = skill.get('progress_state')
+                line = f"{skill_name:<25} │ {progress}"
                 formatted_lines.append(line)
 
         formatted_lines.append("</code>")
@@ -83,11 +111,10 @@ class SkillFormatters:
         table_text = "\n".join(formatted_lines)
 
         final_message_text = f"""
+    <b>Персонаж:</b> {char_name}
+    <b>Группа:</b> {group_dict.get('title_ru')}
 
-                Персонаж: <b>{char_name}</b>
-                Группа: {group_dict.get('title_ru')}
-
-    В это группе  {len(skill_dict)} навыков. 
+    В этой группе {len(skill_dict)} навыков.
     Выбери навык ниже, чтобы увидеть прогресс, детали и изменить состояние.
 
     {table_text}

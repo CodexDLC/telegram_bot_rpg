@@ -2,23 +2,23 @@
 import logging
 
 from aiogram import Router, F, Bot
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
 from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
-from app.services.helpers_module.DTO_helper import fsm_convector
+from app.resources.texts.ui_text.data_text_status_menu import STATUS_SKILLS
 from app.services.helpers_module.helper_id_callback import error_int_id, get_int_id_type, get_group_key, \
     get_type_callback
-from app.services.ui_service.character_skill_service import CharacterSkillStatusServer
+from app.services.ui_service.character_skill_service import CharacterSkillStatusService
 
 log = logging.getLogger(__name__)
 
 router = Router(name="character_skill_menu")
 
 
-@router.callback_query(F.data.startswith("status:skills"),
-                       *FSM_CONTEX_CHARACTER_STATUS)
-
+@router.callback_query(F.data.startswith(STATUS_SKILLS),
+                       StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
 async def character_skill_status_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
     """
     Обработка callback кнопок в меню статус, относящихся c навыкам персонажа.
@@ -36,11 +36,14 @@ async def character_skill_status_handler(call: CallbackQuery, state: FSMContext,
         return
 
     state_data = await state.get_data()
-    character_skill = await fsm_convector(state_data.get("character_progress_skill"), "character_progress")
-    character = await fsm_convector(state_data.get("character"), "character")
-    state_fsm = state_data.get("state_data")
+    log.debug(f"state_data = {state_data} ")
+    bd_data_status = state_data.get("bd_data_status")
+    log.debug(f"bd_data_status = {bd_data_status} ")
+    character_skill = bd_data_status.get("character_progress_skill")
+    character = bd_data_status.get("character")
+    state_fsm = state_data.get("state_fsm")
 
-    char_skill_service = CharacterSkillStatusServer(
+    char_skill_service = CharacterSkillStatusService(
         char_id=char_id,
         state_fsm=state_fsm,
         character=character,
@@ -49,6 +52,7 @@ async def character_skill_status_handler(call: CallbackQuery, state: FSMContext,
     )
 
     text, kb = char_skill_service.data_message_all_group_skill()
+
 
     message_content = state_data.get("message_content") or None
 
@@ -72,8 +76,8 @@ async def character_skill_status_handler(call: CallbackQuery, state: FSMContext,
 
 
 
-@router.callback_query(F.data.startswith("status:skills:group"),
-                       *FSM_CONTEX_CHARACTER_STATUS)
+@router.callback_query(F.data.startswith("skills:group"),
+                       StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
 async def character_skill_group_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
     """
     Обработчик кнопок
@@ -91,13 +95,15 @@ async def character_skill_group_handler(call: CallbackQuery, state: FSMContext, 
 
     state_data = await state.get_data()
     char_id = state_data.get("char_id")
+    bd_data_status = state_data.get("bd_data_status")
+    character_skill = bd_data_status.get("character_progress_skill")
+    character = bd_data_status.get("character")
     state_fsm = state_data.get("state_fsm")
-    character_skill = await fsm_convector(state_data.get("character_progress_skill"), "character_progress")
-    character = await fsm_convector(state_data.get("character"), "character")
+
     t_data = get_type_callback(call=call)
 
 
-    char_skill_service = CharacterSkillStatusServer(
+    char_skill_service = CharacterSkillStatusService(
         char_id=char_id,
         state_fsm=state_fsm,
         character=character,
@@ -120,6 +126,10 @@ async def character_skill_group_handler(call: CallbackQuery, state: FSMContext, 
         )
 
 
+@router.callback_query(F.data.startswith("skill:details:"),
+                       StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
+async def character_skill_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
+    pass
 
 
 

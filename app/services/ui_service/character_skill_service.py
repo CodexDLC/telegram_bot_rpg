@@ -11,7 +11,7 @@ from app.services.ui_service.helpers_ui.skill_formatters import SkillFormatters 
 
 log = logging.getLogger(__name__)
 
-class CharacterSkillStatusServer:
+class CharacterSkillStatusService:
 
     def __init__(self,
                  char_id : int,
@@ -34,6 +34,9 @@ class CharacterSkillStatusServer:
         """
         :return: текст и клавиатуру с группами навыков
         """
+        if self.character is None:
+            log.warning(f"Character = {self.character}")
+
         char_name = self.character.get('name')
         text = SkillF.group_skill(self.data_skill, char_name)
         kb = self._start_skill_kb()
@@ -52,7 +55,7 @@ class CharacterSkillStatusServer:
             character_skill=self.character_skill
         )
 
-        kb = self._group_skill_kb()
+        kb = self._group_skill_kb(group_type=group_type)
 
         return text, kb
 
@@ -76,9 +79,10 @@ class CharacterSkillStatusServer:
         if not self.data_skill:
             return None
 
-        skill_dict = self.data_skill[group_type]["skills"]
-        for key, value in skill_dict:
-            kb.button(text=value, callback_data=f"status:skills:group:skill:{key}")
+        skill_dict = self.data_skill[group_type]['skills']
+        log.debug(f" skill_dict = {skill_dict}")
+        for key, value in skill_dict.items():
+            kb.button(text=value, callback_data=f"skill:details:{key}")
 
         kb.adjust(2)
 
@@ -98,11 +102,12 @@ class CharacterSkillStatusServer:
         :return: клавиатуру для первого режима
         """
         kb = InlineKeyboardBuilder()
+
         for group, value in self.data_skill.items():
             text = value.get("title_ru")
-            kb.button(text=f"{text}", callback_data=f"status:skills:group:{group}")
+            kb.button(text=f"{text}", callback_data=f"skills:group:{group}")
 
-        kb.adjust(3)
+        kb.adjust(2)
 
         self._create_buttons(kb)
 

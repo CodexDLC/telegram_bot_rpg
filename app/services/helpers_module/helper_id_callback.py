@@ -38,9 +38,12 @@ def get_group_key(call: CallbackQuery) -> Optional[str]:
 
 def get_type_callback(call: CallbackQuery)-> Optional[str]:
     call_data = call.data
-    call_data_parts = call_data.split(":")
+    if call_data:
+        call_data_parts = call_data.split(":")
 
-    type_call_data = call_data_parts[-2]
+        type_call_data = call_data_parts[-2]
+    else:
+        type_call_data = "bio"
 
     return type_call_data
 

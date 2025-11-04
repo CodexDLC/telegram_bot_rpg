@@ -65,12 +65,14 @@ async def select_character_handler(call: CallbackQuery, state: FSMContext,bot: B
             reply_markup=get_character_lobby_kb(characters, selected_char_id=char_id)
         )
 
+        await state.update_data(char_id=char_id, user_id=call.from_user.id)
+
         await status_menu_start_handler(
             state=state,
-            call=call,
             bot=bot
-
         )
+
+
     else:
         # Обработка случая, когда у пользователя нет персонажей.
         log.warning(f"У пользователя {call.from_user.id} нет персонажей.")
