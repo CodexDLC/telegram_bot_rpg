@@ -6,5 +6,3 @@ STATUS_ACTION = {
     "nav:start": "❌ Закрыть"
 }
 
-STATUS_SKILLS = "status:skills"
-STATUS_BIO    = "status:bio"

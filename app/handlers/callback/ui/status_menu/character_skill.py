@@ -1,5 +1,6 @@
 # app/handlers/callback/ui/status_menu/character_skill.py
 import logging
+import time
 
 from aiogram import Router, F, Bot
 from aiogram.filters import StateFilter
@@ -7,12 +8,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
 from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
-from app.resources.keyboards.callback_data import StatusMenuCallback
-from app.resources.texts.ui_text.data_text_status_menu import STATUS_SKILLS
+from app.resources.keyboards.callback_data import StatusMenuCallback, SkillMenuCallback
+from app.resources.texts.ui_messages import TEXT_AWAIT
 from app.services.helpers_module.get_data_handlers.status_data_helper import get_status_data_package
-from app.services.helpers_module.helper_id_callback import error_int_id, get_int_id_type, get_group_key, \
-    get_type_callback
+from app.services.helpers_module.helper_id_callback import error_int_id
 from app.services.ui_service.character_skill_service import CharacterSkillStatusService
+from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ router = Router(name="character_skill_menu")
 
 
 @router.callback_query(
-    StatusMenuCallback.filter(F.action == "skills"), # <--- ФИЛЬТР ДЛЯ ФИЛЬТРА
+    StatusMenuCallback.filter(F.action == "skills"),  # <--- ФИЛЬТР ДЛЯ ФИЛЬТРА
     StateFilter(*FSM_CONTEX_CHARACTER_STATUS)
 )
 async def character_skill_status_handler(
@@ -34,6 +35,8 @@ async def character_skill_status_handler(
 
     """
     log.info("character_skill_status_handler начал свою работу")
+    await call.message.edit_text(TEXT_AWAIT, parse_mode="html")
+    start_time = time.monotonic()
 
     char_id = callback_data.char_id
     call_type = callback_data.action
@@ -67,6 +70,8 @@ async def character_skill_status_handler(
     message_content = state_data.get("message_content") or None
 
     if message_content is not None:
+        if start_time:
+            await await_min_delay(start_time, min_delay=0.5)
 
         await bot.edit_message_text(
             chat_id=message_content.get("chat_id"),
@@ -78,7 +83,6 @@ async def character_skill_status_handler(
 
     await state.update_data(
         char_id=char_id,
-        call_type=call_type,
         bd_data_status=bd_data_status
     )
 
@@ -86,14 +90,22 @@ async def character_skill_status_handler(
 
 
 
-@router.callback_query(F.data.startswith("skills:group"),
+@router.callback_query(SkillMenuCallback.filter(F.level == "group"),
                        StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
-async def character_skill_group_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
+async def character_skill_group_handler(
+        call: CallbackQuery,
+        state: FSMContext,
+        bot: Bot,
+        callback_data: SkillMenuCallback
+    ):
     """
     Обработчик кнопок
     """
-
-    gp = get_group_key(call)
+    await call.message.edit_text(TEXT_AWAIT, parse_mode="html")
+    start_time = time.monotonic()
+    gp = callback_data.value
+    char_id = callback_data.char_id
+    view_mode = callback_data.view_mode
 
     if gp is None:
         # вызываем функцию helper ошибки айди
@@ -101,13 +113,11 @@ async def character_skill_group_handler(call: CallbackQuery, state: FSMContext, 
         await error_int_id(call)
         return
 
-
     state_data = await state.get_data()
-    char_id = state_data.get("char_id")
-    user_id = call.from_user.id
+    user_id = state_data.get("user_id")
     bd_data_status = state_data.get("bd_data_status") or None
 
-    if bd_data_status is None:
+    if bd_data_status is None or char_id != bd_data_status.get("id"):
         bd_data_status = await get_status_data_package(char_id=char_id, user_id=user_id)
 
     char_skill_service = CharacterSkillStatusService(
@@ -115,7 +125,7 @@ async def character_skill_group_handler(call: CallbackQuery, state: FSMContext, 
         character=bd_data_status.get("character"),
         character_skill=bd_data_status.get("character_progress_skill"),
         call_type=state_data.get("call_type"),
-        view_mode=state_data.get("view_mode")
+        view_mode=view_mode  #
     )
 
     text, kb = char_skill_service.data_message_group_skill(group_type=gp)
@@ -123,6 +133,8 @@ async def character_skill_group_handler(call: CallbackQuery, state: FSMContext, 
     message_content = state_data.get("message_content") or None
 
     if message_content is not None:
+        if start_time:
+            await await_min_delay(start_time, min_delay=0.5)
 
         await bot.edit_message_text(
             chat_id=message_content.get("chat_id"),
@@ -132,8 +144,12 @@ async def character_skill_group_handler(call: CallbackQuery, state: FSMContext, 
             reply_markup=kb
         )
 
+    await state.update_data(
+        bd_data_status=bd_data_status,
+        user_id=user_id
+    )
 
-@router.callback_query(F.data.startswith("skill:details:"),
+@router.callback_query(SkillMenuCallback.filter(F.level == "detail"),
                        StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
 async def character_skill_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
     pass

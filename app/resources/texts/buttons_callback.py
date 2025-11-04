@@ -37,3 +37,4 @@ class GameStage(StrEnum):
     TUTORIAL_SKILL = "tutorial_skill"       # "tutorial_skill"
     TUTORIAL_WORLD = "tutorial_world"       # На будущее
     IN_GAME = "in_game"                     # Обычная игра
+

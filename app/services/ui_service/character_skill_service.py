@@ -6,7 +6,7 @@ from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.resources.game_data.skill_library import SKILL_UI_GROUPS_MAP
-from app.resources.keyboards.callback_data import StatusMenuCallback
+from app.resources.keyboards.callback_data import StatusMenuCallback, SkillMenuCallback
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.resources.texts.ui_text.data_text_status_menu import STATUS_ACTION
 from app.services.ui_service.helpers_ui.skill_formatters import SkillFormatters as SkillF
@@ -83,17 +83,27 @@ class CharacterSkillStatusService:
 
 
     def _group_skill_kb(self, group_type: Optional[str]):
+        """
+
+        """
         kb = InlineKeyboardBuilder()
 
         if not self.data_skill:
             return None
 
-        log.debug(f"{self.view_mode}")
         if self.view_mode != "lobby":
             skill_dict = self.data_skill[group_type]['skills']
-            log.debug(f" skill_dict = {skill_dict}")
+
             for key, value in skill_dict.items():
-                kb.button(text=value, callback_data=f"skill:details:{key}")
+                kb.button(
+                    text=value,
+                    callback_data=SkillMenuCallback(
+                        level="detail",
+                        value=key,
+                        char_id=self.char_id,
+                        view_mode=self.view_mode
+                    ).pack()
+                )
 
             kb.adjust(2)
 
@@ -102,7 +112,7 @@ class CharacterSkillStatusService:
             action="skills",
             char_id=self.char_id,
             view_mode=self.view_mode
-        ).pack()  #
+        ).pack()
 
         buttons.append(InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback))
 
@@ -110,7 +120,6 @@ class CharacterSkillStatusService:
             kb.row(*buttons)
 
         return kb.as_markup()
-
 
     def _start_skill_kb(self):
         """
@@ -120,16 +129,23 @@ class CharacterSkillStatusService:
 
         for group, value in self.data_skill.items():
             text = value.get("title_ru")
-            kb.button(text=f"{text}", callback_data=f"skills:group:{group}")
+
+            kb.button(
+                text=text,
+                callback_data=SkillMenuCallback(
+                    level="group",
+                    value=group,
+                    char_id=self.char_id,
+                    view_mode=self.view_mode,
+                ).pack(),
+            )
 
         kb.adjust(2)
-
         self._create_buttons(kb)
-
         return kb.as_markup()
 
 
-    def _create_buttons(self,kb: InlineKeyboardBuilder):
+    def _create_buttons(self, kb:InlineKeyboardBuilder):
 
         active_callback_action = self.call_type
         buttons = []
@@ -161,3 +177,5 @@ class CharacterSkillStatusService:
             b1 = InlineKeyboardButton(text=value, callback_data=callback_data_str)
             buttons.append(b1)
 
+        if buttons:
+            kb.row(*buttons)

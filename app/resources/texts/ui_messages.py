@@ -9,3 +9,11 @@ START_GREETING = """
 """
 
 DEFAULT_ACTOR_NAME = "⚙️ system"
+
+
+TEXT_AWAIT = f"""
+
+{DEFAULT_ACTOR_NAME}:  ****** Идет обработка данных ***** 
+
+
+"""
