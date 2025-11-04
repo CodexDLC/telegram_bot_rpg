@@ -15,19 +15,21 @@ class CharacterSkillStatusService:
 
     def __init__(self,
                  char_id : int,
-                 state_fsm: str,
                  call_type: str,
+                 view_mode: str,
                  character: dict[str, Any],
                  character_skill: list[dict[str, Any]]
                  ):
 
         self.char_id = char_id
-        self.fsm_state = state_fsm
         self.character = character
         self.call_type = call_type
+        self.view_mode=view_mode
+        self.actor_name = "system"
         self.data_skill = SKILL_UI_GROUPS_MAP
         self.b_status = STATUS_ACTION
         self.character_skill = character_skill
+
 
 
     def data_message_all_group_skill(self):

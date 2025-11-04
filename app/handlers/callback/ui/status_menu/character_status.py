@@ -1,3 +1,4 @@
+# app/handlers/callback/ui/status_menu/character_status.py
 import logging
 from typing import Union
 
@@ -10,6 +11,7 @@ from aiogram.types import CallbackQuery
 from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
 from app.resources.texts.ui_text.data_text_status_menu import STATUS_BIO
 from app.services.helpers_module.DTO_helper import fsm_convector
+from app.services.helpers_module.get_data_handlers.status_data_helper import get_status_data_package
 from app.services.helpers_module.helper_id_callback import error_int_id, error_msg_default, get_int_id_type, \
     get_type_callback
 from app.services.ui_service.character_status_service import CharacterMenuUIService
@@ -21,7 +23,9 @@ log = logging.getLogger(__name__)
 
 async def status_menu_start_handler(state: FSMContext,
                                     bot: Bot,
-                                    call: Union[CallbackQuery, None] = None, ):
+                                    call: Union[CallbackQuery, None] = None,
+                                    view_mode: str = "full_access"
+                                    ):
     """
     ОСНОВНАЯ ЛОГИКА: Выводит или обновляет статус персонажа.
     (Режим 1: call=CallbackQuery, Режим 2: call=None)
@@ -56,13 +60,14 @@ async def status_menu_start_handler(state: FSMContext,
 
     # --- Инициализация Сервиса ---
     char_menu_service = CharacterMenuUIService(
-        user_id=user_id,
         char_id=char_id,
-        fsm=await state.get_state(),
-        call_type=call_type
+        call_type=call_type,
+        view_mode=view_mode
     )
+    bd_data_status = state_data.get("bd_data_status") or None
 
-    bd_data_status = await char_menu_service.get_bd_data_staus()
+    if bd_data_status is None:
+        bd_data_status = await get_status_data_package(char_id=char_id, user_id=user_id)
 
     if bd_data_status is None:
         log.warning(f"bd_data_status не найден для char_id={char_id}.")
@@ -152,8 +157,11 @@ async def status_menu_start_handler(state: FSMContext,
         # Это предотвратит дубликаты при следующем вызове.
         update_data = {
             "bd_data_status": bd_data_status,
-            "state_fsm": await state.get_state()
+            "state_fsm": await state.get_state(),
+            "view_mode" : view_mode,
+            "user_id" : user_id
         }
+
         if new_message_created:
             update_data["message_content"] = message_content
 

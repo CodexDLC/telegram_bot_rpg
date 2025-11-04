@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery
 
 from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
 from app.resources.texts.ui_text.data_text_status_menu import STATUS_SKILLS
+from app.services.helpers_module.get_data_handlers.status_data_helper import get_status_data_package
 from app.services.helpers_module.helper_id_callback import error_int_id, get_int_id_type, get_group_key, \
     get_type_callback
 from app.services.ui_service.character_skill_service import CharacterSkillStatusService
@@ -36,19 +37,18 @@ async def character_skill_status_handler(call: CallbackQuery, state: FSMContext,
         return
 
     state_data = await state.get_data()
-    log.debug(f"state_data = {state_data} ")
-    bd_data_status = state_data.get("bd_data_status")
-    log.debug(f"bd_data_status = {bd_data_status} ")
-    character_skill = bd_data_status.get("character_progress_skill")
-    character = bd_data_status.get("character")
-    state_fsm = state_data.get("state_fsm")
+    bd_data_status = state_data.get("bd_data_status") or None
+    user_id = state_data.get("user_id")
+
+    if bd_data_status is None:
+        bd_data_status = await get_status_data_package(char_id=char_id, user_id=user_id)
 
     char_skill_service = CharacterSkillStatusService(
         char_id=char_id,
-        state_fsm=state_fsm,
-        character=character,
-        character_skill=character_skill,
-        call_type=t_data
+        character=bd_data_status.get("character"),
+        character_skill=bd_data_status.get("character_progress_skill"),
+        call_type=t_data,
+        view_mode=state_data.get("view_mode")
     )
 
     text, kb = char_skill_service.data_message_all_group_skill()
@@ -68,8 +68,8 @@ async def character_skill_status_handler(call: CallbackQuery, state: FSMContext,
 
     await state.update_data(
         char_id=char_id,
-        state_fsm=state_fsm,
-        call_type=t_data
+        call_type=t_data,
+        bd_data_status=bd_data_status
     )
 
     log.info("character_skill_status_handler Закончил свою работу")
@@ -92,23 +92,20 @@ async def character_skill_group_handler(call: CallbackQuery, state: FSMContext, 
         return
 
 
-
     state_data = await state.get_data()
     char_id = state_data.get("char_id")
-    bd_data_status = state_data.get("bd_data_status")
-    character_skill = bd_data_status.get("character_progress_skill")
-    character = bd_data_status.get("character")
-    state_fsm = state_data.get("state_fsm")
+    user_id = call.from_user.id
+    bd_data_status = state_data.get("bd_data_status") or None
 
-    t_data = get_type_callback(call=call)
-
+    if bd_data_status is None:
+        bd_data_status = await get_status_data_package(char_id=char_id, user_id=user_id)
 
     char_skill_service = CharacterSkillStatusService(
         char_id=char_id,
-        state_fsm=state_fsm,
-        character=character,
-        character_skill=character_skill,
-        call_type=t_data,
+        character=bd_data_status.get("character"),
+        character_skill=bd_data_status.get("character_progress_skill"),
+        call_type=state_data.get("call_type"),
+        view_mode=state_data.get("view_mode")
     )
 
     text, kb = char_skill_service.data_message_group_skill(group_type=gp)
