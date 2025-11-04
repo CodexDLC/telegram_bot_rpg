@@ -9,6 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
 from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
+from app.resources.keyboards.callback_data import StatusMenuCallback
 from app.resources.texts.ui_text.data_text_status_menu import STATUS_BIO
 from app.services.helpers_module.DTO_helper import fsm_convector
 from app.services.helpers_module.get_data_handlers.status_data_helper import get_status_data_package
@@ -24,7 +25,10 @@ log = logging.getLogger(__name__)
 async def status_menu_start_handler(state: FSMContext,
                                     bot: Bot,
                                     call: Union[CallbackQuery, None] = None,
-                                    view_mode: str = "full_access"
+                                    # VVV Параметры, которые передаст хэндлер VVV
+                                    explicit_char_id: int = None,
+                                    explicit_view_mode: str = None,
+                                    explicit_call_type: str = None
                                     ):
     """
     ОСНОВНАЯ ЛОГИКА: Выводит или обновляет статус персонажа.
@@ -33,25 +37,27 @@ async def status_menu_start_handler(state: FSMContext,
     log.info("status_menu_start_handler (ЛОГИКА) начал работу")
     state_data = await state.get_data()
 
-    # --- Определение режима ---
     if call:
-        # Режим 1: Нас вызвали нажатием на кнопку (status:bio:123)
+        # Режим 1: Нас вызвали нажатием на кнопку (call НЕ None)
         log.debug("Режим 1 (Callback)")
-        char_id = get_int_id_type(call=call)
-        call_type = get_type_callback(call=call)
+
+        # Мы получаем данные из хэндлера, который их распарсил
+        char_id = explicit_char_id
+        view_mode = explicit_view_mode
+        call_type = explicit_call_type
         user_id = call.from_user.id
     else:
         # Режим 2: Нас вызвали из лобби (call=None)
         log.debug("Режим 2 (Лобби, call=None)")
         char_id = state_data.get("char_id")
         user_id = state_data.get("user_id")
-        call_type = "bio"  # По умолчанию для лобби
+        call_type = "bio"
+        view_mode = "lobby"
 
-    # --- Валидация ID ---
+        # --- Валидация ID ---
     if char_id is None:
-        log.error(f"Ошибка: ID персонажа не найден (Режим: {'Callback' if call else 'Лобби'}).")
-        if call:  # Отвечаем на call, если он есть
-            await error_int_id(call)
+        log.error(f"Ошибка: ID персонажа не найден.")
+        if call: await error_int_id(call)
         return
 
     if user_id is None:
@@ -66,7 +72,10 @@ async def status_menu_start_handler(state: FSMContext,
     )
     bd_data_status = state_data.get("bd_data_status") or None
 
-    if bd_data_status is None:
+    if bd_data_status is None or char_id != bd_data_status.get("id"):
+        if bd_data_status is not None:
+            log.warning(
+            f"Кэш FSM неактуален. ID в FSM={char_id}, ID в кэше={bd_data_status.get('id')}. Принудительная перезагрузка.")
         bd_data_status = await get_status_data_package(char_id=char_id, user_id=user_id)
 
     if bd_data_status is None:
@@ -178,14 +187,26 @@ async def status_menu_start_handler(state: FSMContext,
         log.exception(f"Критическая ошибка при обновлении БИО/Статов: {e}")
 
 
-@router.callback_query(F.data.startswith(STATUS_BIO),
-                       StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
-async def status_menu_callback_handler(call: CallbackQuery,
-                                       state: FSMContext,
-                                       bot: Bot):
+@router.callback_query(
+    StatusMenuCallback.filter(F.action == "bio"),  # <--- ФИЛЬТР ДЛЯ ФИЛЬТРА
+    StateFilter(*FSM_CONTEX_CHARACTER_STATUS)
+)
+async def status_menu_callback_handler(
+        call: CallbackQuery,
+        state: FSMContext,
+        bot: Bot,
+        callback_data: StatusMenuCallback  # <--- Сюда придет ТОЛЬКО 'bio'
+):
     """
-    Хэндлер-обертка: Ловит callback от кнопки (status:bio:...)
-    и вызывает основную функцию логики status_menu_start_handler.
+    Хэндлер-обертка: Ловит callback ТОЛЬКО для action='bio'
     """
-    log.debug(f"Получен callback: {call.data}. Вызов status_menu_start_handler.")
-    await status_menu_start_handler(state=state, bot=bot, call=call)
+    log.debug(f"Получен [StatusMenuCallback(bio)]: {callback_data}")
+
+    await status_menu_start_handler(
+        state=state,
+        bot=bot,
+        call=call,
+        explicit_char_id=callback_data.char_id,
+        explicit_view_mode=callback_data.view_mode,
+        explicit_call_type=callback_data.action  # будет 'bio'
+    )

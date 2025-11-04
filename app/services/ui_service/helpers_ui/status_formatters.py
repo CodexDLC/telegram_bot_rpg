@@ -1,9 +1,6 @@
 #app/services/helpers_module/ui/status_formatters.py
 import logging
 
-from aiogram.types import InlineKeyboardMarkup
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO, CharacterReadDTO
 from app.resources.texts.buttons_callback import Buttons
 
@@ -17,18 +14,16 @@ class StatusFormatter:
     """
 
     @staticmethod
-    def format_character_bio(character: CharacterReadDTO, stats: CharacterStatsReadDTO) -> str:
+    def format_character_bio(
+            character: CharacterReadDTO,
+            stats: CharacterStatsReadDTO,
+            actor_name: str
+    ) -> str:
         """
         Форматирует детальное "Био" (для "Якоря" ПОСЛЕ выбора).
         Это представление по умолчанию при инспекции или при нажатии кнопки статус персонажа.
 
         """
-        log.debug(
-            f"""
-            character равно = {character}
-            stats = {stats}            
-            """
-        )
         s = getattr(stats, 'strength', 0)
         p = getattr(stats, 'perception', 0)
         e = getattr(stats, 'endurance', 0)
@@ -42,10 +37,12 @@ class StatusFormatter:
         data = character.created_at
 
         text = f"""
-
-        ℹ️ Статус персонажа:  -= <i>{name}</i> =-    
-        
+    
+    {actor_name}: ❗ Инициация данных       
+    {actor_name}:  Вывод данных.     
+    
     <code>
+    ℹ️ Статус персонажа:  -= <i>{name}</i> =-    
     <b>Пол:</b><i>{gender}</i>     
     <b>Параметры персонажа:</b>
     

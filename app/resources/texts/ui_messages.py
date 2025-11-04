@@ -8,3 +8,4 @@ START_GREETING = """
 
 """
 
+DEFAULT_ACTOR_NAME = "⚙️ system"

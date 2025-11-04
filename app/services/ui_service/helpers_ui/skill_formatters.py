@@ -8,7 +8,7 @@ log = logging.getLogger(__name__)
 class SkillFormatters:
 
     @staticmethod
-    def group_skill(data: Dict[str, Dict[str, str]], char_name: str) -> Union[str, None]:
+    def group_skill(data: Dict[str, Dict[str, str]], char_name: str, actor_name: str) -> Union[str, None]:
         """
         Форматирует текст для первого сообщения навыков.
         Использует идею "числа впереди" для надежного выравнивания.
@@ -61,15 +61,17 @@ class SkillFormatters:
         table_text = "\n".join(formatted_lines)
 
         # Текст самого сообщения не меняем
-        final_message_text = f"""
+        final_message_text = f"""                  
         
-    <b>Персонаж:</b> {char_name}
-
-    Твои способности сгруппированы в {len(data)} основных категория.
-    Число в начале это количество навыков внутри группы. 
+    {actor_name}: ❗ Инициация данных
+    
+    {actor_name}: Ваши способности сгруппированы в {len(data)} основных категориях.
+        
+                          
+    <code> 
+    <b>Имя персонажа:</b> {char_name}
+    </code>    
     {table_text}
-    
-    
     """
 
         return final_message_text
@@ -79,6 +81,8 @@ class SkillFormatters:
             data: dict[str, dict[str, str]],
             group_type: str,
             char_name: str,
+            actor_name:str,
+            view_mode: str,
             character_skill: list[dict[str, Any]]
     ):
         """
@@ -87,6 +91,9 @@ class SkillFormatters:
         if data is None:
             log.error("Нет данных в словаре.")
             return None
+
+
+        bonus_text = f"{actor_name} Выбери навык ниже, чтобы увидеть прогресс, детали и изменить состояние."
 
         group_dict = data.get(group_type)
         skill_dict = group_dict.get("skills")
@@ -111,12 +118,14 @@ class SkillFormatters:
         table_text = "\n".join(formatted_lines)
 
         final_message_text = f"""
+    
+    {actor_name}:  В этой группе {len(skill_dict)} навыков.
+    {"" if view_mode == "lobby" else bonus_text}    
+    
+    <code>    
     <b>Персонаж:</b> {char_name}
     <b>Группа:</b> {group_dict.get('title_ru')}
-
-    В этой группе {len(skill_dict)} навыков.
-    Выбери навык ниже, чтобы увидеть прогресс, детали и изменить состояние.
-
+    </code>     
     {table_text}
     """
 

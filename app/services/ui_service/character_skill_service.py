@@ -6,6 +6,8 @@ from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.resources.game_data.skill_library import SKILL_UI_GROUPS_MAP
+from app.resources.keyboards.callback_data import StatusMenuCallback
+from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.resources.texts.ui_text.data_text_status_menu import STATUS_ACTION
 from app.services.ui_service.helpers_ui.skill_formatters import SkillFormatters as SkillF
 
@@ -25,7 +27,7 @@ class CharacterSkillStatusService:
         self.character = character
         self.call_type = call_type
         self.view_mode=view_mode
-        self.actor_name = "system"
+        self.actor_name = DEFAULT_ACTOR_NAME
         self.data_skill = SKILL_UI_GROUPS_MAP
         self.b_status = STATUS_ACTION
         self.character_skill = character_skill
@@ -40,7 +42,8 @@ class CharacterSkillStatusService:
             log.warning(f"Character = {self.character}")
 
         char_name = self.character.get('name')
-        text = SkillF.group_skill(self.data_skill, char_name)
+        syb_name = DEFAULT_ACTOR_NAME if self.call_type == "lobby" else self.actor_name
+        text = SkillF.group_skill(self.data_skill, char_name, syb_name)
         kb = self._start_skill_kb()
 
         return text, kb
@@ -50,10 +53,14 @@ class CharacterSkillStatusService:
          текст и клавиатура для навыков в группе
         """
         char_name = self.character.get('name')
+
+        syb_name = DEFAULT_ACTOR_NAME if self.call_type == "lobby" else self.actor_name
         text = SkillF.format_skill_list_in_group(
             data=self.data_skill,
             group_type=group_type,
             char_name=char_name,
+            actor_name=syb_name,
+            view_mode=self.view_mode,
             character_skill=self.character_skill
         )
 
@@ -81,22 +88,28 @@ class CharacterSkillStatusService:
         if not self.data_skill:
             return None
 
-        skill_dict = self.data_skill[group_type]['skills']
-        log.debug(f" skill_dict = {skill_dict}")
-        for key, value in skill_dict.items():
-            kb.button(text=value, callback_data=f"skill:details:{key}")
+        log.debug(f"{self.view_mode}")
+        if self.view_mode != "lobby":
+            skill_dict = self.data_skill[group_type]['skills']
+            log.debug(f" skill_dict = {skill_dict}")
+            for key, value in skill_dict.items():
+                kb.button(text=value, callback_data=f"skill:details:{key}")
 
-        kb.adjust(2)
+            kb.adjust(2)
 
         buttons = []
-        back_callback = f"status:skills:{self.char_id}"
-        buttons.append(kb.button(text="🔙 Назад", callback_data=back_callback))
+        back_callback = StatusMenuCallback(
+            action="skills",
+            char_id=self.char_id,
+            view_mode=self.view_mode
+        ).pack()  #
+
+        buttons.append(InlineKeyboardButton(text="🔙 Назад", callback_data=back_callback))
 
         if buttons:
             kb.row(*buttons)
 
         return kb.as_markup()
-
 
 
     def _start_skill_kb(self):
@@ -118,23 +131,33 @@ class CharacterSkillStatusService:
 
     def _create_buttons(self,kb: InlineKeyboardBuilder):
 
-        active_callback = f"status:{self.call_type}"
+        active_callback_action = self.call_type
         buttons = []
         for key, value in self.b_status.items():
 
-            if key == active_callback:
+            # Получаем 'bio' или 'skills'
+            action = key
+
+            if action == active_callback_action:
                 continue
 
+            # VVV Логика для кнопки "Закрыть" VVV
             if key == "nav:start":
                 # Если мы в лобби, кнопка "Закрыть" не нужна
-                if self.fsm_state == "CharacterLobby.selection":
+                if self.view_mode == "lobby":
                     continue
+                # Это обычная кнопка, она не часть Фабрики
+                b1 = InlineKeyboardButton(text=value, callback_data=key)
+                buttons.append(b1)
+                continue
 
-            callback_data = f"{key}:{self.char_id}" if key.startswith("status:") else key
+            # Собираем callback через нашу Фабрику
+            callback_data_str = StatusMenuCallback(
+                action=action,
+                char_id=self.char_id,
+                view_mode=self.view_mode
+            ).pack()
 
-            b1 = InlineKeyboardButton(text=value, callback_data=callback_data)
+            b1 = InlineKeyboardButton(text=value, callback_data=callback_data_str)
             buttons.append(b1)
-
-        if buttons:
-            kb.row(*buttons)
 

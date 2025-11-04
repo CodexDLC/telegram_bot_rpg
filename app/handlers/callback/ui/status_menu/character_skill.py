@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
 from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
+from app.resources.keyboards.callback_data import StatusMenuCallback
 from app.resources.texts.ui_text.data_text_status_menu import STATUS_SKILLS
 from app.services.helpers_module.get_data_handlers.status_data_helper import get_status_data_package
 from app.services.helpers_module.helper_id_callback import error_int_id, get_int_id_type, get_group_key, \
@@ -18,17 +19,25 @@ log = logging.getLogger(__name__)
 router = Router(name="character_skill_menu")
 
 
-@router.callback_query(F.data.startswith(STATUS_SKILLS),
-                       StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
-async def character_skill_status_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
+@router.callback_query(
+    StatusMenuCallback.filter(F.action == "skills"), # <--- ФИЛЬТР ДЛЯ ФИЛЬТРА
+    StateFilter(*FSM_CONTEX_CHARACTER_STATUS)
+)
+async def character_skill_status_handler(
+    call: CallbackQuery,
+    state: FSMContext,
+    bot: Bot,
+    callback_data: StatusMenuCallback
+):
     """
     Обработка callback кнопок в меню статус, относящихся c навыкам персонажа.
 
     """
     log.info("character_skill_status_handler начал свою работу")
 
-    char_id = get_int_id_type(call=call)
-    t_data = get_type_callback(call=call)
+    char_id = callback_data.char_id
+    call_type = callback_data.action
+    view_mode = callback_data.view_mode
 
     if char_id is None:
         # вызываем функцию helper ошибки айди
@@ -45,10 +54,11 @@ async def character_skill_status_handler(call: CallbackQuery, state: FSMContext,
 
     char_skill_service = CharacterSkillStatusService(
         char_id=char_id,
+        call_type=call_type,
+        view_mode=view_mode,
         character=bd_data_status.get("character"),
         character_skill=bd_data_status.get("character_progress_skill"),
-        call_type=t_data,
-        view_mode=state_data.get("view_mode")
+
     )
 
     text, kb = char_skill_service.data_message_all_group_skill()
@@ -68,7 +78,7 @@ async def character_skill_status_handler(call: CallbackQuery, state: FSMContext,
 
     await state.update_data(
         char_id=char_id,
-        call_type=t_data,
+        call_type=call_type,
         bd_data_status=bd_data_status
     )
 
