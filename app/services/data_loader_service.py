@@ -5,7 +5,7 @@ import asyncio
 from database.repositories import (
     get_user_repo,
     get_character_repo, get_character_stats_repo,
-    get_skill_rate_repo, get_skill_progress_repo
+    get_skill_progress_repo
 )
 
 from database.session import get_async_session

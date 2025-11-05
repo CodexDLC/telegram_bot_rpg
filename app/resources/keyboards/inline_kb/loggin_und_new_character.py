@@ -6,10 +6,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.resources.texts.buttons_callback import Buttons
 
 
-
-
 log = logging.getLogger(__name__)
-
 
 
 def get_start_adventure_kb() -> InlineKeyboardMarkup:
@@ -57,43 +54,6 @@ def tutorial_kb(data: dict[str, str]) -> InlineKeyboardMarkup:
         for key, value in data.items():
             kb.button(text=value, callback_data=key)
             kb.adjust(1)
-
-    return kb.as_markup()
-
-
-
-# ===== Login и Инициация создания персонажа по выбору игрока, а не первого=====
-
-def get_character_lobby_kb(
-    characters: list,
-    selected_char_id: int | None,
-    max_slots: int = 4
-) -> InlineKeyboardMarkup:
-
-    """
-        Клавиатура стартового меню лобби выбора персонажа
-    """
-
-    kb = InlineKeyboardBuilder()
-    lobby_data = Buttons.LOBBY
-
-    # === Блок персонажей (2x2) ===
-    for i in range(max_slots):
-        if i < len(characters):
-            char = characters[i]
-            kb.button(
-                text=f"{'✅ ' if char.character_id == selected_char_id else '👤 '}{char.name}",
-                callback_data=f"lobby:select:{char.character_id}"
-            )
-        else:
-            kb.button(text=lobby_data["lobby:create"], callback_data="lobby:create")
-
-    kb.adjust(2, 2)
-
-    # === Блок действий (по одной на строку) ===
-    actions = ["logout", "lobby:login"]
-    for cb in actions:
-        kb.row(InlineKeyboardButton(text=lobby_data[cb], callback_data=cb))
 
     return kb.as_markup()
 

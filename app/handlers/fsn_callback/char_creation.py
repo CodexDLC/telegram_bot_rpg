@@ -1,21 +1,24 @@
 # app/handlers/fsn_callback/char_creation.py
 import asyncio
 import logging
+import time
 from aiogram import Router, F, Bot
 
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from app.resources.fsm_states.states import CharacterCreation, StartTutorial, CharacterLobby
-from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb, tutorial_kb, gender_kb
+from app.resources.fsm_states.states import CharacterCreation, StartTutorial
+from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb, tutorial_kb
 from app.resources.schemas_dto.character_dto import CharacterCreateDTO
 from app.resources.texts.buttons_callback import Buttons, GameStage
 
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
-
+from app.services.game_service.new_character.onboarding_service import OnboardingService
 
 from app.services.helpers_module.game_validator import validate_character_name
+from app.services.helpers_module.helper_id_callback import get_int_id_type
+from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from database.repositories import get_character_repo
 from database.session import get_async_session
 
@@ -24,13 +27,83 @@ log = logging.getLogger(__name__)
 router = Router(name="character_creation_fsm")
 
 
+
+async def start_creation_handler(
+        call: CallbackQuery,
+        state: FSMContext,
+        bot: Bot,
+        user_id: int,
+        message_menu: dict[str, int]):
+    """
+        Инициирует создание персонажа
+
+    """
+    await call.answer()
+    start_time = time.monotonic()
+
+
+
+
+
+    if start_time:
+        await await_min_delay(start_time, min_delay=0.3)
+
+    await bot.edit_message_text(
+        chat_id=message_menu.get("chat_id"),
+        message_id=message_menu.get("message_id"),
+        text=text,
+        parse_mode="html",
+        reply_markup=kb
+    )
+
+
+
+
+    await create_message_content_start_creation(user_id=user_id, call=call)
+
+
+
+    await state.set_state(CharacterCreation.choosing_gender)
+
+async def create_message_content_start_creation(
+        call: CallbackQuery,
+        state: FSMContext,
+        user_id: int):
+    """
+    Инициализация второго сообщения при создании персонажа
+    """
+
+    start_time = time.monotonic()
+    create_service = OnboardingService(user_id=user_id)
+    text, kb = create_service.get_data_start_creation_content()
+
+    msg = await call.message.answer(
+            text=text,
+            parse_mode="html",
+            reply_markup=kb
+        )
+
+    if start_time:
+        await await_min_delay(start_time, min_delay=0.3)
+
+    message_content = {
+        "chat_id": msg.chat.id,
+        "message_id": msg.message_id
+    }
+
+    await state.update_data(message_content=message_content)
+
+
+
+
 @router.callback_query(CharacterCreation.choosing_gender, F.data.startswith("gender:"))
 async def choose_gender_handler(call: CallbackQuery, state: FSMContext):
     """
     Обрабатывает выбор пола.
     """
+
     await call.answer()
-    gender_value = call.data.split(":")[-1]
+    gender_value = get_int_id_type(call=call)
     gender_text_ru = Buttons.GENDER.get(f"gender:{gender_value}", "Не указан")
 
     await state.update_data(gender_db=gender_value, gender_display=gender_text_ru)
@@ -149,14 +222,3 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext):
     return None
 
 
-@router.callback_query(CharacterLobby.selection, F.data == "lobby:create")
-async def start_creation_handler(call: CallbackQuery, state: FSMContext):
-    """
-        Инициирует создание персонажа
-
-    """
-    await state.set_state(CharacterCreation.choosing_gender)
-    if isinstance(call.message, Message):
-        await call.message.edit_text(
-            text=LobbyMessages.NewCharacter.GENDER_CHOICE, parse_mode='HTML',
-            reply_markup=gender_kb())

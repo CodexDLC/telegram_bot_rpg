@@ -21,6 +21,8 @@ def get_int_id_type(call: CallbackQuery)-> Optional[int]:
 
     return char_id
 
+
+
 def get_group_key(call: CallbackQuery) -> Optional[str]:
     """
     Извлекает ключ группы навыков из колбэка и проверяет его наличие

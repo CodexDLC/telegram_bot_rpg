@@ -7,10 +7,10 @@ from aiogram.types import CallbackQuery
 
 from app.handlers.callback.ui.status_menu.character_status import status_menu_start_handler
 from app.resources.fsm_states.states import CharacterLobby
-from app.resources.keyboards.inline_kb.loggin_und_new_character import get_character_lobby_kb
+
 from app.services.data_loader_service import load_data_auto
 from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store
-from app.services.helpers_module.ui.lobby_formatters import LobbyFormatter
+from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
 
 log = logging.getLogger(__name__)
 

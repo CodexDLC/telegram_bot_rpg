@@ -13,7 +13,7 @@ class LobbyFormatter:
     """
 
     @staticmethod
-    def format_character_list(characters: list[CharacterReadDTO] | list[dict[str, str]]) -> str:
+    def format_character_list(characters: list[CharacterReadDTO]) -> str:
         """
         Форматирует ОБЩИЙ список персонажей (для "Якоря" до выбора).
         Принимает: Список DTO персонажей.

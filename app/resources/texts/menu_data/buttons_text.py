@@ -1,0 +1,17 @@
+
+
+class ButtonsTextData:
+
+
+    BUTTONS_MENU_FULL = {
+
+        "status" : "ℹ️ Статус",
+        "inventory": "📦 Инвентарь",
+        "navigation": "🗺️ Навигация",
+        "logaut": "❌ Выйти оффлайн",
+
+    }
+
+
+
+    TEXT_MENU = "<code>Игровое меню</code>"

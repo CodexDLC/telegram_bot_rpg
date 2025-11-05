@@ -1,5 +1,6 @@
 # app/handlers/commands.py
 import logging
+import time
 
 from aiogram import Router
 from aiogram.filters import Command
@@ -8,11 +9,9 @@ from aiogram.types import Message
 
 
 from app.resources.keyboards.inline_kb.loggin_und_new_character import get_start_adventure_kb
-from app.resources.schemas_dto.user_dto import UserUpsertDTO
 from app.resources.texts.ui_messages import START_GREETING
-from database.db import get_db_connection
-from database.repositories import get_user_repo
-from database.session import get_async_session
+from app.services.game_service.command_service import CommandService
+from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 
 log = logging.getLogger(__name__)
 
@@ -22,33 +21,26 @@ router = Router(name="commands_router")
 @router.message(Command("start"))
 async def cmd_start(m: Message, state: FSMContext)-> None:
     log.info("Команда /start")
+    start_time = time.monotonic()
 
-
-
-    # 1. Мы не можем продолжать, если нет message.from_user
+    # Мы не можем продолжать, если нет message.from_user
     if not m.from_user:
         return None
-
+    # Очищаем контекст
     await state.clear()
-
+    # получаем объект Пользователя
     user = m.from_user
 
-    # 2. "ЗАПЕЧАТЫВАНИЕ" ДАННЫХ В DTO
+    # создаем сервис и вызываем его метод, что бы сохранить в базу пользователя
+    com_service = CommandService(user)
+    await com_service.create_user_in_db()
 
-    user_dto = UserUpsertDTO(
-        telegram_id=user.id,
-        first_name=user.first_name,
-        username=user.username,
-        last_name=user.last_name,
-        language_code=user.language_code,
-        is_premium=bool(user.is_premium)
-    )
-    # 3. Используем DTO для записи в БД
-    async with get_async_session() as session:
-        user_repo = get_user_repo(session)
-        await user_repo.upsert_user(user_dto)
+    if start_time:
+        await await_min_delay(start_time, min_delay=0.5)
 
-    # 4. Отправляем сообщение пользователю
+
+
+    # Отправляем сообщение пользователю и сохраняем сообщение для получения айди чата и сообщения
     mes = await m.answer(
         START_GREETING.format(first_name=user.first_name),
         reply_markup=get_start_adventure_kb())
@@ -63,7 +55,7 @@ async def cmd_start(m: Message, state: FSMContext)-> None:
     try:
         await m.delete()
     except Exception as e:
-        # (На всякий случай, если у бота нет прав или сообщение старое)
+        # На всякий случай, если у бота нет прав или сообщение старое
         log.warning(f"Не удалось удалить сообщение /start: {e}")
 
     return None
