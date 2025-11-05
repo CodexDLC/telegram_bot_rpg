@@ -5,7 +5,8 @@ from app.resources.schemas_dto.character_dto import CharacterReadDTO
 from app.resources.texts.buttons_callback import Buttons
 from app.services.helpers_module.DTO_helper import fsm_store
 from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
-from database.repositories import get_user_repo
+from app.resources.schemas_dto.character_dto import CharacterShellCreateDTO
+from database.repositories import get_character_repo
 from database.session import get_async_session
 
 
@@ -66,3 +67,18 @@ class LobbyService:
             kb.row(InlineKeyboardButton(text=lobby_data[cb], callback_data=cb))
 
         return kb.as_markup()
+
+
+    async def create_und_get_character_id(self):
+
+        dto_object = CharacterShellCreateDTO(
+            user_id=self.user_id
+        )
+
+        async with get_async_session() as session:
+            char_repo = get_character_repo(session)
+            char_id = char_repo.create_character_shell(dto_object)
+
+        return char_id
+
+

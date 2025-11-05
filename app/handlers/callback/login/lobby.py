@@ -71,11 +71,14 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
         log.warning("Персонажей нету запускаем цепочку инициализации персонажа")
         state_data = await state.get_data()
 
+        char_id = lobby_service.create_und_get_character_id()
 
         await start_creation_handler(
             call=call,
             state=state,
             user_id=lobby_service.user_id,
             message_menu= state_data.get("message_menu"),
-            bot=bot
+            bot=bot,
+            char_id=char_id
+
         )

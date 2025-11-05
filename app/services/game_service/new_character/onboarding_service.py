@@ -3,6 +3,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.resources.texts.buttons_callback import Buttons
+from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 
 
 class OnboardingService:
@@ -10,13 +11,13 @@ class OnboardingService:
     def __init__(self, user_id: int):
         self.user_id = user_id
         self.buttons = Buttons
-
+        self.new_char = LobbyMessages.NewCharacter
 
 
 
     def get_data_start_creation_content(self):
 
-        text = ""
+        text =  self.new_char.GENDER_CHOICE
 
         kb = self._gender_kb()
 

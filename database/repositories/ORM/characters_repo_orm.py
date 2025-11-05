@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.schemas_dto.character_dto import (
     CharacterStatsReadDTO, CharacterStatsUpdateDTO,
-    CharacterCreateDTO, CharacterReadDTO
-    )
+    CharacterReadDTO, CharacterShellCreateDTO, CharacterOnboardingUpdateDTO
+)
 
 from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
 
@@ -26,9 +26,10 @@ class CharactersRepoORM(ICharactersRepo):
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_character(self, character_data: CharacterCreateDTO) -> int:
+    async def create_character_shell(self, character_data: CharacterShellCreateDTO) -> int:
         """
-        Создает или обновляет персонажа, используя 'входную' DTO.
+        Создает "оболочку" персонажа (только user_id) и
+        возвращает его новый character_id.
         """
         character_data_dict = character_data.model_dump()
 
@@ -43,6 +44,29 @@ class CharactersRepoORM(ICharactersRepo):
         log.debug(f"Выполнен flush для Character: {orm_character.character_id}")
 
         return orm_character.character_id
+
+
+    async def update_character_onboarding(
+            self,
+            character_id: int,
+            character_data: CharacterOnboardingUpdateDTO
+    ) -> None:
+        """
+        Обновляет "оболочку" персонажа (имя, пол, game_stage)
+        после прохождения создания.
+        """
+
+        stmt = (
+            update(Characters)
+            .where(Characters.character_id == character_id)
+            .values(
+                name=character_data.name,
+                gender=character_data.gender,
+                game_stage=character_data.game_stage
+            )
+        )
+        await self.session.execute(stmt)
+        log.debug(f"Данные персонажа {character_id} были обновлены на: {character_data}")
 
 
     async def get_character(self, character_id: int, **kwargs) -> Optional[CharacterReadDTO]:

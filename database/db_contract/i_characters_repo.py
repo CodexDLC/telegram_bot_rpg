@@ -4,18 +4,34 @@ from abc import abstractmethod, ABC
 from typing import Dict, Optional
 
 from app.resources.schemas_dto.character_dto import (
-    CharacterReadDTO, CharacterCreateDTO,
-    CharacterStatsReadDTO, CharacterStatsUpdateDTO
+    CharacterReadDTO, CharacterShellCreateDTO, CharacterOnboardingUpdateDTO,
+    CharacterStatsReadDTO, CharacterStatsUpdateDTO,
 )
 
 
 class ICharactersRepo(ABC):
+
+
     @abstractmethod
-    async def create_character(self, character_data: CharacterCreateDTO) -> int:
+    async def create_character_shell(self, character_data: CharacterShellCreateDTO) -> int:
         """
-        Создает персонажа.
+        Создает "оболочку" персонажа (только user_id) и
+        возвращает его новый character_id.
         """
         pass
+
+    @abstractmethod
+    async def update_character_onboarding(
+            self,
+            character_id: int,
+            character_data: CharacterOnboardingUpdateDTO
+    ) -> None:
+        """
+        Обновляет "оболочку" персонажа (имя, пол, game_stage)
+        после прохождения создания.
+        """
+        pass
+
 
     @abstractmethod
     async def get_character(self, character_id: int, **kwargs) -> CharacterReadDTO | None:

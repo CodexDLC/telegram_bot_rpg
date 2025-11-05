@@ -178,9 +178,7 @@ async def status_menu_start_handler(state: FSMContext,
                     reply_markup=kb
                 )
 
-        # --- Обновление FSM ---
-        # Обновляем `message_content` в FSM *только если* мы его создали.
-        # Это предотвратит дубликаты при следующем вызове.
+
         update_data = {
             "bd_data_status": bd_data_status,
             "user_id" : user_id

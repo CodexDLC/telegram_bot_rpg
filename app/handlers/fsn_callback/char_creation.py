@@ -9,11 +9,11 @@ from aiogram.types import CallbackQuery, Message
 
 from app.resources.fsm_states.states import CharacterCreation, StartTutorial
 from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb, tutorial_kb
-from app.resources.schemas_dto.character_dto import CharacterCreateDTO
 from app.resources.texts.buttons_callback import Buttons, GameStage
 
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
+from app.services.game_service.menu_service import MenuService
 from app.services.game_service.new_character.onboarding_service import OnboardingService
 
 from app.services.helpers_module.game_validator import validate_character_name
@@ -33,6 +33,7 @@ async def start_creation_handler(
         state: FSMContext,
         bot: Bot,
         user_id: int,
+        char_id : int,
         message_menu: dict[str, int]):
     """
         Инициирует создание персонажа
@@ -42,8 +43,12 @@ async def start_creation_handler(
     start_time = time.monotonic()
 
 
+    ms = MenuService(
+        game_stage="",
+        char_id=char_id,
+    )
 
-
+    text, kb = ms.get_data_menu()
 
     if start_time:
         await await_min_delay(start_time, min_delay=0.3)
@@ -56,19 +61,15 @@ async def start_creation_handler(
         reply_markup=kb
     )
 
-
-
-
-    await create_message_content_start_creation(user_id=user_id, call=call)
-
-
-
+    await create_message_content_start_creation(user_id=user_id, call=call, state=state, bot=bot)
     await state.set_state(CharacterCreation.choosing_gender)
 
 async def create_message_content_start_creation(
         call: CallbackQuery,
         state: FSMContext,
-        user_id: int):
+        user_id: int,
+        bot: Bot
+        ):
     """
     Инициализация второго сообщения при создании персонажа
     """
@@ -77,21 +78,44 @@ async def create_message_content_start_creation(
     create_service = OnboardingService(user_id=user_id)
     text, kb = create_service.get_data_start_creation_content()
 
-    msg = await call.message.answer(
+    state_data = await state.get_data()
+    message_content = state_data.get("message_content") or None
+
+    if message_content is None:
+        log.debug(f"message_content = {message_content} запускаем создание нового сообщения ")
+
+        if start_time:
+            await await_min_delay(start_time, min_delay=0.3)
+
+        msg = await call.message.answer(
+                text=text,
+                parse_mode="html",
+                reply_markup=kb
+            )
+
+        message_content = {
+            "chat_id": msg.chat.id,
+            "message_id": msg.message_id
+        }
+        await state.update_data(message_content=message_content)
+
+    else:
+        log.debug(f"message_content = {message_content} запускаем редактирование старого сообщения")
+
+        if start_time:
+            await await_min_delay(start_time, min_delay=0.3)
+
+        await bot.edit_message_text(
+            chat_id=message_content.get("chat_id"),
+            message_id=message_content.get("message_id"),
             text=text,
             parse_mode="html",
             reply_markup=kb
-        )
+            )
 
-    if start_time:
-        await await_min_delay(start_time, min_delay=0.3)
 
-    message_content = {
-        "chat_id": msg.chat.id,
-        "message_id": msg.message_id
-    }
 
-    await state.update_data(message_content=message_content)
+
 
 
 

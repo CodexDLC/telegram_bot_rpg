@@ -4,26 +4,35 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-Gender = Literal["male", "female", "other"]
+Gender = Literal["male", "female"]
 
 
-class CharacterCreateDTO(BaseModel):
+class CharacterShellCreateDTO(BaseModel):
     """
-    DTO для 'входа' (создание).
+    DTO для 'входа' (создание "оболочки" персонажа).
+    Содержит ТОЛЬКО ID пользователя.
     """
     user_id: int
+
+class CharacterOnboardingUpdateDTO(BaseModel):
+    """
+    DTO для 'входа' (обновление персонажа после онбординга).
+    """
     name: str
-    gender: Gender
+    gender: Gender  # (Gender у вас уже определен)
     game_stage: str
 
 
-
-class CharacterReadDTO(CharacterCreateDTO):
+class CharacterReadDTO(BaseModel):
     """
     DTO для выхода
 
     """
     character_id: int
+    user_id: int
+    name: str
+    gender: Gender
+    game_stage: str
     created_at: str
     updated_at: str
 
