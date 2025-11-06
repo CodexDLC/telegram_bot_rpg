@@ -114,12 +114,6 @@ async def create_message_content_start_creation(
             )
 
 
-
-
-
-
-
-
 @router.callback_query(CharacterCreation.choosing_gender, F.data.startswith("gender:"))
 async def choose_gender_handler(call: CallbackQuery, state: FSMContext):
     """
