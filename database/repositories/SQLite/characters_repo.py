@@ -3,8 +3,10 @@ from typing import Dict
 
 import aiosqlite
 
-from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterCreateDTO, CharacterStatsReadDTO, \
-    CharacterStatsUpdateDTO
+from app.resources.schemas_dto.character_dto import (
+    CharacterReadDTO, CharacterStatsReadDTO,
+    CharacterStatsUpdateDTO)
+
 from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
 
 log = logging.getLogger(__name__)

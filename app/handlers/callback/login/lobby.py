@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery
 from app.handlers.fsn_callback.char_creation import start_creation_handler
 from app.resources.fsm_states.states import CharacterLobby
 
-from app.services.data_loader_service import load_data_auto
+from app.services.helpers_module.data_loader_service import load_data_auto
 
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.lobbyservice import LobbyService
@@ -56,7 +56,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
         await state.set_state(CharacterLobby.selection)
         await state.update_data(selected_char_id=None, message_content=None)
 
-        text, kb = lobby_service.get_data_lobby_start()
+        text, kb = await lobby_service.get_data_lobby_start()
 
         if start_time:
             await await_min_delay(start_time, min_delay=0.5)
@@ -71,7 +71,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
         log.warning("Персонажей нету запускаем цепочку инициализации персонажа")
         state_data = await state.get_data()
 
-        char_id = lobby_service.create_und_get_character_id()
+        char_id = await lobby_service.create_und_get_character_id()
 
         await start_creation_handler(
             call=call,
@@ -80,5 +80,4 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
             message_menu= state_data.get("message_menu"),
             bot=bot,
             char_id=char_id
-
         )

@@ -10,7 +10,7 @@ from aiogram.types import Message
 
 from app.resources.keyboards.inline_kb.loggin_und_new_character import get_start_adventure_kb
 from app.resources.texts.ui_messages import START_GREETING
-from app.services.game_service.command_service import CommandService
+from app.services.ui_service.command_service import CommandService
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 
 log = logging.getLogger(__name__)

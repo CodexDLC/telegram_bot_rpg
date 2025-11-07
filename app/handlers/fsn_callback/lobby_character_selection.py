@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery
 from app.handlers.callback.ui.status_menu.character_status import status_menu_start_handler
 from app.resources.fsm_states.states import CharacterLobby
 
-from app.services.data_loader_service import load_data_auto
+from app.services.helpers_module.data_loader_service import load_data_auto
 from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store
 from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
 

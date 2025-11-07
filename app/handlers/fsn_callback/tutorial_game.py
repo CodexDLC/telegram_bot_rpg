@@ -10,7 +10,7 @@ from aiogram.types import CallbackQuery, Message
 
 
 from app.resources.fsm_states.states import StartTutorial
-from app.resources.keyboards.inline_kb.loggin_und_new_character import tutorial_kb
+
 from app.resources.texts.buttons_callback import Buttons, GameStage
 from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
 from app.services.game_service.skill.skill_service import CharacterSkillsService

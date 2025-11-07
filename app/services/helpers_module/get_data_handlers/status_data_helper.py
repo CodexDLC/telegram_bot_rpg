@@ -1,6 +1,6 @@
 # (Подсказка)
 import logging
-from app.services.data_loader_service import load_data_auto
+from app.services.helpers_module.data_loader_service import load_data_auto
 from app.services.helpers_module.DTO_helper import fsm_store
 
 log = logging.getLogger(__name__)

@@ -1,7 +1,7 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, User
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.resources.schemas_dto.character_dto import CharacterReadDTO
+from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterOnboardingUpdateDTO
 from app.resources.texts.buttons_callback import Buttons
 from app.services.helpers_module.DTO_helper import fsm_store
 from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
@@ -25,7 +25,7 @@ class LobbyService:
         self.user_id = user.id
 
 
-    def get_data_lobby_start(self):
+    async def get_data_lobby_start(self):
 
         text = LobbyFormatter.format_character_list(self.characters)
 
@@ -77,8 +77,14 @@ class LobbyService:
 
         async with get_async_session() as session:
             char_repo = get_character_repo(session)
-            char_id = char_repo.create_character_shell(dto_object)
+            char_id = await char_repo.create_character_shell(dto_object)
 
         return char_id
 
+    async def update_character_db(self, char_update_dto: CharacterOnboardingUpdateDTO):
 
+        async with get_async_session() as session:
+            char_repo = get_character_repo(session)
+            await char_repo.update_character_onboarding(
+                character_id=self.selected_char_id,
+                character_data=char_update_dto)

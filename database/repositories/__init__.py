@@ -10,7 +10,7 @@ from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterSt
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM, CharacterStatsRepoORM
 from database.repositories.ORM.skill_repo import SkillRateRepo, SkillProgressRepo
 from database.repositories.ORM.users_repo_orm import UsersRepoORM
-from database.repositories.SQLite.characters_repo import CharacterStatsRepo
+
 
 
 def get_user_repo(session: AsyncSession) -> IUserRepo:
