@@ -44,16 +44,4 @@ def confirm_kb() -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def tutorial_kb(data: dict[str, str]) -> InlineKeyboardMarkup:
-    """
-    Возвращает Inline-клавиатуру с кнопкой для туториал.
-    """
-
-    kb = InlineKeyboardBuilder()
-    if data:
-        for key, value in data.items():
-            kb.button(text=value, callback_data=key)
-            kb.adjust(1)
-
-    return kb.as_markup()
 

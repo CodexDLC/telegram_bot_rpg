@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
 
-from app.handlers.fsn_callback.char_creation import start_creation_handler
+from app.handlers.callback.login.char_creation import start_creation_handler
 from app.resources.fsm_states.states import CharacterLobby
 
 from app.services.helpers_module.data_loader_service import load_data_auto
@@ -81,3 +81,27 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
             bot=bot,
             char_id=char_id
         )
+
+
+@router.callback_query(CharacterLobby.selection, F.data == "lobby:create")
+async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
+    # 1. Получаем нужные данные из FSM
+    state_data = await state.get_data()
+    message_menu = state_data.get("message_menu")
+    user_id = call.from_user.id
+
+    # 2. Создаем "оболочку" персонажа
+    # (Точно так же, как ты делал в start_login_handler)
+    lobby_service = LobbyService(user=call.from_user)
+    char_id = await lobby_service.create_und_get_character_id()
+
+    # 3. Вызываем хэндлер создания
+    # (Твоя главная идея - "просто должен вызывать")
+    await start_creation_handler(
+        call=call,
+        state=state,
+        bot=bot,
+        user_id=user_id,
+        char_id=char_id,
+        message_menu=message_menu
+    )

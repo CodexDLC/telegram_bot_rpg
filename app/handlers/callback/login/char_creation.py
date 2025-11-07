@@ -28,6 +28,8 @@ router = Router(name="character_creation_fsm")
 
 
 
+
+
 async def start_creation_handler(
         call: CallbackQuery,
         state: FSMContext,

@@ -29,7 +29,7 @@ class LobbyService:
 
         text = LobbyFormatter.format_character_list(self.characters)
 
-        kb = self._get_character_lobby_kb()
+        kb = await self._get_character_lobby_kb()
 
         return text , kb
 
@@ -53,8 +53,8 @@ class LobbyService:
             if i < len(characters):
                 char = characters[i]
                 kb.button(
-                    text=f"{'✅ ' if char.character_id == self.selected_char_id else '👤 '}{char.name}",
-                    callback_data=f"lobby:select:{char.character_id}"
+                    text=f"{'✅ ' if char.get('character_id') == self.selected_char_id else '👤 '}{char.get('name')}",
+                    callback_data=f"lobby:select:{char.get('character_id')}"
                 )
             else:
                 kb.button(text=lobby_data["lobby:create"], callback_data="lobby:create")
