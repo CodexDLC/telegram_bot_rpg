@@ -19,177 +19,138 @@ from app.services.ui_service.character_status_service import CharacterMenuUIServ
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 
 router = Router(name="character_status_menu")
-
 log = logging.getLogger(__name__)
 
 
-async def status_menu_start_handler(state: FSMContext,
-                                    bot: Bot,
-                                    call: Union[CallbackQuery, None] = None,
-                                    # VVV Параметры, которые передаст хэндлер VVV
-                                    explicit_char_id: int = None,
-                                    explicit_view_mode: str = None,
-                                    explicit_call_type: str = None,
-                                    ):
+async def status_menu_start_handler(
+    state: FSMContext,
+    bot: Bot,
+    call: Union[CallbackQuery, None] = None,
+    explicit_char_id: int = None,
+    explicit_view_mode: str = None,
+    explicit_call_type: str = None,
+):
     """
-    ОСНОВНАЯ ЛОГИКА: Выводит или обновляет статус персонажа.
-    (Режим 1: call=CallbackQuery, Режим 2: call=None)
-    """
+    Основная логика отображения и обновления меню статуса персонажа.
 
+    Эта функция является центральным узлом для управления меню статуса.
+    Она может работать в двух режимах:
+    1.  **Режим Callback (call is not None):** Вызывается из обработчика
+        `status_menu_callback_handler` при нажатии на inline-кнопку
+        (например, "Биография").
+    2.  **Режим прямого вызова (call is None):** Вызывается из других частей
+        кода, например, из лобби (`select_character_handler`), чтобы
+        инициализировать или обновить меню статуса без прямого действия
+        от пользователя в этом меню.
+
+    Args:
+        state (FSMContext): Состояние FSM.
+        bot (Bot): Экземпляр бота.
+        call (Union[CallbackQuery, None], optional): Входящий callback, если
+            функция вызвана через обработчик. Defaults to None.
+        explicit_char_id (int, optional): ID персонажа, переданный явно.
+        explicit_view_mode (str, optional): Режим отображения (e.g., "lobby"),
+            переданный явно.
+        explicit_call_type (str, optional): Тип действия (e.g., "bio"),
+            переданный явно.
+
+    Returns:
+        None
+    """
     log.info("status_menu_start_handler (ЛОГИКА) начал работу")
     state_data = await state.get_data()
     start_time = time.monotonic()
 
+    # --- Определение режима работы и сбор данных ---
     if call:
-        # Режим 1: Нас вызвали нажатием на кнопку (call НЕ None)
+        # Режим 1: Вызов через Callback. Данные приходят из аргументов.
         log.debug("Режим 1 (Callback)")
-        # Мы получаем данные из хэндлера, который их распарсил
         char_id = explicit_char_id
         view_mode = explicit_view_mode
         call_type = explicit_call_type
         user_id = call.from_user.id
-
     else:
-        # Режим 2: Нас вызвали из лобби (call=None)
+        # Режим 2: Прямой вызов (из лобби). Данные берутся из FSM.
         log.debug("Режим 2 (Лобби, call=None)")
         char_id = state_data.get("char_id")
         user_id = state_data.get("user_id")
-        call_type = "bio"
+        call_type = "bio"  # По умолчанию показываем биографию
         view_mode = "lobby"
 
-
-        # --- Валидация ID ---
+    # --- Валидация ключевых данных ---
     if char_id is None:
-        log.error(f"Ошибка: ID персонажа не найден.")
+        log.error("Ошибка: ID персонажа не найден.")
         if call: await error_int_id(call)
         return
-
     if user_id is None:
-        log.error(f"Критическая ошибка: user_id не найден (Режим: {'Callback' if call else 'Лобби'}).")
+        log.error(f"Критическая ошибка: user_id не найден.")
         return
 
-    # --- Инициализация Сервиса ---
-    char_menu_service = CharacterMenuUIService(
-        char_id=char_id,
-        call_type=call_type,
-        view_mode=view_mode
-    )
-    bd_data_status = state_data.get("bd_data_status") or None
+    # --- Инициализация Сервиса и данных ---
+    char_menu_service = CharacterMenuUIService(char_id=char_id, call_type=call_type, view_mode=view_mode)
+    bd_data_status = state_data.get("bd_data_status")
 
+    # Оптимизация: перезагружаем данные из БД только если их нет в FSM,
+    # или если они относятся к другому персонажу.
     if bd_data_status is None or char_id != bd_data_status.get("id"):
         if bd_data_status is not None:
-            log.warning(
-            f"Кэш FSM неактуален. ID в FSM={char_id}, ID в кэше={bd_data_status.get('id')}. Принудительная перезагрузка.")
+            log.warning(f"Кэш FSM неактуален. Принудительная перезагрузка.")
         bd_data_status = await get_status_data_package(char_id=char_id, user_id=user_id)
 
     if bd_data_status is None:
         log.warning(f"bd_data_status не найден для char_id={char_id}.")
-        if call:  # Отвечаем на call, если он есть
-            await error_msg_default(call)
+        if call: await error_msg_default(call)
         return
 
     # --- Подготовка сообщения ---
-    message_content = state_data.get("message_content") or None
-
+    message_content = state_data.get("message_content")
     character = await fsm_convector(bd_data_status.get("character"), "character")
     character_state = await fsm_convector(bd_data_status.get("character_stats"), "character_stats")
+    text, kb = char_menu_service.staus_bio_message(character=character, stats=character_state)
 
-    text, kb = char_menu_service.staus_bio_message(
-        character=character,
-        stats=character_state,
-    )
-
-    log.debug(f"kb = {kb}")
-
-
-    # --- Логика Отправки/Редактирования (ВОЗВРАЩЕННАЯ ВЕРСИЯ) ---
+    # --- Логика Отправки/Редактирования ---
     try:
-        new_message_created = False  # Флаг для отслеживания нового сообщения
-
+        new_message_created = False
         if message_content is None:
-            # --- Случай 1: FSM пуст, сообщения нет ---
+            # Случай 1: Сообщения еще нет, нужно создать новое.
             log.debug("message_content=None. Требуется НОВОЕ сообщение.")
-
+            msg = None
             if call:
-                # Режим 1 (Callback): Создаем новое
-                log.debug("Режим 1 (Callback): Отправляем новое через call.message.answer")
                 msg = await call.message.answer(text=text, parse_mode='HTML', reply_markup=kb)
-
             elif user_id:
-                # Режим 2 (Лобби): Создаем новое (Это тот самый случай из лога)
-                log.debug(f"Режим 2 (Лобби): Отправляем новое через bot.send_message, chat_id={user_id}")
-                msg = await bot.send_message(
-                    chat_id=user_id,
-                    text=text,
-                    parse_mode='HTML',
-                    reply_markup=kb
-                )
-
+                msg = await bot.send_message(chat_id=user_id, text=text, parse_mode='HTML', reply_markup=kb)
             else:
-                # Авария: некуда слать
-                log.error("Критическая ошибка: 'message_content' is None, 'call' is None и 'user_id' is None.")
+                log.error("Критическая ошибка: некуда отправлять сообщение (нет call и user_id).")
                 return
 
-                # Сохраняем данные *нового* сообщения в локальную переменную
-            message_content = {
-                "message_id": msg.message_id,
-                "chat_id": msg.chat.id
-            }
-            new_message_created = True  # Ставим флаг
-
+            message_content = {"message_id": msg.message_id, "chat_id": msg.chat.id}
+            new_message_created = True
         else:
-            # --- Случай 2: FSM не пуст, сообщение ЕСТЬ ---
-
+            # Случай 2: Сообщение уже есть, редактируем его.
             log.debug("message_content=Есть. РЕДАКТИРУЕМ существующее сообщение.")
-            chat_id = message_content.get("chat_id")
-            message_id = message_content.get("message_id")
+            await bot.edit_message_text(
+                chat_id=message_content.get("chat_id"),
+                message_id=message_content.get("message_id"),
+                text=TEXT_AWAIT,
+                parse_mode='HTML',
+            )
+            if start_time:
+                await await_min_delay(start_time, min_delay=1)
+            await bot.edit_message_text(
+                chat_id=message_content.get("chat_id"),
+                message_id=message_content.get("message_id"),
+                text=text,
+                parse_mode='HTML',
+                reply_markup=kb
+            )
 
-            if not chat_id or not message_id:
-                # Аварийный случай: FSM сломан. Пытаемся починить.
-                log.error(f"Ошибка: message_content поврежден в FSM. {message_content}. Пытаемся починиться.")
-                if call:
-                    msg = await call.message.answer(text=text, parse_mode='HTML', reply_markup=kb)
-                elif user_id:
-                    msg = await bot.send_message(chat_id=user_id, text=text, parse_mode='HTML', reply_markup=kb)
-                else:
-                    log.error("Не можем починиться: нет 'call' и нет 'user_id'.")
-                    return  # Не можем починиться
-
-                message_content = {"message_id": msg.message_id, "chat_id": msg.chat.id}
-                new_message_created = True
-            else:
-                # Штатное редактирование
-                await bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    text=TEXT_AWAIT,
-                    parse_mode='HTML',
-
-                )
-
-                if start_time:
-                    await await_min_delay(start_time, min_delay=1)
-
-                await bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    text=text,
-                    parse_mode='HTML',
-                    reply_markup=kb
-                )
-
-
-        update_data = {
-            "bd_data_status": bd_data_status,
-            "user_id" : user_id
-        }
-
+        # --- Обновление FSM ---
+        update_data = {"bd_data_status": bd_data_status, "user_id": user_id}
         if new_message_created:
             update_data["message_content"] = message_content
-
         await state.update_data(**update_data)
 
-        log.info(f"status_menu_start_handler (ЛОГИКА) закончил свою работу ")
+        log.info(f"status_menu_start_handler (ЛОГИКА) закончил свою работу")
 
     except TelegramBadRequest as e:
         if "message is not modified" in str(e):
@@ -197,29 +158,42 @@ async def status_menu_start_handler(state: FSMContext,
         else:
             log.warning(f"Неожиданная ошибка Telegram API: {e}")
     except Exception as e:
-        log.exception(f"Критическая ошибка при обновлении БИО/Статов: {e}")
+        log.exception(f"Критическая ошибка при обновлении статуса: {e}")
 
 
 @router.callback_query(
-    StatusMenuCallback.filter(F.action == "bio"),  # <--- ФИЛЬТР ДЛЯ ФИЛЬТРА
+    StatusMenuCallback.filter(F.action == "bio"),
     StateFilter(*FSM_CONTEX_CHARACTER_STATUS)
 )
 async def status_menu_callback_handler(
         call: CallbackQuery,
         state: FSMContext,
         bot: Bot,
-        callback_data: StatusMenuCallback  # <--- Сюда придет ТОЛЬКО 'bio'
+        callback_data: StatusMenuCallback
 ):
     """
-    Хэндлер-обертка: Ловит callback ТОЛЬКО для action='bio'
+    Обработчик-обертка для кнопок меню статуса.
+
+    Эта функция-обертка ловит callback'и от кнопок меню статуса
+    (например, "Биография"), извлекает из них необходимые данные и
+    передает их в основную логическую функцию `status_menu_start_handler`.
+    Такой подход разделяет логику парсинга callback'ов и основную
+    бизнес-логику отображения меню.
+
+    Args:
+        call (CallbackQuery): Входящий callback от кнопки.
+        state (FSMContext): Состояние FSM.
+        bot (Bot): Экземпляр бота.
+        callback_data (StatusMenuCallback): Распарсенные данные из callback.
+
+    Returns:
+        None
     """
     log.debug(f"Получен [StatusMenuCallback(bio)]: {callback_data}")
     await call.answer()
-
     await call.message.edit_text(TEXT_AWAIT, parse_mode="html")
 
-
-
+    # Передаем управление основной функции, явно передавая все параметры.
     await status_menu_start_handler(
         state=state,
         bot=bot,
@@ -227,5 +201,4 @@ async def status_menu_callback_handler(
         explicit_char_id=callback_data.char_id,
         explicit_view_mode=callback_data.view_mode,
         explicit_call_type=callback_data.action
-
     )

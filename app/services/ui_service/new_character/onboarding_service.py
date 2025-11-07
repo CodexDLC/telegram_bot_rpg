@@ -1,7 +1,8 @@
+from typing import Optional, Tuple
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO, CharacterOnboardingUpdateDTO
+from app.resources.schemas_dto.character_dto import CharacterOnboardingUpdateDTO
 from app.resources.texts.buttons_callback import Buttons
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from database.repositories import get_character_repo
@@ -9,97 +10,120 @@ from database.session import get_async_session
 
 
 class OnboardingService:
+    """
+    Сервис для управления процессом создания нового персонажа (onboarding).
 
-    def __init__(self, user_id: int, char_id : int = None):
+    Этот класс предоставляет методы для получения текстов, клавиатур и
+    обновления данных персонажа в базе данных на всех этапах его создания:
+    от выбора пола до ввода имени и начала туториала.
+    """
+
+    def __init__(self, user_id: int, char_id: Optional[int] = None):
+        """
+        Инициализирует сервис создания персонажа.
+
+        Args:
+            user_id (int): ID пользователя Telegram.
+            char_id (Optional[int], optional): ID создаваемого персонажа.
+                Может быть None на начальных этапах. Defaults to None.
+        """
         self.user_id = user_id
         self.buttons = Buttons
         self.new_char = LobbyMessages.NewCharacter
-        if char_id:
-            self.char_id = char_id
-        else:
-            self.char_id = None
+        self.char_id = char_id
 
-    def get_data_start_creation_content(self):
-
-        text =  self.new_char.GENDER_CHOICE
-
-        kb = self._start_creation_kb()
-
-
-        return text , kb
-
-
-    def get_data_start_gender(self, gender_callback: str):
+    def get_data_start_creation_content(self) -> Tuple[str, InlineKeyboardMarkup]:
         """
-        Возвращает текст, отображаемое имя (для UI) и значение для БД.
+        Возвращает данные для первого шага: выбор пола.
+
+        Returns:
+            Tuple[str, InlineKeyboardMarkup]: Текст с предложением выбрать
+            пол и клавиатура с вариантами.
+        """
+        text = self.new_char.GENDER_CHOICE
+        kb = self._start_creation_kb()
+        return text, kb
+
+    def get_data_start_gender(self, gender_callback: str) -> Tuple[str, str, str]:
+        """
+        Обрабатывает выбор пола и возвращает данные для следующего шага.
+
+        Args:
+            gender_callback (str): Callback-данные от кнопки выбора пола
+                (e.g., "gender:male").
+
+        Returns:
+            Tuple[str, str, str]: Кортеж, содержащий:
+                - Текст с предложением ввести имя.
+                - Отображаемое название пола для UI (e.g., "Мужчина").
+                - Значение пола для записи в БД (e.g., "male").
         """
         text = self.new_char.NAME_INPUT
-
-        # 1. Получаем отображаемое имя (e.g. "✨ Женщина")
-        gender_display = self.buttons.GENDER.get(gender_callback)
-
-        # 2. Получаем значение для БД (e.g. "female")
+        gender_display = self.buttons.GENDER.get(gender_callback, "Не указан")
         gender_db = gender_callback.split(":")[-1]
-
         return text, gender_display, gender_db
 
-
-
-    def get_data_choosing_name(self):
-
-        text = self.new_char.NAME_INPUT
-
-        return text
-
-    async def update_character_db(self, char_update_dto: CharacterOnboardingUpdateDTO):
+    def get_data_choosing_name(self) -> str:
         """
-        Обновляет данные персонажа в БД.
-        :param char_update_dto:
-        :return: None
+        Возвращает текст для этапа ввода имени.
+
+        Returns:
+            str: Текст с предложением ввести имя.
         """
+        return self.new_char.NAME_INPUT
+
+    async def update_character_db(self, char_update_dto: CharacterOnboardingUpdateDTO) -> None:
+        """
+        Обновляет данные создаваемого персонажа в базе данных.
+
+        Args:
+            char_update_dto (CharacterOnboardingUpdateDTO): DTO с данными
+                (имя, пол, этап игры) для обновления.
+
+        Returns:
+            None
+        """
+        if not self.char_id:
+            # Это мера предосторожности, чтобы не вызвать ошибку,
+            # если `char_id` не был установлен.
+            raise ValueError("char_id must be set before updating the character.")
 
         async with get_async_session() as session:
             char_repo = get_character_repo(session)
             await char_repo.update_character_onboarding(
                 character_id=self.char_id,
-                character_data=char_update_dto)
+                character_data=char_update_dto
+            )
 
-    def get_data_start(self, name: str, gender: str):
+    def get_data_start(self, name: str, gender: str) -> Tuple[str, InlineKeyboardMarkup]:
+        """
+        Возвращает данные для финального сообщения перед туториалом.
 
-        text = LobbyMessages.NewCharacter.FINAL_CONFIRMATION.format(
-            name=name,
-            gender=gender
-        )
+        Args:
+            name (str): Имя созданного персонажа.
+            gender (str): Отображаемое название пола.
 
-
+        Returns:
+            Tuple[str, InlineKeyboardMarkup]: Финальный текст и клавиатура
+            для начала туториала.
+        """
+        text = self.new_char.FINAL_CONFIRMATION.format(name=name, gender=gender)
         kb = self._tutorial_kb()
-
         return text, kb
 
-
     def _start_creation_kb(self) -> InlineKeyboardMarkup:
-        """
-        Возвращает Inline-клавиатуру с кнопками выбора пола.
-        """
+        """Создает клавиатуру для выбора пола."""
         kb = InlineKeyboardBuilder()
-
         for key, value in self.buttons.GENDER.items():
             kb.button(text=value, callback_data=key)
-
         return kb.as_markup()
 
     def _tutorial_kb(self) -> InlineKeyboardMarkup:
-        """
-        Возвращает Inline-клавиатуру с кнопкой для туториал.
-        """
-        data = self.buttons.TUTORIAL_START_BUTTON
-
+        """Создает клавиатуру для начала туториала."""
         kb = InlineKeyboardBuilder()
+        data = self.buttons.TUTORIAL_START_BUTTON
         if data:
             for key, value in data.items():
                 kb.button(text=value, callback_data=key)
-                kb.adjust(1)
-
+            kb.adjust(1)
         return kb.as_markup()
-
-

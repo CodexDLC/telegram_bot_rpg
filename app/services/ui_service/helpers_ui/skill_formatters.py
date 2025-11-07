@@ -1,141 +1,146 @@
-# skill_formatters
+# app/services/ui_service/helpers_ui/skill_formatters.py
 import logging
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, List, Optional
 
 log = logging.getLogger(__name__)
 
 
 class SkillFormatters:
+    """
+    Класс-контейнер для статических методов форматирования текста в меню навыков.
+    """
 
     @staticmethod
-    def group_skill(data: Dict[str, Dict[str, str]], char_name: str, actor_name: str) -> Union[str, None]:
+    def group_skill(data: Dict[str, Dict[str, Any]], char_name: str, actor_name: str) -> Optional[str]:
         """
-        Форматирует текст для первого сообщения навыков.
-        Использует идею "числа впереди" для надежного выравнивания.
-        Число навыков выравнивается по правому краю,
-        затем идет разделитель и название группы.
+        Форматирует текст для отображения списка групп навыков.
+
+        Создает псевдо-таблицу с выравниванием, показывающую количество
+        навыков в каждой группе.
+
+        Args:
+            data (Dict[str, Dict[str, Any]]): Словарь с данными о группах
+                навыков (из `skill_library.py`).
+            char_name (str): Имя персонажа.
+            actor_name (str): Имя "рассказчика".
+
+        Returns:
+            Optional[str]: Готовый текст сообщения или None в случае ошибки.
         """
         if data is None:
-            log.error("Нет данных в словаре.")
+            log.error("Нет данных о группах навыков.")
             return None
 
-        # --- Новая, упрощенная логика ---
-
-        # Задаем ширину колонки для чисел.
-        # 3 знака = безопасно для чисел до 999.
-        number_width = 3
+        number_width = 3  # Ширина колонки для количества навыков
         separator = " | "
+        formatted_lines = ["<code>"]
 
-        formatted_lines = []
-        formatted_lines.append("<code>")
-
-        # 1. Заголовок
+        # --- Заголовок таблицы ---
         header_num = "№"
         header_title = "Группа"
-        # Выравниваем "№" по правому краю, так же, как будут идти числа
         header_line = f"{header_num:>{number_width}}{separator}{header_title}"
         formatted_lines.append(header_line)
-
-        # 2. Разделительная линия
-        # Делаем ее простой, на основе ширины заголовка
-        # (Можно и убрать, если не нравится)
         separator_line = f"{'─' * number_width}{separator}{'─' * 15}"
         formatted_lines.append(separator_line)
 
-        # 3. Данные
+        # --- Строки таблицы ---
         for group, value in data.items():
-            title = value.get("title_ru", "Без имени")  # Добавим "Без имени" на всякий случай
+            title = value.get("title_ru", "Без имени")
             skills_count = len(value.get("skills", {}))
-
-            # Опционально: обрезка слишком длинных названий, чтобы они не переносились
-            # Можно увеличить лимит или убрать, если перенос строк - это нормально
-            max_title_width = 35
-            if len(title) > max_title_width:
-                title = title[:max_title_width - 1] + "…"
-
             line = f"{skills_count:>{number_width}}{separator}{title}"
             formatted_lines.append(line)
 
         formatted_lines.append("</code>")
-
         table_text = "\n".join(formatted_lines)
 
-        # Текст самого сообщения не меняем
-        final_message_text = f"""                  
-        
-    {actor_name}: ❗ Инициация данных
-    
-    {actor_name}: Ваши способности сгруппированы в {len(data)} основных категориях.
-        
-                          
-    <code> 
-    <b>Имя персонажа:</b> {char_name}
-    </code>    
-    {table_text}
-    """
-
+        # --- Финальный текст сообщения ---
+        final_message_text = (
+            f"{actor_name}: ❗ Инициация данных\n\n"
+            f"{actor_name}: Ваши способности сгруппированы в {len(data)} основных категориях.\n\n"
+            f"<code><b>Имя персонажа:</b> {char_name}</code>\n"
+            f"{table_text}"
+        )
         return final_message_text
 
     @staticmethod
     def format_skill_list_in_group(
-            data: dict[str, dict[str, str]],
+            data: Dict[str, Dict[str, Any]],
             group_type: str,
             char_name: str,
-            actor_name:str,
+            actor_name: str,
             view_mode: str,
-            character_skill: list[dict[str, Any]]
-    ):
+            character_skill: List[Dict[str, Any]]
+    ) -> Optional[str]:
         """
-        Форматирует сообщение со списком навыков выбранной группы
+        Форматирует сообщение со списком навыков в выбранной группе.
+
+        Создает псевдо-таблицу, показывающую название навыка и его
+        текущий прогресс (статус).
+
+        Args:
+            data (Dict[str, Dict[str, Any]]): Словарь с данными о группах навыков.
+            group_type (str): Ключ выбранной группы.
+            char_name (str): Имя персонажа.
+            actor_name (str): Имя "рассказчика".
+            view_mode (str): Режим просмотра ("lobby" или "ingame").
+            character_skill (List[Dict[str, Any]]): Список навыков персонажа из БД.
+
+        Returns:
+            Optional[str]: Готовый текст сообщения или None в случае ошибки.
         """
         if data is None:
-            log.error("Нет данных в словаре.")
+            log.error("Нет данных о группах навыков.")
             return None
 
-
-        bonus_text = f"{actor_name} Выбери навык ниже, чтобы увидеть прогресс, детали и изменить состояние."
-
         group_dict = data.get(group_type)
-        skill_dict = group_dict.get("skills")
+        if not group_dict:
+            log.error(f"Группа '{group_type}' не найдена в данных.")
+            return "Ошибка: не найдена указанная группа навыков."
 
-        formatted_lines = []
+        skill_dict = group_dict.get("skills", {})
+        bonus_text = (
+            f"{actor_name}: Выбери навык ниже, чтобы увидеть прогресс, "
+            "детали и изменить состояние."
+        )
 
-        # Используем ровную псевдографику │ вместо обычного |
-        formatted_lines.append("<code>")
+        # --- Формирование таблицы ---
+        formatted_lines = ["<code>"]
         formatted_lines.append(f"{'Навык':<25} │ Прогрессия")
         formatted_lines.append("─" * 37)
 
-        for skill in character_skill:
-            skill_key = skill["skill_key"]
-            if skill_key in skill_dict:
-                skill_name = skill_dict.get(skill_key)
-                progress = skill.get('progress_state')
-                line = f"{skill_name:<25} │ {progress}"
-                formatted_lines.append(line)
+        # Создаем словарь для быстрого доступа к прогрессу по ключу навыка.
+        skill_progress_map = {skill["skill_key"]: skill.get('progress_state', 'N/A')
+                              for skill in character_skill}
+
+        # Итерируемся по всем возможным навыкам в группе, чтобы сохранить порядок.
+        for skill_key, skill_name in skill_dict.items():
+            # Берем прогресс из карты или ставим 'Нет', если у персонажа его нет.
+            progress = skill_progress_map.get(skill_key, 'Нет')
+            line = f"{skill_name:<25} │ {progress}"
+            formatted_lines.append(line)
 
         formatted_lines.append("</code>")
-
         table_text = "\n".join(formatted_lines)
 
-        final_message_text = f"""
-    
-    {actor_name}:  В этой группе {len(skill_dict)} навыков.
-    {"" if view_mode == "lobby" else bonus_text}    
-    
-    <code>    
-    <b>Персонаж:</b> {char_name}
-    <b>Группа:</b> {group_dict.get('title_ru')}
-    </code>     
-    {table_text}
-    """
-
+        # --- Финальный текст сообщения ---
+        final_message_text = (
+            f"{actor_name}: В этой группе {len(skill_dict)} навыков.\n"
+            # Показываем подсказку только если мы не в режиме лобби.
+            f'{"" if view_mode == "lobby" else bonus_text}\n\n'
+            f"<code>"
+            f"<b>Персонаж:</b> {char_name}\n"
+            f"<b>Группа:</b> {group_dict.get('title_ru')}"
+            f"</code>\n"
+            f"{table_text}"
+        )
         return final_message_text
 
-
     @staticmethod
-    def format_skill_text(
+    def format_skill_text():
+        """
+        Форматирует детальное описание навыка (заглушка).
 
-
-    ):
-
+        Returns:
+            None
+        """
         pass
