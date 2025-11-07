@@ -2,10 +2,11 @@
 import logging
 from typing import List, Dict, Optional
 
-
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, insert
-from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import SQLAlchemyError
+# Импортируем диалект PostgreSQL для ON CONFLICT
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.resources.game_data.skill_library import SKILL_RECIPES
 from app.resources.schemas_dto.skill import SkillRateDTO, SkillProgressDTO
@@ -14,128 +15,132 @@ from database.model_orm.skill import SkillProgressState, CharacterSkillRate, Cha
 
 log = logging.getLogger(__name__)
 
+
 class SkillRateRepo(ISkillRateRepo):
-    """
-    Контракт для C.R.U.D. таблицы 'character_skill_rates' (БСО)
-    """
+    """ORM-реализация репозитория для ставок развития навыков (БСО)."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
+        log.debug(f"Инициализирован {self.__class__.__name__} с сессией: {session}")
 
     async def upsert_skill_rates(self, rates_data: List[Dict[str, any]]) -> None:
-        """
-        Атомарно (через UPSERT) обновляет ВСЕ ставки БСО.
-        (Это исправленная версия)
-        """
+        """Атомарно (через UPSERT) обновляет ставки БСО для персонажа."""
         if not rates_data:
-            log.warning("Вызван upsert_skill_rates с пустым словарем БСО.")
+            log.warning("Вызван upsert_skill_rates с пустым списком данных.")
             return
 
-        # 1. Создаем запрос UPSERT (ON CONFLICT DO UPDATE)
-        stmt = insert(CharacterSkillRate).values(rates_data)
+        char_id = rates_data[0].get('character_id')
+        log.debug(f"Запрос на UPSERT {len(rates_data)} ставок БСО для character_id={char_id}")
 
-        # 2. VVVV ВОТ ИСПРАВЛЕНИЕ VVVV
+        # Используем диалект PostgreSQL для `ON CONFLICT DO UPDATE`
+        stmt = pg_insert(CharacterSkillRate).values(rates_data)
         stmt = stmt.on_conflict_do_update(
-            index_elements=["character_id", "skill_key"],
+            index_elements=[CharacterSkillRate.character_id, CharacterSkillRate.skill_key],
             set_={"xp_per_tick": stmt.excluded.xp_per_tick}
         )
-
-        await self.session.execute(stmt)
+        try:
+            await self.session.execute(stmt)
+            log.debug(f"Ставки БСО для character_id={char_id} успешно обновлены.")
+        except SQLAlchemyError as e:
+            log.exception(f"Ошибка SQLAlchemy при UPSERT ставок БСО для character_id={char_id}: {e}")
+            raise
 
     async def get_all_skill_rates(self, character_id: int, **kwargs) -> List[SkillRateDTO]:
-        """
-        Возвращает ВСЕ рассчитанные ставки БСО для персонажа.
-        """
+        """Возвращает все рассчитанные ставки БСО для персонажа."""
+        log.debug(f"Запрос на получение всех ставок БСО для character_id={character_id}")
         stmt = select(CharacterSkillRate).where(CharacterSkillRate.character_id == character_id)
-
-        result = await self.session.scalars(stmt)
-        orm_rates_list = result.all()
-
-        if orm_rates_list:
-            log.debug(f"БСО получены: {orm_rates_list}")
-            return [SkillRateDTO.model_validate(orm_rate) for orm_rate in orm_rates_list]
-        return []
-
-
+        try:
+            result = await self.session.scalars(stmt)
+            orm_rates_list = result.all()
+            log.debug(f"Найдено {len(orm_rates_list)} ставок БСО для character_id={character_id}.")
+            return [SkillRateDTO.from_orm(orm_rate) for orm_rate in orm_rates_list]
+        except SQLAlchemyError as e:
+            log.exception(f"Ошибка SQLAlchemy при получении ставок БСО для character_id={character_id}: {e}")
+            raise
 
 
 class SkillProgressRepo(ISkillProgressRepo):
-    """
-    Контракт для C.R.U.D. таблицы 'character_skill_progress'
-    """
+    """ORM-реализация репозитория для прогресса навыков персонажа."""
+
     def __init__(self, session: AsyncSession):
         self.session = session
+        log.debug(f"Инициализирован {self.__class__.__name__} с сессией: {session}")
 
     async def initialize_all_base_skills(self, character_id: int) -> None:
-        """
-        (ТВОЙ НОВЫЙ МЕТОД)
-        Создает (INSERT) все БАЗОВЫЕ навыки (Уровень 1) для
-        персонажа со значением total_xp = 0.
-        (Использует self.session)
-        """
-        data = SKILL_RECIPES
+        """Создает записи для всех базовых навыков для нового персонажа."""
+        log.debug(f"Запрос на инициализацию базовых навыков для character_id={character_id}")
+        base_skills = [
+            {"character_id": character_id, "skill_key": key, "total_xp": 0}
+            for key, recipe in SKILL_RECIPES.items()
+            if recipe.get("prerequisite_skill") is None
+        ]
+        if not base_skills:
+            log.warning("Не найдено базовых навыков для инициализации.")
+            return
 
-        # 1. Создаем запрос INSERT
-        stmt = insert(CharacterSkillProgress).values(
-            [{"character_id": character_id, "skill_key": skill_key, "total_xp": 0} for skill_key in data.keys()
-             if data[skill_key].get("prerequisite_skill") is None]
-            )
-
-        # 2. отправляем запрос
+        # Используем ON CONFLICT DO NOTHING, чтобы избежать ошибок при повторном вызове
+        stmt = pg_insert(CharacterSkillProgress).values(base_skills)
         stmt = stmt.on_conflict_do_nothing(
-            index_elements=["character_id", "skill_key"]
+            index_elements=[CharacterSkillProgress.character_id, CharacterSkillProgress.skill_key]
+        )
+        try:
+            await self.session.execute(stmt)
+            log.info(f"Инициализировано {len(base_skills)} базовых навыков для character_id={character_id}.")
+        except SQLAlchemyError as e:
+            log.exception(f"Ошибка SQLAlchemy при инициализации навыков для character_id={character_id}: {e}")
+            raise
+
+    async def add_skill_xp(self, character_id: int, skill_key: str, xp_to_add: int) -> Optional[SkillProgressDTO]:
+        """Атомарно добавляет опыт к навыку и возвращает обновленный прогресс."""
+        log.debug(f"Запрос на добавление {xp_to_add} XP к навыку '{skill_key}' для character_id={character_id}")
+        stmt = (
+            update(CharacterSkillProgress)
+            .where(
+                CharacterSkillProgress.character_id == character_id,
+                CharacterSkillProgress.skill_key == skill_key
             )
-
-        await self.session.execute(stmt)
-
-
-    async def add_skill_xp(self, character_id: int, skill_key: str, xp_to_add: int) ->  Optional[SkillProgressDTO]:
-        """
-        Атомарно ДОБАВЛЯЕТ опыт к 'total_xp'.
-        Это наш главный метод прокачки.
-        (UPDATE character_skill_progress SET total_xp = total_xp + ? WHERE ...)
-        Возвращает DTO с *рассчитанным* новым уровнем.
-        """
-        stmt = update(CharacterSkillProgress).where(
-            CharacterSkillProgress.character_id == character_id,
-            CharacterSkillProgress.skill_key == skill_key
-        ).values(
-            total_xp=CharacterSkillProgress.total_xp + xp_to_add
-        ).returning(CharacterSkillProgress)
-
-        result = await self.session.execute(stmt)
-        orm_progress = result.scalar_one_or_none()
-        if orm_progress:
-            return SkillProgressDTO.model_validate(orm_progress)
-        return None
-
+            .values(total_xp=CharacterSkillProgress.total_xp + xp_to_add)
+            .returning(CharacterSkillProgress)
+        )
+        try:
+            result = await self.session.execute(stmt)
+            orm_progress = result.scalar_one_or_none()
+            if orm_progress:
+                log.debug(f"Опыт для навыка '{skill_key}' у character_id={character_id} обновлен.")
+                return SkillProgressDTO.from_orm(orm_progress)
+            log.warning(f"Не удалось добавить опыт: навык '{skill_key}' не найден для character_id={character_id}.")
+            return None
+        except SQLAlchemyError as e:
+            log.exception(f"Ошибка SQLAlchemy при добавлении опыта к навыку '{skill_key}' для character_id={character_id}: {e}")
+            raise
 
     async def update_skill_state(self, character_id: int, skill_key: str, state: SkillProgressState) -> None:
-        """
-        Обновляет ТОЛЬКО состояние (PLUS/PAUSE/MINUS).
-        (Твой 'update_skill_progress' был нужен, но только для этого)
-        """
-
-        stmt = update(CharacterSkillProgress).where(
-            CharacterSkillProgress.character_id==character_id,
-            CharacterSkillProgress.skill_key==skill_key).values(progress_state=state)
-
-        await self.session.execute(stmt)
-
+        """Обновляет состояние развития навыка (PLUS/PAUSE/MINUS)."""
+        log.debug(f"Запрос на обновление состояния навыка '{skill_key}' на '{state.name}' для character_id={character_id}")
+        stmt = (
+            update(CharacterSkillProgress)
+            .where(
+                CharacterSkillProgress.character_id == character_id,
+                CharacterSkillProgress.skill_key == skill_key
+            )
+            .values(progress_state=state)
+        )
+        try:
+            await self.session.execute(stmt)
+            log.debug(f"Состояние навыка '{skill_key}' для character_id={character_id} обновлено.")
+        except SQLAlchemyError as e:
+            log.exception(f"Ошибка SQLAlchemy при обновлении состояния навыка '{skill_key}' для character_id={character_id}: {e}")
+            raise
 
     async def get_all_skills_progress(self, character_id: int, **kwargs) -> List[SkillProgressDTO]:
-
-        """
-        Возвращает прогресс ВСЕХ навыков персонажа.
-        """
+        """Возвращает прогресс всех навыков персонажа."""
+        log.debug(f"Запрос на получение прогресса всех навыков для character_id={character_id}")
         stmt = select(CharacterSkillProgress).where(CharacterSkillProgress.character_id == character_id)
-
-        result = await self.session.scalars(stmt)
-        orm_progress_list = result.all()
-
-        if orm_progress_list:
-            log.debug(f"Прогресс получен: {orm_progress_list}")
-            return [SkillProgressDTO.model_validate(orm_progress) for orm_progress in orm_progress_list]
-        return []
-
-
+        try:
+            result = await self.session.scalars(stmt)
+            orm_progress_list = result.all()
+            log.debug(f"Найдено {len(orm_progress_list)} записей о прогрессе навыков для character_id={character_id}.")
+            return [SkillProgressDTO.from_orm(orm_progress) for orm_progress in orm_progress_list]
+        except SQLAlchemyError as e:
+            log.exception(f"Ошибка SQLAlchemy при получении прогресса навыков для character_id={character_id}: {e}")
+            raise

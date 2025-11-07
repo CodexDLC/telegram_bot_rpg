@@ -41,9 +41,15 @@ def setup_logging(
     Returns:
         None
     """
+    # Получаем корневой логгер, чтобы добавить в него сообщения о настройке.
+    # Это временная мера, пока basicConfig не будет вызван.
+    log = logging.getLogger()
+    log.setLevel("DEBUG")  # Временно ставим DEBUG, чтобы видеть все сообщения
+
     # --- 1. Настройка форматов ---
     text_format = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
     date_format = "%Y-%m-%d %H:%M:%S"
+    log.debug("Форматы для логирования определены.")
 
     # --- 2. Настройка консольного обработчика с цветами ---
     console_handler = logging.StreamHandler(stream=sys.stdout)
@@ -60,13 +66,18 @@ def setup_logging(
         },
     )
     console_handler.setFormatter(console_fmt)
+    log.debug("Консольный обработчик (StreamHandler) настроен.")
 
     handlers: List[logging.Handler] = [console_handler]
 
     # --- 3. Настройка файлового обработчика с ротацией (если включено) ---
     if to_file:
+        log.debug(f"Включено логирование в файл. Путь: {log_path}")
         # Создаем директорию для логов, если она не существует.
-        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+        log_dir = Path(log_path).parent
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log.debug(f"Директория для логов '{log_dir}' проверена/создана.")
+
         # RotatingFileHandler автоматически управляет размером и количеством файлов.
         file_handler = RotatingFileHandler(
             filename=log_path,
@@ -77,13 +88,22 @@ def setup_logging(
         file_handler.setLevel(level)
         file_handler.setFormatter(logging.Formatter(text_format, date_format))
         handlers.append(file_handler)
+        log.debug("Файловый обработчик (RotatingFileHandler) настроен.")
+    else:
+        log.debug("Логирование в файл отключено.")
 
     # --- 4. Применение конфигурации ---
     # logging.basicConfig должен вызываться один раз. Он настраивает корневой логгер.
-    logging.basicConfig(level=level, handlers=handlers)
+    # force=True (в Python 3.8+) позволяет перенастроить логгер, если он уже был настроен.
+    logging.basicConfig(level=level, handlers=handlers, force=True)
+    log.info(f"Система логирования настроена. Общий уровень: {level}.")
 
     # --- 5. Настройка уровней для сторонних библиотек ---
     # Уменьшаем "шум" от библиотек, логи которых не так важны в обычном режиме.
     logging.getLogger("aiogram").setLevel("INFO")
     logging.getLogger("httpx").setLevel("WARNING")
     logging.getLogger("aiosqlite").setLevel("INFO")
+    logging.getLogger("sqlalchemy").setLevel("WARNING")
+    log.debug("Уровни логирования для сторонних библиотек (aiogram, httpx, aiosqlite, sqlalchemy) установлены.")
+
+    log.info("Настройка логирования завершена.")

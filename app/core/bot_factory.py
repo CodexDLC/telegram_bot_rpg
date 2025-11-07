@@ -5,44 +5,60 @@ from typing import Tuple
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
+from redis.exceptions import ConnectionError as RedisConnectionError
 
-from app.core.config import REDIS_URL
+from app.core.config import REDIS_URL, BOT_TOKEN
 
 log = logging.getLogger(__name__)
 
 
-def build_app(token: str) -> Tuple[Bot, Dispatcher]:
+async def create_bot_and_dispatcher() -> Tuple[Bot, Dispatcher]:
     """
-    Создает и конфигурирует экземпляры Bot и Dispatcher.
+    Асинхронно создает и конфигурирует экземпляры Bot и Dispatcher.
 
-    Эта функция-фабрика инкапсулирует логику создания ключевых объектов
-    aiogram:
+    Эта асинхронная фабрика инкапсулирует логику создания ключевых
+    объектов aiogram и проверяет подключения к внешним сервисам (Redis).
+
     1.  Создает экземпляр `Bot`.
-    2.  Подключается к Redis и создает `RedisStorage` для хранения состояний FSM.
-    3.  Создает экземпляр `Dispatcher` с настроенным хранилищем.
-
-    Использование фабрики позволяет легко переключать компоненты (например,
-    хранилище) и упрощает инициализацию приложения в `main.py`.
+    2.  Подключается к Redis и создает `RedisStorage` для FSM.
+    3.  Проверяет соединение с Redis.
+    4.  Создает `Dispatcher` с настроенным хранилищем.
 
     Args:
-        token (str): Токен Telegram-бота.
+        None
 
     Returns:
         Tuple[Bot, Dispatcher]: Кортеж с готовыми к работе экземплярами
-        `Bot` и `Dispatcher`.
-    """
-    bot = Bot(token)
-    log.info("Экземпляр Bot создан.")
+                                `Bot` и `Dispatcher`.
 
-    # Создаем клиент для подключения к Redis.
-    redis_client = Redis.from_url(REDIS_URL)
-    log.info(f"Подключение к Redis по адресу: {REDIS_URL}")
+    Raises:
+        RuntimeError: Если не удалось подключиться к Redis.
+    """
+    log.info("Начало создания экземпляров Bot и Dispatcher...")
+
+    # --- Создание бота ---
+    bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+    log.debug("Экземпляр Bot создан.")
+
+    # --- Подключение к Redis и создание хранилища ---
+    log.debug(f"Попытка подключения к Redis по адресу: {REDIS_URL}")
+    try:
+        redis_client = Redis.from_url(REDIS_URL)
+        # Проверяем соединение с Redis
+        if not await redis_client.ping():
+            raise RedisConnectionError
+        log.info("Соединение с Redis успешно установлено.")
+    except RedisConnectionError as e:
+        log.critical(f"Не удалось подключиться к Redis: {e}")
+        raise RuntimeError(f"Критическая ошибка: не удалось подключиться к Redis по адресу {REDIS_URL}")
 
     # RedisStorage будет использоваться для машины состояний (FSM).
-    # Это позволяет сохранять состояния пользователей даже после перезапуска бота.
     storage = RedisStorage(redis=redis_client)
+    log.debug("Хранилище состояний RedisStorage создано.")
 
+    # --- Создание диспетчера ---
     dp = Dispatcher(storage=storage)
-    log.info("Экземпляр Dispatcher создан с RedisStorage.")
+    log.debug("Экземпляр Dispatcher создан с RedisStorage.")
 
+    log.info("Экземпляры Bot и Dispatcher успешно созданы и настроены.")
     return bot, dp

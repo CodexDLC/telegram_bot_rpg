@@ -1,29 +1,30 @@
-from typing import Optional, List
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, User
+# app/services/ui_service/lobbyservice.py
+import logging
+from typing import Optional, List, Tuple
+
+from aiogram.types import InlineKeyboardMarkup, User
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterOnboardingUpdateDTO
+from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterOnboardingUpdateDTO, CharacterShellCreateDTO
 from app.resources.texts.buttons_callback import Buttons
-from app.services.helpers_module.DTO_helper import fsm_store
 from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
-from app.resources.schemas_dto.character_dto import CharacterShellCreateDTO
-from database.repositories import get_character_repo
+from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from database.session import get_async_session
+
+log = logging.getLogger(__name__)
 
 
 class LobbyService:
     """
-    Сервис для управления логикой лобби выбора персонажей.
+    Сервис для управления UI-логикой лобби выбора персонажей.
 
-    Этот класс инкапсулирует операции, связанные с отображением списка
-    персонажей, созданием клавиатур и взаимодействием с базой данных
-    для создания и обновления персонажей.
+    Инкапсулирует операции, связанные с отображением списка персонажей,
+    созданием клавиатур и взаимодействием с БД для создания персонажей.
     """
 
     def __init__(
             self,
             user: User,
-            selected_char_id: Optional[int] = None,
             characters: Optional[List[CharacterReadDTO]] = None,
     ):
         """
@@ -31,105 +32,107 @@ class LobbyService:
 
         Args:
             user (User): Объект пользователя Telegram.
-            selected_char_id (Optional[int], optional): ID текущего выбранного
-                персонажа для подсветки в клавиатуре. Defaults to None.
-            characters (Optional[List[CharacterReadDTO]], optional): Список
-                персонажей пользователя. Defaults to None.
+            characters (Optional[List[CharacterReadDTO]]): Список DTO персонажей.
         """
-        self.buttons = Buttons
-        self.characters = characters if characters is not None else []
-        self.selected_char_id = selected_char_id
         self.user_id = user.id
+        self.characters = characters if characters is not None else []
+        log.debug(f"Инициализирован {self.__class__.__name__} для user_id={self.user_id} с {len(self.characters)} персонажами.")
 
-    async def get_data_lobby_start(self) -> tuple[str, InlineKeyboardMarkup]:
+    async def get_data_lobby_start(self) -> Tuple[str, InlineKeyboardMarkup]:
         """
         Подготавливает данные для отображения стартового экрана лобби.
 
-        Форматирует текст со списком персонажей и создает соответствующую
-        клавиатуру.
-
         Returns:
-            tuple[str, InlineKeyboardMarkup]: Кортеж, содержащий текст
-            сообщения и клавиатуру.
+            Tuple[str, InlineKeyboardMarkup]: Кортеж с текстом и клавиатурой.
         """
+        log.debug(f"Подготовка стартового экрана лобби для user_id={self.user_id}.")
         text = LobbyFormatter.format_character_list(self.characters)
-        kb = await self._get_character_lobby_kb()
+        kb = self._get_character_lobby_kb()
         return text, kb
 
-    async def _get_character_lobby_kb(self, max_slots: int = 4) -> InlineKeyboardMarkup:
+    def _get_character_lobby_kb(self, max_slots: int = 4) -> InlineKeyboardMarkup:
         """
         Создает клавиатуру для лобби выбора персонажа.
 
-        Генерирует кнопки для каждого персонажа и кнопки действий
-        ("Создать", "Войти в игру", "Выйти").
-
         Args:
-            max_slots (int, optional): Максимальное количество слотов для
-                персонажей. Defaults to 4.
+            max_slots (int): Максимальное количество слотов для персонажей.
 
         Returns:
             InlineKeyboardMarkup: Готовая клавиатура для лобби.
         """
+        log.debug(f"Создание клавиатуры лобби для user_id={self.user_id}.")
         kb = InlineKeyboardBuilder()
-        lobby_data = Buttons.LOBBY
+        lobby_buttons = Buttons.LOBBY
 
-        characters = await fsm_store(self.characters)
-
-        # === Блок персонажей (2x2) ===
-        # Создаем кнопки для существующих персонажей и пустые слоты.
+        # Создаем кнопки для существующих персонажей.
         for i in range(max_slots):
-            if i < len(characters):
-                char = characters[i]
-                char_id = char.get('character_id')
-                # Добавляем эмодзи для визуального выделения выбранного персонажа.
-                is_selected = char_id == self.selected_char_id
-                prefix = '✅ ' if is_selected else '👤 '
+            if i < len(self.characters):
+                char = self.characters[i]
                 kb.button(
-                    text=f"{prefix}{char.get('name')}",
-                    callback_data=f"lobby:select:{char_id}"
+                    text=f"👤 {char.name}",
+                    callback_data=f"lobby:select:{char.character_id}"
                 )
             else:
-                # Если слот пуст, добавляем кнопку создания нового персонажа.
-                kb.button(text=lobby_data["lobby:create"], callback_data="lobby:create")
-        kb.adjust(2, 2)
+                # Если слот пуст, добавляем кнопку создания.
+                kb.button(text=lobby_buttons["lobby:create"], callback_data="lobby:create")
+        kb.adjust(2)  # По 2 кнопки в ряду для персонажей/создания.
 
-        # === Блок действий (по одной на строку) ===
-        actions = ["logout", "lobby:login"]
-        for cb in actions:
-            kb.row(InlineKeyboardButton(text=lobby_data[cb], callback_data=cb))
+        # Добавляем кнопки действий.
+        kb.row(Buttons.get_button("lobby:login"))
+        kb.row(Buttons.get_button("logout"))
 
+        log.debug("Клавиатура лобби успешно создана.")
         return kb.as_markup()
 
     async def create_und_get_character_id(self) -> int:
         """
-        Создает "оболочку" персонажа в базе данных и возвращает его ID.
+        Создает "оболочку" персонажа в БД и возвращает его ID.
 
-        "Оболочка" - это минимальная запись в БД, которая создается до того,
-        как пользователь введет имя и выберет пол.
+        "Оболочка" - это минимальная запись, создаваемая до ввода имени/пола.
+        Использует собственную сессию для выполнения этой изолированной операции.
 
         Returns:
             int: ID созданного персонажа.
         """
+        log.info(f"Запрос на создание 'оболочки' персонажа для user_id={self.user_id}.")
         dto_object = CharacterShellCreateDTO(user_id=self.user_id)
         async with get_async_session() as session:
-            char_repo = get_character_repo(session)
-            char_id = await char_repo.create_character_shell(dto_object)
-        return char_id
+            char_repo = CharactersRepoORM(session)
+            try:
+                char_id = await char_repo.create_character_shell(dto_object)
+                await session.commit() # Коммитим, так как сессия локальная
+                log.info(f"Успешно создана 'оболочка' персонажа с char_id={char_id} для user_id={self.user_id}.")
+                return char_id
+            except Exception as e:
+                log.exception(f"Ошибка при создании 'оболочки' персонажа для user_id={self.user_id}: {e}")
+                await session.rollback()
+                raise
 
-    async def update_character_db(self, char_update_dto: CharacterOnboardingUpdateDTO):
+    async def update_character_db(self, char_id: int, char_update_dto: CharacterOnboardingUpdateDTO) -> None:
         """
         Обновляет данные персонажа на этапе создания (onboarding).
 
+        Использует собственную сессию для выполнения этой операции.
+
         Args:
-            char_update_dto (CharacterOnboardingUpdateDTO): DTO с данными
-                для обновления (имя, пол и т.д.).
+            char_id (int): ID персонажа для обновления.
+            char_update_dto (CharacterOnboardingUpdateDTO): DTO с данными.
 
         Returns:
             None
         """
+        log.info(f"Запрос на обновление данных онбординга для char_id={char_id}.")
+        log.debug(f"Данные для обновления: {char_update_dto.model_dump_json()}")
         async with get_async_session() as session:
-            char_repo = get_character_repo(session)
-            await char_repo.update_character_onboarding(
-                character_id=self.selected_char_id,
-                character_data=char_update_dto
-            )
+            char_repo = CharactersRepoORM(session)
+            try:
+                await char_repo.update_character_onboarding(
+                    character_id=char_id,
+                    character_data=char_update_dto
+                )
+                await session.commit()
+                log.info(f"Данные персонажа {char_id} успешно обновлены.")
+            except Exception as e:
+                log.exception(f"Ошибка при обновлении данных онбординга для char_id={char_id}: {e}")
+                await session.rollback()
+                raise

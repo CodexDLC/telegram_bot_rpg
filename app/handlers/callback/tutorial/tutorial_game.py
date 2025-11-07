@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
 from app.resources.fsm_states.states import StartTutorial
-from app.services.helpers_module.helper_id_callback import error_msg_default
+from app.services.helpers_module.callback_exceptions import error_msg_default
 from app.services.ui_service.helpers_ui.ui_tools import animate_message_sequence, await_min_delay
 from app.services.ui_service.tutorial.tutorial_service import TutorialService
 
@@ -17,46 +17,40 @@ router = Router(name="tutorial_game_router")
 
 
 @router.callback_query(StartTutorial.start, F.data.startswith("tut:start"))
-async def start_tutorial_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
+async def start_tutorial_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     """
     Начинает туториал по распределению очков характеристик.
 
-    Этот обработчик запускается после создания персонажа. Он инициализирует
-    сервис туториала, отображает первый шаг (вопрос) и переводит FSM
-    в состояние прохождения туториала.
-
     Args:
-        call (CallbackQuery): Входящий callback от кнопки начала туториала.
+        call (CallbackQuery): Callback от кнопки начала туториала.
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
 
     Returns:
         None
     """
-    log.debug("Начало работы start_tutorial_handler")
-    await call.answer()
+    if not call.from_user:
+        log.warning("Хэндлер 'start_tutorial_handler' получил обновление без 'from_user'.")
+        return
 
+    user_id = call.from_user.id
     state_data = await state.get_data()
     char_id = state_data.get("char_id")
+    log.info(f"Хэндлер 'start_tutorial_handler' [tut:start] вызван user_id={user_id}, char_id={char_id}")
+    await call.answer()
 
     if not char_id:
-        log.error("char_id не найден в FSM. Невозможно начать туториал.")
-        await state.clear()
+        log.warning(f"User {user_id} в 'start_tutorial_handler' имел 'char_id=None'. Отправка ошибки.")
         await error_msg_default(call=call)
         return
 
-    # Инициализируем сервис туториала с ID персонажа.
-    tut_service = TutorialService(
-        char_id=char_id,
-        bonus_dict={}
-    )
-
-    # Получаем текст и клавиатуру для первого шага.
+    tut_service = TutorialService(char_id=char_id, bonus_dict={})
     text, kb = tut_service.get_next_step()
+    log.debug(f"Для user_id={user_id} получен первый шаг туториала.")
 
     message_content = state_data.get("message_content")
     if not message_content:
-        log.error("message_content не найден в FSM.")
+        log.error(f"Не найден 'message_content' в FSM для user_id={user_id}.")
         await error_msg_default(call=call)
         return
 
@@ -68,81 +62,78 @@ async def start_tutorial_handler(call: CallbackQuery, state: FSMContext, bot: Bo
         reply_markup=kb
     )
 
-    # Сохраняем данные туториала (пул событий, бонусы) в FSM.
     await state.update_data(**tut_service.get_fsm_data())
     await state.set_state(StartTutorial.in_progress)
-    log.debug(f"Состояние state в конце start_tutorial_handler = {await state.get_data()}")
+    log.info(f"FSM для user_id={user_id} переведен в состояние 'StartTutorial.in_progress'.")
+    log.debug(f"Данные FSM в конце 'start_tutorial_handler': {await state.get_data()}")
 
 
 @router.callback_query(StartTutorial.in_progress, F.data.startswith("tut_ev"))
-async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
+async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     """
-    Обрабатывает выбор пользователя на одном из шагов туториала.
-
-    Эта функция является основным циклом распределения очков. Она получает
-    ответ пользователя, добавляет соответствующий бонус к характеристикам,
-    и отображает следующий шаг. Если шаги закончились, запускает
-    анимацию подсчета результатов.
+    Обрабатывает выбор пользователя на шаге туториала.
 
     Args:
-        call (CallbackQuery): Входящий callback с выбором пользователя (e.g., "tut_ev:strength").
+        call (CallbackQuery): Callback с выбором (e.g., "tut_ev:strength").
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
 
     Returns:
         None
     """
+    if not call.from_user:
+        log.warning("Хэндлер 'tutorial_event_stats_handler' получил обновление без 'from_user'.")
+        return
+
+    choice = call.data
+    user_id = call.from_user.id
+    log.info(f"Хэндлер 'tutorial_event_stats_handler' [{choice}] вызван user_id={user_id}")
     await call.answer()
     start_time = time.monotonic()
-    state_data = await state.get_data()
 
-    # Воссоздаем сервис из данных FSM, чтобы продолжить с того же места.
+    state_data = await state.get_data()
+    char_id = state_data.get("char_id")
+    if not char_id:
+        log.warning(f"User {user_id} в 'tutorial_event_stats_handler' имел 'char_id=None'.")
+        await error_msg_default(call=call)
+        return
+
+    # Воссоздаем сервис из FSM.
     tut_service = TutorialService(
-        char_id=state_data.get("char_id"),
+        char_id=char_id,
         event_pool=state_data.get("event_pool"),
         sim_text_count=state_data.get("sim_text_count", 0),
         bonus_dict=state_data.get("bonus_dict")
     )
+    log.debug(f"Сервис туториала для user_id={user_id} воссоздан из FSM.")
 
-    choice = call.data
-    if not choice:
-        log.error("Отсутствует callback.data в tutorial_event_stats_handler")
-        await error_msg_default(call=call)
-        return
-
-    # Добавляем бонус на основе выбора пользователя.
     tut_service.add_bonus(choice_key=choice)
+    log.debug(f"Бонус '{choice}' добавлен для char_id={char_id}. Текущие бонусы: {tut_service.bonus_dict}")
 
-    # Получаем следующий шаг или None, если шаги закончились.
     text, kb = tut_service.get_next_step()
-
     message_content = state_data.get("message_content")
     if not message_content:
+        log.error(f"Не найден 'message_content' в FSM для user_id={user_id}.")
         await error_msg_default(call)
         return
 
-    # Сохраняем обновленные данные туториала (оставшиеся события, бонусы).
     await state.update_data(**tut_service.get_fsm_data())
+    log.debug(f"Данные FSM для user_id={user_id} обновлены.")
 
-    # Если text is None, значит, туториал завершен.
     if text is None:
-        # Готовим данные для финальной анимации.
+        log.info(f"Туториал для char_id={char_id} завершен. Запуск анимации подсчета.")
         animation_steps, final_kb = tut_service.get_data_animation_steps()
-
-        # Запускаем анимацию подсчета очков.
         await animate_message_sequence(
             message_to_edit=message_content,
             sequence=animation_steps,
             bot=bot,
             final_reply_markup=final_kb
         )
-        # Переводим FSM в состояние подтверждения.
         await state.set_state(StartTutorial.confirmation)
+        log.info(f"FSM для user_id={user_id} переведен в состояние 'StartTutorial.confirmation'.")
     else:
-        # Если есть следующий шаг, просто обновляем сообщение.
-        if start_time:
-            await await_min_delay(start_time, min_delay=0.3)
-
+        log.debug(f"Отображение следующего шага туториала для char_id={char_id}.")
+        await await_min_delay(start_time, min_delay=0.3)
         await bot.edit_message_text(
             chat_id=message_content.get("chat_id"),
             message_id=message_content.get("message_id"),
@@ -153,56 +144,52 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
 
 
 @router.callback_query(StartTutorial.confirmation, F.data.startswith("tut:"))
-async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
+async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     """
     Обрабатывает финальный выбор после распределения характеристик.
 
-    Пользователь может подтвердить характеристики, начать заново или
-    (в будущем) завершить создание.
-
     Args:
-        call (CallbackQuery): Входящий callback (tut:restart, tut:continue, tut:finish).
+        call (CallbackQuery): Callback (tut:restart, tut:continue, tut:finish).
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
 
     Returns:
         None
     """
-    await call.answer()
-    start_time = time.monotonic()
-    state_data = await state.get_data()
-    call_data = call.data
-
-    if not state_data:
-        await error_msg_default(call)
+    if not call.from_user:
+        log.warning("Хэндлер 'tutorial_confirmation_handler' получил обновление без 'from_user'.")
         return
 
+    call_data = call.data
+    user_id = call.from_user.id
+    log.info(f"Хэндлер 'tutorial_confirmation_handler' [{call_data}] вызван user_id={user_id}")
+    await call.answer()
+    start_time = time.monotonic()
+
+    state_data = await state.get_data()
     char_id = state_data.get("char_id")
     message_content = state_data.get("message_content")
 
-    if not message_content:
+    if not all([char_id, message_content]):
+        log.warning(f"Недостаточно данных в FSM для user_id={user_id} в 'tutorial_confirmation_handler'.")
         await error_msg_default(call)
         return
 
-    # Воссоздаем сервис с текущими данными для выполнения действий.
     tut_service = TutorialService(
         char_id=char_id,
         event_pool=state_data.get("event_pool"),
         sim_text_count=state_data.get("sim_text_count", 0),
         bonus_dict=state_data.get("bonus_dict")
     )
+    log.debug(f"Сервис туториала для user_id={user_id} воссоздан из FSM.")
+
+    await await_min_delay(start_time, min_delay=0.3)
 
     if call_data == "tut:restart":
-        # Сбрасываем состояние туториала для повторного прохождения.
+        log.info(f"Пользователь {user_id} перезапускает туториал для char_id={char_id}.")
         await state.set_state(StartTutorial.start)
-        # Очищаем только данные туториала, сохраняя char_id.
-        await state.update_data(tut_service={}, bonus_dict={}, event_pool=None, sim_text_count=0)
-
+        await state.update_data(bonus_dict={}, event_pool=None, sim_text_count=0)
         text, kb = tut_service.get_restart_stats()
-
-        if start_time:
-            await await_min_delay(start_time, min_delay=0.3)
-
         await bot.edit_message_text(
             chat_id=message_content.get("chat_id"),
             message_id=message_content.get("message_id"),
@@ -210,18 +197,17 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, 
             parse_mode="html",
             reply_markup=kb
         )
+        log.debug(f"Сообщение о рестарте отправлено user_id={user_id}.")
 
     elif call_data == "tut:continue":
-        # Применяем бонусы к характеристикам персонажа в базе данных.
-        if not char_id or not state_data.get("bonus_dict"):
+        bonus_dict = state_data.get("bonus_dict")
+        if not bonus_dict:
+            log.warning(f"User {user_id} попытался продолжить туториал без бонусов.")
             await error_msg_default(call)
             return
 
+        log.info(f"Пользователь {user_id} подтвердил характеристики для char_id={char_id}. Бонусы: {bonus_dict}")
         text, kb = await tut_service.update_stats_und_get()
-
-        if start_time:
-            await await_min_delay(start_time, min_delay=0.3)
-
         await bot.edit_message_text(
             chat_id=message_content.get("chat_id"),
             message_id=message_content.get("message_id"),
@@ -229,16 +215,15 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, 
             parse_mode="html",
             reply_markup=kb
         )
-        # Здесь можно установить следующий стейт, например, завершение туториала
+        log.debug(f"Сообщение с финальными статами отправлено user_id={user_id}.")
+        # TODO: Установить следующий стейт, например, завершение туториала
         # await state.set_state(SomeOtherState.next_step)
 
     elif call_data == "tut:finish":
-        # TODO: Реализовать логику завершения туториала и перехода в игру.
+        log.info(f"Пользователь {user_id} нажал 'Завершить' (заглушка) для char_id={char_id}.")
         await state.clear()
         await state.update_data(char_id=char_id)
         await call.message.edit_text("Дальше пока не разработано.")
     else:
-        # Обработка непредусмотренных callback'ов.
-        await state.clear()
-        await state.update_data(char_id=char_id)
-        await call.message.edit_text("Произошла ошибка. Дальше пока не разработано.")
+        log.error(f"Неизвестный callback '{call_data}' в 'tutorial_confirmation_handler' от user_id={user_id}.")
+        await error_msg_default(call)

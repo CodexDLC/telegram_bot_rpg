@@ -10,6 +10,7 @@ from app.resources.keyboards.inline_kb.loggin_und_new_character import get_chara
 from app.services.helpers_module.data_loader_service import load_data_auto
 from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store
 from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
+from app.services.helpers_module.callback_exceptions import error_msg_default
 
 log = logging.getLogger(__name__)
 
@@ -17,122 +18,98 @@ router = Router(name="lobby_fsm")
 
 
 @router.callback_query(CharacterLobby.selection, F.data.startswith("lobby:select"))
-async def select_character_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
+async def select_character_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     """
     Обрабатывает выбор персонажа в лобби.
 
-    Этот обработчик отвечает за:
-    - Загрузку данных о персонажах из FSM или базы данных.
-    - Обновление списка персонажей с выделением выбранного.
-    - Отображение или обновление подробной информации (статус) о выбранном персонаже.
-    - Сохранение актуального состояния в FSM.
+    Загружает данные о персонажах, обновляет список с выделением выбранного,
+    отображает подробную информацию о нем и сохраняет состояние в FSM.
 
     Args:
-        call (CallbackQuery): Входящий callback от выбора персонажа.
+        call (CallbackQuery): Callback от выбора персонажа.
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
 
     Returns:
         None
     """
-    await call.answer()
+    if not call.from_user:
+        log.warning("Хэндлер 'select_character_handler' получил обновление без 'from_user'.")
+        return
+
     char_id = int(call.data.split(":")[-1])
+    user_id = call.from_user.id
+    log.info(f"Хэндлер 'select_character_handler' [lobby:select] вызван user_id={user_id}, char_id={char_id}")
+    await call.answer()
 
-    # --- 1. ЗАГРУЗКА ДАННЫХ О ПЕРСОНАЖАХ ---
-    # Пытаемся получить список персонажей из хранилища FSM, чтобы избежать лишних запросов к БД.
-    characters = await fsm_load_auto(state=state, key="characters") or None
+    # Пытаемся получить список персонажей из FSM.
+    characters = await fsm_load_auto(state=state, key="characters")
 
-    # --- 2. ПЕРВИЧНАЯ ЗАГРУЗКА ИЗ БД ---
-    # Если в FSM данных нет (например, первый вход в лобби), загружаем их из базы данных.
+    # Если в FSM данных нет, загружаем их из БД.
     if characters is None:
-        log.info("Данных 'characters' нет в FSM, загружаю из БД...")
+        log.info(f"Данные 'characters' для user_id={user_id} не найдены в FSM, загрузка из БД...")
         get_data = await load_data_auto(
             ["characters", "character_stats"],
             character_id=char_id,
-            user_id=call.from_user.id,
+            user_id=user_id,
         )
-        # Сохраняем полученные данные в FSM для последующих обращений.
+        characters = get_data.get("characters")
+        # Сохраняем полученные данные в FSM.
         await state.update_data(
-            characters=await fsm_store(value=get_data.get("characters")),
+            characters=await fsm_store(value=characters),
             character_stats=await fsm_store(value=get_data.get("character_stats"))
         )
+        log.debug(f"Данные 'characters' и 'character_stats' для user_id={user_id} загружены в FSM.")
 
-    # --- 3. ПОЛУЧЕНИЕ АКТУАЛЬНЫХ ДАННЫХ FSM ---
-    # Загружаем все данные из FSM, чтобы иметь самую свежую информацию.
-    state_data = await state.get_data()
-    characters = await fsm_load_auto(state=state, key="characters") or state_data.get("characters")
-
-    # --- 4. ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ---
     if characters:
-        # Редактируем сообщение со списком персонажей, визуально выделяя выбранного.
+        # Редактируем сообщение со списком персонажей, выделяя выбранного.
         await call.message.edit_text(
             text=LobbyFormatter.format_character_list(characters),
             parse_mode='HTML',
             reply_markup=get_character_lobby_kb(characters, selected_char_id=char_id)
         )
+        log.debug(f"Список персонажей для user_id={user_id} обновлен, выбран char_id={char_id}.")
 
-        # Сохраняем ID выбранного персонажа и пользователя для последующего использования.
-        await state.update_data(char_id=char_id, user_id=call.from_user.id)
+        # Сохраняем ID выбранного персонажа.
+        await state.update_data(char_id=char_id, user_id=user_id)
 
-        # Вызываем обработчик меню статуса, чтобы отобразить или обновить
-        # подробную информацию о персонаже в отдельном сообщении.
+        # Вызываем обработчик меню статуса для отображения информации.
         await status_menu_start_handler(
             state=state,
             bot=bot,
-            explicit_view_mode="lobby"  # Указываем, что мы находимся в лобби.
+            explicit_view_mode="lobby"
         )
-
     else:
-        # Обработка маловероятного случая, когда у пользователя нет персонажей,
-        # хотя он находится в этом обработчике.
-        log.warning(f"У пользователя {call.from_user.id} нет персонажей.")
-        await call.message.edit_text("У вас нет созданных персонажей.")
+        log.warning(f"У user_id={user_id} нет персонажей, хотя он находится в лобби выбора.")
+        await error_msg_default(call=call, message_text="У вас нет созданных персонажей.")
 
 
 @router.callback_query(CharacterLobby.selection, F.data == "lobby:login")
-async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot):
+async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     """
-    Обрабатывает нажатие кнопки "Войти в игру".
-
-    На данный момент является заглушкой. В будущем здесь будет реализована
-    логика входа персонажа в игровой мир, включая проверку туториалов и
-    загрузку соответствующего игрового состояния.
+    Обрабатывает нажатие кнопки "Войти в игру" (заглушка).
 
     Args:
-        call (CallbackQuery): Входящий callback от кнопки "Войти в игру".
+        call (CallbackQuery): Callback от кнопки "Войти в игру".
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
 
     Returns:
         None
     """
-    log.debug(f"Начало работы start_logging_handler ")
-    await call.answer()
+    if not call.from_user:
+        log.warning("Хэндлер 'start_logging_handler' получил обновление без 'from_user'.")
+        return
+
+    user_id = call.from_user.id
     state_data = await state.get_data()
-    message_content = state_data.get("message_content")
-    message_menu = state_data.get("message_menu")
-    char_id = state_data.get("activ_char_id")
+    char_id = state_data.get("char_id")
+
+    log.info(f"Хэндлер 'start_logging_handler' [lobby:login] вызван user_id={user_id}, char_id={char_id}")
+    await call.answer(text="⚠️ Функция входа в игру находится в разработке.", show_alert=True)
+    log.warning(f"Попытка входа в игру (функция-заглушка) для user_id={user_id}, char_id={char_id}. Данные FSM: {state_data}")
 
     # TODO: Реализовать полную логику входа в игру.
-    # TODO: Реализовать систему сохранения прогресса туториала,
-    # чтобы возвращать игрока на нужный этап после пересоздания или логина.
-
-    # --- ЗАГЛУШКА: ИНФОРМИРОВАНИЕ О НЕРАБОТАЮЩЕЙ ФУНКЦИИ ---
-    # Редактируем оба сообщения (меню и контент), чтобы показать, что функция в разработке.
-    await bot.edit_message_text(
-        chat_id=message_menu.get("chat_id"),
-        message_id=message_menu.get("message_id"),
-        text="Логина в игру пока нету",
-        parse_mode='HTML',
-        reply_markup=None
-    )
-
-    await bot.edit_message_text(
-        chat_id=message_content.get("chat_id"),
-        message_id=message_content.get("message_id"),
-        text=" Логина в игру пока нету",
-        parse_mode='HTML',
-        reply_markup=None
-    )
-
-    log.debug(f"Состояние FSM при попытке логина: {state_data}")
+    # TODO: Проверять, пройден ли туториал. Если нет - перенаправлять на него.
+    # TODO: Загружать игровое состояние (локация, инвентарь и т.д.).
+    # TODO: Очищать сообщение лобби и меню, создавать игровой интерфейс.

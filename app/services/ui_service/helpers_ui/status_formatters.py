@@ -35,12 +35,12 @@ class StatusFormatter:
         Returns:
             str: Отформатированный текст для сообщения.
         """
+        log.debug(f"Начало форматирования биографии персонажа. Actor: '{actor_name}'.")
         if not character or not stats:
-            log.warning("Отсутствуют данные персонажа или его характеристик.")
+            log.warning("Отсутствуют данные персонажа или его характеристик для форматирования биографии.")
             return "Ошибка: не удалось загрузить данные персонажа."
 
-        # Безопасно получаем значения характеристик, используя getattr
-        # с fallback-значением 0, если атрибут отсутствует.
+        # Безопасно получаем значения характеристик.
         s = getattr(stats, 'strength', 0)
         p = getattr(stats, 'perception', 0)
         e = getattr(stats, 'endurance', 0)
@@ -48,14 +48,14 @@ class StatusFormatter:
         i = getattr(stats, 'intelligence', 0)
         a = getattr(stats, 'agility', 0)
         l = getattr(stats, 'luck', 0)
+        log.debug(f"Характеристики персонажа {character.character_id}: S:{s}, P:{p}, E:{e}, C:{c}, I:{i}, A:{a}, L:{l}.")
 
         name = character.name
         gender = Buttons.GENDER.get(f"gender:{character.gender}", "Не указан")
         # Форматируем дату создания для лучшей читаемости.
         created_date = character.created_at.strftime('%d-%m-%Y %H:%M') if character.created_at else "Неизвестно"
+        log.debug(f"Имя: '{name}', Пол: '{gender}', Дата создания: '{created_date}'.")
 
-        # Используем f-string с тройными кавычками для удобного
-        # многострочного форматирования.
         text = (
             f"{actor_name}: ❗ Инициация данных\n"
             f"{actor_name}: Вывод данных.\n\n"
@@ -73,4 +73,5 @@ class StatusFormatter:
             f"<b>Дата создания:</b> <i>{created_date}</i>\n"
             f"</code>"
         )
+        log.debug(f"Сформирован текст биографии персонажа (длина: {len(text)}).")
         return text

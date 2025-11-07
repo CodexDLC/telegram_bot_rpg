@@ -1,6 +1,6 @@
 # app/services/ui_service/helpers_ui/skill_formatters.py
 import logging
-from typing import Any, Dict, Union, List, Optional
+from typing import Any, Dict, List, Optional
 
 log = logging.getLogger(__name__)
 
@@ -27,28 +27,27 @@ class SkillFormatters:
         Returns:
             Optional[str]: Готовый текст сообщения или None в случае ошибки.
         """
-        if data is None:
-            log.error("Нет данных о группах навыков.")
+        log.debug(f"Форматирование списка групп навыков для персонажа '{char_name}'.")
+        if not data:
+            log.error("Отсутствуют данные о группах навыков для форматирования.")
             return None
 
-        number_width = 3  # Ширина колонки для количества навыков
+        number_width = 3
         separator = " | "
         formatted_lines = ["<code>"]
 
         # --- Заголовок таблицы ---
         header_num = "№"
         header_title = "Группа"
-        header_line = f"{header_num:>{number_width}}{separator}{header_title}"
-        formatted_lines.append(header_line)
-        separator_line = f"{'─' * number_width}{separator}{'─' * 15}"
-        formatted_lines.append(separator_line)
+        formatted_lines.append(f"{header_num:>{number_width}}{separator}{header_title}")
+        formatted_lines.append(f"{'─' * number_width}{separator}{'─' * 15}")
 
         # --- Строки таблицы ---
-        for group, value in data.items():
-            title = value.get("title_ru", "Без имени")
-            skills_count = len(value.get("skills", {}))
-            line = f"{skills_count:>{number_width}}{separator}{title}"
-            formatted_lines.append(line)
+        for group_key, group_value in data.items():
+            title = group_value.get("title_ru", "Без имени")
+            skills_count = len(group_value.get("skills", {}))
+            formatted_lines.append(f"{skills_count:>{number_width}}{separator}{title}")
+            log.debug(f"  - Группа '{group_key}': {title}, Навыков: {skills_count}")
 
         formatted_lines.append("</code>")
         table_text = "\n".join(formatted_lines)
@@ -60,6 +59,7 @@ class SkillFormatters:
             f"<code><b>Имя персонажа:</b> {char_name}</code>\n"
             f"{table_text}"
         )
+        log.debug(f"Сформирован текст для групп навыков (длина: {len(final_message_text)}).")
         return final_message_text
 
     @staticmethod
@@ -88,13 +88,14 @@ class SkillFormatters:
         Returns:
             Optional[str]: Готовый текст сообщения или None в случае ошибки.
         """
-        if data is None:
-            log.error("Нет данных о группах навыков.")
+        log.debug(f"Форматирование списка навыков в группе '{group_type}' для персонажа '{char_name}'.")
+        if not data:
+            log.error("Отсутствуют данные о группах навыков для форматирования.")
             return None
 
         group_dict = data.get(group_type)
         if not group_dict:
-            log.error(f"Группа '{group_type}' не найдена в данных.")
+            log.error(f"Группа '{group_type}' не найдена в данных SKILL_UI_GROUPS_MAP.")
             return "Ошибка: не найдена указанная группа навыков."
 
         skill_dict = group_dict.get("skills", {})
@@ -111,13 +112,13 @@ class SkillFormatters:
         # Создаем словарь для быстрого доступа к прогрессу по ключу навыка.
         skill_progress_map = {skill["skill_key"]: skill.get('progress_state', 'N/A')
                               for skill in character_skill}
+        log.debug(f"Карта прогресса навыков для персонажа: {skill_progress_map}")
 
         # Итерируемся по всем возможным навыкам в группе, чтобы сохранить порядок.
         for skill_key, skill_name in skill_dict.items():
-            # Берем прогресс из карты или ставим 'Нет', если у персонажа его нет.
             progress = skill_progress_map.get(skill_key, 'Нет')
-            line = f"{skill_name:<25} │ {progress}"
-            formatted_lines.append(line)
+            formatted_lines.append(f"{skill_name:<25} │ {progress}")
+            log.debug(f"  - Навык '{skill_name}': Прогресс '{progress}'")
 
         formatted_lines.append("</code>")
         table_text = "\n".join(formatted_lines)
@@ -125,7 +126,6 @@ class SkillFormatters:
         # --- Финальный текст сообщения ---
         final_message_text = (
             f"{actor_name}: В этой группе {len(skill_dict)} навыков.\n"
-            # Показываем подсказку только если мы не в режиме лобби.
             f'{"" if view_mode == "lobby" else bonus_text}\n\n'
             f"<code>"
             f"<b>Персонаж:</b> {char_name}\n"
@@ -133,14 +133,13 @@ class SkillFormatters:
             f"</code>\n"
             f"{table_text}"
         )
+        log.debug(f"Сформирован текст для списка навыков в группе (длина: {len(final_message_text)}).")
         return final_message_text
 
     @staticmethod
     def format_skill_text():
         """
         Форматирует детальное описание навыка (заглушка).
-
-        Returns:
-            None
         """
+        log.debug("Вызван метод-заглушка 'format_skill_text'.")
         pass

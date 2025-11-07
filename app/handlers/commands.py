@@ -35,22 +35,26 @@ async def cmd_start(m: Message, state: FSMContext) -> None:
     Returns:
         None
     """
-    log.info("Команда /start")
-    start_time = time.monotonic()
-
-    # Мы не можем продолжать, если нет message.from_user
+    # Защитная проверка: мы не можем продолжать, если нет message.from_user.
     if not m.from_user:
-        return None
+        log.warning("Хэндлер 'cmd_start' получил обновление без 'from_user'.")
+        return
+
+    log.info(f"Хэндлер 'cmd_start' [/start] вызван user_id={m.from_user.id}")
+    start_time = time.monotonic()
 
     # Полностью очищаем состояние FSM, чтобы избежать проблем
     # от предыдущих "зависших" сессий пользователя.
     await state.clear()
+    log.debug(f"Состояние FSM очищено для user_id={m.from_user.id}")
+
     user = m.from_user
 
     # Инициализируем сервис для работы с командами,
-    # который инкапсулирует логику создания пользователя.
+    # который инкапсулирует логику создания или поиска пользователя.
     com_service = CommandService(user)
     await com_service.create_user_in_db()
+    log.debug(f"Пользователь {user.id} обработан сервисом CommandService.")
 
     # Обеспечиваем минимальную задержку для плавности UI.
     if start_time:
@@ -67,13 +71,14 @@ async def cmd_start(m: Message, state: FSMContext) -> None:
         "chat_id": mes.chat.id
     }
     await state.update_data(message_menu=message_menu)
+    log.debug(f"Состояние FSM обновлено для user_id={user.id} с message_id={mes.message_id}")
 
     # Удаляем исходное сообщение /start, чтобы не засорять чат.
     try:
         await m.delete()
     except Exception as e:
-        # На всякий случай, если у бота нет прав или сообщение старое
-        log.warning(f"Не удалось удалить сообщение /start: {e}")
+        # На всякий случай, если у бота нет прав или сообщение старое.
+        log.warning(f"Не удалось удалить сообщение /start для user_id={user.id}: {e}")
 
     return None
 
@@ -89,6 +94,11 @@ async def cmd_setting(m: Message) -> None:
     Returns:
         None
     """
+    if not m.from_user:
+        log.warning("Хэндлер 'cmd_setting' получил обновление без 'from_user'.")
+        return
+
+    log.info(f"Хэндлер 'cmd_setting' [/setting] вызван user_id={m.from_user.id}")
     pass
 
 
@@ -103,6 +113,11 @@ async def cmd_help(m: Message) -> None:
     Returns:
         None
     """
+    if not m.from_user:
+        log.warning("Хэндлер 'cmd_help' получил обновление без 'from_user'.")
+        return
+
+    log.info(f"Хэндлер 'cmd_help' [/help] вызван user_id={m.from_user.id}")
     pass
 
 
@@ -117,4 +132,9 @@ async def cmd_game_menu(m: Message) -> None:
     Returns:
         None
     """
+    if not m.from_user:
+        log.warning("Хэндлер 'cmd_game_menu' получил обновление без 'from_user'.")
+        return
+
+    log.info(f"Хэндлер 'cmd_game_menu' [/game_menu] вызван user_id={m.from_user.id}")
     pass
