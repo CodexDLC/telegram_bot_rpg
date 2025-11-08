@@ -3,14 +3,14 @@
 from .base import Base, TimestampMixin
 from .skill import CharacterSkillRate, CharacterSkillProgress
 from .user import User
-from .character import Characters, CharacterStats
+from .character import Character, CharacterStats
 
 
 __all__ = [
     "Base",
     "TimestampMixin",
     "User",
-    "Characters",
+    "Character",
     "CharacterStats",
     "CharacterSkillRate",
     "CharacterSkillProgress"

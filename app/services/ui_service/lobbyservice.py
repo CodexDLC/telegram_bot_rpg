@@ -1,15 +1,16 @@
 # app/services/ui_service/lobbyservice.py
 import logging
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict, Any
 
-from aiogram.types import InlineKeyboardMarkup, User
+from aiogram.types import InlineKeyboardMarkup, User, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterOnboardingUpdateDTO, CharacterShellCreateDTO
+from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterShellCreateDTO
 from app.resources.texts.buttons_callback import Buttons
 from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from database.session import get_async_session
+from app.resources.keyboards.callback_data import LobbySelectionCallback
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class LobbyService:
     def __init__(
             self,
             user: User,
+            char_id: int = None,
             characters: Optional[List[CharacterReadDTO]] = None,
     ):
         """
@@ -36,6 +38,7 @@ class LobbyService:
         """
         self.user_id = user.id
         self.characters = characters if characters is not None else []
+        self.char_id = char_id if char_id is not None else None
         log.debug(f"Инициализирован {self.__class__.__name__} для user_id={self.user_id} с {len(self.characters)} персонажами.")
 
     async def get_data_lobby_start(self) -> Tuple[str, InlineKeyboardMarkup]:
@@ -62,27 +65,49 @@ class LobbyService:
         """
         log.debug(f"Создание клавиатуры лобби для user_id={self.user_id}.")
         kb = InlineKeyboardBuilder()
-        lobby_buttons = Buttons.LOBBY
+        lobby_buttons = Buttons.LOBBY_KB_UP
 
         # Создаем кнопки для существующих персонажей.
         for i in range(max_slots):
             if i < len(self.characters):
                 char = self.characters[i]
-                kb.button(
-                    text=f"👤 {char.name}",
-                    callback_data=f"lobby:select:{char.character_id}"
-                )
+                callback = LobbySelectionCallback(
+                    action="select",
+                    char_id=char.character_id
+                ).pack()
+                if char.character_id == self.char_id:
+                    text = f"✅ {char.name}"
+                else:
+                    text = f"👤 {char.name}"
+                kb.button(text=text, callback_data=callback.pack())
             else:
+                callback = LobbySelectionCallback(
+                    action="create",
+                )
                 # Если слот пуст, добавляем кнопку создания.
-                kb.button(text=lobby_buttons["lobby:create"], callback_data="lobby:create")
-        kb.adjust(2)  # По 2 кнопки в ряду для персонажей/создания.
+                kb.button(text=lobby_buttons["create"], callback_data=callback.pack())
+        kb.adjust(2, 2)
 
-        # Добавляем кнопки действий.
-        kb.row(Buttons.get_button("lobby:login"))
-        kb.row(Buttons.get_button("logout"))
+        buttons = self._down_button()
+        kb.row(*buttons)
 
         log.debug("Клавиатура лобби успешно создана.")
         return kb.as_markup()
+
+    def _down_button(self):
+        # Допустим, ты передаешь нужные данные как словарь, где ключ - это action
+        lobby_buttons_dawn = Buttons.LOBBY_KB_DOWN
+        buttons = []
+
+        for key, value in lobby_buttons_dawn.items():
+            buttons.append(InlineKeyboardButton(
+                text=value,
+                callback_data=LobbySelectionCallback(action=key).pack()
+            ))
+
+        return buttons
+
+
 
     async def create_und_get_character_id(self) -> int:
         """
@@ -106,4 +131,13 @@ class LobbyService:
                 log.exception(f"Ошибка при создании 'оболочки' персонажа для user_id={self.user_id}: {e}")
                 await session.rollback()
                 raise
+
+    def get_fsm_data(self) -> Dict[str, Any]:
+        """ Собирает данные сервиса для сохранения в FSM"""
+        return {
+            "char_id": self.char_id,
+            "characters": self.characters
+        }
+
+
 

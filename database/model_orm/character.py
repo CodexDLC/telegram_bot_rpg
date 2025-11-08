@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from .skill import CharacterSkillRate, CharacterSkillProgress
 
 
+# ВОЗВРАЩАЮ ИСХОДНОЕ ИМЯ КЛАССА
 class Character(Base, TimestampMixin):
     """
     ORM-модель для таблицы `characters`.
@@ -39,8 +40,6 @@ class Character(Base, TimestampMixin):
     __tablename__ = "characters"
 
     character_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    # ondelete="CASCADE" означает, что при удалении пользователя
-    # все его персонажи также будут удалены на уровне БД.
     user_id: Mapped[int] = mapped_column(ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), default="Новый персонаж", nullable=False)
     gender: Mapped[str] = mapped_column(String(20), default="other", nullable=False)
@@ -50,7 +49,7 @@ class Character(Base, TimestampMixin):
     user: Mapped["User"] = relationship(back_populates="characters")
     stats: Mapped["CharacterStats"] = relationship(
         back_populates="character",
-        cascade="all, delete-orphan"  # При удалении персонажа удаляются и его статы
+        cascade="all, delete-orphan"
     )
     skill_rate: Mapped[List["CharacterSkillRate"]] = relationship(
         back_populates="character",
@@ -62,32 +61,32 @@ class Character(Base, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<Character(id={self.character_id}, name='{self.name}', user_id={self.user_id})>"
+        # 3. ИСПРАВЬТЕ ИМЯ КЛАССА В ВЫВОДЕ
+        return f"<Character(id={self.character_id}, name='{self.name}', user_id={self.user_id})>"  # <-- БЫЛО 'Characters'
 
 
 class CharacterStats(Base, TimestampMixin):
     """
+
     ORM-модель для таблицы `character_stats`.
 
     Хранит основные характеристики (S.P.E.C.I.A.L.) персонажа.
-    Связана с `Character` отношением "один-к-одному".
+    Связана с `Characters` отношением "один-к-одному".
 
     Attributes:
         character_id (Mapped[int]): ID персонажа (первичный и внешний ключ).
         strength, perception, endurance, charisma, intelligence, agility, luck:
             Числовые значения характеристик.
 
-        character (Mapped["Character"]): Обратная связь "один-к-одному" с моделью
-            Character.
+        character (Mapped["Characters"]): Обратная связь "один-к-одному" с моделью
+            Characters.
 
         created_at, updated_at: Временные метки (наследуются от TimestampMixin).
     """
     __tablename__ = "character_stats"
 
-    # `character_id` является одновременно и первичным, и внешним ключом,
-    # что обеспечивает связь "один-к-одному".
     character_id: Mapped[int] = mapped_column(
-        ForeignKey("characters.character_id", ondelete="CASCADE"),
+        ForeignKey("characters.character_id", ondelete="CASCADE"),  # <-- "characters.character_id" (таблица) - ВЕРНО
         primary_key=True
     )
     strength: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
@@ -98,8 +97,8 @@ class CharacterStats(Base, TimestampMixin):
     agility: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     luck: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
 
-    # Обратная связь
-    character: Mapped["Character"] = relationship(back_populates="stats")
+    # ИСПРАВЛЯЮ ОБРАТНУЮ СВЯЗЬ
+    character: Mapped["Character"] = relationship(back_populates="stats")  # <-- БЫЛО 'Characters'
 
     def __repr__(self) -> str:
         return f"<CharacterStats(character_id={self.character_id})>"

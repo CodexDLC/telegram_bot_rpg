@@ -6,19 +6,25 @@ from aiogram.types import CallbackQuery
 
 from app.handlers.callback.ui.status_menu.character_status import status_menu_start_handler
 from app.resources.fsm_states.states import CharacterLobby
+from app.resources.keyboards.callback_data import LobbySelectionCallback
 
 from app.services.helpers_module.data_loader_service import load_data_auto
-from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store
-from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
+from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store, fsm_convector
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
+from app.services.ui_service.lobbyservice import LobbyService
 
 log = logging.getLogger(__name__)
 
 router = Router(name="lobby_fsm")
 
 
-@router.callback_query(CharacterLobby.selection, F.data.startswith("lobby:select"))
-async def select_character_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+@router.callback_query(CharacterLobby.selection, LobbySelectionCallback.filter(F.action == "select"))
+async def select_character_handler(
+        call: CallbackQuery,
+        callback_data: LobbySelectionCallback,
+        state: FSMContext,
+        bot: Bot
+) -> None:
     """
     Обрабатывает выбор персонажа в лобби.
 
@@ -37,10 +43,10 @@ async def select_character_handler(call: CallbackQuery, state: FSMContext, bot: 
         log.warning("Хэндлер 'select_character_handler' получил обновление без 'from_user'.")
         return
 
-    char_id = int(call.data.split(":")[-1])
-    user = call.from_user
-    user_id= user.id
-    log.info(f"Хэндлер 'select_character_handler' [lobby:select] вызван user_id={user_id}, char_id={char_id}")
+    char_id = callback_data.char_id
+    user= call.from_user
+
+    log.info(f"Хэндлер 'select_character_handler' [lobby:select] вызван user_id={user.id}, char_id={char_id}")
     await call.answer()
 
     # Пытаемся получить список персонажей из FSM.
@@ -48,31 +54,40 @@ async def select_character_handler(call: CallbackQuery, state: FSMContext, bot: 
 
     # Если в FSM данных нет, загружаем их из БД.
     if characters is None:
-        log.info(f"Данные 'characters' для user_id={user_id} не найдены в FSM, загрузка из БД...")
-        get_data = await load_data_auto(
-            ["characters", "character_stats"],
-            character_id=char_id,
-            user_id=user_id,
-        )
-        characters = get_data.get("characters")
+        log.info(f"Данные 'characters' для user_id={user.id} не найдены в FSM, загрузка из БД...")
+        characters = await load_data_auto(["characters"], user_id=user.id)
         # Сохраняем полученные данные в FSM.
         await state.update_data(
             characters=await fsm_store(value=characters),
-            character_stats=await fsm_store(value=get_data.get("character_stats"))
         )
-        log.debug(f"Данные 'characters' и 'character_stats' для user_id={user_id} загружены в FSM.")
+        log.debug(f"Данные 'characters' для user_id={user.id} загружены в FSM.")
 
     if characters:
-        # Редактируем сообщение со списком персонажей, выделяя выбранного.
-        await call.message.edit_text(
-            text=LobbyFormatter.format_character_list(characters),
-            parse_mode='HTML',
-            reply_markup=get_character_lobby_kb(characters, selected_char_id=char_id)
+        state_data = await state.get_data()
+
+        lobby_service = LobbyService(
+            user=user,
+            char_id=char_id,
+            characters= await fsm_convector(characters, "characters")
         )
-        log.debug(f"Список персонажей для user_id={user_id} обновлен, выбран char_id={char_id}.")
+
+        text, kb = lobby_service.get_data_lobby_start()
+
+        message_menu = state_data.get("message_menu")
+
+        if message_menu:
+            await bot.edit_message_text(
+                chat_id=message_menu.get("chat_id"),
+                message_id=message_menu.get("message_id"),
+                text=text,
+                parse_mode="html",
+                reply_markup=kb,
+            )
+
+        fsm_data = lobby_service.get_fsm_data()
 
         # Сохраняем ID выбранного персонажа.
-        await state.update_data(char_id=char_id, user_id=user_id)
+        await state.update_data(*fsm_data)
 
         # Вызываем обработчик меню статуса для отображения информации.
         await status_menu_start_handler(
@@ -81,11 +96,11 @@ async def select_character_handler(call: CallbackQuery, state: FSMContext, bot: 
             explicit_view_mode="lobby"
         )
     else:
-        log.warning(f"У user_id={user_id} нет персонажей, хотя он находится в лобби выбора.")
+        log.warning(f"У user_id={user.id} нет персонажей, хотя он находится в лобби выбора.")
         await ERR.generic_error(call=call)
 
 
-@router.callback_query(CharacterLobby.selection, F.data == "lobby:login")
+@router.callback_query(CharacterLobby.selection, LobbySelectionCallback.filter(F.action == "login"))
 async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     """
     Обрабатывает нажатие кнопки "Войти в игру" (заглушка).
@@ -114,3 +129,9 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     # TODO: Проверять, пройден ли туториал. Если нет - перенаправлять на него.
     # TODO: Загружать игровое состояние (локация, инвентарь и т.д.).
     # TODO: Очищать сообщение лобби и меню, создавать игровой интерфейс.
+
+
+
+@router.callback_query(CharacterLobby.selection, LobbySelectionCallback.filter(F.action == "delete"))
+async def delete_character_lobby(call: CallbackQuery, state: FSMContext):
+    pass

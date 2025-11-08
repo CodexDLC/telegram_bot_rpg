@@ -81,7 +81,7 @@ class CharactersRepoORM(ICharactersRepo):
 
             if orm_character:
                 log.debug(f"Персонаж с character_id={character_id} найден.")
-                return CharacterReadDTO.from_orm(orm_character)
+                return CharacterReadDTO.model_validate(orm_character)
             log.debug(f"Персонаж с character_id={character_id} не найден.")
             return None
         except SQLAlchemyError as e:
@@ -97,7 +97,7 @@ class CharactersRepoORM(ICharactersRepo):
             orm_characters_list = result.all()
 
             log.debug(f"Найдено {len(orm_characters_list)} персонажей для user_id={user_id}.")
-            return [CharacterReadDTO.from_orm(orm_char) for orm_char in orm_characters_list]
+            return [CharacterReadDTO.model_validate(orm_char) for orm_char in orm_characters_list]
         except SQLAlchemyError as e:
             log.exception(f"Ошибка SQLAlchemy при получении списка персонажей для user_id={user_id}: {e}")
             raise
@@ -142,7 +142,7 @@ class CharacterStatsRepoORM(ICharacterStatsRepo):
 
             if orm_stats:
                 log.debug(f"Статы для character_id={character_id} найдены.")
-                return CharacterStatsReadDTO.from_orm(orm_stats)
+                return CharacterStatsReadDTO.model_validate(orm_stats)
             log.debug(f"Статы для character_id={character_id} не найдены.")
             return None
         except SQLAlchemyError as e:
@@ -193,7 +193,7 @@ class CharacterStatsRepoORM(ICharacterStatsRepo):
             orm_stats = result.scalar_one_or_none()
             if orm_stats:
                 log.debug(f"Атомарное добавление статов для {character_id} выполнено успешно.")
-                return CharacterStatsReadDTO.from_orm(orm_stats)
+                return CharacterStatsReadDTO.model_validate(orm_stats)
             log.warning(f"Не удалось вернуть обновленные статы после add_stats для character_id={character_id}.")
             return None
         except SQLAlchemyError as e:

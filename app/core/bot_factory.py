@@ -1,8 +1,9 @@
-# app/core/bot_factory.py
 import logging
 from typing import Tuple
 
 from aiogram import Bot, Dispatcher
+# 1. ДОБАВИТЬ ЭТОТ ИМПОРТ
+from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -12,7 +13,7 @@ from app.core.config import REDIS_URL, BOT_TOKEN
 log = logging.getLogger(__name__)
 
 
-async def create_bot_and_dispatcher() -> Tuple[Bot, Dispatcher]:
+async def build_app() -> Tuple[Bot, Dispatcher]:
     """
     Асинхронно создает и конфигурирует экземпляры Bot и Dispatcher.
 
@@ -37,11 +38,14 @@ async def create_bot_and_dispatcher() -> Tuple[Bot, Dispatcher]:
     log.info("Начало создания экземпляров Bot и Dispatcher...")
 
     # --- Создание бота ---
-    bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+    # 2. ИЗМЕНИТЬ ЭТУ СТРОКУ
+    # БЫЛО: bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
+
     log.debug("Экземпляр Bot создан.")
 
     # --- Подключение к Redis и создание хранилища ---
-    log.debug(f"Попытка подключения к Redis по адресу: {REDIS_URL}")
+    log.debug(f"Попытка подключения к Redis")
     try:
         redis_client = Redis.from_url(REDIS_URL)
         # Проверяем соединение с Redis

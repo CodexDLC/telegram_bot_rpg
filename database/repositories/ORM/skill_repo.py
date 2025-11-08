@@ -53,7 +53,7 @@ class SkillRateRepo(ISkillRateRepo):
             result = await self.session.scalars(stmt)
             orm_rates_list = result.all()
             log.debug(f"Найдено {len(orm_rates_list)} ставок БСО для character_id={character_id}.")
-            return [SkillRateDTO.from_orm(orm_rate) for orm_rate in orm_rates_list]
+            return [SkillRateDTO.model_validate(orm_rate) for orm_rate in orm_rates_list]
         except SQLAlchemyError as e:
             log.exception(f"Ошибка SQLAlchemy при получении ставок БСО для character_id={character_id}: {e}")
             raise
@@ -107,7 +107,7 @@ class SkillProgressRepo(ISkillProgressRepo):
             orm_progress = result.scalar_one_or_none()
             if orm_progress:
                 log.debug(f"Опыт для навыка '{skill_key}' у character_id={character_id} обновлен.")
-                return SkillProgressDTO.from_orm(orm_progress)
+                return SkillProgressDTO.model_validate(orm_progress)
             log.warning(f"Не удалось добавить опыт: навык '{skill_key}' не найден для character_id={character_id}.")
             return None
         except SQLAlchemyError as e:
@@ -140,7 +140,7 @@ class SkillProgressRepo(ISkillProgressRepo):
             result = await self.session.scalars(stmt)
             orm_progress_list = result.all()
             log.debug(f"Найдено {len(orm_progress_list)} записей о прогрессе навыков для character_id={character_id}.")
-            return [SkillProgressDTO.from_orm(orm_progress) for orm_progress in orm_progress_list]
+            return [SkillProgressDTO.model_validate(orm_progress) for orm_progress in orm_progress_list]
         except SQLAlchemyError as e:
             log.exception(f"Ошибка SQLAlchemy при получении прогресса навыков для character_id={character_id}: {e}")
             raise

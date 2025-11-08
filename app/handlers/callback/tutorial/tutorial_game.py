@@ -45,6 +45,7 @@ async def start_tutorial_handler(call: CallbackQuery, state: FSMContext, bot: Bo
         return
 
     tut_service = TutorialService(char_id=char_id, bonus_dict={})
+
     text, kb = tut_service.get_next_step()
     log.debug(f"Для user_id={user_id} получен первый шаг туториала.")
 
@@ -110,17 +111,22 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
     tut_service.add_bonus(choice_key=choice)
     log.debug(f"Бонус '{choice}' добавлен для char_id={char_id}. Текущие бонусы: {tut_service.bonus_dict}")
 
-    text, kb = tut_service.get_next_step()
+    # 1. Сначала получаем результат в ОДНУ переменную
+    next_step_data = tut_service.get_next_step()
+
+    # 2. Получаем message_content (это можно сделать до проверки)
     message_content = state_data.get("message_content")
     if not message_content:
         log.error(f"Не найден 'message_content' в FSM для user_id={user_id}.")
         await ERR.message_content_not_found_in_fsm(call)
         return
 
+    # 3. Обновляем FSM (тоже можно сделать до проверки)
     await state.update_data(**tut_service.get_fsm_data())
     log.debug(f"Данные FSM для user_id={user_id} обновлены.")
 
-    if text is None:
+    # 4. Теперь ПРОВЕРЯЕМ, не None ли результат
+    if next_step_data is None:
         log.info(f"Туториал для char_id={char_id} завершен. Запуск анимации подсчета.")
         animation_steps, final_kb = tut_service.get_data_animation_steps()
         await animate_message_sequence(
@@ -132,6 +138,9 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
         await state.set_state(StartTutorial.confirmation)
         log.info(f"FSM для user_id={user_id} переведен в состояние 'StartTutorial.confirmation'.")
     else:
+        # 5. И ТОЛЬКО ЕСЛИ НЕ None, мы его распаковываем
+        text, kb = next_step_data
+
         log.debug(f"Отображение следующего шага туториала для char_id={char_id}.")
         await await_min_delay(start_time, min_delay=0.3)
         await bot.edit_message_text(
@@ -141,7 +150,6 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
             parse_mode="html",
             reply_markup=kb
         )
-
 
 @router.callback_query(StartTutorial.confirmation, F.data.startswith("tut:"))
 async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:

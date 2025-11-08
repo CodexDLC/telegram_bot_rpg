@@ -115,7 +115,7 @@ class UsersRepoORM(IUserRepo):
 
             if orm_users_list:
                 log.debug(f"Найдено {len(orm_users_list)} пользователей.")
-                return [UserDTO.from_orm(orm_user) for orm_user in orm_users_list]
+                return [UserDTO.model_validate(orm_user) for orm_user in orm_users_list]
             else:
                 log.debug("Пользователи в базе данных не найдены.")
                 return []

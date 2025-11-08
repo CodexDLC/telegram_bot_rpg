@@ -36,7 +36,7 @@ async def main() -> None:
         return
 
     # Создаем экземпляры бота и диспетчера с помощью фабрики.
-    bot, dp = build_app(token=BOT_TOKEN)
+    bot, dp = await build_app()
     log.info("Экземпляры бота и диспетчера созданы.")
 
     # Подключаем все роутеры, собранные в app/handlers/__init__.py

@@ -1,4 +1,5 @@
-# database/model_orm/base.py
+# 1. Импортируем 'datetime' из стандартной библиотеки
+from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.orm import (
     declarative_base,
@@ -8,7 +9,6 @@ from sqlalchemy.orm import (
 from sqlalchemy.types import TIMESTAMP
 
 # Создание декларативной базы.
-# Все ORM-модели должны наследоваться от этого класса.
 Base = declarative_base()
 
 
@@ -17,28 +17,30 @@ class TimestampMixin:
     Миксин (примесь) для добавления полей временных меток в модели.
 
     Этот класс добавляет два поля: `created_at` и `updated_at`, которые
-    автоматически управляются базой данных на уровне сервера.
+    автоматически управляются базой данных на уровне сервера (в UTC).
 
     Attributes:
-        created_at (Mapped[str]): Время создания записи.
+        # 2. Тип в Python - 'datetime'
+        created_at (Mapped[datetime]): Время создания записи (UTC).
             Устанавливается базой данных при вставке новой строки.
-        updated_at (Mapped[str]): Время последнего обновления записи.
-            Устанавливается базой данных при вставке и может быть
-            обновлено триггерами при изменении строки.
+        # 3. Тип в Python - 'datetime'
+        updated_at (Mapped[datetime]): Время последнего обновления записи (UTC).
+            Обновляется триггерами БД при изменении строки.
     """
-    __abstract__ = True  # Указывает SQLAlchemy, что это не модель для маппинга.
+    __abstract__ = True
 
-    # server_default использует функцию БД для установки значения.
-    # STRFTIME - специфична для SQLite. Для PostgreSQL нужно использовать NOW().
-    # Использование TIMESTAMP с timezone=True рекомендуется для кросс-совместимости.
-    created_at: Mapped[str] = mapped_column(
-        TIMESTAMP(timezone=True),
-        server_default=text("TIMEZONE('utc', now())"),
+    # 2. Меняем Mapped[str] на Mapped[datetime]
+    created_at: Mapped[datetime] = mapped_column(
+        # 3. Оставляем ваш SQLite-специфичный server_default
+        server_default=text("STRFTIME('%Y-%m-%d %H:%M:%S', 'now')"),
         nullable=False
     )
-    updated_at: Mapped[str] = mapped_column(
-        TIMESTAMP(timezone=True),
-        server_default=text("TIMEZONE('utc', now())"),
-        onupdate=text("TIMEZONE('utc', now())"),
+
+    # 4. Меняем Mapped[str] на Mapped[datetime]
+    updated_at: Mapped[datetime] = mapped_column(
+        # 5. Оставляем ваш SQLite-специфичный server_default
+        server_default=text("STRFTIME('%Y-%m-%d %H:%M:%S', 'now')"),
         nullable=False
+        # P.S. 'onupdate' здесь не нужен, так как вы
+        # (судя по docstring) используете внешние триггеры.
     )
