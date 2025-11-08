@@ -74,6 +74,7 @@ async def status_menu_start_handler(
         log.warning(f"Не найден char_id для user_id={user_id} в 'status_menu_start_handler'.")
         if call: await ERR.invalid_id(call)
         return
+
     if not user_id:
         log.error(f"Критическая ошибка: user_id не найден в FSM или call для char_id={char_id}.")
         return

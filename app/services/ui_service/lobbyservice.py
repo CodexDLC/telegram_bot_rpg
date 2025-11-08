@@ -7,6 +7,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterShellCreateDTO
 from app.resources.texts.buttons_callback import Buttons
+from app.services.helpers_module.DTO_helper import fsm_store
 from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from database.session import get_async_session
@@ -41,7 +42,7 @@ class LobbyService:
         self.char_id = char_id if char_id is not None else None
         log.debug(f"Инициализирован {self.__class__.__name__} для user_id={self.user_id} с {len(self.characters)} персонажами.")
 
-    async def get_data_lobby_start(self) -> Tuple[str, InlineKeyboardMarkup]:
+    def get_data_lobby_start(self) -> Tuple[str, InlineKeyboardMarkup]:
         """
         Подготавливает данные для отображения стартового экрана лобби.
 
@@ -74,7 +75,7 @@ class LobbyService:
                 callback = LobbySelectionCallback(
                     action="select",
                     char_id=char.character_id
-                ).pack()
+                )
                 if char.character_id == self.char_id:
                     text = f"✅ {char.name}"
                 else:
@@ -89,7 +90,8 @@ class LobbyService:
         kb.adjust(2, 2)
 
         buttons = self._down_button()
-        kb.row(*buttons)
+        for button in buttons:
+            kb.row(button)
 
         log.debug("Клавиатура лобби успешно создана.")
         return kb.as_markup()
@@ -132,11 +134,13 @@ class LobbyService:
                 await session.rollback()
                 raise
 
-    def get_fsm_data(self) -> Dict[str, Any]:
+    async def get_fsm_data(self) -> Dict[str, Any]:
         """ Собирает данные сервиса для сохранения в FSM"""
+        characters = await fsm_store(self.characters)
         return {
             "char_id": self.char_id,
-            "characters": self.characters
+            "characters": characters,
+            "user_id": self.user_id
         }
 
 

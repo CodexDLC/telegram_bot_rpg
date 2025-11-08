@@ -39,11 +39,11 @@ class CharactersRepoORM(ICharactersRepo):
             # noinspection PyArgumentList
             orm_character = Character(**character_data_dict)
             # SQLAlchemy автоматически создаст CharacterStats из-за cascade
-            # orm_character.stats = CharacterStats()
+            orm_character.stats = CharacterStats()
 
             self.session.add(orm_character)
-            # flush() отправляет изменения в БД и синхронизирует ID,
-            # но не коммитит транзакцию.
+
+            # flush() отправляет изменения в БД и синхронизирует ID
             await self.session.flush()
             log.debug(f"Выполнен flush для Character, получен character_id: {orm_character.character_id}")
 
@@ -186,16 +186,24 @@ class CharacterStatsRepoORM(ICharacterStatsRepo):
             update(CharacterStats)
             .where(CharacterStats.character_id == character_id)
             .values(**values_to_update)
-            .returning(CharacterStats)
         )
+
         try:
-            result = await self.session.execute(stmt)
-            orm_stats = result.scalar_one_or_none()
-            if orm_stats:
-                log.debug(f"Атомарное добавление статов для {character_id} выполнено успешно.")
-                return CharacterStatsReadDTO.model_validate(orm_stats)
-            log.warning(f"Не удалось вернуть обновленные статы после add_stats для character_id={character_id}.")
+            # Шаг 1: Просто выполняем обновление
+            await self.session.execute(stmt)
+            log.debug(f"Атомарное обновление статов для {character_id} выполнено.")
+
+            # Шаг 2: Получаем обновленные данные отдельным запросом
+            updated_stats_dto = await self.get_stats(character_id=character_id)
+
+            if updated_stats_dto:
+                log.debug(f"Успешно получены обновленные статы для {character_id}.")
+                return updated_stats_dto
+
+            # Эта ситуация теперь почти невозможна, если UPDATE прошел
+            log.warning(f"Не удалось получить статы после обновления для character_id={character_id}.")
             return None
+
         except SQLAlchemyError as e:
             log.exception(f"Ошибка SQLAlchemy при атомарном добавлении статов для character_id={character_id}: {e}")
             raise

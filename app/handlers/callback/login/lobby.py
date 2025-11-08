@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery
 
 from app.handlers.callback.login.char_creation import start_creation_handler
 from app.resources.fsm_states.states import CharacterLobby
+from app.resources.keyboards.callback_data import LobbySelectionCallback
 from app.services.helpers_module.data_loader_service import load_data_auto
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.lobbyservice import LobbyService
@@ -56,10 +57,10 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
         log.info(f"У user_id={user.id} есть персонажи. Переход в лобби выбора.")
         await state.set_state(CharacterLobby.selection)
         # Очищаем данные предыдущего выбора, чтобы избежать некорректного состояния.
-        await state.update_data(selected_char_id=None, message_content=None)
+        await state.update_data(selected_char_id=None, message_content=None, user_id=user.id)
         log.debug(f"Состояние установлено в CharacterLobby.selection для user_id={user.id}")
 
-        text, kb = await lobby_service.get_data_lobby_start()
+        text, kb = lobby_service.get_data_lobby_start()
 
         await await_min_delay(start_time, min_delay=0.5)
 
@@ -88,7 +89,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
         )
 
 
-@router.callback_query(CharacterLobby.selection, F.data == "lobby:create")
+@router.callback_query(CharacterLobby.selection, LobbySelectionCallback.filter(F.action == "create"))
 async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     """
     Обрабатывает нажатие "Создать нового персонажа" из лобби.

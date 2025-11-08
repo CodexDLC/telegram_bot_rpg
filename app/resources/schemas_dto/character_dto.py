@@ -1,7 +1,6 @@
 # app/resources/schemas_dto/character_dto.py
-
+from datetime import datetime
 from typing import Literal
-
 from pydantic import BaseModel, ConfigDict
 
 Gender = Literal["male", "female", "other"]
@@ -33,8 +32,8 @@ class CharacterReadDTO(BaseModel):
     name: str
     gender: Gender
     game_stage: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -60,7 +59,7 @@ class CharacterStatsReadDTO(CharacterStatsUpdateDTO):
 
     """
 
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

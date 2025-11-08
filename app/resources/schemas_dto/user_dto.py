@@ -1,5 +1,5 @@
 # app/resources/schemas_dto/user_dto.py
-
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
@@ -24,7 +24,7 @@ class UserDTO(UserUpsertDTO):
     DTO для 'вывода' (чтения из БД).
     Содержит все поля из UserUpsertDTO + поля, генерируемые БД.
     """
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

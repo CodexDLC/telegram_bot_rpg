@@ -62,7 +62,7 @@ class Character(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         # 3. ИСПРАВЬТЕ ИМЯ КЛАССА В ВЫВОДЕ
-        return f"<Character(id={self.character_id}, name='{self.name}', user_id={self.user_id})>"  # <-- БЫЛО 'Characters'
+        return f"<Character(id={self.character_id}, name='{self.name}', user_id={self.user_id})>"
 
 
 class CharacterStats(Base, TimestampMixin):

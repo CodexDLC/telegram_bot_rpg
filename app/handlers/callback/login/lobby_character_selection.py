@@ -55,12 +55,17 @@ async def select_character_handler(
     # Если в FSM данных нет, загружаем их из БД.
     if characters is None:
         log.info(f"Данные 'characters' для user_id={user.id} не найдены в FSM, загрузка из БД...")
-        characters = await load_data_auto(["characters"], user_id=user.id)
-        # Сохраняем полученные данные в FSM.
+        # 1. Сначала получаем словарь с данными
+        loaded_data = await load_data_auto(["characters"], user_id=user.id)
+        # 2. Извлекаем из него СПИСОК
+        characters_list = loaded_data.get("characters")
+
+        # 3. Сохраняем в FSM, передав fsm_store именно СПИСОК
         await state.update_data(
-            characters=await fsm_store(value=characters),
+            characters=await fsm_store(value=characters_list),
         )
-        log.debug(f"Данные 'characters' для user_id={user.id} загружены в FSM.")
+        # 4. И не забываем присвоить правильное значение локальной переменной
+        characters = characters_list
 
     if characters:
         state_data = await state.get_data()
@@ -75,6 +80,8 @@ async def select_character_handler(
 
         message_menu = state_data.get("message_menu")
 
+        log.debug(f"message_menu = {message_menu} ")
+
         if message_menu:
             await bot.edit_message_text(
                 chat_id=message_menu.get("chat_id"),
@@ -84,16 +91,17 @@ async def select_character_handler(
                 reply_markup=kb,
             )
 
-        fsm_data = lobby_service.get_fsm_data()
+        fsm_data = await lobby_service.get_fsm_data()
 
         # Сохраняем ID выбранного персонажа.
-        await state.update_data(*fsm_data)
+        await state.update_data(**fsm_data)
 
         # Вызываем обработчик меню статуса для отображения информации.
         await status_menu_start_handler(
             state=state,
             bot=bot,
-            explicit_view_mode="lobby"
+            explicit_view_mode="lobby",
+            explicit_char_id=char_id,
         )
     else:
         log.warning(f"У user_id={user.id} нет персонажей, хотя он находится в лобби выбора.")
