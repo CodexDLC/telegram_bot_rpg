@@ -51,7 +51,6 @@ class CommandService:
             user_repo = UsersRepoORM(session)
             try:
                 await user_repo.upsert_user(self.user_dto)
-                await session.commit()
                 log.info(f"Пользователь {self.user_dto.telegram_id} успешно создан/обновлен в БД.")
             except Exception as e:
                 log.exception(f"Ошибка при выполнении upsert для пользователя {self.user_dto.telegram_id}: {e}")

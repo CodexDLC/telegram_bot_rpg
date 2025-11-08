@@ -1,7 +1,7 @@
 # app/handlers/callback/ui/status_menu/character_status.py
 import logging
 import time
-from typing import Union, Optional
+from typing import Optional
 
 from aiogram import Router, F, Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -14,7 +14,7 @@ from app.resources.keyboards.callback_data import StatusMenuCallback
 from app.resources.texts.ui_messages import TEXT_AWAIT
 from app.services.helpers_module.DTO_helper import fsm_convector
 from app.services.helpers_module.get_data_handlers.status_data_helper import get_status_data_package
-from app.services.helpers_module.callback_exceptions import error_int_id, error_msg_default
+from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
 from app.services.ui_service.character_status_service import CharacterMenuUIService
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 
@@ -72,7 +72,7 @@ async def status_menu_start_handler(
     # --- Валидация ключевых данных ---
     if not char_id:
         log.warning(f"Не найден char_id для user_id={user_id} в 'status_menu_start_handler'.")
-        if call: await error_int_id(call)
+        if call: await ERR.invalid_id(call)
         return
     if not user_id:
         log.error(f"Критическая ошибка: user_id не найден в FSM или call для char_id={char_id}.")
@@ -88,7 +88,7 @@ async def status_menu_start_handler(
         bd_data_status = await get_status_data_package(char_id=char_id, user_id=user_id)
         if bd_data_status is None:
             log.warning(f"Не удалось загрузить 'bd_data_status' для char_id={char_id}.")
-            if call: await error_msg_default(call)
+            if call: await ERR.invalid_id(call)
             return
         await state.update_data(bd_data_status=bd_data_status)
         log.debug(f"Данные 'bd_data_status' для char_id={char_id} сохранены в FSM.")

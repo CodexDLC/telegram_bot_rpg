@@ -11,7 +11,7 @@ from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
 from app.resources.keyboards.callback_data import StatusMenuCallback, SkillMenuCallback
 from app.resources.texts.ui_messages import TEXT_AWAIT
 from app.services.helpers_module.get_data_handlers.status_data_helper import get_status_data_package
-from app.services.helpers_module.callback_exceptions import error_int_id, error_msg_default
+from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
 from app.services.ui_service.character_skill_service import CharacterSkillStatusService
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 
@@ -54,7 +54,7 @@ async def character_skill_status_handler(
 
     if not char_id:
         log.warning(f"Не найден char_id в callback_data для user_id={user_id}: {call.data}")
-        await error_int_id(call)
+        await ERR.invalid_id(call)
         return
 
     state_data = await state.get_data()
@@ -65,7 +65,7 @@ async def character_skill_status_handler(
         bd_data_status = await get_status_data_package(char_id=char_id, user_id=user_id)
         if not bd_data_status:
             log.warning(f"Не удалось загрузить 'bd_data_status' для char_id={char_id}.")
-            await error_msg_default(call)
+            await ERR.generic_error(call)
             return
         await state.update_data(bd_data_status=bd_data_status)
         log.debug(f"Данные 'bd_data_status' для char_id={char_id} сохранены в FSM.")
@@ -129,7 +129,7 @@ async def character_skill_group_handler(
 
     if not group_type:
         log.warning(f"Не найден 'group_type' в callback_data для user_id={user_id}: {call.data}")
-        await error_int_id(call)
+        await ERR.invalid_id(call)
         return
 
     state_data = await state.get_data()
@@ -140,7 +140,7 @@ async def character_skill_group_handler(
         bd_data_status = await get_status_data_package(char_id=char_id, user_id=user_id)
         if not bd_data_status:
             log.warning(f"Не удалось загрузить 'bd_data_status' для char_id={char_id}.")
-            await error_msg_default(call)
+            await ERR.generic_error(call)
             return
         await state.update_data(bd_data_status=bd_data_status)
         log.debug(f"Данные 'bd_data_status' для char_id={char_id} сохранены в FSM.")

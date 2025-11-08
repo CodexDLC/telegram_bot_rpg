@@ -6,11 +6,11 @@ from aiogram.types import CallbackQuery
 
 from app.handlers.callback.ui.status_menu.character_status import status_menu_start_handler
 from app.resources.fsm_states.states import CharacterLobby
-from app.resources.keyboards.inline_kb.loggin_und_new_character import get_character_lobby_kb
+
 from app.services.helpers_module.data_loader_service import load_data_auto
 from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store
 from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
-from app.services.helpers_module.callback_exceptions import error_msg_default
+from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +38,8 @@ async def select_character_handler(call: CallbackQuery, state: FSMContext, bot: 
         return
 
     char_id = int(call.data.split(":")[-1])
-    user_id = call.from_user.id
+    user = call.from_user
+    user_id= user.id
     log.info(f"Хэндлер 'select_character_handler' [lobby:select] вызван user_id={user_id}, char_id={char_id}")
     await call.answer()
 
@@ -81,7 +82,7 @@ async def select_character_handler(call: CallbackQuery, state: FSMContext, bot: 
         )
     else:
         log.warning(f"У user_id={user_id} нет персонажей, хотя он находится в лобби выбора.")
-        await error_msg_default(call=call, message_text="У вас нет созданных персонажей.")
+        await ERR.generic_error(call=call)
 
 
 @router.callback_query(CharacterLobby.selection, F.data == "lobby:login")

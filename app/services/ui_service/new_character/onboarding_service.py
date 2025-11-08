@@ -109,7 +109,6 @@ class OnboardingService:
                     character_id=self.char_id,
                     character_data=char_update_dto
                 )
-                await session.commit()
                 log.info(f"Данные персонажа {self.char_id} успешно обновлены в БД.")
             except Exception as e:
                 log.exception(f"Ошибка при обновлении данных персонажа {self.char_id} для user_id={self.user_id}: {e}")

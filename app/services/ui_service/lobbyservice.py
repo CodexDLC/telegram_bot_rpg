@@ -100,7 +100,6 @@ class LobbyService:
             char_repo = CharactersRepoORM(session)
             try:
                 char_id = await char_repo.create_character_shell(dto_object)
-                await session.commit() # Коммитим, так как сессия локальная
                 log.info(f"Успешно создана 'оболочка' персонажа с char_id={char_id} для user_id={self.user_id}.")
                 return char_id
             except Exception as e:
@@ -108,31 +107,3 @@ class LobbyService:
                 await session.rollback()
                 raise
 
-    async def update_character_db(self, char_id: int, char_update_dto: CharacterOnboardingUpdateDTO) -> None:
-        """
-        Обновляет данные персонажа на этапе создания (onboarding).
-
-        Использует собственную сессию для выполнения этой операции.
-
-        Args:
-            char_id (int): ID персонажа для обновления.
-            char_update_dto (CharacterOnboardingUpdateDTO): DTO с данными.
-
-        Returns:
-            None
-        """
-        log.info(f"Запрос на обновление данных онбординга для char_id={char_id}.")
-        log.debug(f"Данные для обновления: {char_update_dto.model_dump_json()}")
-        async with get_async_session() as session:
-            char_repo = CharactersRepoORM(session)
-            try:
-                await char_repo.update_character_onboarding(
-                    character_id=char_id,
-                    character_data=char_update_dto
-                )
-                await session.commit()
-                log.info(f"Данные персонажа {char_id} успешно обновлены.")
-            except Exception as e:
-                log.exception(f"Ошибка при обновлении данных онбординга для char_id={char_id}: {e}")
-                await session.rollback()
-                raise

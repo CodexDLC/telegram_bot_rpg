@@ -161,9 +161,7 @@ class TutorialService:
                 char_repo = CharactersRepoORM(session)
                 await char_repo.update_character_game_stage(self.char_id, GameStage.TUTORIAL_SKILL)
                 log.debug(f"Игровой этап для char_id={self.char_id} обновлен на '{GameStage.TUTORIAL_SKILL}'.")
-
-                await session.commit()
-                log.info(f"Транзакция финализации статов для char_id={self.char_id} успешно закоммичена.")
+                log.info(f"Транзакция финализации статов для char_id={self.char_id} готова к коммиту.")
                 return final_stats_obj
             except Exception as e:
                 log.exception(f"Ошибка во время финализации статов для char_id={self.char_id}. Откат транзакции. Ошибка: {e}")

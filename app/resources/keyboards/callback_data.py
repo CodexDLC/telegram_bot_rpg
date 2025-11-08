@@ -1,5 +1,6 @@
 # app/resources/keyboards/callback_data.py
 from sys import prefix
+from typing import Optional
 
 from aiogram.filters.callback_data import CallbackData
 
@@ -42,3 +43,14 @@ class MeinMenuCallback(CallbackData, prefix="menu"):
     action: str
     game_stage: str
     char_id: int
+
+
+class LobbySelectionCallback(CallbackData, prefix="lsc"):
+    """
+    Callback для выбора/создания персонажа в лобби.
+    action: 'select', 'create', 'login', 'logout'
+    char_id: ID персонажа (используется только для action='select')
+    """
+    action: str
+    # Используем Optional, т.к. 'create' не требует ID
+    char_id: Optional[int] = None

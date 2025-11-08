@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
 from app.resources.fsm_states.states import StartTutorial
-from app.services.helpers_module.callback_exceptions import error_msg_default
+from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
 from app.services.ui_service.helpers_ui.ui_tools import animate_message_sequence, await_min_delay
 from app.services.ui_service.tutorial.tutorial_service import TutorialService
 
@@ -41,7 +41,7 @@ async def start_tutorial_handler(call: CallbackQuery, state: FSMContext, bot: Bo
 
     if not char_id:
         log.warning(f"User {user_id} в 'start_tutorial_handler' имел 'char_id=None'. Отправка ошибки.")
-        await error_msg_default(call=call)
+        await ERR.invalid_id(call=call)
         return
 
     tut_service = TutorialService(char_id=char_id, bonus_dict={})
@@ -51,7 +51,7 @@ async def start_tutorial_handler(call: CallbackQuery, state: FSMContext, bot: Bo
     message_content = state_data.get("message_content")
     if not message_content:
         log.error(f"Не найден 'message_content' в FSM для user_id={user_id}.")
-        await error_msg_default(call=call)
+        await ERR.message_content_not_found_in_fsm(call=call)
         return
 
     await bot.edit_message_text(
@@ -95,7 +95,7 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
     char_id = state_data.get("char_id")
     if not char_id:
         log.warning(f"User {user_id} в 'tutorial_event_stats_handler' имел 'char_id=None'.")
-        await error_msg_default(call=call)
+        await ERR.invalid_id(call=call)
         return
 
     # Воссоздаем сервис из FSM.
@@ -114,7 +114,7 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
     message_content = state_data.get("message_content")
     if not message_content:
         log.error(f"Не найден 'message_content' в FSM для user_id={user_id}.")
-        await error_msg_default(call)
+        await ERR.message_content_not_found_in_fsm(call)
         return
 
     await state.update_data(**tut_service.get_fsm_data())
@@ -172,7 +172,7 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, 
 
     if not all([char_id, message_content]):
         log.warning(f"Недостаточно данных в FSM для user_id={user_id} в 'tutorial_confirmation_handler'.")
-        await error_msg_default(call)
+        await ERR.invalid_id(call)
         return
 
     tut_service = TutorialService(
@@ -203,7 +203,7 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, 
         bonus_dict = state_data.get("bonus_dict")
         if not bonus_dict:
             log.warning(f"User {user_id} попытался продолжить туториал без бонусов.")
-            await error_msg_default(call)
+            await ERR.invalid_id(call)
             return
 
         log.info(f"Пользователь {user_id} подтвердил характеристики для char_id={char_id}. Бонусы: {bonus_dict}")
@@ -226,4 +226,4 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, 
         await call.message.edit_text("Дальше пока не разработано.")
     else:
         log.error(f"Неизвестный callback '{call_data}' в 'tutorial_confirmation_handler' от user_id={user_id}.")
-        await error_msg_default(call)
+        await ERR.callback_data_missing(call)

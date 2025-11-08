@@ -13,7 +13,7 @@ from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
 from app.services.ui_service.menu_service import MenuService
 from app.services.ui_service.new_character.onboarding_service import OnboardingService
 from app.services.helpers_module.game_validator import validate_character_name
-from app.services.helpers_module.callback_exceptions import error_msg_default
+from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay, animate_message_sequence
 
 log = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ async def start_creation_handler(
     # Обновляем верхнее сообщение (меню).
     if not message_menu or not message_menu.get("chat_id") or not message_menu.get("message_id"):
         log.error(f"Некорректные данные 'message_menu' для user_id={user_id}: {message_menu}")
-        await error_msg_default(call=call)
+        await ERR.generic_error(call=call)
         return
     await bot.edit_message_text(
         chat_id=message_menu.get("chat_id"),
@@ -131,7 +131,7 @@ async def create_message_content_start_creation(
             log.debug("Контентное сообщение успешно отредактировано.")
         except Exception as e:
             log.exception(f"Не удалось отредактировать контентное сообщение для user_id={user_id}: {e}")
-            await error_msg_default(call=call)
+            await ERR.char_id_not_found_in_fsm(call=call)
 
 
 @router.callback_query(CharacterCreation.choosing_gender, F.data.startswith("gender:"))
@@ -165,7 +165,7 @@ async def choose_gender_handler(call: CallbackQuery, state: FSMContext, bot: Bot
 
     if not all([user_id, char_id, message_content]):
         log.warning(f"Недостаточно данных в FSM для user_id={call.from_user.id} в 'choose_gender_handler'. Данные: {state_data}")
-        await error_msg_default(call=call)
+        await ERR.generic_error(call=call)
         return
 
     create_service = OnboardingService(user_id=user_id, char_id=char_id)
@@ -286,7 +286,7 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: 
     if not all([char_id, name, gender_db]):
         log.error(f"Критическая ошибка: недостаточно данных в FSM для завершения создания персонажа user_id={user_id}. Данные: {state_data}")
         await state.clear()
-        await error_msg_default(call=call)
+        await ERR.generic_error(call=call)
         return
 
     await state.set_state(StartTutorial.start)

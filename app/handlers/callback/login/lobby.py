@@ -10,6 +10,7 @@ from app.resources.fsm_states.states import CharacterLobby
 from app.services.helpers_module.data_loader_service import load_data_auto
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.lobbyservice import LobbyService
+from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
 
 log = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
         char_id = await lobby_service.create_und_get_character_id()
         if not char_id:
             log.error(f"Не удалось создать 'оболочку' персонажа для user_id={user.id}")
-            # TODO: Отправить сообщение об ошибке пользователю
+            await ERR.invalid_id(call=call)
             return
 
         # Передаем управление обработчику создания персонажа.
@@ -114,7 +115,7 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
     char_id = await lobby_service.create_und_get_character_id()
     if not char_id:
         log.error(f"Не удалось создать 'оболочку' персонажа для user_id={user_id} из лобби.")
-        # TODO: Отправить сообщение об ошибке пользователю
+        await ERR.invalid_id(call=call)
         return
 
     # Передаем управление основному обработчику создания персонажа.
