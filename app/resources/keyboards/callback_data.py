@@ -61,6 +61,6 @@ class TutorialQuestCallback(CallbackData, prefix="tut_quest"):
     Управляет навигацией по всему FSM-квесту создания персонажа.
 
     """
-    phase: str  # Твоя "Фаза"
-    branch: str  # Твоя "Ветка" (e.g., melee, ranged, magic)
-    value: str  # Твой "Навык" (e.g., light_armor, reflexes, none)
+    branch: str
+    phase: str
+    value: str

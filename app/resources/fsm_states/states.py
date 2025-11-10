@@ -18,6 +18,8 @@ class StartTutorial(StatesGroup):
     start = State()
     in_progress = State()
     confirmation = State()
+    in_skills_progres = State()
+    skill_confirm = State()
 
 
 class CharacterLobby(StatesGroup):
@@ -32,6 +34,7 @@ FSM_CONTEX_CHARACTER_STATUS = [
 
 GARBAGE_TEXT_STATES = [
     StartTutorial.start, StartTutorial.confirmation, StartTutorial.in_progress,
+    StartTutorial.in_skills_progres, StartTutorial.skill_confirm,
     CharacterLobby.selection, CharacterLobby.start_logging,
     CharacterCreation.choosing_gender, CharacterCreation.confirm
 ]

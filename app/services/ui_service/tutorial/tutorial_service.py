@@ -17,7 +17,7 @@ from database.session import get_async_session
 log = logging.getLogger(__name__)
 
 
-class TutorialService:
+class TutorialServiceStats:
     """
     Сервис для управления UI и логикой туториала по созданию персонажа.
 
@@ -167,3 +167,5 @@ class TutorialService:
                 log.exception(f"Ошибка во время финализации статов для char_id={self.char_id}. Откат транзакции. Ошибка: {e}")
                 await session.rollback()
                 return None
+
+
