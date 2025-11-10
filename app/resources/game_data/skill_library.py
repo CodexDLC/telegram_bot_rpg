@@ -10,13 +10,12 @@ BASE_MAX_XP = 1_000_000
 
 # -----------------
 # 2. РЕЦЕПТЫ S.P.E.C.I.A.L., МУЛЬТИПЛЕЕРЫ И ТРЕБОВАНИЯ
-# (Твоя полная EVE-модель)
 # ВАЖНО: Добавлено поле "title_ru" для UI
 # -----------------
 SKILL_RECIPES = {
 
     # ------------------
-    # 🗡 Уровень 1: БАЗОВЫЕ БОЕВЫЕ НАВЫКИ
+    # 🗡 Уровень 1: БОЕВЫЕ НАВЫКИ
     # ------------------
     "melee_combat": {
         "primary": "strength",
@@ -44,7 +43,7 @@ SKILL_RECIPES = {
     },
 
     # ------------------
-    # 🛡 Уровень 1: БАЗОВЫЕ ЗАЩИТНЫЕ НАВЫКИ
+    # 🛡 Уровень 1: ЗАЩИТНЫЕ НАВЫКИ
     # ------------------
     "light_armor": {"primary": "endurance", "secondary": "agility", "title_ru": "Легкая броня", "xp_multiplier": 1.0, "prerequisite_skill": None,
                     "prerequisite_title": None},
@@ -56,7 +55,7 @@ SKILL_RECIPES = {
                "prerequisite_title": None},
 
     # ------------------
-    # 🧠 Уровень 1: БАЗОВЫЕ ТАКТИЧЕСКИЕ НАВЫКИ
+    # 🧠 Уровень 1: ТАКТИЧЕСКИЕ НАВЫКИ
     # ------------------
     "intuition": {"primary": "luck", "secondary": "perception", "title_ru": "Интуиция", "xp_multiplier": 0.8, "prerequisite_skill": None,
                   "prerequisite_title": None},

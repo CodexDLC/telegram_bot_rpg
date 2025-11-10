@@ -1,5 +1,5 @@
 # app/resources/keyboards/callback_data.py
-from sys import prefix
+
 from typing import Optional
 
 from aiogram.filters.callback_data import CallbackData
@@ -54,3 +54,13 @@ class LobbySelectionCallback(CallbackData, prefix="lsc"):
     action: str
     # Используем Optional, т.к. 'create' не требует ID
     char_id: Optional[int] = None
+
+
+class TutorialQuestCallback(CallbackData, prefix="tut_quest"):
+    """
+    Управляет навигацией по всему FSM-квесту создания персонажа.
+
+    """
+    phase: str  # Твоя "Фаза"
+    branch: str  # Твоя "Ветка" (e.g., melee, ranged, magic)
+    value: str  # Твой "Навык" (e.g., light_armor, reflexes, none)

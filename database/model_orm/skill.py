@@ -87,6 +87,7 @@ class CharacterSkillProgress(Base, TimestampMixin):
     )
     skill_key: Mapped[str] = mapped_column(String(50), nullable=False)
     total_xp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_unlocked: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     progress_state: Mapped[SkillProgressState] = mapped_column(
         Enum(SkillProgressState, name="skill_progress_state_enum", create_type=True),
