@@ -4,9 +4,14 @@ from typing import Tuple, Union, List, Dict, Any
 
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from sqlalchemy.exc import SQLAlchemyError
 
-from app.resources.texts.game_messages.tutorial_messages_skill import TUTORIAL_SKILL_EVENTS
-from app.resources.keyboards.callback_data import TutorialQuestCallback
+
+from app.resources.texts.buttons_callback import GameStage
+from app.resources.texts.game_messages.tutorial_messages_skill import TUTORIAL_SKILL_EVENTS, TUTORIAL_SKILL_FINALE
+from app.resources.keyboards.callback_data import TutorialQuestCallback, LobbySelectionCallback
+from database.repositories import SkillProgressRepo, CharactersRepoORM
+from database.session import get_async_session
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +37,9 @@ class TutorialServiceSkills:
                            инициализируется начальное состояние.
         """
         self.data_pool = TUTORIAL_SKILL_EVENTS
+        self.data_final = TUTORIAL_SKILL_FINALE
         self.skills_db = skills_db
+
 
         if callback_data:
             self.phase = callback_data.phase
@@ -200,9 +207,73 @@ class TutorialServiceSkills:
             text = data.get("text")
             kb = self._step_inline_kb(data.get("buttons"))
             return text, kb
+
+        elif self.phase == "p_end":
+            log.debug("Processing 'p_end'.")
+            data = self._get_branch_step1(branch=self.phase, phase=self.value)
+            text = data.get("text")
+            kb = self._step_inline_kb(data.get("buttons"))
+            return text, kb
+
         else:
             log.error(f"Could not determine next step for phase: '{self.phase}'")
             raise ValueError(f"Не получилось вернуть данные для фазы '{self.phase}'")
+
+    def get_awakening_data(
+            self,
+            char_id: int,
+            final_choice_key: str  # <- Добавил этот аргумент
+    ) -> Tuple[str, InlineKeyboardMarkup]:
+        """
+        Формирует финальное "пробуждающее" сообщение и клавиатуру.
+
+        Использует self.data_final (TUTORIAL_SKILL_FINALE) для получения
+        шаблона текста и данных кнопки. Форматирует текст, подставляя
+        {choice_name}, и создает единственную кнопку с LobbySelectionCallback,
+        ведущую к "логину" (пробуждению).
+
+        Args:
+            char_id (int): ID персонажа (для "вшивания" в callback).
+            final_choice_key (str): Ключ финального выбора (e.g., "mining"),
+                                     используется для форматирования текста.
+
+        Returns:
+            Tuple[str, InlineKeyboardMarkup]: Отформатированный текст и
+                                              финальная клавиатура.
+        """
+        log.debug(
+            f"Подготовка 'awakening_data' для char_id={char_id} с выбором '{final_choice_key}'"
+        )
+
+        kb = InlineKeyboardBuilder()
+
+        # 1. Получаем данные из 'self'
+        # Убедись, что self.data_final ссылается на TUTORIAL_SKILL_FINALE
+        text_template = self.data_final["text"]
+        button_data = self.data_final["button"]
+
+        # 2. Форматируем текст
+        # (Тут можно усложнить и найти красивое имя по ключу, но пока и так сойдет)
+        try:
+            text = text_template.format(choice_name=final_choice_key)
+        except KeyError:
+            log.warning(
+                f"Не удалось отформатировать 'choice_name' в TUTORIAL_SKILL_FINALE. Используется ключ '{final_choice_key}'.")
+            text = text_template.format(choice_name=final_choice_key)  # На всякий случай
+
+        # 3. Собираем Callback
+        callback = LobbySelectionCallback(
+            action=button_data.get("action"),  # "login"
+            char_id=char_id
+        ).pack()
+
+        # 4. Собираем кнопку
+        kb.button(text=button_data.get("text"), callback_data=callback)  # "[ 👁️ Открыть глаза ]"
+        kb.adjust(1)
+
+        log.debug(f"Финальная 'awakening' клавиатура для char_id={char_id} создана.")
+
+        return text, kb.as_markup()
 
     def _step_inline_kb(self, buttons: dict) -> InlineKeyboardMarkup:
         """
@@ -248,3 +319,70 @@ class TutorialServiceSkills:
 
         kb.adjust(1)
         return kb.as_markup()
+
+    async def finalize_skill_selection(
+            self,
+            char_id: int
+    ):
+        """
+        Финализирует туториал по навыкам, управляя собственной транзакцией.
+
+        Этот метод открывает собственную сессию 'get_async_session' и
+        выполняет в ней две критические операции:
+        1. Разблокирует (is_unlocked=True) все навыки из `self.skills_db`.
+        2. Переводит персонажа на следующий игровой этап (IN_GAME).
+
+        'get_async_session' автоматически выполнит commit при успехе
+        или rollback при любой ошибке.
+
+        Args:
+            char_id (int): ID персонажа для обновления.
+
+        Raises:
+            SQLAlchemyError: Если любая из DB-операций завершится
+                             неудачно (будет поймана и проброшена).
+            Exception: Если произойдет любая другая ошибка (будет поймана
+                       и проброшена).
+        """
+
+        # self.skills_db берется из экземпляра класса,
+        # который хэндлер должен был правильно инициализировать
+        if not self.skills_db:
+            log.warning(f"Попытка финализировать навыки для char_id={char_id}, но 'self.skills_db' пуст.")
+            return
+
+        log.info(f"Начало финализации туториала навыков для char_id={char_id} в БД (внутренняя сессия)...")
+
+        # 1. Создаем сессию (как ты и просил)
+        try:
+            async with get_async_session() as session:
+
+                # 2. Создаем два объекта репозитория
+                progress_repo = SkillProgressRepo(session)
+                char_repo = CharactersRepoORM(session)
+
+                # 3. Вызываем методы
+
+                # Шаг 1: Разблокируем навыки
+                log.debug(f"Шаг 1/2: Обновление 'is_unlocked=True' для char_id={char_id}. Навыки: {self.skills_db}")
+                await progress_repo.update_skill_unlocked_state(
+                    character_id=char_id,
+                    skill_key_list=self.skills_db,
+                    state=True
+                )
+
+                # Шаг 2: Обновляем этап игры
+                log.debug(f"Шаг 2/2: Обновление 'game_stage' на '{GameStage.IN_GAME}' для char_id={char_id}.")
+                await char_repo.update_character_game_stage(
+                    character_id=char_id,
+                    game_stage=GameStage.IN_GAME
+                )
+
+            log.info(f"Финализация навыков и game_stage для char_id={char_id} УСПЕШНО ЗАКОММИЧЕНА.")
+
+        except (SQLAlchemyError, Exception) as e:
+            # 5. Сессия 'get_async_session' автоматически
+            #    поймает ошибку, выполнит session.rollback() и закроет сессию.
+            log.exception(
+                f"Ошибка при финализации навыков для char_id={char_id}. ТРАНЗАКЦИЯ ОТКАТИЛАСЬ. Ошибка: {e}")
+            raise  # Пробрасываем, чтобы хэндлер показал 'ERR.generic_error(call)'

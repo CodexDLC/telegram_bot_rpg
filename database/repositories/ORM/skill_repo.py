@@ -3,6 +3,7 @@ import logging
 from typing import List, Dict, Optional
 
 from sqlalchemy import select, update
+from sqlalchemy.types import Boolean
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 # ИСПРАВЛЕНО: Импортируем диалект SQLite
@@ -158,6 +159,26 @@ class SkillProgressRepo(ISkillProgressRepo):
             log.exception(
                 f"Ошибка SQLAlchemy при обновлении состояния навыка '{skill_key}' для character_id={character_id}: {e}")
             raise
+
+    async def update_skill_unlocked_state(self, character_id: int, skill_key_list: list[str], state: bool):
+
+        """Обновляет состояние unlocked поля  """
+        log.debug(
+            f"Запрос на отрытия навыков из списка '{skill_key_list}' на '{state}' для character_id={character_id}"
+        )
+        stmt = (update(CharacterSkillProgress)
+                .where(CharacterSkillProgress.character_id == character_id,
+                       CharacterSkillProgress.skill_key.in_(skill_key_list))
+                .values(is_unlocked=state))
+
+        try:
+            await self.session.execute(stmt)
+            log.debug(f"Состояние навыков из списка '{skill_key_list}' для character_id={character_id} обновлено.")
+        except SQLAlchemyError as e:
+            log.exception(
+                f"Ошибка SQLAlchemy при обновлении состояния навыков '{skill_key_list}' для character_id={character_id}: {e}")
+            raise
+
 
     async def get_all_skills_progress(self, character_id: int, **kwargs) -> List[SkillProgressDTO]:
         """Возвращает прогресс всех навыков персонажа."""

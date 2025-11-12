@@ -3,6 +3,7 @@ from aiogram import Router
 from .callback.login.lobby import router as lobby_router
 from .callback.ui.status_menu.character_status import router as character_status_menu_router
 from .callback.ui.status_menu.character_skill import router as character_skill_router
+from .callback.tutorial.tutorial_skill import router as tutorial_skill_router
 from app.handlers.callback.login.char_creation import router as char_creation_router
 from app.handlers.callback.tutorial.tutorial_game import router as tutorial_game_router
 from app.handlers.callback.login.lobby_character_selection import router as lobby_character_selection_router
@@ -20,6 +21,7 @@ router.include_routers(
     lobby_router,
     char_creation_router,
     tutorial_game_router,
+    tutorial_skill_router,
     lobby_character_selection_router,
     character_status_menu_router,
     character_skill_router,

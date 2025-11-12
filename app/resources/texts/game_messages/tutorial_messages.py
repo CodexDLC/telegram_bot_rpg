@@ -155,6 +155,6 @@ class TutorialMessages:
 Твой путь начинается сейчас, 'Прошедший'."""
 
     TUTORIAL_CONFIRM_BUTTONS: ButtonData = {
-        "tut:start_skill_phase": """✅ Отлично. Что дальше?""",
+        "tut_quest:start_skill_phase": """✅ Отлично. Что дальше?""",
         "tut:restart": """❓ Не понял. Повторить калибровку."""
     }

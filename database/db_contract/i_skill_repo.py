@@ -108,6 +108,28 @@ class ISkillProgressRepo(ABC):
         pass
 
     @abstractmethod
+    async def update_skill_unlocked_state(self, character_id: int, skill_key_list: list[str], state: bool):
+        """
+        Массово обновляет статус `is_unlocked` для списка навыков персонажа.
+
+        Этот метод должен найти все записи, соответствующие `character_id`
+        и ключам в `skill_key_list`, и установить их поле `is_unlocked`
+        в значение, переданное в `state`.
+
+        Args:
+            character_id (int): ID персонажа, чьи навыки обновляются.
+            skill_key_list (list[str]): Список строковых ключей навыков
+                                        (например, ['mining', 'melee_combat']),
+                                        которые нужно обновить.
+            state (bool): Новое состояние для `is_unlocked`
+                          (True - разблокирован, False - заблокирован).
+
+        Returns:
+            None
+        """
+        pass
+
+    @abstractmethod
     async def get_all_skills_progress(self, character_id: int) -> List[SkillProgressDTO]:
         """
         Возвращает прогресс всех навыков для одного персонажа.
