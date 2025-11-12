@@ -36,21 +36,25 @@ def calculate_rates_data(
     rates_to_upsert: List[Dict[str, Any]] = []
 
     for skill_key, recipe in SKILL_RECIPES.items():
-        primary_stat_name = recipe.get("primary")
-        secondary_stat_name = recipe.get("secondary")
+        # 1. Инициализируй счетчик для этого навыка
+        total_xp_tick = 0.0
 
-        if not primary_stat_name or not secondary_stat_name:
-            log.warning(f"Для навыка '{skill_key}' не определены primary или secondary характеристики в SKILL_RECIPES.")
-            continue
+        # 2. Получи твой новый словарь весов из рецепта
+        #    (используй .get() с {} на случай, если у навыка нет весов)
+        stat_weights = recipe.get("stat_weights", {})
 
-        # Безопасно получаем значения характеристик из DTO.
-        # Если характеристика не найдена, используется значение по умолчанию 0.
-        primary_val = getattr(stats_dto, primary_stat_name, 0)
-        secondary_val = getattr(stats_dto, secondary_stat_name, 0)
+        # 3. Запусти *внутренний* цикл по твоему словарю весов
+        for stat_name, multiplier in stat_weights.items():
+            # 4. Безопасно получи значение стата из DTO
+            #    (getattr нужен, т.к. stat_name - это строка)
+            stat_value = getattr(stats_dto, stat_name, 0)
 
-        # Формула расчета ставки.
-        xp_tick_rate = (primary_val * 2) + (secondary_val * 1)
-        log.debug(f"  - Навык: {skill_key}, Первичная: {primary_stat_name}({primary_val}), Вторичная: {secondary_stat_name}({secondary_val}) -> БСО: {xp_tick_rate}")
+            # 5. Рассчитай вклад этого стата и добавь к счетчику
+            total_xp_tick += stat_value * multiplier
+
+        # 6. После внутреннего цикла, округли результат до int
+        xp_tick_rate = int(total_xp_tick)
+
 
         rates_to_upsert.append({
             "character_id": character_id,

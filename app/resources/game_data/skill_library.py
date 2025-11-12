@@ -18,24 +18,21 @@ SKILL_RECIPES = {
     # 🗡 Уровень 1: БОЕВЫЕ НАВЫКИ
     # ------------------
     "melee_combat": {
-        "primary": "strength",
-        "secondary": "agility",
+        "stat_weights": {"strength": 2.0, "agility": 1.0},
         "title_ru": "Ближний бой",
         "xp_multiplier": 1.0,
         "prerequisite_skill": None,
         "prerequisite_title": None
     },
     "ranged_combat": {
-        "primary": "agility",
-        "secondary": "perception",
+        "stat_weights": {"agility": 2.0, "perception": 1.0},
         "title_ru": "Дальний бой",
         "xp_multiplier": 1.0,
         "prerequisite_skill": None,
         "prerequisite_title": None
     },
     "magic_weapons": {
-        "primary": "intelligence",
-        "secondary": "charisma",
+        "stat_weights": {"intelligence": 2.0, "charisma": 1.0},
         "title_ru": "Магическое оружие",
         "xp_multiplier": 1.0,
         "prerequisite_skill": None,
@@ -45,137 +42,320 @@ SKILL_RECIPES = {
     # ------------------
     # 🛡 Уровень 1: ЗАЩИТНЫЕ НАВЫКИ
     # ------------------
-    "light_armor": {"primary": "endurance", "secondary": "agility", "title_ru": "Легкая броня", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                    "prerequisite_title": None},
-    "medium_armor": {"primary": "endurance", "secondary": "strength", "title_ru": "Средняя броня", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                     "prerequisite_title": None},
-    "heavy_armor": {"primary": "strength", "secondary": "endurance", "title_ru": "Тяжелая броня", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                    "prerequisite_title": None},
-    "shield": {"primary": "strength", "secondary": "agility", "title_ru": "Щит", "xp_multiplier": 1.0, "prerequisite_skill": None,
-               "prerequisite_title": None},
+    "light_armor": {
+        "stat_weights": {"endurance": 2.0, "agility": 1.0},
+        "title_ru": "Легкая броня",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "medium_armor": {
+        "stat_weights": {"endurance": 2.0, "strength": 1.0},
+        "title_ru": "Средняя броня",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "heavy_armor": {
+        "stat_weights": {"strength": 2.0, "endurance": 1.0},
+        "title_ru": "Тяжелая броня",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "shield": {
+        "stat_weights": {"strength": 2.0, "agility": 1.0},
+        "title_ru": "Щит",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
 
     # ------------------
     # 🧠 Уровень 1: ТАКТИЧЕСКИЕ НАВЫКИ
     # ------------------
-    "intuition": {"primary": "luck", "secondary": "perception", "title_ru": "Интуиция", "xp_multiplier": 0.8, "prerequisite_skill": None,
-                  "prerequisite_title": None},
-    "reflexes": {"primary": "agility", "secondary": "perception", "title_ru": "Рефлексы", "xp_multiplier": 0.8, "prerequisite_skill": None,
-                 "prerequisite_title": None},
-    "fortitude": {"primary": "endurance", "secondary": "strength", "title_ru": "Стойкость", "xp_multiplier": 0.8, "prerequisite_skill": None,
-                  "prerequisite_title": None},
-    "persistence": {"primary": "strength", "secondary": "endurance", "title_ru": "Настойчивость", "xp_multiplier": 0.8, "prerequisite_skill": None,
-                    "prerequisite_title": None},
+    "intuition": {
+        "stat_weights": {"agility": 2.0, "wisdom": 1.0},
+        "title_ru": "Интуиция",
+        "xp_multiplier": 0.8,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "reflexes": {
+        "stat_weights": {"wisdom": 2.0, "agility": 1.0},
+        "title_ru": "Рефлексы",
+        "xp_multiplier": 0.8,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "fortitude": {
+        "stat_weights": {"endurance": 2.0, "men": 1.0},
+        "title_ru": "Стойкость",
+        "xp_multiplier": 0.8,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "persistence": {
+        "stat_weights": {"strength": 2.0, "intelligence": 1.0},
+        "title_ru": "Настойчивость",
+        "xp_multiplier": 0.8,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
 
     # ------------------
     # 🌪️ Уровень 1: ШКОЛЫ МАГИИ Стихий
     # ------------------
-    "fire_magic": {"primary": "intelligence", "secondary": "perception", "title_ru": "Магия Огня", "xp_multiplier": 1.2,
-                   "prerequisite_skill": None, "prerequisite_title": None},
-    "air_magic": {"primary": "intelligence", "secondary": "perception", "title_ru": "Магия Воздуха", "xp_multiplier": 1.2,
-                  "prerequisite_skill": None, "prerequisite_title": None},
-    "water_magic": {"primary": "intelligence", "secondary": "perception", "title_ru": "Магия Воды", "xp_multiplier": 1.2,
-                    "prerequisite_skill": None, "prerequisite_title": None},
-    "earth_magic": {"primary": "intelligence", "secondary": "perception", "title_ru": "Магия Земли", "xp_multiplier": 1.2,
-                    "prerequisite_skill": None, "prerequisite_title": None},
+    "fire_magic": {
+        "stat_weights": {"intelligence": 2.0, "wisdom": 1.0},
+        "title_ru": "Магия Огня",
+        "xp_multiplier": 1.2,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "air_magic": {
+        "stat_weights": {"intelligence": 2.0, "wisdom": 1.0},
+        "title_ru": "Магия Воздуха",
+        "xp_multiplier": 1.2,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "water_magic": {
+        "stat_weights": {"intelligence": 2.0, "wisdom": 1.0},
+        "title_ru": "Магия Воды",
+        "xp_multiplier": 1.2,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "earth_magic": {
+        "stat_weights": {"intelligence": 2.0, "wisdom": 1.0},
+        "title_ru": "Магия Земли",
+        "xp_multiplier": 1.2,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
 
     # ------------------
     # 🔮 Уровень 1: ШКОЛЫ МАГИИ аспектов
     # ------------------
-
-    "dark_magic": {"primary": "perception", "secondary": "intelligence", "title_ru": "Магия Тьмы", "xp_multiplier": 1.5,
-                   "prerequisite_skill": None, "prerequisite_title": None},
-    "light_magic": {"primary": "perception", "secondary": "intelligence", "title_ru": "Магия Света", "xp_multiplier": 1.5,
-                    "prerequisite_skill": None, "prerequisite_title": None},
-    "arcane_magic": {"primary": "perception", "secondary": "intelligence", "title_ru": "Тайная Магия", "xp_multiplier": 1.5,
-                     "prerequisite_skill": None, "prerequisite_title": None},
-    "nature_magic": {"primary": "charisma", "secondary": "intelligence", "title_ru": "Магия Природы", "xp_multiplier": 1.2, "prerequisite_skill": None,
-                "prerequisite_title": None},
+    "dark_magic": {
+        "stat_weights": {"perception": 2.0, "intelligence": 1.0},
+        "title_ru": "Магия Тьмы",
+        "xp_multiplier": 1.5,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "light_magic": {
+        "stat_weights": {"perception": 2.0, "intelligence": 1.0},
+        "title_ru": "Магия Света",
+        "xp_multiplier": 1.5,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "arcane_magic": {
+        "stat_weights": {"perception": 2.0, "intelligence": 1.0},
+        "title_ru": "Тайная Магия",
+        "xp_multiplier": 1.5,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "nature_magic": {
+        "stat_weights": {"charisma": 2.0, "intelligence": 1.0},
+        "title_ru": "Магия Природы",
+        "xp_multiplier": 1.2,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
 
     # ------------------
     # 🏗 Уровень 1: БАЗОВЫЕ РЕМЁСЛА (Сбор)
     # ------------------
-    "mining": {"primary": "perception", "secondary": "endurance", "title_ru": "Горное дело", "xp_multiplier": 1.0, "prerequisite_skill": None,
-               "prerequisite_title": None},
-    "herbalism": {"primary": "perception", "secondary": "endurance", "title_ru": "Травничество", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                  "prerequisite_title": None},
-    "skinning": {"primary": "perception", "secondary": "endurance", "title_ru": "Снятие шкур", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                 "prerequisite_title": None},
-    "woodcutting": {"primary": "perception", "secondary": "endurance", "title_ru": "Лесорубство", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                    "prerequisite_title": None},
-    "hunting": {"primary": "perception", "secondary": "endurance", "title_ru": "Охота", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                "prerequisite_title": None},
-    "archaeology": {"primary": "perception", "secondary": "endurance", "title_ru": "Археология", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                    "prerequisite_title": None},
-    "gathering": {"primary": "perception", "secondary": "endurance", "title_ru": "Сбор", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                  "prerequisite_title": None},
+    "mining": {
+        "stat_weights": {"perception": 2.0, "endurance": 1.0},
+        "title_ru": "Горное дело",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "herbalism": {
+        "stat_weights": {"perception": 2.0, "endurance": 1.0},
+        "title_ru": "Травничество",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "skinning": {
+        "stat_weights": {"perception": 2.0, "endurance": 1.0},
+        "title_ru": "Снятие шкур",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "woodcutting": {
+        "stat_weights": {"perception": 2.0, "endurance": 1.0},
+        "title_ru": "Лесорубство",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "hunting": {
+        "stat_weights": {"perception": 2.0, "endurance": 1.0},
+        "title_ru": "Охота",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "archaeology": {
+        "stat_weights": {"perception": 2.0, "endurance": 1.0},
+        "title_ru": "Археология",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "gathering": {
+        "stat_weights": {"perception": 2.0, "endurance": 1.0},
+        "title_ru": "Сбор",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
 
     # ------------------
     # ⚒️ Уровень 1: БАЗОВЫЕ РЕМЁСЛА (Производство)
     # ------------------
-    "alchemy": {"primary": "intelligence", "secondary": "agility", "title_ru": "Алхимия", "xp_multiplier": 1.5, "prerequisite_skill": None,
-                "prerequisite_title": None},
-    "science": {"primary": "intelligence", "secondary": "perception", "title_ru": "Наука", "xp_multiplier": 1.5, "prerequisite_skill": None,
-                "prerequisite_title": None},
-    "weapon_craft": {"primary": "intelligence", "secondary": "agility", "title_ru": "Оружейное дело", "xp_multiplier": 2.0,
-                     "prerequisite_skill": None, "prerequisite_title": None},
-    "armor_craft": {"primary": "intelligence", "secondary": "agility", "title_ru": "Бронное дело", "xp_multiplier": 2.0, "prerequisite_skill": None,
-                    "prerequisite_title": None},
-    "jewelry_craft": {"primary": "intelligence", "secondary": "agility", "title_ru": "Ювелирное дело", "xp_multiplier": 2.0,
-                      "prerequisite_skill": None, "prerequisite_title": None},
-    "artifact_craft": {"primary": "intelligence", "secondary": "agility", "title_ru": "Создание артефактов", "xp_multiplier": 2.5,
-                       "prerequisite_skill": None, "prerequisite_title": None},
+    "alchemy": {
+        "stat_weights": {"intelligence": 2.0, "agility": 1.0},
+        "title_ru": "Алхимия",
+        "xp_multiplier": 1.5,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "science": {
+        "stat_weights": {"intelligence": 2.0, "perception": 1.0},
+        "title_ru": "Наука",
+        "xp_multiplier": 1.5,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "weapon_craft": {
+        "stat_weights": {"intelligence": 2.0, "agility": 1.0},
+        "title_ru": "Оружейное дело",
+        "xp_multiplier": 2.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "armor_craft": {
+        "stat_weights": {"intelligence": 2.0, "agility": 1.0},
+        "title_ru": "Бронное дело",
+        "xp_multiplier": 2.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "jewelry_craft": {
+        "stat_weights": {"intelligence": 2.0, "agility": 1.0},
+        "title_ru": "Ювелирное дело",
+        "xp_multiplier": 2.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "artifact_craft": {
+        "stat_weights": {"intelligence": 2.0, "agility": 1.0},
+        "title_ru": "Создание артефактов",
+        "xp_multiplier": 2.5,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
 
     # ------------------
     # 🤝 Уровень 1: БАЗОВЫЕ ТОРГОВЫЕ
     # ------------------
-    "accounting": {"primary": "luck", "secondary": "charisma", "title_ru": "Бухгалтерия", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                   "prerequisite_title": None},
-    "brokerage": {"primary": "luck", "secondary": "charisma", "title_ru": "Посредничество", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                  "prerequisite_title": None},
-    "contracts": {"primary": "luck", "secondary": "charisma", "title_ru": "Договоры", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                  "prerequisite_title": None},
-    "trade_relations": {"primary": "luck", "secondary": "charisma", "title_ru": "Торговые связи", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                        "prerequisite_title": None},
+    "accounting": {
+        "stat_weights": {"luck": 2.0, "charisma": 1.0},
+        "title_ru": "Бухгалтерия",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "brokerage": {
+        "stat_weights": {"luck": 2.0, "charisma": 1.0},
+        "title_ru": "Посредничество",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "contracts": {
+        "stat_weights": {"luck": 2.0, "charisma": 1.0},
+        "title_ru": "Договоры",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "trade_relations": {
+        "stat_weights": {"luck": 2.0, "charisma": 1.0},
+        "title_ru": "Торговые связи",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
 
+    # ------------------
     # 👥 Уровень 1: БАЗОВЫЕ СОЦИАЛЬНЫЕ
-
-    "leadership": {"primary": "charisma", "secondary": "luck", "title_ru": "Лидерство", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                   "prerequisite_title": None},
-    "organization": {"primary": "luck", "secondary": "charisma", "title_ru": "Организация", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                     "prerequisite_title": None},
-    "team_spirit": {"primary": "charisma", "secondary": "luck", "title_ru": "Командный дух", "xp_multiplier": 1.0, "prerequisite_skill": None,
-                    "prerequisite_title": None},
-    "egoism": {"primary": "luck", "secondary": "charisma", "title_ru": "Эгоизм", "xp_multiplier": 1.0, "prerequisite_skill": None,
-               "prerequisite_title": None},
+    # ------------------
+    "leadership": {
+        "stat_weights": {"charisma": 2.0, "luck": 1.0},
+        "title_ru": "Лидерство",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "organization": {
+        "stat_weights": {"luck": 2.0, "charisma": 1.0},
+        "title_ru": "Организация",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "team_spirit": {
+        "stat_weights": {"charisma": 2.0, "luck": 1.0},
+        "title_ru": "Командный дух",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
+    "egoism": {
+        "stat_weights": {"luck": 2.0, "charisma": 1.0},
+        "title_ru": "Эгоизм",
+        "xp_multiplier": 1.0,
+        "prerequisite_skill": None,
+        "prerequisite_title": None
+    },
 
     # ------------------
     # 🚀 Уровень 2: ПРОДВИНУТЫЕ (ADVANCED) НАВЫКИ
     # ------------------
     "advanced_melee_combat": {
-        "primary": "strength",
-        "secondary": "agility",
+        "stat_weights": {"strength": 2.0, "agility": 1.0},
         "title_ru": "Продвинутый ближний бой",
-        "xp_multiplier": 5.0,  # x5 сложность
+        "xp_multiplier": 5.0,
         "prerequisite_skill": "melee_combat",
         "prerequisite_title": "⚜️ Грандмастер"
     },
     "advanced_ranged_combat": {
-        "primary": "agility",
-        "secondary": "perception",
+        "stat_weights": {"agility": 2.0, "perception": 1.0},
         "title_ru": "Продвинутый дальний бой",
         "xp_multiplier": 5.0,
         "prerequisite_skill": "ranged_combat",
         "prerequisite_title": "⚜️ Грандмастер"
     },
     "advanced_magic_weapons": {
-        "primary": "intelligence",
-        "secondary": "charisma",
+        "stat_weights": {"intelligence": 2.0, "charisma": 1.0},
         "title_ru": "Продвинутое маг. оружие",
         "xp_multiplier": 5.0,
         "prerequisite_skill": "magic_weapons",
         "prerequisite_title": "⚜️ Грандмастер"
     }
 }
+
 
 
 # 4. ЛОГИКА ПРОГРЕССИИ (Не меняется)

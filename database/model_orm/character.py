@@ -9,6 +9,7 @@ from database.model_orm.base import Base, TimestampMixin
 if TYPE_CHECKING:
     from .user import User
     from .skill import CharacterSkillRate, CharacterSkillProgress
+    from .modifiers import CharacterModifiers
 
 
 # ВОЗВРАЩАЮ ИСХОДНОЕ ИМЯ КЛАССА
@@ -30,6 +31,8 @@ class Character(Base, TimestampMixin):
             Позволяет получить доступ к объекту пользователя-владельца.
         stats (Mapped["CharacterStats"]): Связь "один-к-одному" с характеристиками
             персонажа.
+        modifiers (Mapped["CharacterModifiers"]): Связь "один-к-одному" с модификаторами
+            персонажа.
         skill_rate (Mapped[List["CharacterSkillRate"]]): Связь "один-ко-многим"
             со ставками навыков персонажа.
         skill_progress (Mapped[List["CharacterSkillProgress"]]): Связь "один-ко-многим"
@@ -48,6 +51,10 @@ class Character(Base, TimestampMixin):
     # Связи
     user: Mapped["User"] = relationship(back_populates="characters")
     stats: Mapped["CharacterStats"] = relationship(
+        back_populates="character",
+        cascade="all, delete-orphan"
+    )
+    modifiers: Mapped["CharacterModifiers"] = relationship(
         back_populates="character",
         cascade="all, delete-orphan"
     )
@@ -89,13 +96,21 @@ class CharacterStats(Base, TimestampMixin):
         ForeignKey("characters.character_id", ondelete="CASCADE"),  # <-- "characters.character_id" (таблица) - ВЕРНО
         primary_key=True
     )
+    # Физические
     strength: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
-    perception: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
-    endurance: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
-    charisma: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
-    intelligence: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     agility: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    endurance: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+
+    # Магические
+    intelligence: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    wisdom: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    men: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+
+    # Вспомогательные
+    perception: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    charisma: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     luck: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+
 
     # ИСПРАВЛЯЮ ОБРАТНУЮ СВЯЗЬ
     character: Mapped["Character"] = relationship(back_populates="stats")  # <-- БЫЛО 'Characters'

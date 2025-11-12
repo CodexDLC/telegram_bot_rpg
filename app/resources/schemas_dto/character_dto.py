@@ -46,9 +46,13 @@ class CharacterStatsUpdateDTO(BaseModel):
     strength: int
     agility: int
     endurance: int
-    charisma: int
+
     intelligence: int
+    wisdom: int
+    men: int
+
     perception: int
+    charisma: int
     luck: int
 
 
