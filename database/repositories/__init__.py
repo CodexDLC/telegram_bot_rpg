@@ -21,7 +21,7 @@ def get_user_repo(session: AsyncSession) -> IUserRepo:
     какую реализацию IUserRepo мы используем.
     """
     # Сейчас мы возвращаем ORM-реализацию
-    return UsersRepoORM(session)
+    return UsersRepoORM(session=session)
 
 
 def get_character_repo(session: AsyncSession) -> ICharactersRepo:
@@ -29,7 +29,7 @@ def get_character_repo(session: AsyncSession) -> ICharactersRepo:
     Эта функция - ЕДИНСТВЕННОЕ место, которое знает,
     какую реализацию ICharacterRepo мы используем.
     """
-    return CharactersRepoORM(session)
+    return CharactersRepoORM(session=session)
 
 
 def get_character_stats_repo(session: AsyncSession) -> ICharacterStatsRepo:
@@ -46,7 +46,7 @@ def get_skill_rate_repo(session: AsyncSession) -> ISkillRateRepo:
     место, которое знает,
     какую реализацию ISkillRateRepo мы используем.
     """
-    return SkillRateRepo(session)
+    return SkillRateRepo(session=session)
 
 def get_skill_progress_repo(session: AsyncSession) -> ISkillProgressRepo:
 
@@ -65,4 +65,4 @@ def get_modifiers_repo(session: AsyncSession) -> ICharacterModifiersRepo:
     мы используем.
     """
 
-    return CharacterModifiersRepo
+    return CharacterModifiersRepo(session=session)

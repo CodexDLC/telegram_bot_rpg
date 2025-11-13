@@ -4,7 +4,8 @@ from typing import Tuple
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardMarkup
 
-from app.resources.keyboards.callback_data import MeinMenuCallback
+# 1. --- ДОБАВЬ ИМПОРТ StatusNavCallback ---
+from app.resources.keyboards.callback_data import MeinMenuCallback, StatusNavCallback
 from app.resources.texts.menu_data.buttons_text import ButtonsTextData
 
 log = logging.getLogger(__name__)
@@ -13,20 +14,13 @@ log = logging.getLogger(__name__)
 class MenuService:
     """
     Сервис для создания динамических верхних меню.
-
-    Генерирует текст и клавиатуру для "главного" меню, которое
-    отображается в верхней части экрана. Набор кнопок в меню зависит
-    от текущего этапа игры (`game_stage`).
+    ...
     """
 
     def __init__(self, game_stage: str, char_id: int):
         """
         Инициализирует сервис меню.
-
-        Args:
-            game_stage (str): Текущий этап игры (e.g., "creation", "lobby").
-            char_id (int): ID персонажа, для которого создается меню.
-                           Этот ID "зашивается" в callback-данные кнопок.
+        ...
         """
         self.data = ButtonsTextData
         self.gs = game_stage
@@ -36,9 +30,7 @@ class MenuService:
     def get_data_menu(self) -> Tuple[str, InlineKeyboardMarkup]:
         """
         Возвращает текст и клавиатуру для текущего меню.
-
-        Returns:
-            Tuple[str, InlineKeyboardMarkup]: Кортеж с текстом и клавиатурой.
+        ...
         """
         log.debug("Запрос на получение данных меню.")
         text = self.data.TEXT_MENU
@@ -51,7 +43,9 @@ class MenuService:
 
         1. Определяет `game_stage`.
         2. Из `MENU_LAYOUTS` получает список ключей кнопок для этого этапа.
-        3. Для каждого ключа находит текст и создает кнопку с `MeinMenuCallback`.
+        3. Для каждого ключа находит текст и создает кнопку с *соответствующим*
+           CallbackData (`StatusNavCallback` для "status", `MeinMenuCallback`
+           для всего остального).
 
         Returns:
             InlineKeyboardMarkup: Готовая клавиатура меню.
@@ -69,21 +63,44 @@ class MenuService:
 
         for key in buttons_to_create:
             button_text = buttons_full_data.get(key)
-            if button_text:
-                # Создаем callback, содержащий всю необходимую информацию.
+
+            if not button_text:
+                log.warning(f"Для ключа кнопки '{key}' не найден текст в BUTTONS_MENU_FULL.")
+                continue
+
+
+            if key == "status":
+
+                callback_data = StatusNavCallback(
+                    char_id=self.char_id,
+                    level=0,
+                    key="bio"  # Вход по умолчанию в "Био"
+                ).pack()
+
+            elif key in ("logout", "navigation", "inventory"):
+
                 callback_data = MeinMenuCallback(
                     action=key,
                     game_stage=self.gs,
                     char_id=self.char_id
                 ).pack()
 
-                kb.button(
-                    text=button_text,
-                    callback_data=callback_data
-                )
             else:
-                log.warning(f"Для ключа кнопки '{key}' не найден текст в BUTTONS_MENU_FULL.")
+                # Защита на случай, если мы добавим новый ключ
+                # в buttons_text.py, но забудем обработать его здесь.
+                log.error(
+                    f"Необработанный ключ '{key}' в MenuService._create_menu_kb. "
+                    f"Не удалось определить тип CallbackData."
+                )
+                continue
+
+            # Добавляем кнопку с правильным callback_data
+            kb.button(
+                text=button_text,
+                callback_data=callback_data
+            )
 
         # Здесь можно будет настроить `adjust`, если потребуется.
+        # Например, `kb.adjust(2, 1)` если кнопок 3 (статус, навигация, выйти)
         log.debug(f"Клавиатура меню для game_stage='{self.gs}' успешно создана.")
         return kb.as_markup()

@@ -5,32 +5,23 @@ from typing import Optional
 from aiogram.filters.callback_data import CallbackData
 
 
-class StatusMenuCallback(CallbackData, prefix="sm"):
+class StatusNavCallback(CallbackData, prefix="statnav"):
     """
+    Универсальный иерархический коллбек для ВСЕЙ навигации по Меню Статуса.
+    (Заменяет StatusMenuCallback и SkillMenuCallback)
 
-    action: 'bio', 'skills'
-    char_id: 1, 2, 3...
-    view_mode: 'lobby', 'full_access'
-
-    (Aiogram сам превратит это в строку: "sm:bio:123:lobby")
+    Args:
+        char_id (int): ID персонажа
+        level (int): Уровень вложенности:
+                     0 = 'tab' (Уровень вкладок: 'bio', 'skills', 'stats')
+                     1 = 'group' (Уровень групп: 'combat_base', 'base_stats')
+                     2 = 'detail' (Уровень детализации: 'melee_combat', 'strength')
+        key (str): Строковый ключ для идентификации на этом уровне
+                   (e.g., 'bio', 'combat_base', 'melee_combat')
     """
-    action: str
     char_id: int
-    view_mode: str
-
-
-class SkillMenuCallback(CallbackData, prefix="skm"):
-    """
-
-    level: 'group' (кнопка группы) или 'detail' (кнопка навыка)
-    value: 'combat_base' (название группы) или 'melee_combat' (ключ навыка)
-    char_id: ID персонажа
-    view_mode: 'lobby' или 'full_access'
-    """
-    level: str
-    value: str
-    char_id: int
-    view_mode: str
+    level: int
+    key: str
 
 
 class MeinMenuCallback(CallbackData, prefix="menu"):
