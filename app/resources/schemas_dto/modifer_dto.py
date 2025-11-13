@@ -36,6 +36,7 @@ class CharacterModifiersDto(BaseModel):
     counter_attack_chance: float
     pet_ally_power: float
     vampiric_rage: float
+    parry_chance: float
 
     # --- Ресурсы ---
     hp_max: int

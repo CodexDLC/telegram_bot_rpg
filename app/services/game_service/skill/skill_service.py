@@ -2,10 +2,13 @@
 import logging
 from typing import Optional, Dict
 
+from app.services.game_service.modifiers_calculator_service import ModifiersCalculatorService as MCService
 from database.db_contract.i_characters_repo import ICharacterStatsRepo
+from database.db_contract.i_modifiers_repo import ICharacterModifiersRepo
 from database.db_contract.i_skill_repo import ISkillRateRepo, ISkillProgressRepo
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.services.game_service.skill.rate_service import calculate_rates_data
+
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +28,7 @@ class CharacterSkillsService:
             stats_repo: ICharacterStatsRepo,
             rate_repo: ISkillRateRepo,
             progress_repo: ISkillProgressRepo,
+            modifiers_repo: ICharacterModifiersRepo
     ):
         """
         Инициализирует сервис с помощью инъекции зависимостей.
@@ -37,6 +41,7 @@ class CharacterSkillsService:
         self._stats_repo = stats_repo
         self._rate_repo = rate_repo
         self._progress_repo = progress_repo
+        self._modifiers_repo = modifiers_repo
         log.debug(f"{self.__class__.__name__} инициализирован с репозиториями.")
 
     async def finalize_tutorial_stats(
@@ -83,5 +88,10 @@ class CharacterSkillsService:
         await self._rate_repo.upsert_skill_rates(rates_data)
         log.debug(f"БСО для character_id={character_id} успешно рассчитаны и сохранены.")
 
-        log.info(f"Успешная финализация туториала S.P.E.C.I.A.L. для character_id={character_id}.")
+        # Шаг 4: Расчитывает модификаторы от статов и сохронять в таблицу
+        log.debug(f"Шаг 4/4: Расчет и сохранение модификаторов для character_id={character_id}")
+        modifiers_data_dto = MCService.calculate_all_modifiers_for_stats(final_stats_dto)
+        await self._modifiers_repo.save_modifiers(character_id, modifiers_data_dto)
+
+        log.info(f"Успешная финализация туториала для character_id={character_id}.")
         return final_stats_dto

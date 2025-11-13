@@ -3,11 +3,13 @@
 # 1. Мы импортируем AsyncSession из SQLAlchemy
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from database.db_contract.i_modifiers_repo import ICharacterModifiersRepo
 from database.db_contract.i_skill_repo import ISkillRateRepo, ISkillProgressRepo
 # 2. Мы импортируем КОНТРАКТЫ (Интерфейсы)
 from database.db_contract.i_users_repo import IUserRepo
 from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM, CharacterStatsRepoORM
+from database.repositories.ORM.modifiers_repo import CharacterModifiersRepo
 from database.repositories.ORM.skill_repo import SkillRateRepo, SkillProgressRepo
 from database.repositories.ORM.users_repo_orm import UsersRepoORM
 
@@ -55,3 +57,12 @@ def get_skill_progress_repo(session: AsyncSession) -> ISkillProgressRepo:
     """
     return SkillProgressRepo(session)
 
+def get_modifiers_repo(session: AsyncSession) -> ICharacterModifiersRepo:
+    """
+    Эта функция - ЕДИНСТВЕННОЕ
+    место, которое знает,
+    какую реализацию ICharacterModifiersRepo
+    мы используем.
+    """
+
+    return CharacterModifiersRepo

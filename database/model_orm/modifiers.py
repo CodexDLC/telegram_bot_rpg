@@ -52,6 +52,7 @@ class CharacterModifiers(Base, TimestampMixin):
     counter_attack_chance: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     pet_ally_power: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     vampiric_rage: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    parry_chance: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
 
     # --- Ресурсы ---
     hp_max: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -10,8 +10,13 @@ from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.resources.texts.buttons_callback import Buttons, GameStage
 from app.resources.texts.game_messages.tutorial_messages import TutorialEventsData, TutorialMessages
 from app.services.game_service.skill.skill_service import CharacterSkillsService
-from database.repositories.ORM.characters_repo_orm import CharacterStatsRepoORM, CharactersRepoORM
-from database.repositories.ORM.skill_repo import SkillRateRepo, SkillProgressRepo
+from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
+
+from database.repositories import (
+    get_character_stats_repo, get_skill_rate_repo,
+    get_skill_progress_repo, get_modifiers_repo
+)
+
 from database.session import get_async_session
 
 log = logging.getLogger(__name__)
@@ -147,9 +152,10 @@ class TutorialServiceStats:
         async with get_async_session() as session:
             try:
                 char_service = CharacterSkillsService(
-                    stats_repo=CharacterStatsRepoORM(session),
-                    rate_repo=SkillRateRepo(session),
-                    progress_repo=SkillProgressRepo(session)
+                    stats_repo=get_character_stats_repo(session),
+                    rate_repo=get_skill_rate_repo(session),
+                    progress_repo=get_skill_progress_repo(session),
+                    modifiers_repo=get_modifiers_repo(session)
                 )
                 final_stats_obj = await char_service.finalize_tutorial_stats(
                     character_id=self.char_id,
