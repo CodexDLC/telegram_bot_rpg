@@ -5,7 +5,19 @@ from typing import Optional
 from aiogram.filters.callback_data import CallbackData
 
 
-class StatusNavCallback(CallbackData, prefix="statnav"):
+class MeinMenuCallback(CallbackData, prefix="menu"):
+    """
+    action:         Какую кнопку нажали какой обработчик вызвать
+    game_stage:     Сколько кнопок доступно
+    char_id:        ID персонажа
+    """
+
+    action: str
+    game_stage: str
+    char_id: int
+
+
+class StatusNavCallback(CallbackData, prefix="status_menu"):
     """
     Универсальный иерархический коллбек для ВСЕЙ навигации по Меню Статуса.
     (Заменяет StatusMenuCallback и SkillMenuCallback)
@@ -19,21 +31,9 @@ class StatusNavCallback(CallbackData, prefix="statnav"):
         key (str): Строковый ключ для идентификации на этом уровне
                    (e.g., 'bio', 'combat_base', 'melee_combat')
     """
+
     char_id: int
-    level: int
     key: str
-
-
-class MeinMenuCallback(CallbackData, prefix="menu"):
-    """
-    action:         Какую кнопку нажали какой обработчик вызвать
-    game_stage:     Сколько кнопок доступно
-    char_id:        ID персонажа
-    """
-
-    action: str
-    game_stage: str
-    char_id: int
 
 
 class LobbySelectionCallback(CallbackData, prefix="lsc"):

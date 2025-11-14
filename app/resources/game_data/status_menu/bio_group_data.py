@@ -33,9 +33,9 @@ BIO_HIERARCHY: Dict[str, Any] = {
         # Service будет использовать .format() для подстановки DTO
         "description": (
             "<code>"
-            "Имя:       {character.name}\n"
-            "Пол:       {gender_display}\n"
-            "Создан:    {character.created_at}\n"
+            "Имя:       {name}\n"
+            "Пол:       {gender}\n"
+            "Создан:    {created_at}\n"
             # (В будущем добавим сюда "Титул", "Достижения" и т.д.)
             "</code>"
         ),

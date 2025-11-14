@@ -5,10 +5,9 @@ from typing import Any, Optional, List, Dict, Tuple
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.resources.game_data.skill_library import SKILL_UI_GROUPS_MAP
-from app.resources.keyboards.callback_data import StatusMenuCallback, SkillMenuCallback
+
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
-from app.resources.texts.ui_text.data_text_status_menu import STATUS_ACTION
+
 from app.services.ui_service.helpers_ui.skill_formatters import SkillFormatters as SkillF
 
 log = logging.getLogger(__name__)

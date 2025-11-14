@@ -8,11 +8,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
 from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
-from app.resources.keyboards.callback_data import StatusMenuCallback, SkillMenuCallback
 from app.resources.texts.ui_messages import TEXT_AWAIT
 from app.services.helpers_module.get_data_handlers.status_data_helper import get_status_data_package
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
-from app.services.ui_service.character_skill_service import CharacterSkillStatusService
+from app.services.ui_service.status_menu.character_skill_service import CharacterSkillStatusService
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 
 log = logging.getLogger(__name__)

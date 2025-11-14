@@ -42,13 +42,32 @@ class UIErrorHandler:
 
         try:
             # Отправляем новое сообщение с подробностями.
-            await call.message.answer(
-                f"⚠️ {message_text}\n\nПожалуйста, попробуйте начать заново с команды /start",
-                # TODO: В будущем здесь будет reply_markup=get_error_reply_kb()
-            )
-            log.debug(f"Сообщение об ошибке успешно отправлено user_id={user_id}.")
+            # Проверяем, есть ли у call.message, чтобы избежать ошибки, если его нет
+            if call.message:
+                await call.message.answer(
+                    f"⚠️ {message_text}\n\nПожалуйста, попробуйте начать заново с команды /start",
+                    # TODO: В будущем здесь будет reply_markup=get_error_reply_kb()
+                )
+                log.debug(f"Сообщение об ошибке успешно отправлено user_id={user_id}.")
+            else:
+                log.error(f"Не удалось отправить сообщение об ошибке для user_id={user_id}, так как call.message отсутствует.")
         except TelegramBadRequest as e:
             log.error(f"Не удалось отправить сообщение об ошибке для user_id={user_id}: {e}")
+
+    # --- НОВЫЙ УНИВЕРСАЛЬНЫЙ МЕТОД ---
+    @staticmethod
+    async def handle_exception(call: CallbackQuery, error_text: str = "Произошла непредвиденная ошибка.") -> None:
+        """
+        Универсальный обработчик исключений.
+
+        Args:
+            call: Объект CallbackQuery.
+            error_text: Описание ошибки для пользователя.
+        """
+        await UIErrorHandler._error_msg_default(
+            call,
+            message_text=error_text
+        )
 
     # --- Публичные методы для конкретных ошибок ---
 

@@ -38,69 +38,34 @@ class MenuService:
         return text, kb
 
     def _create_menu_kb(self) -> InlineKeyboardMarkup:
-        """
-        Создает клавиатуру меню на основе текущего этапа игры.
-
-        1. Определяет `game_stage`.
-        2. Из `MENU_LAYOUTS` получает список ключей кнопок для этого этапа.
-        3. Для каждого ключа находит текст и создает кнопку с *соответствующим*
-           CallbackData (`StatusNavCallback` для "status", `MeinMenuCallback`
-           для всего остального).
-
-        Returns:
-            InlineKeyboardMarkup: Готовая клавиатура меню.
-        """
         kb = InlineKeyboardBuilder()
-        menu_layouts = self.data.MENU_LAYOUTS
-        buttons_full_data = self.data.BUTTONS_MENU_FULL
+        menu_layouts = self.data.MENU_LAYOUTS  #
+        buttons_full_data = self.data.BUTTONS_MENU_FULL  #
 
-        # Получаем список ключей кнопок для текущего этапа игры.
         buttons_to_create = menu_layouts.get(self.gs, [])
-        log.debug(f"Для game_stage='{self.gs}' будут созданы кнопки: {buttons_to_create}")
-
-        if not buttons_to_create:
-            log.warning(f"Для game_stage='{self.gs}' не найдено раскладки в MENU_LAYOUTS.")
 
         for key in buttons_to_create:
             button_text = buttons_full_data.get(key)
 
             if not button_text:
-                log.warning(f"Для ключа кнопки '{key}' не найден текст в BUTTONS_MENU_FULL.")
                 continue
 
-
             if key == "status":
-
+                # --- ИСПРАВЛЕНО: Просто ключ "bio" и ID ---
                 callback_data = StatusNavCallback(
-                    char_id=self.char_id,
-                    level=0,
-                    key="bio"  # Вход по умолчанию в "Био"
+                    key="bio",
+                    char_id=self.char_id
                 ).pack()
 
             elif key in ("logout", "navigation", "inventory"):
-
                 callback_data = MeinMenuCallback(
                     action=key,
                     game_stage=self.gs,
                     char_id=self.char_id
                 ).pack()
-
             else:
-                # Защита на случай, если мы добавим новый ключ
-                # в buttons_text.py, но забудем обработать его здесь.
-                log.error(
-                    f"Необработанный ключ '{key}' в MenuService._create_menu_kb. "
-                    f"Не удалось определить тип CallbackData."
-                )
                 continue
 
-            # Добавляем кнопку с правильным callback_data
-            kb.button(
-                text=button_text,
-                callback_data=callback_data
-            )
-
-        # Здесь можно будет настроить `adjust`, если потребуется.
-        # Например, `kb.adjust(2, 1)` если кнопок 3 (статус, навигация, выйти)
+            kb.button(text=button_text, callback_data=callback_data)
         log.debug(f"Клавиатура меню для game_stage='{self.gs}' успешно создана.")
         return kb.as_markup()
