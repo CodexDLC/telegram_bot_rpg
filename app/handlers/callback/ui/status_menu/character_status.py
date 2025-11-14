@@ -1,11 +1,11 @@
 # app/handlers/callback/ui/status_menu/character_status.py
 import logging
 import time
-from aiogram import Router, F, Bot
+from aiogram import Router, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
-from app.resources.keyboards.callback_data import StatusNavCallback
+from app.resources.keyboards.status_callback import StatusNavCallback
 from app.services.helpers_module.DTO_helper import fsm_clean_core_state
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.status_menu.character_status_service import CharacterMenuUIService
@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 router = Router(name="character_status_menu")
 
 
-@router.callback_query(StatusNavCallback.filter(F.key == "bio"))
+@router.callback_query(StatusNavCallback.filter())
 async def bio_tab_callback_handler(
         call: CallbackQuery,
         state: FSMContext,

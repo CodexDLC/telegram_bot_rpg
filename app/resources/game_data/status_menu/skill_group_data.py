@@ -2,10 +2,6 @@
 import logging
 from typing import Dict, Any
 
-# 1. Импортируем "Мастер-список" вкладок из "Био"
-# (Предполагается, что bio_group_data.py находится в этой же папке)
-from .bio_group_data import TABS_NAV_DATA
-
 log = logging.getLogger(__name__)
 
 # ==========================================================================
@@ -45,7 +41,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
         "title": "🗡️ Боевые навыки",
         "description": "Группа навыков, отвечающих за ведение боя.",
         "empty_description": "У тебя пока нет разблокированных боевых навыков.",
-        "data_source": "character_progress_skill",
+        
         "items": {
             "melee_combat": "Ближний бой",
             "ranged_combat": "Дальний бой",
@@ -60,7 +56,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
         "title": "🛡️ Защитные навыки",
         "description": "Группа навыков, отвечающих за твою выживаемость.",
         "empty_description": "У тебя пока нет разблокированных защитных навыков.",
-        "data_source": "character_progress_skill",
+        
         "items": {
             "light_armor": "Легкая броня",
             "medium_armor": "Средняя броня",
@@ -73,7 +69,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
         "title": "🧠 Тактические навыки",
         "description": "Группа навыков, отвечающих за тактическое преимущество.",
         "empty_description": "У тебя пока нет разблокированных тактических навыков.",
-        "data_source": "character_progress_skill",
+        
         "items": {
             "intuition": "Интуиция",
             "reflexes": "Рефлексы",
@@ -86,7 +82,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
         "title": "🌪️ Магия Стихий",
         "description": "Группа навыков, отвечающих за магию стихий.",
         "empty_description": "У тебя пока нет разблокированных навыков магии стихий.",
-        "data_source": "character_progress_skill",
+        
         "items": {
             "fire_magic": "Магия Огня",
             "air_magic": "Магия Воздуха",
@@ -99,7 +95,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
         "title": "🔮 Магия Аспектов",
         "description": "Группа навыков, отвечающих за магию аспектов.",
         "empty_description": "У тебя пока нет разблокированных навыков магии аспектов.",
-        "data_source": "character_progress_skill",
+        
         "items": {
             "dark_magic": "Магия Тьмы",
             "light_magic": "Магия Света",
@@ -108,11 +104,11 @@ SKILL_HIERARCHY: Dict[str, Any] = {
         }
     },
 
-    "gathering": {
+    "gathering_group": {
         "title": "🏗️ Сбор / Ресурсы",
         "description": "Группа навыков, отвечающих за сбор ресурсов.",
         "empty_description": "У тебя пока нет разблокированных навыков сбора.",
-        "data_source": "character_progress_skill",
+        
         "items": {
             "mining": "Горное дело",
             "herbalism": "Травничество",
@@ -128,7 +124,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
         "title": "⚒️ Производство",
         "description": "Группа навыков, отвечающих за создание предметов.",
         "empty_description": "У тебя пока нет разблокированных производственных навыков.",
-        "data_source": "character_progress_skill",
+        
         "items": {
             "alchemy": "Алхимия",
             "science": "Наука",
@@ -143,7 +139,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
         "title": "🤝 Торговые",
         "description": "Группа навыков, отвечающих за торговлю.",
         "empty_description": "У тебя пока нет разблокированных торговых навыков.",
-        "data_source": "character_progress_skill",
+        
         "items": {
             "accounting": "Бухгалтерия",
             "brokerage": "Посредничество",
@@ -156,7 +152,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
         "title": "👥 Социальные",
         "description": "Группа навыков, отвечающих за социальное взаимодействие.",
         "empty_description": "У тебя пока нет разблокированных социальных навыков.",
-        "data_source": "character_progress_skill",
+        
         "items": {
             "leadership": "Лидерство",
             "organization": "Организация",
@@ -180,7 +176,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "ranged_combat": {
         "title": "Дальний бой",
@@ -191,7 +187,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "magic_weapons": {
         "title": "Магическое оружие",
@@ -202,7 +198,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "advanced_melee_combat": {
         "title": "Продвинутый ближний бой",
@@ -213,7 +209,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "advanced_ranged_combat": {
         "title": "Продвинутый дальний бой",
@@ -224,7 +220,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "advanced_magic_weapons": {
         "title": "Продвинутое маг. оружие",
@@ -235,7 +231,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
 
     # --- Defense ---
@@ -248,7 +244,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "medium_armor": {
         "title": "Средняя броня",
@@ -259,7 +255,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "heavy_armor": {
         "title": "Тяжелая броня",
@@ -270,7 +266,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "shield": {
         "title": "Щит",
@@ -281,7 +277,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
 
     # --- Tactical ---
@@ -294,7 +290,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "reflexes": {
         "title": "Рефлексы",
@@ -305,7 +301,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "fortitude": {
         "title": "Стойкость",
@@ -316,7 +312,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "persistence": {
         "title": "Настойчивость",
@@ -327,7 +323,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
 
     # --- Magic Elemental ---
@@ -340,7 +336,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "air_magic": {
         "title": "Магия Воздуха",
@@ -351,7 +347,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "water_magic": {
         "title": "Магия Воды",
@@ -362,7 +358,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "earth_magic": {
         "title": "Магия Земли",
@@ -373,7 +369,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
 
     # --- Magic Aspect ---
@@ -386,7 +382,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "light_magic": {
         "title": "Магия Света",
@@ -397,7 +393,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "arcane_magic": {
         "title": "Тайная Магия",
@@ -408,7 +404,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "nature_magic": {
         "title": "Магия Природы",
@@ -419,7 +415,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
 
     # --- Gathering ---
@@ -432,7 +428,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "herbalism": {
         "title": "Травничество",
@@ -443,7 +439,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "skinning": {
         "title": "Снятие шкур",
@@ -454,7 +450,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "woodcutting": {
         "title": "Лесорубство",
@@ -465,7 +461,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "hunting": {
         "title": "Охота",
@@ -476,7 +472,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "archaeology": {
         "title": "Археология",
@@ -487,7 +483,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "gathering": {
         "title": "Сбор",
@@ -498,7 +494,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
 
     # --- Production ---
@@ -511,7 +507,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "science": {
         "title": "Наука",
@@ -522,7 +518,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "weapon_craft": {
         "title": "Оружейное дело",
@@ -533,7 +529,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "armor_craft": {
         "title": "Бронное дело",
@@ -544,7 +540,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "jewelry_craft": {
         "title": "Ювелирное дело",
@@ -555,7 +551,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "artifact_craft": {
         "title": "Создание артефактов",
@@ -566,7 +562,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
 
     # --- Trade ---
@@ -579,7 +575,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "brokerage": {
         "title": "Посредничество",
@@ -590,7 +586,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "contracts": {
         "title": "Договоры",
@@ -601,7 +597,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "trade_relations": {
         "title": "Торговые связи",
@@ -612,7 +608,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
 
     # --- Social ---
@@ -625,7 +621,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "organization": {
         "title": "Организация",
@@ -636,7 +632,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "team_spirit": {
         "title": "Командный дух",
@@ -647,7 +643,7 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
     "egoism": {
         "title": "Эгоизм",
@@ -658,6 +654,6 @@ SKILL_HIERARCHY: Dict[str, Any] = {
             "<b>Прогресс:</b> {skill.percentage}%\n"
             "<b>Звание:</b> {skill.title}"
         ),
-        "data_source": "character_progress_skill", "items": None
+         "items": None
     },
 }

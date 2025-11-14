@@ -42,7 +42,7 @@ MODIFIER_HIERARCHY: Dict[str, Any] = {
     "base_stats": {
         "title": "❤️ Базовые Характеристики (Lvl 1)",
         "description": "Твои 9 основных характеристик. Они являются 'Lvl 1' и определяют все остальные параметры.",
-        "data_source": "character_stats",  # Подсказка сервису, какой DTO парсить
+          # Подсказка сервису, какой DTO парсить
         "items": {
             "strength": "Сила",
             "agility": "Ловкость",
@@ -71,7 +71,6 @@ MODIFIER_HIERARCHY: Dict[str, Any] = {
     "physical_offense": {
         "title": "⚔️ Физическая Атака (Lvl 2)",
         "description": "Модификаторы 'Lvl 2', отвечающие за нанесение физического урона.",
-        "data_source": "character_modifiers",
         "items": {
             "physical_damage_bonus": "Бонус физ. урона",
             "physical_penetration": "Физ. пробивание",
@@ -83,7 +82,6 @@ MODIFIER_HIERARCHY: Dict[str, Any] = {
     "magical_offense": {
         "title": "🔮 Магическая Атака (Lvl 2)",
         "description": "Модификаторы 'Lvl 2', отвечающие за нанесение магического урона.",
-        "data_source": "character_modifiers",
         "items": {
             "magical_damage_bonus": "Бонус маг. урона",
             "magical_penetration": "Маг. пробивание",
@@ -97,7 +95,6 @@ MODIFIER_HIERARCHY: Dict[str, Any] = {
     "defense": {
         "title": "🛡️ Защита (Lvl 2)",
         "description": "Модификаторы 'Lvl 2', отвечающие за твою выживаемость в бою.",
-        "data_source": "character_modifiers",
         "items": {
             "physical_resistance": "Физ. сопротивление",
             "magical_resistance": "Маг. сопротивление",
@@ -116,7 +113,6 @@ MODIFIER_HIERARCHY: Dict[str, Any] = {
     "general_combat": {
         "title": "✨ Общие Боевые (Lvl 2)",
         "description": "Модификаторы 'Lvl 2', дающие различные боевые преимущества.",
-        "data_source": "character_modifiers",
         "items": {
             "counter_attack_chance": "Шанс контратаки",
             "pet_ally_power": "Сила питомцев/союзников",
@@ -129,7 +125,6 @@ MODIFIER_HIERARCHY: Dict[str, Any] = {
     "utility": {
         "title": "💰 Экономика и Ремесло (Lvl 2)",
         "description": "Модификаторы 'Lvl 2', влияющие на небоевые аспекты игры.",
-        "data_source": "character_modifiers",
         "items": {
             "trade_discount": "Торговая скидка",
             "find_loot_chance": "Шанс найти добычу",
@@ -144,15 +139,15 @@ MODIFIER_HIERARCHY: Dict[str, Any] = {
     # Описания для *каждого* ключа из "items" выше
 
     # --- Lvl 1 (из 'base_stats') ---
-    "strength": {"title": "Сила", "description": "<b>Сила (Strength) [Lvl 1]</b>\n\n(Описание в разработке...)", "data_source": "character_stats", "items": None},
-    "agility": {"title": "Ловкость", "description": "<b>Ловкость (Agility) [Lvl 1]</b>\n\n(Описание в разработке...)", "data_source": "character_stats", "items": None},
-    "endurance": {"title": "Выносливость", "description": "<b>Выносливость (Endurance) [Lvl 1]</b>\n\n(Описание в разработке...)", "data_source": "character_stats", "items": None},
-    "intelligence": {"title": "Интеллект", "description": "<b>Интеллект (Intelligence) [Lvl 1]</b>\n\n(Описание в разработке...)", "data_source": "character_stats", "items": None},
-    "wisdom": {"title": "Мудрость", "description": "<b>Мудрость (Wisdom) [Lvl 1]</b>\n\n(Описание в разработке...)", "data_source": "character_stats", "items": None},
-    "men": {"title": "Дух", "description": "<b>Дух (Men) [Lvl 1]</b>\n\n(Описание в разработке...)", "data_source": "character_stats", "items": None},
-    "perception": {"title": "Восприятие", "description": "<b>Восприятие (Perception) [Lvl 1]</b>\n\n(Описание в разработке...)", "data_source": "character_stats", "items": None},
-    "charisma": {"title": "Харизма", "description": "<b>Харизма (Charisma) [Lvl 1]</b>\n\n(Описание в разработке...)", "data_source": "character_stats", "items": None},
-    "luck": {"title": "Удача", "description": "<b>Удача (Luck) [Lvl 1]</b>\n\n(Описание в разработке...)", "data_source": "character_stats", "items": None},
+    "strength": {"title": "Сила", "description": "<b>Сила (Strength) [Lvl 1]</b>\n\n(Описание в разработке...)",  "items": None},
+    "agility": {"title": "Ловкость", "description": "<b>Ловкость (Agility) [Lvl 1]</b>\n\n(Описание в разработке...)",  "items": None},
+    "endurance": {"title": "Выносливость", "description": "<b>Выносливость (Endurance) [Lvl 1]</b>\n\n(Описание в разработке...)",  "items": None},
+    "intelligence": {"title": "Интеллект", "description": "<b>Интеллект (Intelligence) [Lvl 1]</b>\n\n(Описание в разработке...)",  "items": None},
+    "wisdom": {"title": "Мудрость", "description": "<b>Мудрость (Wisdom) [Lvl 1]</b>\n\n(Описание в разработке...)",  "items": None},
+    "men": {"title": "Дух", "description": "<b>Дух (Men) [Lvl 1]</b>\n\n(Описание в разработке...)",  "items": None},
+    "perception": {"title": "Восприятие", "description": "<b>Восприятие (Perception) [Lvl 1]</b>\n\n(Описание в разработке...)",  "items": None},
+    "charisma": {"title": "Харизма", "description": "<b>Харизма (Charisma) [Lvl 1]</b>\n\n(Описание в разработке...)",  "items": None},
+    "luck": {"title": "Удача", "description": "<b>Удача (Luck) [Lvl 1]</b>\n\n(Описание в разработке...)",  "items": None},
 
     # --- Lvl 2 (из 'resources') ---
     "hp_max": {"title": "Макс. Здоровье", "description": "<b>Макс. Здоровье [Lvl 2]</b>\n\n(Описание в разработке...)", "data_source": "character_modifiers", "items": None},
