@@ -4,8 +4,10 @@ from typing import Tuple
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardMarkup
 
+from app.resources.keyboards.callback_data import MeinMenuCallback
+from app.resources.keyboards.status_callback import StatusNavCallback
 # 1. --- ДОБАВЬ ИМПОРТ StatusNavCallback ---
-from app.resources.keyboards.callback_data import MeinMenuCallback, StatusNavCallback
+
 from app.resources.texts.menu_data.buttons_text import ButtonsTextData
 
 log = logging.getLogger(__name__)

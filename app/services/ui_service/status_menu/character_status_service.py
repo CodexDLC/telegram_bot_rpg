@@ -1,12 +1,21 @@
-# app/services/ui_service/status_menu/character_status_service.py
 import logging
-from typing import Tuple, Optional, Dict, Any
+from typing import Tuple, Optional, Dict, Any, Type
 
+from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.resources.game_data.status_menu.bio_group_data import TABS_NAV_DATA, BIO_HIERARCHY
-from app.resources.keyboards.callback_data import StatusNavCallback
+from app.resources.game_data.status_menu.modifer_group_data import MODIFIER_HIERARCHY
+from app.resources.game_data.status_menu.skill_group_data import SKILL_HIERARCHY
+from app.resources.keyboards.status_callback import (
+    StatusNavCallback,
+    StatusSkillsCallback,
+    StatusModifierCallback
+)
+from app.services.ui_service.base_service import BaseUIService
+from app.services.ui_service.helpers_ui.skill_formatters import SkillFormatters as SkillF
+
 from app.resources.schemas_dto.character_dto import CharacterReadDTO
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.services.ui_service.helpers_ui.status_formatters import StatusFormatter as StatusF
@@ -16,7 +25,7 @@ from database.session import get_async_session
 log = logging.getLogger(__name__)
 
 
-class CharacterMenuUIService:
+class CharacterMenuUIService(BaseUIService):
     """
     Сервис для формирования UI-компонентов меню статуса персонажа.
 
@@ -28,7 +37,7 @@ class CharacterMenuUIService:
             self,
             char_id: int,
             callback_data: StatusNavCallback,
-            state_data: Dict[str, Any],
+            state_data: dict[str, Any],
             syb_name: Optional[str] = None,
     ):
         """
@@ -42,12 +51,14 @@ class CharacterMenuUIService:
                       отображается информация. Если None, используется
                       значение по умолчанию.
         """
-        self.char_id = char_id
+        super().__init__(char_id=char_id, state_data=state_data)
+
         self.actor_name = syb_name or DEFAULT_ACTOR_NAME
         self.status_buttons = TABS_NAV_DATA
-        self.data_lib = BIO_HIERARCHY.get("bio", {})
+        self.data_bio = BIO_HIERARCHY.get("bio", {})
+        self.data_skill = SKILL_HIERARCHY
+        self.data_mod = MODIFIER_HIERARCHY
         self.call_type = callback_data.key
-        self.state_data = state_data
 
         log.debug(
             f"Initialized {self.__class__.__name__} for char_id={char_id}, "
@@ -71,7 +82,7 @@ class CharacterMenuUIService:
         log.debug(f"Формирование сообщения 'Биография' для char_id={self.char_id}.")
 
         # Форматируем основной текст биографии
-        text_formated = self.data_lib.get("description", "Нет данных.").format(
+        text_formated = self.data_bio.get("description", "Нет данных.").format(
             name=character.name,
             gender=character.gender,
             created_at=character.created_at.strftime('%d-%m-%Y %H:%M'),
@@ -87,17 +98,100 @@ class CharacterMenuUIService:
         log.debug(f"Сообщение 'Биография' для char_id={self.char_id} успешно сформировано.")
         return text, kb
 
-    def _status_kb(self) -> InlineKeyboardMarkup:
+    def status_message_skill_message(
+            self,
+            character: CharacterReadDTO
+    ) -> Tuple[str, InlineKeyboardMarkup]:
         """
-        Создает навигационную клавиатуру для меню статуса.
-
-        Содержит кнопки для переключения между вкладками. Кнопка для
-        текущей активной вкладки не создается.
+        Возвращает текст и клавиатуру для отображения групп навыков.
 
         Returns:
-            Готовая навигационная клавиатура.
+            Tuple[str, InlineKeyboardMarkup]: Текст и клавиатура.
+        """
+        log.debug(f"Подготовка сообщения со списком групп навыков для char_id={self.char_id}.")
+        if character is None:
+            log.warning(f"Данные персонажа (character) отсутствуют для char_id={self.char_id}.")
+            return "Ошибка: данные персонажа не найдены.", InlineKeyboardBuilder().as_markup()
+
+        data = self.data_skill.get("skills", {}).get("item", {})  # Добавил {} для безопасности
+        char_name = character.name
+        syb_name = self.actor_name
+
+        text = SkillF.group_skill(data, char_name, syb_name)
+        kb = self._build_group_kb(items=data, callback_factory=StatusSkillsCallback)
+        return text, kb
+
+    def status_message_modifier_message(
+            self,
+            character: CharacterReadDTO
+    ) -> Tuple[str, InlineKeyboardMarkup]:
+
+        data = self.data_mod.get("stats", {}).get("item", {})  # Добавил {} для безопасности
+
+        char_name = character.name
+        syb_name = self.actor_name
+        text = SkillF.group_skill(data, char_name, syb_name)
+        kb = self._build_group_kb(items=data, callback_factory=StatusModifierCallback)
+
+        return text, kb
+
+    # =================================================================
+    # МЕТОДЫ ГЕНЕРАЦИИ КЛАВИАТУР
+    # =================================================================
+
+    def _status_kb(self) -> InlineKeyboardMarkup:
+        """
+        Создает БАЗОВУЮ навигационную клавиатуру (только нижний ряд).
+        Используется там, где нет кнопок групп (например, "Био").
         """
         kb = InlineKeyboardBuilder()
+        log.debug(f"Создание базовой навигационной клавиатуры. Активная вкладка: '{self.call_type}'.")
+
+        buttons_to_add = self._status_buttons()
+        if buttons_to_add:
+            kb.row(*buttons_to_add)
+            log.debug(f"Добавлено {len(buttons_to_add)} навигационных кнопок.")
+
+        return kb.as_markup()
+
+    def _build_group_kb(
+            self,
+            items: Dict[str, str],
+            callback_factory: Type[CallbackData]
+    ) -> InlineKeyboardMarkup:
+        """
+        УНИВЕРСАЛЬНЫЙ метод. Строит клавиатуру с группами (Навыки, Статы).
+
+        Он делает ВСЁ:
+        1. Строит сетку кнопок групп (Навыки или Статы).
+        2. Добавляет нижний ряд навигации.
+        """
+        kb = InlineKeyboardBuilder()
+        log.debug(f"Создание универсальной клавиатуры групп для '{callback_factory.__name__}'.")
+
+        # --- 1. Строим сетку кнопок (Навыки, Статы и т.д.) ---
+        if items:
+            for key, value in items.items():
+                callback_data = callback_factory(
+                    char_id=self.char_id,
+                    level="group",
+                    key=key
+                ).pack()
+                kb.button(text=value, callback_data=callback_data)
+            kb.adjust(2)
+            log.debug(f"Построена сетка из {len(items)} элементов.")
+        else:
+            log.warning(f"Нет 'items' для построения сетки кнопок (char_id={self.char_id}).")
+
+        # --- 2. Добавляем нижний ряд навигации ---
+        buttons_to_add = self._status_buttons()
+        if buttons_to_add:
+            kb.row(*buttons_to_add)
+            log.debug(f"Добавлен навигационный ряд из {len(buttons_to_add)} кнопок.")
+
+        return kb.as_markup()
+
+    def _status_buttons(self):
         log.debug(f"Создание навигационной клавиатуры для меню статуса. Активная вкладка: '{self.call_type}'.")
 
         buttons_to_add = []
@@ -112,36 +206,7 @@ class CharacterMenuUIService:
             ).pack()
             buttons_to_add.append(InlineKeyboardButton(text=value, callback_data=callback_data))
 
-        if buttons_to_add:
-            kb.row(*buttons_to_add)
-            log.debug(f"Добавлено {len(buttons_to_add)} навигационных кнопок.")
-
-        return kb.as_markup()
-
-    def get_message_data(self) -> Optional[Tuple[int, int]]:
-        """
-        Извлекает chat_id и message_id из данных состояния FSM.
-
-        Returns:
-            Кортеж (chat_id, message_id) в случае успеха, иначе None.
-        """
-        message_content = self.state_data.get("message_content")
-        if not message_content:
-            log.warning(f"В FSM state для char_id={self.char_id} отсутствует 'message_content'.")
-            return None
-
-        chat_id = message_content.get("chat_id")
-        message_id = message_content.get("message_id")
-
-        if not chat_id or not message_id:
-            log.warning(
-                f"В 'message_content' для char_id={self.char_id} отсутствует "
-                f"'chat_id' или 'message_id'."
-            )
-            return None
-
-        log.debug(f"Извлечены данные сообщения: chat_id={chat_id}, message_id={message_id}.")
-        return chat_id, message_id
+        return buttons_to_add
 
     async def get_data_service(self) -> Optional[CharacterReadDTO]:
         """

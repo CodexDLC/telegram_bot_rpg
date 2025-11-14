@@ -11,7 +11,7 @@ class SkillFormatters:
     """
 
     @staticmethod
-    def group_skill(data: Dict[str, Dict[str, Any]], char_name: str, actor_name: str) -> Optional[str]:
+    def group_skill(data: Dict[str, str], char_name: str, actor_name: str) -> Optional[str]:
         """
         Форматирует текст для отображения списка групп навыков.
 
@@ -44,8 +44,8 @@ class SkillFormatters:
 
         # --- Строки таблицы ---
         for group_key, group_value in data.items():
-            title = group_value.get("title_ru", "Без имени")
-            skills_count = len(group_value.get("skills", {}))
+            title = group_value
+            skills_count = len(data)
             formatted_lines.append(f"{skills_count:>{number_width}}{separator}{title}")
             log.debug(f"  - Группа '{group_key}': {title}, Навыков: {skills_count}")
 

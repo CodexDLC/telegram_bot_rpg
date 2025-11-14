@@ -4,9 +4,10 @@ from aiogram import Router, F, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
-from app.handlers.callback.ui.status_menu.character_status import status_menu_start_handler
+from app.handlers.callback.ui.status_menu.character_status import show_status_tab_logic
 from app.resources.fsm_states.states import CharacterLobby
 from app.resources.keyboards.callback_data import LobbySelectionCallback
+from app.resources.keyboards.status_callback import StatusNavCallback
 
 from app.services.helpers_module.data_loader_service import load_data_auto
 from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store, fsm_convector
@@ -97,11 +98,11 @@ async def select_character_handler(
         await state.update_data(**fsm_data)
 
         # Вызываем обработчик меню статуса для отображения информации.
-        await status_menu_start_handler(
+        await show_status_tab_logic(
+            char_id=char_id,
             state=state,
             bot=bot,
-            explicit_view_mode="lobby",
-            explicit_char_id=char_id,
+            call=call
         )
     else:
         log.warning(f"У user_id={user.id} нет персонажей, хотя он находится в лобби выбора.")
