@@ -11,9 +11,7 @@ from app.services.helpers_module.DTO_helper import fsm_store
 from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from database.session import get_async_session
-
-# --- ИЗМЕНЕНИЕ: Импортируем оба колбэка ---
-from app.resources.keyboards.callback_data import LobbySelectionCallback, StatusNavCallback
+from app.resources.keyboards.callback_data import LobbySelectionCallback
 
 log = logging.getLogger(__name__)
 
@@ -21,6 +19,9 @@ log = logging.getLogger(__name__)
 class LobbyService:
     """
     Сервис для управления UI-логикой лобби выбора персонажей.
+
+    Инкапсулирует операции, связанные с отображением списка персонажей,
+    созданием клавиатур и взаимодействием с БД для создания персонажей.
     """
 
     def __init__(
@@ -29,19 +30,40 @@ class LobbyService:
             char_id: int = None,
             characters: Optional[List[CharacterReadDTO]] = None,
     ):
+        """
+        Инициализирует сервис лобби.
+
+        Args:
+            user (User): Объект пользователя Telegram.
+            characters (Optional[List[CharacterReadDTO]]): Список DTO персонажей.
+        """
         self.user_id = user.id
         self.characters = characters if characters is not None else []
         self.char_id = char_id if char_id is not None else None
-        log.debug(
-            f"Инициализирован {self.__class__.__name__} для user_id={self.user_id} с {len(self.characters)} персонажами.")
+        log.debug(f"Инициализирован {self.__class__.__name__} для user_id={self.user_id} с {len(self.characters)} персонажами.")
 
     def get_data_lobby_start(self) -> Tuple[str, InlineKeyboardMarkup]:
+        """
+        Подготавливает данные для отображения стартового экрана лобби.
+
+        Returns:
+            Tuple[str, InlineKeyboardMarkup]: Кортеж с текстом и клавиатурой.
+        """
         log.debug(f"Подготовка стартового экрана лобби для user_id={self.user_id}.")
         text = LobbyFormatter.format_character_list(self.characters)
         kb = self._get_character_lobby_kb()
         return text, kb
 
     def _get_character_lobby_kb(self, max_slots: int = 4) -> InlineKeyboardMarkup:
+        """
+        Создает клавиатуру для лобби выбора персонажа.
+
+        Args:
+            max_slots (int): Максимальное количество слотов для персонажей.
+
+        Returns:
+            InlineKeyboardMarkup: Готовая клавиатура для лобби.
+        """
         log.debug(f"Создание клавиатуры лобби для user_id={self.user_id}.")
         kb = InlineKeyboardBuilder()
         lobby_buttons = Buttons.LOBBY_KB_UP
@@ -50,27 +72,23 @@ class LobbyService:
         for i in range(max_slots):
             if i < len(self.characters):
                 char = self.characters[i]
-
-                # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
-                # Кнопка выбора персонажа ("👤 Имя") теперь использует StatusNavCallback
-                # и ведет в тот же хэндлер, что и кнопка "Статус"
-                callback = StatusNavCallback(
-                    key="bio",
+                callback = LobbySelectionCallback(
+                    action="select",
                     char_id=char.character_id
                 )
-
-                text = f"✅ {char.name}" if char.character_id == self.char_id else f"👤 {char.name}"
+                if char.character_id == self.char_id:
+                    text = f"✅ {char.name}"
+                else:
+                    text = f"👤 {char.name}"
                 kb.button(text=text, callback_data=callback.pack())
             else:
-                # --- БЕЗ ИЗМЕНЕНИЙ ---
-                # Кнопка "Создать" по-прежнему использует LobbySelectionCallback
                 callback = LobbySelectionCallback(
                     action="create",
                 )
+                # Если слот пуст, добавляем кнопку создания.
                 kb.button(text=lobby_buttons["create"], callback_data=callback.pack())
         kb.adjust(2, 2)
 
-        # Кнопки "Войти", "Удалить" (в _down_button) также используют LobbySelectionCallback
         buttons = self._down_button()
         for button in buttons:
             kb.row(button)
@@ -79,8 +97,7 @@ class LobbyService:
         return kb.as_markup()
 
     def _down_button(self):
-        # --- БЕЗ ИЗМЕНЕНИЙ ---
-        # Эти кнопки (Войти, Удалить) по-прежнему используют LobbySelectionCallback
+        # Допустим, ты передаешь нужные данные как словарь, где ключ - это action
         lobby_buttons_dawn = Buttons.LOBBY_KB_DOWN
         buttons = []
 
@@ -92,8 +109,18 @@ class LobbyService:
 
         return buttons
 
+
+
     async def create_und_get_character_id(self) -> int:
-        # (Метод без изменений)
+        """
+        Создает "оболочку" персонажа в БД и возвращает его ID.
+
+        "Оболочка" - это минимальная запись, создаваемая до ввода имени/пола.
+        Использует собственную сессию для выполнения этой изолированной операции.
+
+        Returns:
+            int: ID созданного персонажа.
+        """
         log.info(f"Запрос на создание 'оболочки' персонажа для user_id={self.user_id}.")
         dto_object = CharacterShellCreateDTO(user_id=self.user_id)
         async with get_async_session() as session:
@@ -108,10 +135,13 @@ class LobbyService:
                 raise
 
     async def get_fsm_data(self) -> Dict[str, Any]:
-        # (Метод без изменений)
+        """ Собирает данные сервиса для сохранения в FSM"""
         characters = await fsm_store(self.characters)
         return {
             "char_id": self.char_id,
             "characters": characters,
             "user_id": self.user_id
         }
+
+
+
