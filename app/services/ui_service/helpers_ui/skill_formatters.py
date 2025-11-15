@@ -2,6 +2,9 @@
 import logging
 from typing import Any, Dict, List, Optional
 
+from app.resources.schemas_dto.skill import SkillProgressDTO
+from app.services.game_service.skill.calculator_service import SkillCalculatorService as SkillCal
+
 log = logging.getLogger(__name__)
 
 
@@ -64,12 +67,10 @@ class SkillFormatters:
 
     @staticmethod
     def format_skill_list_in_group(
-            data: Dict[str, Dict[str, Any]],
-            group_type: str,
-            char_name: str,
-            actor_name: str,
-            view_mode: str,
-            character_skill: List[Dict[str, Any]]
+            char_id: int,
+            data_group: dict[str: Any],
+            data_skill: list[SkillProgressDTO],
+            actor_name: str
     ) -> Optional[str]:
         """
         Форматирует сообщение со списком навыков в выбранной группе.
@@ -78,62 +79,51 @@ class SkillFormatters:
         текущий прогресс (статус).
 
         Args:
-            data (Dict[str, Dict[str, Any]]): Словарь с данными о группах навыков.
-            group_type (str): Ключ выбранной группы.
-            char_name (str): Имя персонажа.
+            char_id: int: айди персонажа
+            data_group: dict[str: Any] : словарь группы где есть "title", "empty_description","items"
+            data_skill: list[SkillProgressDTO]: Словарь с DTO skill персонажа.
             actor_name (str): Имя "рассказчика".
-            view_mode (str): Режим просмотра ("lobby" или "ingame").
-            character_skill (List[Dict[str, Any]]): Список навыков персонажа из БД.
 
         Returns:
             Optional[str]: Готовый текст сообщения или None в случае ошибки.
         """
-        log.debug(f"Форматирование списка навыков в группе '{group_type}' для персонажа '{char_name}'.")
-        if not data:
+        data_group_items = data_group.get("items")
+
+        log.debug(f"Форматирование списка навыков в группе '{data_group_items}' для персонажа '{char_id}'.")
+        if not data_group_items:
             log.error("Отсутствуют данные о группах навыков для форматирования.")
             return None
 
-        group_dict = data.get(group_type)
-        if not group_dict:
-            log.error(f"Группа '{group_type}' не найдена в данных SKILL_UI_GROUPS_MAP.")
-            return "Ошибка: не найдена указанная группа навыков."
+        if data_skill:
+            # --- Формирование таблицы ---
+            formatted_lines = ["<code>"]
+            formatted_lines.append(f"{'Навык':<25} │ Прогрессия")
+            formatted_lines.append("─" * 37)
 
-        skill_dict = group_dict.get("skills", {})
-        bonus_text = (
-            f"{actor_name}: Выбери навык ниже, чтобы увидеть прогресс, "
-            "детали и изменить состояние."
-        )
+            # Итерируемся по всем возможным навыкам в группе, чтобы сохранить порядок.
+            for skill_dto in data_skill:
+                percentage = SkillCal.get_skill_display_info(skill_dto).percentage
+                skill_name = data_group_items.get(skill_dto.skill_key)
 
-        # --- Формирование таблицы ---
-        formatted_lines = ["<code>"]
-        formatted_lines.append(f"{'Навык':<25} │ Прогрессия")
-        formatted_lines.append("─" * 37)
+                formatted_lines.append(f"{skill_name:<25} │ {percentage}")
+                log.debug(f"  - Навык '{skill_name}': Прогресс '{percentage}'")
 
-        # Создаем словарь для быстрого доступа к прогрессу по ключу навыка.
-        skill_progress_map = {skill["skill_key"]: skill.get('progress_state', 'N/A')
-                              for skill in character_skill}
-        log.debug(f"Карта прогресса навыков для персонажа: {skill_progress_map}")
+            formatted_lines.append("</code>")
+            table_text = "\n".join(formatted_lines)
 
-        # Итерируемся по всем возможным навыкам в группе, чтобы сохранить порядок.
-        for skill_key, skill_name in skill_dict.items():
-            progress = skill_progress_map.get(skill_key, 'Нет')
-            formatted_lines.append(f"{skill_name:<25} │ {progress}")
-            log.debug(f"  - Навык '{skill_name}': Прогресс '{progress}'")
-
-        formatted_lines.append("</code>")
-        table_text = "\n".join(formatted_lines)
+        else:
+            table_text = data_group.get("empty_description", "У тебя пока нет навыков в этой группе.")
 
         # --- Финальный текст сообщения ---
         final_message_text = (
-            f"{actor_name}: В этой группе {len(skill_dict)} навыков.\n"
-            f'{"" if view_mode == "lobby" else bonus_text}\n\n'
+            f"{actor_name}: В этой группе {len(data_skill)} навыков.\n"
             f"<code>"
-            f"<b>Персонаж:</b> {char_name}\n"
-            f"<b>Группа:</b> {group_dict.get('title_ru')}"
+            f"<b>Группа:</b> {data_group.get('title')}"
             f"</code>\n"
             f"{table_text}"
         )
         log.debug(f"Сформирован текст для списка навыков в группе (длина: {len(final_message_text)}).")
+
         return final_message_text
 
     @staticmethod

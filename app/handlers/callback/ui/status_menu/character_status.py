@@ -13,7 +13,7 @@ from app.services.helpers_module.callback_exceptions import UIErrorHandler as Er
 from app.resources.texts.ui_messages import TEXT_AWAIT
 
 # --- ИМПОРТЫ ДЛЯ ГЕНЕРАЦИИ 'text, kb' ---
-from app.services.ui_service.status_menu.character_status_service import CharacterMenuUIService
+from app.services.ui_service.status_menu.status_service import CharacterMenuUIService
 
 log = logging.getLogger(__name__)
 router = Router(name="character_status_menu")

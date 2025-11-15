@@ -38,7 +38,6 @@ class CharacterReadDTO(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-
 class CharacterStatsUpdateDTO(BaseModel):
     """
     DTO для обновления данных.
@@ -54,7 +53,6 @@ class CharacterStatsUpdateDTO(BaseModel):
     perception: int
     charisma: int
     luck: int
-
 
 
 class CharacterStatsReadDTO(CharacterStatsUpdateDTO):

@@ -4,7 +4,6 @@ from typing import Dict, Any
 
 # 1. Импортируем "Мастер-список" вкладок из "Био"
 # (Предполагается, что bio_group_data.py находится в этой же папке)
-from .bio_group_data import TABS_NAV_DATA
 
 log = logging.getLogger(__name__)
 

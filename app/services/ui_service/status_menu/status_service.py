@@ -229,6 +229,7 @@ class CharacterMenuUIService(BaseUIService):
                 else:
                     log.warning(f"Персонаж с char_id={self.char_id} не найден в БД.")
                     return None
+
         except Exception as e:
             log.error(f"Ошибка при получении данных для char_id={self.char_id}: {e}", exc_info=True)
             raise

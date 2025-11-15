@@ -3,7 +3,6 @@ import logging
 from typing import List, Dict, Optional
 
 from sqlalchemy import select, update
-from sqlalchemy.types import Boolean
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 # ИСПРАВЛЕНО: Импортируем диалект SQLite

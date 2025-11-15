@@ -25,6 +25,7 @@ class SkillProgressDTO(BaseModel):
     character_id: int
     skill_key: str
     total_xp: int
+    is_unlocked: bool
 
     progress_state: SkillProgressState
 

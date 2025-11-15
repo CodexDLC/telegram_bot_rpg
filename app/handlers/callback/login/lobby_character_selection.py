@@ -7,7 +7,7 @@ from aiogram.types import CallbackQuery
 from app.handlers.callback.ui.status_menu.character_status import show_status_tab_logic
 from app.resources.fsm_states.states import CharacterLobby
 from app.resources.keyboards.callback_data import LobbySelectionCallback
-from app.resources.keyboards.status_callback import StatusNavCallback
+
 
 from app.services.helpers_module.data_loader_service import load_data_auto
 from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store, fsm_convector
