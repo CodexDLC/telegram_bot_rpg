@@ -187,7 +187,7 @@ class TutorialServiceSkills:
         if self.phase == "step_1":
             log.debug("Processing 'step_1'.")
             data = self._get_branch_step1(branch=self.branch, phase=self.phase)
-            self._add_skill_db(value=TUTORIAL_PHASE_SKILL.get(self.phase))
+            self._add_skill_db(value=TUTORIAL_PHASE_SKILL.get(self.branch))
             text = data.get("text")
             kb = self._step_inline_kb(data.get("buttons"))
             return text, kb
