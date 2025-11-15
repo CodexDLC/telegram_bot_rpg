@@ -29,7 +29,7 @@ class CharacterSkillStatusService(BaseUIService):
 
     def __init__(self,
                  char_id: int,
-                 callback_data: StatusSkillsCallback,
+                 key: str,
                  state_data: Dict[str, Any],
                  syb_name: Optional[str] = None,
                  ):
@@ -43,8 +43,7 @@ class CharacterSkillStatusService(BaseUIService):
         else:
             self.actor_name = syb_name
         self.data_skills = SKILL_HIERARCHY
-        self.call_type = callback_data.key
-        self.data_group = self.data_skills.get(self.call_type)
+        self.data_group = self.data_skills.get(key)
         self.state_data = state_data
         log.debug(f"Инициализирован {self.__class__.__name__} для char_id={char_id}.")
 

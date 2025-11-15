@@ -102,7 +102,8 @@ async def select_character_handler(
             char_id=char_id,
             state=state,
             bot=bot,
-            call=call
+            call=call,
+            key="bio"
         )
     else:
         log.warning(f"У user_id={user.id} нет персонажей, хотя он находится в лобби выбора.")

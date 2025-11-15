@@ -45,9 +45,6 @@ async def show_status_tab_logic(
     # --- 1. ОБЩАЯ ЛОГИКА: Инициализация ---
     state_data = await state.get_data()
 
-    # Ставим "заглушку" о загрузке
-    await call.message.edit_text(TEXT_AWAIT, parse_mode="html")
-
     callback_for_service = StatusNavCallback(key=key, char_id=char_id)
 
     try:
