@@ -8,7 +8,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 
 from app.resources.texts.buttons_callback import GameStage
-from app.resources.texts.game_messages.tutorial_messages_skill import TUTORIAL_SKILL_EVENTS, TUTORIAL_SKILL_FINALE
+from app.resources.texts.game_messages.tutorial_messages_skill import TUTORIAL_SKILL_EVENTS, TUTORIAL_SKILL_FINALE, \
+    TUTORIAL_PHASE_SKILL
 from app.resources.keyboards.callback_data import TutorialQuestCallback, LobbySelectionCallback
 from database.repositories import SkillProgressRepo, CharactersRepoORM
 from database.session import get_async_session
@@ -55,7 +56,7 @@ class TutorialServiceSkills:
             f"phase='{self.phase}', branch='{self.branch}', value='{self.value}'"
         )
 
-    def _add_skill_db(self):
+    def _add_skill_db(self, value: str = None):
         """
         Добавляет выбранный навык в базу данных навыков персонажа.
 
@@ -63,12 +64,15 @@ class TutorialServiceSkills:
         добавляет в него текущее значение (`self.value`), которое представляет
         собой выбор пользователя на данном шаге. Навыки "none" не добавляются.
         """
-        if self.skills_db is not None and self.value and self.value != "none":
-            log.debug(f"Adding skill '{self.value}' to skills_db.")
-            self.skills_db.append(self.value)
+        if value is None:
+            value = self.value
+
+        if self.skills_db is not None and value and value != "none":
+            log.debug(f"Adding skill '{value}' to skills_db.")
+            self.skills_db.append(value)
             log.debug(f"skills_db is now: {self.skills_db}")
         else:
-            log.debug(f"Skipped adding skill. skills_db is None or value is '{self.value}'.")
+            log.debug(f"Skipped adding skill. skills_db is None or value is '{value}'.")
 
     def get_skills_db(self) -> List[str]:
         """
@@ -178,11 +182,12 @@ class TutorialServiceSkills:
         """
         log.debug(f"Getting next data for state: phase='{self.phase}', branch='{self.branch}', value='{self.value}'")
 
-        self._add_skill_db()
+
 
         if self.phase == "step_1":
             log.debug("Processing 'step_1'.")
             data = self._get_branch_step1(branch=self.branch, phase=self.phase)
+            self._add_skill_db(value=TUTORIAL_PHASE_SKILL.get(self.phase))
             text = data.get("text")
             kb = self._step_inline_kb(data.get("buttons"))
             return text, kb
@@ -190,6 +195,7 @@ class TutorialServiceSkills:
         elif self.phase == "step_2":
             log.debug("Processing 'step_2'.")
             data = self._get_branch_step2(branch=self.branch, phase=self.phase, value=self.value)
+            self._add_skill_db()
             text = data.get("text")
             kb = self._step_inline_kb(data.get("buttons"))
             return text, kb
@@ -197,6 +203,7 @@ class TutorialServiceSkills:
         elif self.phase == "step_3":
             log.debug("Processing 'step_3'.")
             data = self._get_branch_step2(branch=self.branch, phase=self.phase, value=self.value)
+            self._add_skill_db()
             text_or_list: list[tuple[str, float]] = data.get("combat_log")
             kb = self._step_inline_kb(data.get("buttons"))
             return text_or_list, kb
@@ -204,6 +211,7 @@ class TutorialServiceSkills:
         elif self.phase == "finale":
             log.debug("Processing 'finale'.")
             data = self._get_branch_step1(branch=self.phase, phase=self.value)
+            self._add_skill_db()
             text = data.get("text")
             kb = self._step_inline_kb(data.get("buttons"))
             return text, kb
@@ -211,6 +219,7 @@ class TutorialServiceSkills:
         elif self.phase == "p_end":
             log.debug("Processing 'p_end'.")
             data = self._get_branch_step1(branch=self.phase, phase=self.value)
+            self._add_skill_db()
             text = data.get("text")
             kb = self._step_inline_kb(data.get("buttons"))
             return text, kb

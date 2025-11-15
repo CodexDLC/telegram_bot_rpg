@@ -113,11 +113,13 @@ class CharacterMenuUIService(BaseUIService):
             log.warning(f"Данные персонажа (character) отсутствуют для char_id={self.char_id}.")
             return "Ошибка: данные персонажа не найдены.", InlineKeyboardBuilder().as_markup()
 
-        data = self.data_skill.get("skills", {}).get("item", {})  # Добавил {} для безопасности
+        data_skills = self.data_skill.get("skills")
+        data = data_skills.get("items")
+
         char_name = character.name
         syb_name = self.actor_name
 
-        text = SkillF.group_skill(data, char_name, syb_name)
+        text = SkillF.group_skill(data=data, char_name=char_name, actor_name=syb_name)
         kb = self._build_group_kb(items=data, callback_factory=StatusSkillsCallback)
         return text, kb
 

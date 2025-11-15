@@ -58,15 +58,19 @@ async def show_status_tab_logic(
         await Err.handle_exception(call, "Ошибка при инициализации интерфейса.")
         return
 
-    # --- 4. ОБЩАЯ ЛОГИКА: Получение `message_data` ---
     message_data = ui_service.get_message_data()
-    if not message_data:
-        log.warning(f"Не удалось получить chat_id/message_id для user {user_id}.")
-        await Err.message_content_not_found_in_fsm(call)
-        return
-    chat_id, message_id = message_data
+    chat_id, message_id = None, None
+
+    if message_data:
+        chat_id, message_id = message_data
+    else:
+        # Мы НЕ падаем. Мы просто логируем.
+        log.warning(f"User {user_id}: message_content не найден. Будет создано новое сообщение.")
+        # И запоминаем chat_id для отправки нового сообщения
+        chat_id = call.message.chat.id
 
     character = await ui_service.get_data_service()
+
     if not character:
         log.warning(f"Персонаж с char_id={char_id} не найден для user {user_id}.")
         await Err.handle_exception(call, "Не удалось найти данные персонажа.")
@@ -103,19 +107,39 @@ async def show_status_tab_logic(
         return
 
     # --- 6. ОБЩАЯ ЛОГИКА: Отправка сообщения ---
-    await await_min_delay(start_time, min_delay=0.5)
-
     try:
-        await bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=message_id,
-            text=text,
-            parse_mode='HTML',
-            reply_markup=kb
-        )
+        if message_id is None:
+            # СЛУЧАЙ ЛОББИ (message_content не было)
+            log.debug(f"User {user_id}: Создание нового message_content...")
+
+            # 1. Отправляем СРАЗУ готовый 'bio' (а не заглушку)
+            msg = await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode='HTML',
+                reply_markup=kb
+            )
+
+            # 2. Сохраняем ID НОВОГО сообщения в FSM
+            new_content = {"chat_id": msg.chat.id, "message_id": msg.message_id}
+            await state.update_data(message_content=new_content)
+            log.info(f"User {user_id}: Создано message_content (id: {msg.message_id}) и сохранено в FSM.")
+
+        else:
+            # ОБЫЧНЫЙ СЛУЧАЙ (нажатие на 'skills' или 'stats')
+            log.debug(f"User {user_id}: Редактирование message_content (id: {message_id}).")
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                parse_mode='HTML',
+                reply_markup=kb
+            )
+
         log.info(f"Сообщение для вкладки '{key}' (char_id={char_id}) успешно обновлено для user {user_id}.")
+
     except Exception as e:
-        log.error(f"Ошибка при *отправке* сообщения для user {user_id}: {e}", exc_info=True)
+        log.error(f"Ошибка при *отправке/редактировании* сообщения для user {user_id}: {e}", exc_info=True)
 
 
 # =================================================================

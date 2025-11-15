@@ -122,7 +122,7 @@ class CharacterSkillStatusService(BaseUIService):
         try:
             async with get_async_session() as session:
                 skill_progress = get_skill_progress_repo(session)
-                skills_data = skill_progress.get_all_skills_progress(character_id=self.char_id)
+                skills_data = await skill_progress.get_all_skills_progress(character_id=self.char_id)
                 if skills_data:
                     log.debug(f"")
                     return skills_data

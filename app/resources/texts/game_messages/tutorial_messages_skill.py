@@ -16,7 +16,17 @@
 # (v4.1 - ТЕКСТ ПЕРЕПИСАН НА БОЛЕЕ АТМОСФЕРНЫЙ)
 #
 
+TUTORIAL_PHASE_SKILL = {
+    "path_melee": "melee_combat",
+    "path_ranged": "ranged_combat",
+    "path_magic": "magic_weapons"
+}
+
+
+
 TUTORIAL_SKILL_EVENTS = {
+
+
 
     # --- 1. ФАЗА СКИЛЛОВ (Начало) ---
     "start_skill_phase": {

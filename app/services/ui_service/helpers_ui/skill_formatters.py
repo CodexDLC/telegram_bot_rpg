@@ -31,6 +31,7 @@ class SkillFormatters:
             Optional[str]: Готовый текст сообщения или None в случае ошибки.
         """
         log.debug(f"Форматирование списка групп навыков для персонажа '{char_name}'.")
+
         if not data:
             log.error("Отсутствуют данные о группах навыков для форматирования.")
             return None
