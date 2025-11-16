@@ -15,6 +15,8 @@ from .commands import router as command_router
 from .common_fsm_handlers import router as common_fsm_router
 
 
+from .bug_report import router as bug_report_router
+
 router = Router()
 
 
@@ -30,5 +32,6 @@ router.include_routers(
     status_character_skill_router,
     logout_router,
     status_character_modifier_router,
+    bug_report_router,
     common_fsm_router
 )

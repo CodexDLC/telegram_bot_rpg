@@ -9,11 +9,12 @@ from aiogram.types import Message, ReplyKeyboardRemove
 
 # Импорты для кнопок
 from app.resources.keyboards.reply_kb import (
-    RESTART_BUTTON_TEXT, SETTINGS_BUTTON_TEXT, BUG_REPORT_BUTTON_TEXT
+    RESTART_BUTTON_TEXT, SETTINGS_BUTTON_TEXT
 )
 from app.resources.keyboards.inline_kb.loggin_und_new_character import get_start_adventure_kb
 from app.resources.texts.ui_messages import START_GREETING
 from app.services.ui_service.command_service import CommandService
+from app.services.ui_service.helpers_ui.message_info_formatter import MessageInfoFormatter
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.base_service import BaseUIService
 
@@ -99,6 +100,11 @@ async def cmd_start(m: Message, state: FSMContext, bot: Bot) -> None:
         log.warning(f"Не удалось удалить сообщение /start для user_id={user.id}: {e}")
 
 
+
+
+
+
+
 # =================================================================
 # --- 2. ХЭНДЛЕРЫ REPLY-КНОПОК (Заглушки и Рестарт) ---
 # =================================================================
@@ -128,23 +134,6 @@ async def handle_settings_button(m: Message):
 
     await m.answer(
         "⚠️ Меню настроек находится в разработке.",
-    )
-
-
-@router.message(F.text == BUG_REPORT_BUTTON_TEXT)
-async def handle_bug_report_button(m: Message):
-    """
-    ОБРАБАТЫВАЕТ КНОПКУ "Сообщить об ошибке".
-    (Заглушка)
-    """
-    log.info(f"User {m.from_user.id} нажал Reply-кнопку 'Баг-репорт'. (Заглушка)")
-    try:
-        await m.delete()  # Удаляем сообщение с текстом "🐞 Сообщить об ошибке"
-    except Exception:
-        pass
-
-    await m.answer(
-        "⚠️ Система баг-репортов находится в разработке."
     )
 
 
@@ -193,3 +182,20 @@ async def cmd_help(m: Message) -> None:
         "⚠️ Раздел помощи находится в разработке.",
     )
 
+
+@router.message(Command("get_data_message"))
+async def cmd_get_data_message(m: Message, state: FSMContext, bot: Bot) -> None:
+    """Получить полную информацию о сообщении"""
+    if not m.from_user:
+        await m.answer("⚠️ Не удалось получить информацию о пользователе")
+        return
+
+    formatted_info = MessageInfoFormatter.format_full_info(m)
+    await m.answer(formatted_info, parse_mode="HTML")
+
+
+@router.message(Command("get_ids"))
+async def cmd_get_ids(m: Message, state: FSMContext, bot: Bot) -> None:
+    """Получить только ID (для быстрого копирования)"""
+    formatted_info = MessageInfoFormatter.format_chat_ids_only(m)
+    await m.answer(formatted_info, parse_mode="HTML")
