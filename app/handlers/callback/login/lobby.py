@@ -8,10 +8,10 @@ from aiogram.types import CallbackQuery
 from app.handlers.callback.login.char_creation import start_creation_handler
 from app.resources.fsm_states.states import CharacterLobby
 from app.resources.keyboards.callback_data import LobbySelectionCallback
-from app.services.helpers_module.data_loader_service import load_data_auto
+
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.lobbyservice import LobbyService
-from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
+from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 
 
 router = Router(name="login_lobby_router")
@@ -45,11 +45,11 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
 
     # Загружаем данные о персонажах пользователя.
     log.debug(f"Загрузка персонажей для user_id={user.id}")
-    characters_data = await load_data_auto(["characters"], user_id=user.id)
-    character_list = characters_data.get("characters")
-    log.debug(f"Найдено {len(character_list) if character_list else 0} персонажей.")
+    lobby_service = LobbyService(user=user, state_data=await state.get_data())
 
-    lobby_service = LobbyService(characters=character_list, user=user)
+    character_list = await lobby_service.get_data_characters()
+
+    log.debug(f"Получены персонажи: {character_list}")
 
     if character_list:
         # Если у пользователя есть персонажи, показываем лобби.
@@ -74,7 +74,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
         char_id = await lobby_service.create_und_get_character_id()
         if not char_id:
             log.error(f"Не удалось создать 'оболочку' персонажа для user_id={user.id}")
-            await ERR.invalid_id(call=call)
+            await Err.invalid_id(call=call)
             return
 
         # Передаем управление обработчику создания персонажа.
@@ -115,7 +115,7 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
     char_id = await lobby_service.create_und_get_character_id()
     if not char_id:
         log.error(f"Не удалось создать 'оболочку' персонажа для user_id={user_id} из лобби.")
-        await ERR.invalid_id(call=call)
+        await Err.invalid_id(call=call)
         return
 
     # Передаем управление основному обработчику создания персонажа.

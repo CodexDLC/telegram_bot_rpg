@@ -38,7 +38,7 @@ async def show_status_tab_logic(
     3. Вызывает *разную* логику (if/elif) для генерации `text` и `kb`.
     4. Отправляет *общее* сообщение `bot.edit_message_text`.
     """
-    start_time = time.monotonic()
+
     user_id = call.from_user.id
     log.info(f"User {user_id}: Запуск `_show_status_tab_logic` для char_id={char_id}, key='{key}'.")
 
@@ -58,7 +58,7 @@ async def show_status_tab_logic(
         await Err.handle_exception(call, "Ошибка при инициализации интерфейса.")
         return
 
-    message_data = ui_service.get_message_data()
+    message_data = ui_service.get_message_content_data()
     chat_id, message_id = None, None
 
     if message_data:
@@ -128,6 +128,7 @@ async def show_status_tab_logic(
         else:
             # ОБЫЧНЫЙ СЛУЧАЙ (нажатие на 'skills' или 'stats')
             log.debug(f"User {user_id}: Редактирование message_content (id: {message_id}).")
+
             await bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,

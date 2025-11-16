@@ -61,7 +61,7 @@ async def character_skill_group_handler(
 
         text, kb = char_skill_ser.status_group_skill_message(character_skills=skills_data)
 
-        message_data = char_skill_ser.get_message_data()
+        message_data = char_skill_ser.get_message_content_data()
         chat_id, message_id = message_data
 
         await await_min_delay(start_time, min_delay=0.5)
@@ -134,7 +134,7 @@ async def character_skill_detail_handler(call: CallbackQuery, state: FSMContext,
             skills_dto=skills_data
         )
 
-        message_data = char_skill_ser.get_message_data()
+        message_data = char_skill_ser.get_message_content_data()
         chat_id, message_id = message_data
 
         await await_min_delay(start_time, min_delay=0.5)

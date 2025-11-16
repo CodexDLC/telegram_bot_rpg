@@ -135,3 +135,45 @@ class ModifierFormatters:
         )
 
         return text
+
+    @staticmethod
+    def format_modifier_detail(
+            data: Dict[str, Any],  # Данные из MODIFIER_HIERARCHY
+            value: Any,  # Значение (e.g., 5.25 или 150)
+            key: str,  # Ключ (e.g., "energy_regen")
+            actor_name: str
+    ) -> Optional[str]:
+        """
+        Форматирует "карточку" (Lvl 2) для конкретного модификатора.
+        """
+        if not data:
+            log.error("Отсутствуют данные (data) для форматирования Lvl 2.")
+            return None
+
+        # 1. Берем данные из MODIFIER_HIERARCHY
+        title = data.get("title", "...")
+        description = data.get("description", "...")
+
+        # 2. Форматируем значение (проверяем, нужно ли ставить %)
+        if key in PERCENT_KEYS and isinstance(value, (float, int)):
+            formatted_value = f"{value * 100:.2f}%"
+        elif isinstance(value, float):
+            formatted_value = f"{value:.2f}"
+        else:
+            formatted_value = str(value)
+
+        # 3. Собираем текст карточки
+        # (Пока что тут только "Итого", в будущем добавишь "База", "От шмота"...)
+        text = (
+            f"<b>{title}</b>\n\n"
+            f"<i>{actor_name}: {description}</i>\n\n"
+            f"<b>Расчет:</b>\n"
+            f"<code>"
+            f"├ (От статов):     (скоро)\n"
+            f"├ (От экипировки): (скоро)\n"
+            f"├ (От эффектов):   (скоро)\n"
+            f"</code>\n"
+            f"Итого: <b>{formatted_value}</b>"
+        )
+
+        return text

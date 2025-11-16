@@ -40,7 +40,7 @@
 
 - **Фреймворк Бота:** `aiogram 3.x`
     
-- **База Данных:** `SQLite` (через `aiosqlite`)
+- **База Данных:** SQLite` (через `aiosqlite`) для разработки и тестирования, с `PostgreSQL` в качестве production-цели.`
     
 - **ORM:** `SQLAlchemy 2.x` (Асинхронный)
     

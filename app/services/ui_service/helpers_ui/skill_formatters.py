@@ -88,16 +88,36 @@ class SkillFormatters:
 
         if data_skill:
             # --- Формирование таблицы ---
+
+            # 1. Задаем ширину (как в Модификаторах)
+            value_width = 8  # 8 хватит для "100.00%"
+            title_width = 24
+            separator = " | "
+
             formatted_lines = ["<code>"]
-            formatted_lines.append(f"{'Навык':<25} │ %")
-            formatted_lines.append("─" * 28)
+            # 2. Меняем заголовок (Значение | Название)
+            formatted_lines.append(f"{'Прогресс':>{value_width}}{separator}{'Навык':<{title_width}}")
+            formatted_lines.append("─" * 35)  # Чуть длиннее из-за separator
 
             for skill_dto in data_skill:
+                # 3. Получаем процент и форматируем его
                 percentage = SkillCal.get_skill_display_info(skill_dto).percentage
-                skill_name = data_group_items.get(skill_dto.skill_key, "Неизвестный навык")
+                formatted_value = f"{percentage:.2f}%"
 
-                formatted_lines.append(f"{skill_name:<25} │ {percentage}")
-                log.debug(f"  - Навык '{skill_name}': Прогресс '{percentage}'")
+                # 4. Выравниваем значение СПРАВА (как в Модификаторах)
+                formatted_val_str = f"{formatted_value:>{value_width}}"
+
+                # 5. Получаем и форматируем Название СЛЕВА (как в Модификаторах)
+                skill_name = data_group_items.get(skill_dto.skill_key, "Неизвестный навык")
+                if len(skill_name) > title_width:
+                    formatted_title = skill_name[:(title_width - 3)] + "..."
+                else:
+                    formatted_title = f"{skill_name:<{title_width}}"  # Выравниваем слева
+
+                # 6. Собираем строку: ЗНАЧЕНИЕ | НАЗВАНИЕ
+                formatted_lines.append(f"{formatted_val_str}{separator}{formatted_title}")
+
+                log.debug(f"  - Навык '{skill_name}': Прогресс '{formatted_value}'")
 
             formatted_lines.append("</code>")
             table_text = "\n".join(formatted_lines)
@@ -106,10 +126,12 @@ class SkillFormatters:
 
         # --- Финальный текст сообщения ---
         final_message_text = (
-            f"{actor_name}: В этой группе {len(data_skill)} доступных навыков.\n"
+            f"{actor_name}: ❗ Инициация данных\n\n"
+            f"{actor_name}: Вывожу данные о ваших навыках в группе.\n"
+            f"\n"
             f"<code>"
             f"<b>Группа:</b> {group_title}"
-            f"</code>\n"
+            f"</code>\n"      
             f"{table_text}"
         )
         log.debug(f"Сформирован текст для списка навыков в группе '{group_title}' (длина: {len(final_message_text)}).")

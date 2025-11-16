@@ -1,4 +1,5 @@
 # app/services/ui_service/lobbyservice.py
+
 from loguru import logger as log
 from typing import Optional, List, Tuple, Dict, Any
 
@@ -8,13 +9,15 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterShellCreateDTO
 from app.resources.texts.buttons_callback import Buttons
 from app.services.helpers_module.DTO_helper import fsm_store
+from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
+from database.repositories import get_character_repo
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from database.session import get_async_session
 from app.resources.keyboards.callback_data import LobbySelectionCallback
 
 
-class LobbyService:
+class LobbyService(BaseUIService):
     """
     Сервис для управления UI-логикой лобби выбора персонажей.
 
@@ -22,25 +25,32 @@ class LobbyService:
     созданием клавиатур и взаимодействием с БД для создания персонажей.
     """
 
-    def __init__(
-            self,
-            user: User,
-            char_id: int = None,
-            characters: Optional[List[CharacterReadDTO]] = None,
-    ):
+    def __init__(self,
+                 user: User,
+                 state_data: Dict[str, Any],  # Теперь state_data обязателен
+                 char_id: int = None,
+                ):
         """
         Инициализирует сервис лобби.
-
-        Args:
-            user (User): Объект пользователя Telegram.
-            characters (Optional[List[CharacterReadDTO]]): Список DTO персонажей.
         """
-        self.user_id = user.id
-        self.characters = characters if characters is not None else []
-        self.char_id = char_id if char_id is not None else None
-        log.debug(f"Инициализирован {self.__class__.__name__} для user_id={self.user_id} с {len(self.characters)} персонажами.")
 
-    def get_data_lobby_start(self) -> Tuple[str, InlineKeyboardMarkup]:
+        safe_state_data = state_data
+
+        safe_char_id = char_id or 0
+
+        super().__init__(safe_char_id, safe_state_data)
+
+        # А уже ПОСЛЕ этого устанавливаем свои свойства
+        self.user_id = user.id
+        self.char_id = char_id  # self.char_id МОЖЕТ быть None, это нормально
+
+        log.debug(
+            f"Инициализирован {self.__class__.__name__} для user_id={self.user_id}.")
+
+    def get_data_lobby_start(
+            self,
+            characters: Optional[List[CharacterReadDTO]] = None
+    ) -> Tuple[str, InlineKeyboardMarkup]:
         """
         Подготавливает данные для отображения стартового экрана лобби.
 
@@ -48,11 +58,14 @@ class LobbyService:
             Tuple[str, InlineKeyboardMarkup]: Кортеж с текстом и клавиатурой.
         """
         log.debug(f"Подготовка стартового экрана лобби для user_id={self.user_id}.")
-        text = LobbyFormatter.format_character_list(self.characters)
-        kb = self._get_character_lobby_kb()
+        text = LobbyFormatter.format_character_list(characters)
+        kb = self._get_character_lobby_kb(characters)
         return text, kb
 
-    def _get_character_lobby_kb(self, max_slots: int = 4) -> InlineKeyboardMarkup:
+    def _get_character_lobby_kb(
+            self,
+            characters: Optional[List[CharacterReadDTO]],
+            max_slots: int = 4) -> InlineKeyboardMarkup:
         """
         Создает клавиатуру для лобби выбора персонажа.
 
@@ -68,8 +81,8 @@ class LobbyService:
 
         # Создаем кнопки для существующих персонажей.
         for i in range(max_slots):
-            if i < len(self.characters):
-                char = self.characters[i]
+            if i < len(characters):
+                char = characters[i]
                 callback = LobbySelectionCallback(
                     action="select",
                     char_id=char.character_id
@@ -132,9 +145,24 @@ class LobbyService:
                 await session.rollback()
                 raise
 
-    async def get_fsm_data(self) -> Dict[str, Any]:
+    async def get_data_characters(self):
+
+        try:
+            async with get_async_session() as session:
+                char_repo = get_character_repo(session)
+                character = await char_repo.get_characters(self.user_id)
+                if character:
+                    return character
+                else:
+                    return None
+        except Exception as e:
+            log.exception(f"Ошибка при получении списка персонажей для user_id={self.user_id}: {e}")
+
+
+
+    async def get_fsm_data(self, characters_dto: List[CharacterReadDTO]) -> Dict[str, Any]:
         """ Собирает данные сервиса для сохранения в FSM"""
-        characters = await fsm_store(self.characters)
+        characters = await fsm_store(characters_dto)
         return {
             "char_id": self.char_id,
             "characters": characters,

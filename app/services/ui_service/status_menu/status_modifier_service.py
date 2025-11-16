@@ -1,6 +1,6 @@
 # app/services/ui_service/status_menu/status_modifier_service.py
 from loguru import logger as log
-from typing import Tuple, Optional, Dict, Any, Type
+from typing import Tuple, Optional, Dict, Any, Type, Union
 
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -91,6 +91,62 @@ class CharacterModifierUIService(BaseUIService):
             InlineKeyboardButton(text="[ ◀️ Назад к модификаторам ]", callback_data=back_callback)
         )
         return kb.as_markup()
+
+    def status_detail_modifier_message(
+            self,
+            dto_to_use: Union[CharacterStatsReadDTO, CharacterModifiersDTO],
+            group_key: str | None
+    ) -> Tuple[str, InlineKeyboardMarkup]:
+        """
+        Формирует сообщение с детальной информацией (карточкой) о модификаторе.
+
+        :param dto_to_use: DTO, из которого нужно извлечь значение.
+        :param group_key: Ключ родительской группы (нужен для кнопки "Назад").
+        :return: Кортеж с текстом сообщения и клавиатурой.
+        """
+        if not group_key:
+            log.warning(f"Отсутствует group_key {group_key}")
+
+        log.debug(f"Формирование Lvl 2 (детали) для ключа '{self.key}' (группа '{group_key}')")
+
+        # 1. Получаем значение (e.g., 5.25) из DTO
+        value = getattr(dto_to_use, self.key, "N/A")
+
+        # 2. Вызываем новый форматтер
+        text = ModifierF.format_modifier_detail(
+            data=self.data_group,  # self.data_group - это уже данные на self.key
+            value=value,
+            key=self.key,
+            actor_name=self.actor_name
+        )
+
+        # 3. Создаем клавиатуру (только кнопка "Назад")
+        kb = self._detail_modifier_kb(group_key=group_key)
+
+        return text, kb
+
+    def _detail_modifier_kb(self, group_key: str) -> InlineKeyboardMarkup:
+        """
+        Создает клавиатуру для детального просмотра (Lvl 2) - только "Назад".
+
+        :param group_key: Ключ группы (Lvl 1), к которой нужно вернуться.
+        :return: Объект клавиатуры.
+        """
+        kb = InlineKeyboardBuilder()
+
+        # Кнопка "Назад" для возврата к списку модификаторов в группе (Lvl 1)
+        # Мы используем group_key, чтобы вернуться в "base_stats" или "resources"
+        back_callback = StatusModifierCallback(
+            char_id=self.char_id,
+            level="group",
+            key=group_key,
+        ).pack()
+
+        kb.row(
+            InlineKeyboardButton(text="[ ◀️ Назад к группе ]", callback_data=back_callback)
+        )
+        return kb.as_markup()
+
 
     async def get_data_modifier(self)-> CharacterModifiersDTO | None:
 
