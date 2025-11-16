@@ -2,12 +2,12 @@
 from abc import abstractmethod, ABC
 from typing import Optional, Dict, Any
 
-from app.resources.schemas_dto.modifer_dto import CharacterModifiersDto, CharacterModifiersSaveDto
+from app.resources.schemas_dto.modifer_dto import CharacterModifiersDTO, CharacterModifiersSaveDto
 
 class ICharacterModifiersRepo(ABC):
 
     @abstractmethod
-    async def get_modifiers(self, character_id: int) -> Optional[CharacterModifiersDto]:
+    async def get_modifiers(self, character_id: int) -> Optional[CharacterModifiersDTO]:
         """
         Получает ВСЕ модификаторы (DTO для чтения) для одного персонажа.
         """

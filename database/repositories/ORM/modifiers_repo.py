@@ -6,7 +6,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.resources.schemas_dto.modifer_dto import CharacterModifiersDto, CharacterModifiersSaveDto
+from app.resources.schemas_dto.modifer_dto import CharacterModifiersDTO, CharacterModifiersSaveDto
 from database.db_contract.i_modifiers_repo import ICharacterModifiersRepo
 from database.model_orm import CharacterModifiers
 
@@ -18,7 +18,7 @@ class CharacterModifiersRepo(ICharacterModifiersRepo):
         self.session = session
 
 
-    async def get_modifiers(self, character_id: int) -> Optional[CharacterModifiersDto]:
+    async def get_modifiers(self, character_id: int) -> Optional[CharacterModifiersDTO]:
         """
         Получает ВСЕ модификаторы (DTO для чтения) для одного персонажа.
         """
@@ -30,7 +30,7 @@ class CharacterModifiersRepo(ICharacterModifiersRepo):
 
             if orm_modifiers:
                 log.debug(f"Модификаторы для character_id={character_id} найдены.")
-                return CharacterModifiersDto.model_validate(orm_modifiers)
+                return CharacterModifiersDTO.model_validate(orm_modifiers)
             log.debug(f"Модификаторы для character_id={character_id} не найдены.")
             return None
         except SQLAlchemyError as e:

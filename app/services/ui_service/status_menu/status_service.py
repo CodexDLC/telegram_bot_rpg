@@ -19,6 +19,7 @@ from app.services.ui_service.helpers_ui.skill_formatters import SkillFormatters 
 from app.resources.schemas_dto.character_dto import CharacterReadDTO
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.services.ui_service.helpers_ui.status_formatters import StatusFormatter as StatusF
+from app.services.ui_service.helpers_ui.status_modiier_formatters import ModifierFormatters as ModifierF
 from database.repositories import get_character_repo
 from database.session import get_async_session
 
@@ -128,11 +129,11 @@ class CharacterMenuUIService(BaseUIService):
             character: CharacterReadDTO
     ) -> Tuple[str, InlineKeyboardMarkup]:
 
-        data = self.data_mod.get("stats", {}).get("item", {})  # Добавил {} для безопасности
+        data = self.data_mod.get("stats", {}).get("items", {})
 
         char_name = character.name
         syb_name = self.actor_name
-        text = SkillF.group_skill(data, char_name, syb_name)
+        text = ModifierF.group_modifier(data, char_name, syb_name)
         kb = self._build_group_kb(items=data, callback_factory=StatusModifierCallback)
 
         return text, kb

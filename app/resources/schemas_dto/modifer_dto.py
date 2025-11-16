@@ -4,7 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 
-class CharacterModifiersDto(BaseModel):
+class CharacterModifiersDTO(BaseModel):
     """
     DTO для модели CharacterModifiers.
 

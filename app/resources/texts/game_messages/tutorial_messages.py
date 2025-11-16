@@ -1,5 +1,5 @@
 # app/resources/texts/game_messages/tutorial_messages.py
-from typing import Dict, List, Any, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 # --- Типы данных ---
 StatPayload = Dict[str, int]
@@ -138,17 +138,26 @@ class TutorialMessages:
 
     TUTORIAL_COMPLETE_TEXT: str = """...Калибровка завершена...
 
-<b>[СИСТЕМА]:</b> 'Якорь' стабилизирован. Синхронизация с эхо-воспоминаниями прошла успешно.
+    <b>[СИСТЕМА]:</b> 'Якорь' стабилизирован. Синхронизация с эхо-воспоминаниями прошла успешно.
 
-Твои стартовые характеристики зафиксированы:
-<b>Сила:</b> {strength}
-<b>Восприятие:</b> {perception}
-<b>Выносливость:</b> {endurance}
-<b>Харизма:</b> {charisma}
-<b>Интеллект:</b> {intelligence}
-<b>Ловкость:</b> {agility}
-<b>Удача:</b> {luck}
-"""
+    Твои стартовые характеристики зафиксированы:
+    <code>
+    --- Физические ---
+    Сила:         {strength}
+    Ловкость:     {agility}
+    Выносливость: {endurance}
+
+    --- Магические ---
+    Интеллект:    {intelligence}
+    Мудрость:     {wisdom}
+    Дух:          {men}
+
+    --- Вспомогательные ---
+    Восприятие:   {perception}
+    Харизма:      {charisma}
+    Удача:        {luck}
+    </code>
+    """
 
     TUTORIAL_CONFIRM_PROMPT: str = """<b>[СИСТЕМА]:</b> Калибровка завершена. Твой 'Якорь' стабилен.
 

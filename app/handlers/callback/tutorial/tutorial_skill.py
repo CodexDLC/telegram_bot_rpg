@@ -9,6 +9,7 @@ from aiogram.types import CallbackQuery
 
 from app.resources.fsm_states.states import StartTutorial, CharacterLobby
 from app.resources.keyboards.callback_data import TutorialQuestCallback
+from app.resources.texts.ui_messages import TEXT_AWAIT
 from app.services.helpers_module.DTO_helper import fsm_clean_core_state
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay, animate_message_sequence
 from app.services.ui_service.tutorial.tutorial_service_skill import TutorialServiceSkills
@@ -183,6 +184,12 @@ async def skill_confirm_handler(
         log.warning("Handler 'skill_confirm_handler' received update without 'from_user'.")
         return
     start_time = time.monotonic()
+
+    await call.message.edit_text(
+        text=TEXT_AWAIT,
+        parse_mode="html",
+        reply_markup=None
+    )
 
     # --- 1. Сбор данных ---
     final_choice = callback_data.value

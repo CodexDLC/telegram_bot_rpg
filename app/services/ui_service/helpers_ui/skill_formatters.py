@@ -39,9 +39,9 @@ class SkillFormatters:
 
         # --- Заголовок таблицы ---
         header_num = "№"
-        header_title = "Группа"
+        header_title = "Группы-навыков"
         formatted_lines.append(f"{header_num:>{number_width}}{separator}{header_title}")
-        formatted_lines.append(f"{'─' * number_width}{separator}{'─' * 25}")
+        formatted_lines.append(f"{'─' * 28}")
 
         # --- Строки таблицы ---
         for i, (group_key, title) in enumerate(data.items(), start=1):
@@ -91,8 +91,8 @@ class SkillFormatters:
         if data_skill:
             # --- Формирование таблицы ---
             formatted_lines = ["<code>"]
-            formatted_lines.append(f"{'Навык':<25} │ Прогрессия")
-            formatted_lines.append("─" * 37)
+            formatted_lines.append(f"{'Навык':<25} │ %")
+            formatted_lines.append("─" * 28)
 
             for skill_dto in data_skill:
                 percentage = SkillCal.get_skill_display_info(skill_dto).percentage

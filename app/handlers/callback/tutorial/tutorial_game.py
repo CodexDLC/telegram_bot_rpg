@@ -10,6 +10,7 @@ from app.resources.fsm_states.states import StartTutorial
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
 from app.services.ui_service.helpers_ui.ui_tools import animate_message_sequence, await_min_delay
 from app.services.ui_service.tutorial.tutorial_service import TutorialServiceStats
+from app.resources.texts.ui_messages import TEXT_AWAIT
 
 log = logging.getLogger(__name__)
 
@@ -90,8 +91,14 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
     user_id = call.from_user.id
     log.info(f"Хэндлер 'tutorial_event_stats_handler' [{choice}] вызван user_id={user_id}")
     await call.answer()
+
     start_time = time.monotonic()
 
+    await call.message.edit_text(
+        text=TEXT_AWAIT,
+        parse_mode="html",
+        reply_markup=None
+    )
     state_data = await state.get_data()
     char_id = state_data.get("char_id")
     if not char_id:
@@ -142,7 +149,7 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
         text, kb = next_step_data
 
         log.debug(f"Отображение следующего шага туториала для char_id={char_id}.")
-        await await_min_delay(start_time, min_delay=0.3)
+        await await_min_delay(start_time, min_delay=0.8)
         await bot.edit_message_text(
             chat_id=message_content.get("chat_id"),
             message_id=message_content.get("message_id"),

@@ -8,7 +8,6 @@ from app.handlers.callback.ui.status_menu.character_status import show_status_ta
 from app.resources.fsm_states.states import CharacterLobby
 from app.resources.keyboards.callback_data import LobbySelectionCallback
 
-
 from app.services.helpers_module.data_loader_service import load_data_auto
 from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store, fsm_convector
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
@@ -36,9 +35,11 @@ async def select_character_handler(
         call (CallbackQuery): Callback от выбора персонажа.
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
+        callback_data:
 
     Returns:
         None
+
     """
     if not call.from_user:
         log.warning("Хэндлер 'select_character_handler' получил обновление без 'from_user'.")

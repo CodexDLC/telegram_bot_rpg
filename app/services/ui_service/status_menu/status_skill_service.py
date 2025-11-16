@@ -6,13 +6,14 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.resources.game_data.status_menu.skill_group_data import SKILL_HIERARCHY
-from app.resources.keyboards.status_callback import StatusSkillsCallback, StatusNavCallback
+from app.resources.keyboards.status_callback import StatusSkillsCallback, StatusNavCallback, SkillModeCallback
 from app.resources.schemas_dto.skill import SkillProgressDTO
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 
 from app.services.ui_service.helpers_ui.skill_formatters import SkillFormatters as SkillF
 from app.services.ui_service.base_service import BaseUIService
 from app.services.game_service.skill.calculator_service import SkillCalculatorService as SkillCal
+from database.model_orm.skill import SkillProgressState
 
 from database.repositories import get_skill_progress_repo
 from database.session import get_async_session
@@ -41,7 +42,7 @@ class CharacterSkillStatusService(BaseUIService):
         :param char_id: ID персонажа.
         :param key: Ключ для доступа к данным о группе навыков или конкретном навыке.
         :param state_data: Данные состояния FSM.
-        :param syb_name: Имя персонажа (опционально).
+        :param syb_name: Имя симбионта (опционально).
         """
         super().__init__(char_id=char_id, state_data=state_data)
         self.actor_name = syb_name or DEFAULT_ACTOR_NAME
@@ -90,7 +91,7 @@ class CharacterSkillStatusService(BaseUIService):
         if not skill_dto:
             log.warning(f"Не найден DTO для навыка '{self.key}' у персонажа ID={self.char_id}.")
             # Можно вернуть сообщение об ошибке или обработать иначе
-            return "Информация о навыке не найдена.", self._detail_kb(group_key)
+            return "Информация о навыке не найдена.", self._detail_kb(group_key, skill_dto)
 
         skill_display = SkillCal.get_skill_display_info(progress_dto=skill_dto)
 
@@ -104,27 +105,54 @@ class CharacterSkillStatusService(BaseUIService):
             actor_name=self.actor_name
         )
 
-        kb = self._detail_kb(group_key=group_key)
+        kb = self._detail_kb(group_key=group_key, skill_dto=skill_dto)
 
         return text, kb
 
-    def _detail_kb(self, group_key: str) -> InlineKeyboardMarkup:
+    def _detail_kb(self, group_key: str, skill_dto: SkillProgressDTO) -> InlineKeyboardMarkup:
         """
         Создает клавиатуру для детального просмотра навыка (кнопка "Назад").
 
         :param group_key: Ключ группы, к которой нужно вернуться.
         :return: Объект клавиатуры.
         """
+        kb = InlineKeyboardBuilder()
+
+        # 1. Словарь-помощник для текста кнопок
+        button_texts = {
+            SkillProgressState.PLUS: "[ ➕ Повышать ]",
+            SkillProgressState.PAUSE: "[ ⏸️ Пауза ]",
+            SkillProgressState.MINUS: "[ ➖ Понижать ]",
+        }
+
+        # 2. Определяем текущий режим
+        current_state = skill_dto.progress_state
+
+        # 3. Создаем 2 кнопки с ДРУГИМИ режимами
+        for state_enum in [SkillProgressState.PLUS, SkillProgressState.PAUSE, SkillProgressState.MINUS]:
+            if state_enum != current_state:
+                kb.button(
+                    text=button_texts[state_enum],
+                    callback_data=SkillModeCallback(
+                        char_id=self.char_id,
+                        skill_key=skill_dto.skill_key,
+                        new_mode=state_enum.value
+                    ).pack()
+                )
+
+        kb.adjust(2)
+
+        # Кнопка "Назад" для возврата к списку навыков в группе
         back_callback = StatusSkillsCallback(
             char_id=self.char_id,
             level="group",
             key=group_key,
         ).pack()
-        return InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(text="[ ◀️ Назад к навыкам ]", callback_data=back_callback)
-            ]
-        ])
+
+        kb.row(
+            InlineKeyboardButton(text="[ ◀️ Назад к навыкам ]", callback_data=back_callback))
+
+        return kb.as_markup()
 
     def _group_skill_kb(self, sor_list_dto: List[SkillProgressDTO]) -> InlineKeyboardMarkup:
         """
@@ -207,3 +235,20 @@ class CharacterSkillStatusService(BaseUIService):
         except Exception as e:
             log.error(f"Ошибка при получении навыков из БД для персонажа ID={self.char_id}: {e}", exc_info=True)
             raise
+
+    async def set_mode_skill(self, mode: str):
+
+        try:
+            async with get_async_session() as session:
+                skill_progress_repo = get_skill_progress_repo(session)
+                await skill_progress_repo.update_skill_state(
+                    character_id=self.char_id,
+                    skill_key=self.key,
+                    state=SkillProgressState(mode)
+                )
+
+                log.debug(f"")
+        except Exception as e:
+            log.error(f"Ошибка при обновлении режима навыка из БД для персонажа ID={self.char_id}: {e}", exc_info=True)
+            raise
+
