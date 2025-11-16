@@ -1,11 +1,11 @@
 # app/resources/game_data/status_menu/modifier_group_data.py
-import logging
+from loguru import logger as log
 from typing import Dict, Any
 
 # 1. Импортируем "Мастер-список" вкладок из "Био"
 # (Предполагается, что bio_group_data.py находится в этой же папке)
 
-log = logging.getLogger(__name__)
+
 
 # ==========================================================================
 # ИЕРАРХИЯ ДАННЫХ ДЛЯ ВКЛАДКИ "МОДИФИКАТОРЫ" (STATS)

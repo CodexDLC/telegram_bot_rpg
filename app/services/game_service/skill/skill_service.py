@@ -1,5 +1,5 @@
 # app/services/game_service/skill/skill_service.py
-import logging
+from loguru import logger as log
 from typing import Optional, Dict
 
 from app.services.game_service.modifiers_calculator_service import ModifiersCalculatorService as MCService
@@ -10,7 +10,6 @@ from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.services.game_service.skill.rate_service import calculate_rates_data
 
 
-log = logging.getLogger(__name__)
 
 
 class CharacterSkillsService:

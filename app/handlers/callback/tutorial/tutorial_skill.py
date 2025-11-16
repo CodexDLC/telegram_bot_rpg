@@ -1,5 +1,5 @@
 # app/handlers/callback/tutorial/tutorial_skill.py
-import logging
+from loguru import logger as log
 import time
 from typing import Dict, Any, Optional
 
@@ -15,7 +15,6 @@ from app.services.ui_service.helpers_ui.ui_tools import await_min_delay, animate
 from app.services.ui_service.tutorial.tutorial_service_skill import TutorialServiceSkills
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
 
-log = logging.getLogger(__name__)
 
 router = Router(name="tutorial_skill_router")
 

@@ -1,6 +1,6 @@
 # app/services/helpers_module/data_loader_service.py
 import asyncio
-import logging
+from loguru import logger as log
 from typing import List, Dict, Any, Callable, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +10,6 @@ from database.repositories.ORM.skill_repo import SkillProgressRepo
 from database.repositories.ORM.users_repo_orm import UsersRepoORM
 from database.session import get_async_session
 
-log = logging.getLogger(__name__)
 
 # Карта загрузчиков данных.
 # Ключ - строка, которую мы используем в `include`.

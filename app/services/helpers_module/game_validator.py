@@ -1,11 +1,10 @@
 # app/services/helpers_module/game_validator.py
-import logging
+from loguru import logger as log
 import re
 from typing import Tuple, Optional
 
 from app.resources.texts.profanity_list import FORBIDDEN_WORDS
 
-log = logging.getLogger(__name__)
 
 # --- Правила валидации имени персонажа ---
 MIN_NAME_LENGTH = 3

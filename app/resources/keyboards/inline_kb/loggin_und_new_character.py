@@ -1,12 +1,11 @@
 # app/keyboards/inline.py
-import logging
+from loguru import logger as log
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.resources.texts.buttons_callback import Buttons
 
 
-log = logging.getLogger(__name__)
 
 
 def get_start_adventure_kb() -> InlineKeyboardMarkup:

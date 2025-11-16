@@ -1,5 +1,5 @@
 # app/handlers/callback/ui/status_menu/character_skill.py
-import logging
+from loguru import logger as log
 import time
 
 from aiogram import Router, F, Bot
@@ -14,7 +14,6 @@ from app.services.ui_service.status_menu.status_skill_service import CharacterSk
 from app.resources.keyboards.status_callback import StatusSkillsCallback, SkillModeCallback
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 
-log = logging.getLogger(__name__)
 
 router = Router(name="character_skill_menu")
 

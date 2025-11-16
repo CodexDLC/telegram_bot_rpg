@@ -1,10 +1,9 @@
-import logging
+from loguru import logger as log
 from aiogram import Router, F
 from aiogram.types import Message
 
 from app.resources.fsm_states.states import StartTutorial, CharacterCreation, CharacterLobby, GARBAGE_TEXT_STATES
 
-log = logging.getLogger(__name__)
 
 router = Router(name="common_fsm_router")
 

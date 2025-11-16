@@ -1,11 +1,9 @@
 # app/services/game_service/skill/rate_service.py
-import logging
+from loguru import logger as log
 from typing import Dict, List, Any
 
 from app.resources.game_data.skill_library import SKILL_RECIPES
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
-
-log = logging.getLogger(__name__)
 
 
 def calculate_rates_data(

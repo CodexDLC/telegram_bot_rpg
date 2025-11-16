@@ -1,13 +1,11 @@
 # app/services/game_service/skill/calculator_service.py
-import logging
+from loguru import logger as log
 from app.resources.game_data.skill_library import (
     SKILL_RECIPES,
     TITLE_THRESHOLDS_PERCENT,
     BASE_MAX_XP
 )
 from app.resources.schemas_dto.skill import SkillProgressDTO, SkillDisplayDTO
-
-log = logging.getLogger(__name__)
 
 
 class SkillCalculatorService:

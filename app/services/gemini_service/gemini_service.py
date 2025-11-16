@@ -1,5 +1,5 @@
 # app/services/gemini_service/gemini_service.py
-import logging
+from loguru import logger as log
 from typing import Any, Optional
 
 from google import genai
@@ -10,7 +10,6 @@ from app.core.config import GEMINI_TOKEN
 from app.resources.llm_data.mode_preset import ChatMode, MODE_PRESETS
 from app.services.gemini_service.gemini_service_build import BUILDERS_GEMINI as BUILDERS, build_simple_gemini
 
-log = logging.getLogger(__name__)
 
 # Псевдонимы для моделей Gemini для удобства использования.
 GEMINI_MODEL_ALIASES = {

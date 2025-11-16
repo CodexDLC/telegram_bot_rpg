@@ -1,5 +1,5 @@
 # app/handlers/callback/ui/status_menu/character_status.py
-import logging
+from loguru import logger as log
 import time
 from aiogram import Router, Bot
 from aiogram.fsm.context import FSMContext
@@ -15,7 +15,7 @@ from app.resources.texts.ui_messages import TEXT_AWAIT
 # --- ИМПОРТЫ ДЛЯ ГЕНЕРАЦИИ 'text, kb' ---
 from app.services.ui_service.status_menu.status_service import CharacterMenuUIService
 
-log = logging.getLogger(__name__)
+
 router = Router(name="character_status_menu")
 
 

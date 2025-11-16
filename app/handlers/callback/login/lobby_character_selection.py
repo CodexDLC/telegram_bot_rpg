@@ -1,5 +1,5 @@
 # app/handlers/callback/login/lobby_character_selection.py
-import logging
+from loguru import logger as log
 from aiogram import Router, F, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
@@ -13,7 +13,6 @@ from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store, fsm
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
 from app.services.ui_service.lobbyservice import LobbyService
 
-log = logging.getLogger(__name__)
 
 router = Router(name="lobby_fsm")
 

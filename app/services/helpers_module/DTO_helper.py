@@ -1,5 +1,5 @@
 # app/services/helpers_module/DTO_helper.py
-import logging
+from loguru import logger as log
 from typing import Any, List, Dict, Type, Union
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State
@@ -8,8 +8,6 @@ from pydantic import BaseModel
 
 from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterStatsReadDTO
 from app.resources.schemas_dto.skill import SkillProgressDTO
-
-log = logging.getLogger(__name__)
 
 
 FSM_CORE_KEYS = ["user_id", "char_id", "message_menu", "message_content"]

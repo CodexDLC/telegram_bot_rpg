@@ -1,8 +1,7 @@
-import logging
+from loguru import logger as log
 from aiogram.types import CallbackQuery
 from aiogram.exceptions import TelegramBadRequest
 
-log = logging.getLogger(__name__)
 
 
 class UIErrorHandler:

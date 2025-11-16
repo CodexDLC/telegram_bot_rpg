@@ -1,11 +1,9 @@
 # app/services/helpers_module/get_data_handlers/status_data_helper.py
-import logging
+from loguru import logger as log
 from typing import Dict, Any, Optional
 
 from app.services.helpers_module.data_loader_service import load_data_auto
 from app.services.helpers_module.DTO_helper import fsm_store
-
-log = logging.getLogger(__name__)
 
 
 async def get_status_data_package(

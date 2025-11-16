@@ -1,5 +1,5 @@
 # app/handlers/callback/login/char_creation.py
-import logging
+from loguru import logger as log
 import time
 from aiogram import Router, F, Bot
 from aiogram.fsm.context import FSMContext
@@ -16,7 +16,6 @@ from app.services.helpers_module.game_validator import validate_character_name
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay, animate_message_sequence
 
-log = logging.getLogger(__name__)
 
 router = Router(name="character_creation_fsm")
 

@@ -1,9 +1,8 @@
 # app/services/game_service/shard_template_reader.py
-import logging
+from loguru import logger as log
 from typing import Dict, List, Any
 
 
-log = logging.getLogger(__name__)
 
 
 class ShardTemplateReader:

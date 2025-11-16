@@ -1,12 +1,11 @@
 # app/services/gemini_service/gemini_service_build.py
-import logging
+from loguru import logger as log
 from typing import Callable, Tuple, List, Any, Union, Dict
 from google.generativeai import types
 
 from app.resources.llm_data.json_sheme import DUNGEON_JSON_SCHEMA_PROMPT
 from app.resources.llm_data.mode_preset import ModePreset, ChatMode
 
-log = logging.getLogger(__name__)
 
 # Определяем тип для содержимого, которое может быть строкой или списком.
 GeminiContents = Union[str, List[types.ContentDict]]

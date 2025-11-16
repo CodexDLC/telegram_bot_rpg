@@ -1,7 +1,6 @@
 # app/resources/game_data/skill_library.py
-import logging
+from loguru import logger as log
 
-log = logging.getLogger(__name__)
 
 # -----------------
 # 1. ОБЩАЯ ПЕРЕМЕННАЯ

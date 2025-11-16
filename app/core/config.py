@@ -16,13 +16,12 @@ python-dotenv для загрузки переменных из файла `.env
 предотвращая запуск приложения с неполной конфигурацией.
 """
 import os
-import logging
+from loguru import logger as log
 from typing import Optional
 
 from dotenv import load_dotenv
 
 # Инициализируем логгер до того, как что-то может пойти не так.
-log = logging.getLogger(__name__)
 
 # Загружаем переменные окружения из файла .env в корне проекта.
 # Это должно быть одним из первых действий при запуске приложения.

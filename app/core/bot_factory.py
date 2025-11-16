@@ -1,4 +1,4 @@
-import logging
+from loguru import logger as log
 from typing import Tuple
 
 from aiogram import Bot, Dispatcher
@@ -9,8 +9,6 @@ from redis.asyncio import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.core.config import REDIS_URL, BOT_TOKEN
-
-log = logging.getLogger(__name__)
 
 
 async def build_app() -> Tuple[Bot, Dispatcher]:

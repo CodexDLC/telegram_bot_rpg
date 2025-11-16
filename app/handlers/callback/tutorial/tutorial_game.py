@@ -1,6 +1,6 @@
 # app/handlers/callback/tutorial/tutorial_game.py
 import time
-import logging
+from loguru import logger as log
 
 from aiogram import Router, F, Bot
 from aiogram.fsm.context import FSMContext
@@ -12,7 +12,6 @@ from app.services.ui_service.helpers_ui.ui_tools import animate_message_sequence
 from app.services.ui_service.tutorial.tutorial_service import TutorialServiceStats
 from app.resources.texts.ui_messages import TEXT_AWAIT
 
-log = logging.getLogger(__name__)
 
 router = Router(name="tutorial_game_router")
 

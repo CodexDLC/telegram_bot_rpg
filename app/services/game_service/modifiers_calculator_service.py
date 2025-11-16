@@ -1,9 +1,8 @@
 #app/services/game_service/modifiers_calculator_service.py
-import logging
+from loguru import logger as log
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.resources.schemas_dto.modifer_dto import CharacterModifiersSaveDto
 
-log = logging.getLogger(__name__)
 
 class ModifiersCalculatorService:
 

@@ -1,8 +1,7 @@
 # app/resources/game_data/status_menu/bio_group_data.py
-import logging
+from loguru import logger as log
 from typing import Dict, Any
 
-log = logging.getLogger(__name__)
 
 # ==========================================================================
 # 1. МАСТЕР-СПИСОК ВКЛАДОК (ТАБ-БАР)

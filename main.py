@@ -3,14 +3,16 @@ import logging
 
 from app.core.bot_factory import build_app
 from app.core.config import BOT_TOKEN
-from app.core.log_setup import setup_logging
+from app.core.loguru_setup import setup_loguru
+
 from app.handlers import router as main_router
 from database.session import create_db_tables as create_tables
 
 # Настраиваем логирование при старте приложения.
 # Уровень "DEBUG" и вывод в файл можно будет изменить для продакшена.
-setup_logging(level="DEBUG", to_file=True)
+# setup_logging(level="DEBUG", to_file=True)
 
+setup_loguru()
 
 async def main() -> None:
     """
