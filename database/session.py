@@ -1,5 +1,5 @@
 # database/session.py
-import logging
+from loguru import logger as log
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -13,7 +13,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import DB_URL_SQLALCHEMY
 from database.model_orm import Base
 
-log = logging.getLogger(__name__)
 
 # Создание асинхронного "движка" для подключения к базе данных.
 # Движок - это фабрика соединений, управляющая пулом подключений.

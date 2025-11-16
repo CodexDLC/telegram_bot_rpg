@@ -1,5 +1,5 @@
 # app/database/repositories/SQLite/users_repo.py
-import logging
+from loguru import logger as log
 from typing import Optional, List
 
 import aiosqlite
@@ -7,7 +7,6 @@ import aiosqlite
 from app.resources.schemas_dto.user_dto import UserUpsertDTO, UserDTO
 from database.db_contract.i_users_repo import IUserRepo
 
-log = logging.getLogger(__name__)
 
 # =================================================================================
 #

@@ -1,5 +1,5 @@
 # database/repositories/ORM/skill_repo.py
-import logging
+from loguru import logger as log
 from typing import List, Dict, Optional
 
 from sqlalchemy import select, update
@@ -12,8 +12,6 @@ from app.resources.game_data.skill_library import SKILL_RECIPES
 from app.resources.schemas_dto.skill import SkillRateDTO, SkillProgressDTO
 from database.db_contract.i_skill_repo import ISkillRateRepo, ISkillProgressRepo
 from database.model_orm.skill import SkillProgressState, CharacterSkillRate, CharacterSkillProgress
-
-log = logging.getLogger(__name__)
 
 
 class SkillRateRepo(ISkillRateRepo):

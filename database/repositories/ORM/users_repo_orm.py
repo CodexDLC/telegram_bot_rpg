@@ -1,5 +1,5 @@
 # database/repositories/ORM/users_repo_orm.py
-import logging
+from loguru import logger as log
 from typing import Optional, List
 
 from sqlalchemy import select
@@ -9,8 +9,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.resources.schemas_dto.user_dto import UserUpsertDTO, UserDTO
 from database.db_contract.i_users_repo import IUserRepo
 from database.model_orm.user import User
-
-log = logging.getLogger(__name__)
 
 
 class UsersRepoORM(IUserRepo):
@@ -35,7 +33,7 @@ class UsersRepoORM(IUserRepo):
 
     async def upsert_user(self, user_data: UserUpsertDTO) -> None:
         """
-        Создает нового пользователя или обновляет существующего с помощью ORM.
+        Создает нового пользователя или обновляет данные существующего с помощью ORM.
 
         Использует `session.merge()`, который автоматически определяет,
         нужно ли выполнить INSERT или UPDATE на основе первичного ключа.
@@ -63,7 +61,7 @@ class UsersRepoORM(IUserRepo):
 
     async def get_user(self, telegram_id: int, **kwargs) -> Optional[UserDTO]:
         """
-        Находит и возвращает одного пользователя по `telegram_id` с помощью ORM.
+        Находит и возвращает одного пользователя по его `telegram_id` с помощью ORM.
 
         Args:
             telegram_id (int): Уникальный идентификатор пользователя в Telegram.

@@ -1,5 +1,6 @@
 import asyncio
-import logging
+# Шаг 1: Заменили 'import logging' на 'from loguru...'
+from loguru import logger as log
 
 from app.core.bot_factory import build_app
 from app.core.config import BOT_TOKEN
@@ -8,12 +9,10 @@ from app.core.loguru_setup import setup_loguru
 from app.handlers import router as main_router
 from database.session import create_db_tables as create_tables
 
-# Настраиваем логирование при старте приложения.
-# Уровень "DEBUG" и вывод в файл можно будет изменить для продакшена.
-# setup_logging(level="DEBUG", to_file=True)
 
 setup_loguru()
 
+@log.catch
 async def main() -> None:
     """
     Основная асинхронная функция для запуска приложения.
@@ -27,7 +26,6 @@ async def main() -> None:
     Returns:
         None
     """
-    log = logging.getLogger(__name__)
 
     log.info("Инициализация базы данных...")
     await create_tables()
@@ -51,11 +49,9 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    # Используем asyncio.run() для запуска асинхронной функции main.
-    # Это стандартный способ запуска асинхронных приложений в Python.
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        logging.getLogger(__name__).info("Бот остановлен.")
+        log.info("Бот остановлен.")
     except Exception as e:
-        logging.getLogger(__name__).critical(f"Критическая ошибка при запуске: {e}", exc_info=True)
+        log.critical(f"Критическая ошибка при запуске: {e}")

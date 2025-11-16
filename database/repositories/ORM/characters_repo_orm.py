@@ -1,5 +1,5 @@
 # database/repositories/ORM/characters_repo_orm.py
-import logging
+from loguru import logger as log
 from typing import Optional, List, Dict
 
 from sqlalchemy import select, update, delete
@@ -13,8 +13,6 @@ from app.resources.schemas_dto.character_dto import (
 from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
 from database.model_orm import CharacterModifiers
 from database.model_orm.character import Character, CharacterStats
-
-log = logging.getLogger(__name__)
 
 
 class CharactersRepoORM(ICharactersRepo):

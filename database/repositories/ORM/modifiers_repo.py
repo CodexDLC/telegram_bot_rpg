@@ -1,5 +1,5 @@
 #database/repositories/ORM/modifiers_repo.py
-import logging
+from loguru import logger as log
 from typing import Optional, Dict, Any
 
 from sqlalchemy import select, update
@@ -10,7 +10,6 @@ from app.resources.schemas_dto.modifer_dto import CharacterModifiersDTO, Charact
 from database.db_contract.i_modifiers_repo import ICharacterModifiersRepo
 from database.model_orm import CharacterModifiers
 
-log = logging.getLogger(__name__)
 
 class CharacterModifiersRepo(ICharacterModifiersRepo):
 

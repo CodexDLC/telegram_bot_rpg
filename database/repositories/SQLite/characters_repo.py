@@ -1,5 +1,5 @@
 # app/database/repositories/SQLite/characters_repo.py
-import logging
+from loguru import logger as log
 from typing import Dict, Optional, List
 
 import aiosqlite
@@ -13,7 +13,6 @@ from app.resources.schemas_dto.character_dto import (
 
 from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
 
-log = logging.getLogger(__name__)
 
 # =================================================================================
 #

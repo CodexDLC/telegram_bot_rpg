@@ -1,10 +1,9 @@
 # database/schema.py
+from loguru import logger as log
 import aiosqlite
-import logging
 from pathlib import Path
 from typing import List
 
-log = logging.getLogger(__name__)
 
 # Определение пути к директории с SQL-скриптами.
 # Использование Path делает код кросс-платформенным.
