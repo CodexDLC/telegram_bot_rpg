@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery
 from app.handlers.callback.login.char_creation import start_creation_handler
 from app.resources.fsm_states.states import CharacterLobby
 from app.resources.keyboards.callback_data import LobbySelectionCallback
+from app.services.ui_service.command_service import CommandService
 
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.lobby_service import LobbyService
@@ -42,6 +43,15 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
     start_time = time.monotonic()
 
     user = call.from_user
+
+    try:
+        com_service = CommandService(user)
+        await com_service.create_user_in_db()
+        log.debug(f"Failsafe: Пользователь {user.id} проверен/создан перед загрузкой персонажей.")
+    except Exception as e:
+        log.error(f"Критическая ошибка: Не удалось выполнить failsafe user creation для {user.id}: {e}", exc_info=True)
+        await Err.generic_error(call=call)
+        return
 
     # Загружаем данные о персонажах пользователя.
     log.debug(f"Загрузка персонажей для user_id={user.id}")

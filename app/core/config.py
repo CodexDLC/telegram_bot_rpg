@@ -79,3 +79,6 @@ else:
     # Формат URL без пароля
     REDIS_URL: str = f"redis://{REDIS_HOST}:{REDIS_PORT}"
     log.info(f"Сформирован URL для Redis без пароля: {REDIS_URL}")
+
+
+BUG_REPORT_CHANNEL_ID: Optional[int] = os.getenv("BUG_REPORT_CHANNEL_ID")

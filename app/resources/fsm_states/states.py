@@ -29,7 +29,8 @@ class CharacterLobby(StatesGroup):
 
 
 class BugReport(StatesGroup):
-    awaiting_report = State()
+    choosing_type = State()      
+    awaiting_report_text = State()
 
 
 FSM_CONTEX_CHARACTER_STATUS = [
