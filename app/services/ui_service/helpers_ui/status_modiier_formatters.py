@@ -1,12 +1,11 @@
 #
-import logging
+from loguru import logger as log
 from typing import Dict, Optional, Any, Union
 
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.resources.schemas_dto.modifer_dto import CharacterModifiersDTO
 
 
-log = logging.getLogger(__name__)
 
 PERCENT_KEYS = {
         "physical_damage_bonus", "physical_penetration", "physical_crit_chance",

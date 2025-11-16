@@ -1,4 +1,4 @@
-import logging
+from loguru import logger as log
 from typing import Tuple, Optional, Dict, Any, Type
 
 from aiogram.filters.callback_data import CallbackData
@@ -22,8 +22,6 @@ from app.services.ui_service.helpers_ui.status_formatters import StatusFormatter
 from app.services.ui_service.helpers_ui.status_modiier_formatters import ModifierFormatters as ModifierF
 from database.repositories import get_character_repo
 from database.session import get_async_session
-
-log = logging.getLogger(__name__)
 
 
 class CharacterMenuUIService(BaseUIService):

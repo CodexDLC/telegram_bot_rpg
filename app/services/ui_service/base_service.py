@@ -1,8 +1,7 @@
 # app/services/ui_service/base_service.py
-import logging
+from loguru import logger as log
 from typing import Optional, Tuple, Dict, Any
 
-log = logging.getLogger(__name__)
 
 class BaseUIService:
     """

@@ -1,5 +1,5 @@
 #app/services/ui_service/tutorial/tutorial_service_skill.py
-import logging
+from loguru import logger as log
 from typing import Tuple, Union, List, Dict, Any
 
 from aiogram.types import InlineKeyboardMarkup
@@ -13,8 +13,6 @@ from app.resources.texts.game_messages.tutorial_messages_skill import TUTORIAL_S
 from app.resources.keyboards.callback_data import TutorialQuestCallback, LobbySelectionCallback
 from database.repositories import SkillProgressRepo, CharactersRepoORM
 from database.session import get_async_session
-
-log = logging.getLogger(__name__)
 
 
 class TutorialServiceSkills:

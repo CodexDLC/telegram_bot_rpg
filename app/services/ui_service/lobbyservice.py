@@ -1,5 +1,5 @@
 # app/services/ui_service/lobbyservice.py
-import logging
+from loguru import logger as log
 from typing import Optional, List, Tuple, Dict, Any
 
 from aiogram.types import InlineKeyboardMarkup, User, InlineKeyboardButton
@@ -12,8 +12,6 @@ from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from database.session import get_async_session
 from app.resources.keyboards.callback_data import LobbySelectionCallback
-
-log = logging.getLogger(__name__)
 
 
 class LobbyService:

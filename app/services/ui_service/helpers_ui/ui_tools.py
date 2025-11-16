@@ -1,14 +1,12 @@
 # app/services/ui_service/helpers_ui/ui_tools.py
 import asyncio
 import time
-import logging
+from loguru import logger as log
 from typing import Dict, Tuple, Optional, List
 
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.exceptions import TelegramBadRequest
-
-log = logging.getLogger(__name__)
 
 
 async def await_min_delay(start_time: float, min_delay: float = 0.5) -> None:

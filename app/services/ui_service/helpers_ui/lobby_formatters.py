@@ -1,11 +1,9 @@
 # app/services/ui_service/helpers_ui/lobby_formatters.py
-import logging
+from loguru import logger as log
 from typing import List, Optional
 
 from app.resources.schemas_dto.character_dto import CharacterReadDTO
 from app.resources.texts.buttons_callback import Buttons
-
-log = logging.getLogger(__name__)
 
 
 class LobbyFormatter:

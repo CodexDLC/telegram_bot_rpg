@@ -1,5 +1,5 @@
 # app/services/ui_service/status_menu/status_modifier_service.py
-import logging
+from loguru import logger as log
 from typing import Tuple, Optional, Dict, Any, Type
 
 from aiogram.filters.callback_data import CallbackData
@@ -17,7 +17,6 @@ from app.services.ui_service.helpers_ui.status_modiier_formatters import Modifie
 from database.repositories import get_modifiers_repo, get_character_stats_repo
 from database.session import get_async_session
 
-log = logging.getLogger(__name__)
 
 
 

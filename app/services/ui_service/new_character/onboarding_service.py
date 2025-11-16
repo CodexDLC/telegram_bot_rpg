@@ -1,4 +1,4 @@
-import logging
+from loguru import logger as log
 from typing import Optional, Tuple
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -8,8 +8,6 @@ from app.resources.texts.buttons_callback import Buttons
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from database.session import get_async_session
-
-log = logging.getLogger(__name__)
 
 
 class OnboardingService:

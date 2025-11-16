@@ -1,5 +1,5 @@
 # app/services/ui_service/tutorial/tutorial_service.py
-import logging
+from loguru import logger as log
 import random
 from typing import Optional, List, Dict, Tuple, Any
 
@@ -18,8 +18,6 @@ from database.repositories import (
 )
 
 from database.session import get_async_session
-
-log = logging.getLogger(__name__)
 
 
 class TutorialServiceStats:

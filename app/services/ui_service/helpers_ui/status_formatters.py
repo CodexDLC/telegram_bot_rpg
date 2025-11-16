@@ -1,11 +1,9 @@
 # app/services/ui_service/helpers_ui/status_formatters.py
-import logging
+from loguru import logger as log
 from typing import Optional, Any
 
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO, CharacterReadDTO
 from app.resources.texts.buttons_callback import Buttons
-
-log = logging.getLogger(__name__)
 
 
 class StatusFormatter:

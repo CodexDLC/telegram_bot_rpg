@@ -1,12 +1,10 @@
 # app/services/ui_service/command_service.py
-import logging
+from loguru import logger as log
 from aiogram.types import User
 
 from app.resources.schemas_dto.user_dto import UserUpsertDTO
 from database.repositories.ORM.users_repo_orm import UsersRepoORM
 from database.session import get_async_session
-
-log = logging.getLogger(__name__)
 
 
 class CommandService:

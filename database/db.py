@@ -1,11 +1,9 @@
 # database/db.py
-import logging
+from loguru import logger as log
 import aiosqlite
 from contextlib import asynccontextmanager
 
 from app.core.config import DB_NAME
-
-log = logging.getLogger(__name__)
 
 
 @asynccontextmanager

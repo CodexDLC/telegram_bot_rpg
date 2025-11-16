@@ -1,11 +1,9 @@
 # app/services/ui_service/helpers_ui/skill_formatters.py
-import logging
+from loguru import logger as log
 from typing import Any, Dict, Optional, List
 
 from app.resources.schemas_dto.skill import SkillProgressDTO, SkillDisplayDTO
 from app.services.game_service.skill.calculator_service import SkillCalculatorService as SkillCal
-
-log = logging.getLogger(__name__)
 
 
 class SkillFormatters:

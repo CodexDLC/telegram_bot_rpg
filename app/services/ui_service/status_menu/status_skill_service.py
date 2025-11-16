@@ -1,5 +1,5 @@
 # app/services/ui_service/status_skill_service.py
-import logging
+from loguru import logger as log
 from typing import Any, Optional, Dict, Tuple, List
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -17,8 +17,6 @@ from database.model_orm.skill import SkillProgressState
 
 from database.repositories import get_skill_progress_repo
 from database.session import get_async_session
-
-log = logging.getLogger(__name__)
 
 
 class CharacterSkillStatusService(BaseUIService):

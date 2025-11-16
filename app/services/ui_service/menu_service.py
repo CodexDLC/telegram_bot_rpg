@@ -1,5 +1,5 @@
 # app/services/ui_service/menu_service.py
-import logging
+from loguru import logger as log
 from typing import Tuple
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardMarkup
@@ -9,8 +9,6 @@ from app.resources.keyboards.status_callback import StatusNavCallback
 # 1. --- ДОБАВЬ ИМПОРТ StatusNavCallback ---
 
 from app.resources.texts.menu_data.buttons_text import ButtonsTextData
-
-log = logging.getLogger(__name__)
 
 
 class MenuService:
