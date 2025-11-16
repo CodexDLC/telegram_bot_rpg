@@ -25,16 +25,21 @@ class StartTutorial(StatesGroup):
 class CharacterLobby(StatesGroup):
     selection = State()
     start_logging = State()
+    confirm_delete = State()
+
+
+class BugReport(StatesGroup):
+    awaiting_report = State()
 
 
 FSM_CONTEX_CHARACTER_STATUS = [
-    CharacterLobby.start_logging, CharacterLobby.selection
+    CharacterLobby.start_logging, CharacterLobby.selection, CharacterLobby.confirm_delete
 
 ]
 
 GARBAGE_TEXT_STATES = [
     StartTutorial.start, StartTutorial.confirmation, StartTutorial.in_progress,
     StartTutorial.in_skills_progres, StartTutorial.skill_confirm,
-    CharacterLobby.selection, CharacterLobby.start_logging,
+    CharacterLobby.selection, CharacterLobby.start_logging, CharacterLobby.confirm_delete,
     CharacterCreation.choosing_gender, CharacterCreation.confirm
 ]

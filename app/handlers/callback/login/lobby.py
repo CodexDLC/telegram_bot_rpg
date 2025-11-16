@@ -10,7 +10,7 @@ from app.resources.fsm_states.states import CharacterLobby
 from app.resources.keyboards.callback_data import LobbySelectionCallback
 
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
-from app.services.ui_service.lobbyservice import LobbyService
+from app.services.ui_service.lobby_service import LobbyService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 
 
@@ -59,7 +59,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
         await state.update_data(selected_char_id=None, message_content=None, user_id=user.id)
         log.debug(f"Состояние установлено в CharacterLobby.selection для user_id={user.id}")
 
-        text, kb = lobby_service.get_data_lobby_start()
+        text, kb = lobby_service.get_data_lobby_start(character_list)
 
         await await_min_delay(start_time, min_delay=0.5)
 
@@ -111,7 +111,7 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
     message_menu = state_data.get("message_menu")
 
     # Создаем "пустую" запись для нового персонажа в БД.
-    lobby_service = LobbyService(user=call.from_user)
+    lobby_service = LobbyService(user=call.from_user, state_data=state_data)
     char_id = await lobby_service.create_und_get_character_id()
     if not char_id:
         log.error(f"Не удалось создать 'оболочку' персонажа для user_id={user_id} из лобби.")
@@ -127,3 +127,6 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
         char_id=char_id,
         message_menu=message_menu
     )
+
+
+

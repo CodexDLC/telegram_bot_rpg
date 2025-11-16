@@ -4,7 +4,7 @@ from typing import Tuple
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardMarkup
 
-from app.resources.keyboards.callback_data import MeinMenuCallback
+from app.resources.keyboards.callback_data import MeinMenuCallback, LobbySelectionCallback
 from app.resources.keyboards.status_callback import StatusNavCallback
 # 1. --- ДОБАВЬ ИМПОРТ StatusNavCallback ---
 
@@ -39,8 +39,8 @@ class MenuService:
 
     def _create_menu_kb(self) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()
-        menu_layouts = self.data.MENU_LAYOUTS  #
-        buttons_full_data = self.data.BUTTONS_MENU_FULL  #
+        menu_layouts = self.data.MENU_LAYOUTS
+        buttons_full_data = self.data.BUTTONS_MENU_FULL
 
         buttons_to_create = menu_layouts.get(self.gs, [])
 
@@ -51,18 +51,27 @@ class MenuService:
                 continue
 
             if key == "status":
-                # --- ИСПРАВЛЕНО: Просто ключ "bio" и ID ---
                 callback_data = StatusNavCallback(
                     key="bio",
                     char_id=self.char_id
                 ).pack()
 
-            elif key in ("logout", "navigation", "inventory"):
+            # 2. --- (ИЗМЕНИ ЭТОТ БЛОК) ---
+            elif key == "logout":
+                # Теперь "logout" использует LobbySelectionCallback, как в LobbyService
+                callback_data = LobbySelectionCallback(
+                    action=key
+                    # char_id не нужен, так как он Optional
+                ).pack()
+
+            elif key in ("navigation", "inventory"):
+                # Остальные кнопки (пока) используют старый колбэк
                 callback_data = MeinMenuCallback(
                     action=key,
                     game_stage=self.gs,
                     char_id=self.char_id
                 ).pack()
+            # --- (КОНЕЦ ИЗМЕНЕНИЙ) ---
             else:
                 continue
 

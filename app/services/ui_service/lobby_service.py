@@ -1,4 +1,4 @@
-# app/services/ui_service/lobbyservice.py
+# app/services/ui_service/lobby_service.py
 
 from loguru import logger as log
 from typing import Optional, List, Tuple, Dict, Any
@@ -47,6 +47,40 @@ class LobbyService(BaseUIService):
         log.debug(
             f"Инициализирован {self.__class__.__name__} для user_id={self.user_id}.")
 
+
+    def get_message_delete(self, char_name: str) -> tuple[str, InlineKeyboardMarkup]:
+
+        text =  f"⚠️ Вы уверены, что хотите удалить персонажа <b>{char_name}</b>?\n\nЭто действие необратимо."
+
+        kb = self._kb_delete()
+
+        return text, kb
+
+
+    def _kb_delete(self):
+
+        kb = InlineKeyboardBuilder()
+
+        yes_b = LobbySelectionCallback(
+            action="delete_yes",
+            char_id=self.char_id
+
+        ).pack()
+
+        no_b = LobbySelectionCallback(
+            action="delete_no",
+            char_id=self.char_id
+        ).pack()
+
+        kb.button(text="Да", callback_data=yes_b)
+        kb.button(text="Нет", callback_data=no_b)
+
+        kb.adjust(2)
+
+        return kb.as_markup()
+
+
+
     def get_data_lobby_start(
             self,
             characters: Optional[List[CharacterReadDTO]] = None
@@ -79,9 +113,11 @@ class LobbyService(BaseUIService):
         kb = InlineKeyboardBuilder()
         lobby_buttons = Buttons.LOBBY_KB_UP
 
+        itera_char = len(characters) if characters is not None else 0
+
         # Создаем кнопки для существующих персонажей.
         for i in range(max_slots):
-            if i < len(characters):
+            if i < itera_char:
                 char = characters[i]
                 callback = LobbySelectionCallback(
                     action="select",
@@ -115,7 +151,7 @@ class LobbyService(BaseUIService):
         for key, value in lobby_buttons_dawn.items():
             buttons.append(InlineKeyboardButton(
                 text=value,
-                callback_data=LobbySelectionCallback(action=key).pack()
+                callback_data=LobbySelectionCallback(action=key, char_id=self.char_id).pack()
             ))
 
         return buttons
@@ -157,6 +193,19 @@ class LobbyService(BaseUIService):
                     return None
         except Exception as e:
             log.exception(f"Ошибка при получении списка персонажей для user_id={self.user_id}: {e}")
+
+
+    async def delete_character_ind_db(self):
+
+        try:
+            async with get_async_session() as session:
+                char_repo = get_character_repo(session)
+                await char_repo.delete_characters(self.char_id)
+                return True
+
+        except Exception as e:
+            log.exception(f"Ошибка при удалении персонажа {self.char_id} ошибка {e}")
+
 
 
 

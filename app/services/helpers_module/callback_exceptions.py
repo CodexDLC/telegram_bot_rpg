@@ -2,6 +2,7 @@ from loguru import logger as log
 from aiogram.types import CallbackQuery
 from aiogram.exceptions import TelegramBadRequest
 
+from app.resources.keyboards.reply_kb import get_error_recovery_kb
 
 
 class UIErrorHandler:
@@ -40,16 +41,16 @@ class UIErrorHandler:
             log.warning(f"Не удалось ответить на callback для user_id={user_id}: {e}")
 
         try:
-            # Отправляем новое сообщение с подробностями.
-            # Проверяем, есть ли у call.message, чтобы избежать ошибки, если его нет
             if call.message:
+                # 2. --- (ДОБАВИТЬ reply_markup) ---
                 await call.message.answer(
-                    f"⚠️ {message_text}\n\nПожалуйста, попробуйте начать заново с команды /start",
-                    # TODO: В будущем здесь будет reply_markup=get_error_reply_kb()
+                    f"⚠️ {message_text}\n\nПожалуйста, попробуйте начать заново с команды /start или кнопки 'Рестарт'.",
+                    reply_markup=get_error_recovery_kb()
                 )
-                log.debug(f"Сообщение об ошибке успешно отправлено user_id={user_id}.")
+                log.debug(f"Сообщение об ошибке и Reply-клавиатура успешно отправлены user_id={user_id}.")
             else:
-                log.error(f"Не удалось отправить сообщение об ошибке для user_id={user_id}, так как call.message отсутствует.")
+                log.error(
+                    f"Не удалось отправить сообщение об ошибке для user_id={user_id}, так как call.message отсутствует.")
         except TelegramBadRequest as e:
             log.error(f"Не удалось отправить сообщение об ошибке для user_id={user_id}: {e}")
 

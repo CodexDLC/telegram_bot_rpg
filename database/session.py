@@ -3,6 +3,9 @@ from loguru import logger as log
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     AsyncSession,
@@ -13,6 +16,23 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import DB_URL_SQLALCHEMY
 from database.model_orm import Base
 
+
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    """
+    Включает поддержку FOREIGN KEY (и ON DELETE CASCADE)
+    при каждом новом подключении к SQLite.
+    """
+    # Этот код будет синхронным, так как SQLAlchemy
+    # обрабатывает низкоуровневые коннекты в `greenlet`
+    try:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON;")
+        cursor.close()
+        log.debug("PRAGMA foreign_keys=ON включен для нового соединения.")
+    except Exception as e:
+        log.error(f"Не удалось включить PRAGMA foreign_keys: {e}")
 
 # Создание асинхронного "движка" для подключения к базе данных.
 # Движок - это фабрика соединений, управляющая пулом подключений.
