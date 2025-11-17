@@ -50,6 +50,7 @@ async def build_app() -> Tuple[Bot, Dispatcher]:
         if not await redis_client.ping():
             raise RedisConnectionError
         log.info("Соединение с Redis успешно установлено.")
+
     except RedisConnectionError as e:
         log.critical(f"Не удалось подключиться к Redis: {e}")
         raise RuntimeError(f"Критическая ошибка: не удалось подключиться к Redis по адресу {REDIS_URL}")

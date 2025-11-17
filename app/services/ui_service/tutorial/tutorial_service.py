@@ -49,7 +49,7 @@ class TutorialServiceStats:
         self.char_id = char_id
         self.pool_size = pool_size
         self.event_pool = event_pool if event_pool is not None else self._get_event_pool()
-        self.sim_text_count = sim_text_count
+        self.sim_text_count = sim_text_count if event_pool else 0
         self.bonus_dict = bonus_dict if bonus_dict is not None else {}
         self.buttons = Buttons
         log.debug(f"Инициализирован {self.__class__.__name__} для char_id={char_id}. Событий в пуле: {len(self.event_pool)}.")

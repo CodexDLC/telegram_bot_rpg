@@ -247,6 +247,26 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     # TODO: Очищать сообщение лобби и меню, создавать игровой интерфейс.
 
 
+    state_data = await state.get_data()
+    char_id = state_data.get("char_id")
+
+    async with get_async_session() as session:
+        char_repo = CharactersRepoORM(session)
+        character = await char_repo.get_character(char_id)
+
+        if character.game_stage != "in_game":
+            # ⚠️ Персонаж не завершил обучение!
+            if character.game_stage == "tutorial_stats":
+                # Вернуть в Tutorial Stats
+                await redirect_to_tutorial_stats(call, state, bot, char_id)
+            elif character.game_stage == "tutorial_skill":
+                # Вернуть в Tutorial Skills
+                await redirect_to_tutorial_skills(call, state, bot, char_id)
+            else:
+                # Вернуть в создание
+                await call.answer("Персонаж не завершен", show_alert=True)
+            return
+
 
 
 
