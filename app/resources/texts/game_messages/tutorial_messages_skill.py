@@ -41,7 +41,7 @@ TUTORIAL_SKILL_EVENTS = {
             #  ищем 'path_melee', в нем 'step_1')
             "step_1:path_melee": "[Взять Ржавый Меч]",
             "step_1:path_ranged": "[Взять Короткий Лук]",
-            "step_1:path_magic": "[Взять Потрескавшийся Посох]"
+            #"step_1:path_magic": "[Взять Потрескавшийся Посох]"
         }
     },
 

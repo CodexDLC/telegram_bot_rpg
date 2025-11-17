@@ -5,10 +5,10 @@ from aiogram import Bot, Dispatcher
 # 1. ДОБАВИТЬ ЭТОТ ИМПОРТ
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
-from redis.asyncio import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.core.config import REDIS_URL, BOT_TOKEN
+from app.core.redis_client import redis_client
 
 
 async def build_app() -> Tuple[Bot, Dispatcher]:
@@ -42,11 +42,9 @@ async def build_app() -> Tuple[Bot, Dispatcher]:
 
     log.debug("Экземпляр Bot создан.")
 
-    # --- Подключение к Redis и создание хранилища ---
-    log.debug(f"Попытка подключения к Redis")
+    log.debug(f"Попытка подключения к Redis (проверка .ping())")
     try:
-        redis_client = Redis.from_url(REDIS_URL)
-        # Проверяем соединение с Redis
+        # Вот здесь 'await' сработает, потому что мы внутри async def!
         if not await redis_client.ping():
             raise RedisConnectionError
         log.info("Соединение с Redis успешно установлено.")

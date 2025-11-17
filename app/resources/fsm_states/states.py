@@ -33,8 +33,15 @@ class BugReport(StatesGroup):
     awaiting_report_text = State()
 
 
+class InGame(StatesGroup):
+    """Состояния, когда игрок находится в игровом мире."""
+    navigation = State()
+    inventory = State()
+
+
 FSM_CONTEX_CHARACTER_STATUS = [
-    CharacterLobby.start_logging, CharacterLobby.selection, CharacterLobby.confirm_delete
+    CharacterLobby.start_logging, CharacterLobby.selection, CharacterLobby.confirm_delete,
+    InGame.navigation
 
 ]
 

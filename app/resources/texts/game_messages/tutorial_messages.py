@@ -79,7 +79,7 @@ class TutorialEventsData:
     # ---
     TUTORIAL_LOGIC_POOL: Dict[str, StatPayload] = {
         # Event 1
-        "tut_ev1:might": {"strength": 1, "endurance": 1},
+        "tut_ev1:might": {"strength": 4, "endurance": 2, "agility": 1},
         "tut_ev1:finesse": {"agility": 1, "perception": 1},
         "tut_ev1:wits": {"intelligence": 1, "perception": 1},
 

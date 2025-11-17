@@ -5,12 +5,16 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
 from app.handlers.callback.ui.status_menu.character_status import show_status_tab_logic
-from app.resources.fsm_states.states import CharacterLobby
+from app.resources.fsm_states.states import CharacterLobby, InGame
 from app.resources.keyboards.callback_data import LobbySelectionCallback
+from app.resources.texts.ui_messages import TEXT_AWAIT
+from app.services.game_service.login_service import LoginService
 
-from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store, fsm_convector
-from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
+from app.services.helpers_module.DTO_helper import fsm_load_auto, fsm_store, fsm_clean_core_state
+from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.ui_service.lobby_service import LobbyService
+from app.services.ui_service.menu_service import MenuService
+from app.services.ui_service.navigation_service import NavigationService
 
 router = Router(name="lobby_fsm")
 
@@ -111,7 +115,7 @@ async def select_or_delete_character_handler(
             )
         else:
             log.warning(f"У user_id={user.id} нет персонажей, хотя он находится в лобби выбора.")
-            await ERR.generic_error(call=call)
+            await Err.generic_error(call=call)
 
     elif action == "delete":
         # --- 5. ЛОГИКА "DELETE" (новая) ---
@@ -128,7 +132,7 @@ async def select_or_delete_character_handler(
 
         if not message_content:
             log.error(f"User {user.id}: Не найден 'message_content' для показа подтверждения удаления.")
-            await ERR.message_content_not_found_in_fsm(call)
+            await Err.message_content_not_found_in_fsm(call)
             return
 
         char_name = "???"
@@ -173,7 +177,7 @@ async def confirm_delete_handler(call: CallbackQuery, state: FSMContext, callbac
 
     if not char_id:
         log.error(f"User {user.id}: Не найден char_id в confirm_delete_handler.")
-        await ERR.generic_error(call)
+        await Err.generic_error(call)
         return
 
     lobby_service = LobbyService(
@@ -213,62 +217,89 @@ async def confirm_delete_handler(call: CallbackQuery, state: FSMContext, callbac
         )
 
 
-
-
 @router.callback_query(CharacterLobby.selection, LobbySelectionCallback.filter(F.action == "login"))
 async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     """
-    Обрабатывает нажатие кнопки "Войти в игру" (заглушка).
-
-    Args:
-        call (CallbackQuery): Callback от кнопки "Войти в игру".
-        state (FSMContext): Состояние FSM.
-        bot (Bot): Экземпляр бота.
-
-    Returns:
-        None
+    Обрабатывает нажатие кнопки "Войти в игру".
+    (Правильная версия, по твоей архитектуре)
     """
     if not call.from_user:
         log.warning("Хэндлер 'start_logging_handler' получил обновление без 'from_user'.")
         return
 
+    # --- 1. Сбор данных и показ заглушки ---
     user_id = call.from_user.id
     state_data = await state.get_data()
     char_id = state_data.get("char_id")
+    message_menu = state_data.get("message_menu")
+    message_content = state_data.get("message_content")  # <-- Нам нужны ОБА
 
-    log.info(f"Хэндлер 'start_logging_handler' [lobby:login] вызван user_id={user_id}, char_id={char_id}")
-    await call.answer(text="⚠️ Функция входа в игру находится в разработке.", show_alert=True)
-    log.warning(
-        f"Попытка входа в игру (функция-заглушка) для user_id={user_id}, char_id={char_id}. Данные FSM: {state_data}")
+    if not all([char_id, message_menu, message_content]):
+        log.error(f"User {call.from_user.id} нажал 'login', но FSM неполный.")
+        await Err.generic_error(call)
+        return
 
-    # TODO: Реализовать полную логику входа в игру.
-    # TODO: Проверять, пройден ли туториал. Если нет - перенаправлять на него.
-    # TODO: Загружать игровое состояние (локация, инвентарь и т.д.).
-    # TODO: Очищать сообщение лобби и меню, создавать игровой интерфейс.
+    log.info(f"Хэндлер 'start_logging_handler' [lobby:login] вызван user_id={call.from_user.id}, char_id={char_id}")
 
+    # Ставим заглушки на ОБА сообщения
+    await bot.edit_message_text(chat_id=message_menu["chat_id"], message_id=message_menu["message_id"], text=TEXT_AWAIT,
+                                reply_markup=None)
+    await bot.edit_message_text(chat_id=message_content["chat_id"], message_id=message_content["message_id"],
+                                text=TEXT_AWAIT, reply_markup=None)
 
-    state_data = await state.get_data()
-    char_id = state_data.get("char_id")
+    # --- 2. Вызываем LoginService (Бизнес-логика) ---
+    login_service = LoginService(char_id=char_id, state_data=state_data)
+    login_result = await login_service.handle_login()
 
-    async with get_async_session() as session:
-        char_repo = CharactersRepoORM(session)
-        character = await char_repo.get_character(char_id)
+    # --- 3. Проверяем результат (Твоя логика редиректа) ---
+    if not login_result or (login_result[0] != "world" and login_result[0] != "s_d"):
+        game_stage = login_result[0] if login_result else "unknown"
+        log.info(f"Редирект: char_id={char_id} не 'in_game'. Stage: {game_stage}")
 
-        if character.game_stage != "in_game":
-            # ⚠️ Персонаж не завершил обучение!
-            if character.game_stage == "tutorial_stats":
-                # Вернуть в Tutorial Stats
-                await redirect_to_tutorial_stats(call, state, bot, char_id)
-            elif character.game_stage == "tutorial_skill":
-                # Вернуть в Tutorial Skills
-                await redirect_to_tutorial_skills(call, state, bot, char_id)
-            else:
-                # Вернуть в создание
-                await call.answer("Персонаж не завершен", show_alert=True)
-            return
+        # TODO: логика для перевода игрока в туториал
+        # ... await redirect_to_tutorial_stats(call, state, bot, char_id) ...
+        await call.answer(f"Вход невозможен. Сначала завершите этап: {game_stage}", show_alert=True)
+        # (Тут нужно вернуть UI лобби, но пока просто прерываем)
+        return
 
+    # --- 4. Логин УСПЕШЕН. Получаем ДАННЫЕ ---
+    state_name, loc_id = login_result
+    log.info(f"Логин для char_id={char_id} успешен. Вход в: {state_name}:{loc_id}")
 
+    # --- 5. Вызываем Сервисы для UI ---
+    nav_service = NavigationService(char_id=char_id, state_data=state_data)
+    nav_text, nav_kb = await nav_service.get_navigation_ui(state_name, loc_id)  # (UI для низа)
 
+    menu_service = MenuService(game_stage="in_game", char_id=char_id)
+    menu_text, menu_kb = menu_service.get_data_menu()  # (UI для верха)
 
+    # --- 6. Перестраиваем UI (Правильный способ) ---
 
+    # A. Редактируем ВЕРХНЕЕ сообщение (`message_menu`)
+    await bot.edit_message_text(
+        chat_id=message_menu["chat_id"],
+        message_id=message_menu["message_id"],
+        text=menu_text,
+        reply_markup=menu_kb,
+        parse_mode="HTML"
+    )
 
+    # Б. Редактируем НИЖНЕЕ сообщение (`message_content`)
+    await bot.edit_message_text(
+        chat_id=message_content["chat_id"],
+        message_id=message_content["message_id"],
+        text=nav_text,
+        reply_markup=nav_kb,
+        parse_mode="HTML"
+    )
+
+    # --- 7. Обновляем FSM ---
+
+    # Сначала ОЧИЩАЕМ FSM от мусора, сохраняя только ядро
+    # (Она сама позаботится о char_id, message_menu, message_content)
+    await fsm_clean_core_state(state=state, event_source=call)
+
+    # А потом УСТАНАВЛИВАЕМ новый стейт
+    await state.set_state(InGame.navigation)
+
+    log.info(f"User {user_id} (char_id={char_id}) вошел в мир. FSM: InGame.navigation.")
