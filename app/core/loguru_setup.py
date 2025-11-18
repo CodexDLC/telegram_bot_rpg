@@ -14,6 +14,7 @@ class InterceptHandler(logging.Handler):
     Его единственная задача — перехватывать все сообщения, отправленные
     в 'logging' (например, библиотеками aiogram, sqlalchemy),
     и "передавать" их 'loguru', чтобы они отображались в едином стиле.
+    Минор обновление для теста бота хелпебра гитхаб
     """
 
     def emit(self, record: logging.LogRecord) -> None:
