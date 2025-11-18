@@ -1,33 +1,30 @@
 # app/services/ui_service/status_menu/status_modifier_service.py
-from loguru import logger as log
-from typing import Tuple, Optional, Dict, Any, Type, Union
+from typing import Any
 
-from aiogram.filters.callback_data import CallbackData
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-
+from loguru import logger as log
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.resources.game_data.status_menu.modifer_group_data import MODIFIER_HIERARCHY
-from app.resources.keyboards.status_callback import StatusNavCallback, StatusModifierCallback
+from app.resources.keyboards.status_callback import StatusModifierCallback, StatusNavCallback
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.resources.schemas_dto.modifer_dto import CharacterModifiersDTO
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.helpers_ui.status_modiier_formatters import ModifierFormatters as ModifierF
-from database.repositories import get_modifiers_repo, get_character_stats_repo
+from database.repositories import get_character_stats_repo, get_modifiers_repo
 from database.session import get_async_session
 
 
-
-
 class CharacterModifierUIService(BaseUIService):
-
-    def __init__(self,
-                 char_id: int,
-                 key: str,
-                 state_data: Dict[str, Any],
-                 syb_name: Optional[str] = None,
-                 ):
+    def __init__(
+        self,
+        char_id: int,
+        key: str,
+        state_data: dict[str, Any],
+        syb_name: str | None = None,
+    ):
         """
         Инициализирует сервис для работы с навыками персонажа.
 
@@ -39,15 +36,12 @@ class CharacterModifierUIService(BaseUIService):
         super().__init__(char_id=char_id, state_data=state_data)
         self.actor_name = syb_name or DEFAULT_ACTOR_NAME
         self.data_skills = MODIFIER_HIERARCHY
-        self.data_group = self.data_skills.get(key)
+        self.data_group: dict[str, Any] | None = self.data_skills.get(key)
         self.key = key
 
-
-
     def status_group_modifier_message(
-            self,
-            dto_to_use: CharacterStatsReadDTO | CharacterModifiersDTO
-    ) -> Tuple[str, InlineKeyboardMarkup]:
+        self, dto_to_use: CharacterStatsReadDTO | CharacterModifiersDTO
+    ) -> tuple[str | None, InlineKeyboardMarkup] | tuple[str, None]:
         """
         Формирует сообщение со списком модификаторов в выбранной группе.
 
@@ -55,48 +49,32 @@ class CharacterModifierUIService(BaseUIService):
         """
         log.debug(f"Формирование сообщения для группы модификаторов '{self.key}' для персонажа ID={self.char_id}.")
 
-        text = ModifierF.format_stats_list(
-            data=self.data_group,
-            dto_to_use=dto_to_use,
-            actor_name=self.actor_name
-        )
+        if not self.data_group:
+            return "Группа модификаторов не найдена", None
+
+        text = ModifierF.format_stats_list(data=self.data_group, dto_to_use=dto_to_use, actor_name=self.actor_name)
 
         kb = self._group_modifier_kb()
 
-
-
         return text, kb
 
-    def _group_modifier_kb(self)-> InlineKeyboardMarkup:
-
+    def _group_modifier_kb(self) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()
-        data_items = self.data_group.get("items")
-
-        for key, title in data_items.items():
-            callback_data = StatusModifierCallback(
-                    char_id=self.char_id,
-                    level="detail",
-                    key=key
-                ).pack()
-            kb.button(text=title, callback_data=callback_data)
+        if self.data_group:
+            data_items = self.data_group.get("items")
+            if isinstance(data_items, dict):
+                for key, title in data_items.items():
+                    callback_data = StatusModifierCallback(char_id=self.char_id, level="detail", key=key).pack()
+                    kb.button(text=title, callback_data=callback_data)
         kb.adjust(2)
 
-        # Кнопка "Назад" для возврата к списку групп модификаторов
-        back_callback = StatusNavCallback(
-            char_id=self.char_id,
-            key="stats"
-        ).pack()
-
-        kb.row(
-            InlineKeyboardButton(text="[ ◀️ Назад к модификаторам ]", callback_data=back_callback)
-        )
+        back_callback = StatusNavCallback(char_id=self.char_id, key="stats").pack()
+        kb.row(InlineKeyboardButton(text="[ ◀️ Назад к модификаторам ]", callback_data=back_callback))
         return kb.as_markup()
 
     def status_detail_modifier_message(
-            self,
-            dto_to_use: Union[CharacterStatsReadDTO, CharacterModifiersDTO],
-            group_key: str | None
-    ) -> Tuple[str, InlineKeyboardMarkup]:
+        self, dto_to_use: CharacterStatsReadDTO | CharacterModifiersDTO, group_key: str | None
+    ) -> tuple[str | None, InlineKeyboardMarkup] | tuple[str, None]:
         """
         Формирует сообщение с детальной информацией (карточкой) о модификаторе.
 
@@ -106,21 +84,22 @@ class CharacterModifierUIService(BaseUIService):
         """
         if not group_key:
             log.warning(f"Отсутствует group_key {group_key}")
+            return "Ошибка: отсутствует ключ группы.", None
 
         log.debug(f"Формирование Lvl 2 (детали) для ключа '{self.key}' (группа '{group_key}')")
 
-        # 1. Получаем значение (e.g., 5.25) из DTO
         value = getattr(dto_to_use, self.key, "N/A")
 
-        # 2. Вызываем новый форматтер
+        if not self.data_group:
+            return "Данные о группе не найдены", None
+
         text = ModifierF.format_modifier_detail(
-            data=self.data_group,  # self.data_group - это уже данные на self.key
+            data=self.data_group,
             value=value,
             key=self.key,
-            actor_name=self.actor_name
+            actor_name=self.actor_name,
         )
 
-        # 3. Создаем клавиатуру (только кнопка "Назад")
         kb = self._detail_modifier_kb(group_key=group_key)
 
         return text, kb
@@ -134,22 +113,16 @@ class CharacterModifierUIService(BaseUIService):
         """
         kb = InlineKeyboardBuilder()
 
-        # Кнопка "Назад" для возврата к списку модификаторов в группе (Lvl 1)
-        # Мы используем group_key, чтобы вернуться в "base_stats" или "resources"
         back_callback = StatusModifierCallback(
             char_id=self.char_id,
             level="group",
             key=group_key,
         ).pack()
 
-        kb.row(
-            InlineKeyboardButton(text="[ ◀️ Назад к группе ]", callback_data=back_callback)
-        )
+        kb.row(InlineKeyboardButton(text="[ ◀️ Назад к группе ]", callback_data=back_callback))
         return kb.as_markup()
 
-
-    async def get_data_modifier(self)-> CharacterModifiersDTO | None:
-
+    async def get_data_modifier(self) -> CharacterModifiersDTO | None:
         try:
             async with get_async_session() as session:
                 modifier_repo = get_modifiers_repo(session)
@@ -159,12 +132,11 @@ class CharacterModifierUIService(BaseUIService):
                     return modifiers
                 else:
                     return None
-        except Exception as e:
+        except SQLAlchemyError as e:
             log.error(f"{e}")
+            return None
 
-
-    async def get_data_stats(self)-> CharacterStatsReadDTO | None:
-
+    async def get_data_stats(self) -> CharacterStatsReadDTO | None:
         try:
             async with get_async_session() as session:
                 character_stats = get_character_stats_repo(session)
@@ -174,5 +146,6 @@ class CharacterModifierUIService(BaseUIService):
                     return stats
                 else:
                     return None
-        except Exception as e:
+        except SQLAlchemyError as e:
             log.error(f"{e}")
+            return None

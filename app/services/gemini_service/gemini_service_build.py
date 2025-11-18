@@ -1,23 +1,20 @@
 # app/services/gemini_service/gemini_service_build.py
-from loguru import logger as log
-from typing import Callable, Tuple, List, Any, Union, Dict
+from collections.abc import Callable
+from typing import Any
+
 from google.generativeai import types
+from loguru import logger as log
 
 from app.resources.llm_data.json_sheme import DUNGEON_JSON_SCHEMA_PROMPT
-from app.resources.llm_data.mode_preset import ModePreset, ChatMode
-
+from app.resources.llm_data.mode_preset import ChatMode, ModePreset
 
 # Определяем тип для содержимого, которое может быть строкой или списком.
-GeminiContents = Union[str, List[types.ContentDict]]
+GeminiContents = str | list[types.ContentDict]
 # Определяем тип для функции-сборщика.
-GeminiBuilder = Callable[..., Tuple[GeminiContents, str]]
+GeminiBuilder = Callable[..., tuple[GeminiContents, str]]
 
 
-def build_simple_gemini(
-        preset: ModePreset,
-        user_text: str,
-        **kw: Any
-) -> Tuple[GeminiContents, str]:
+def build_simple_gemini(preset: ModePreset, user_text: str, **kw: Any) -> tuple[GeminiContents, str]:
     """
     Универсальный сборщик для простых текстовых задач.
 
@@ -39,10 +36,10 @@ def build_simple_gemini(
 
 
 def build_dungeon_gemini(
-        preset: ModePreset,
-        user_text: str,  # Этот параметр игнорируется
-        **kw: Any
-) -> Tuple[GeminiContents, str]:
+    preset: ModePreset,
+    user_text: str,  # Этот параметр игнорируется
+    **kw: Any,
+) -> tuple[GeminiContents, str]:
     """
     Специализированный сборщик для генерации подземелий.
 
@@ -61,7 +58,9 @@ def build_dungeon_gemini(
     log.debug("Используется 'build_dungeon_gemini'.")
     theme_prompt_from_db = kw.get("theme_prompt_from_db")
     if not theme_prompt_from_db:
-        log.warning("'theme_prompt_from_db' не предоставлен для 'build_dungeon_gemini'. Результат может быть непредсказуемым.")
+        log.warning(
+            "'theme_prompt_from_db' не предоставлен для 'build_dungeon_gemini'. Результат может быть непредсказуемым."
+        )
         theme_prompt_from_db = "Случайная тема на усмотрение ИИ."
 
     base_instruction = preset["system_instruction"]
@@ -84,7 +83,7 @@ def build_dungeon_gemini(
 
 # Словарь, который сопоставляет режимы чата с их функциями-сборщиками.
 # Это позволяет гибко добавлять новые режимы и их логику сборки промптов.
-BUILDERS_GEMINI: Dict[ChatMode, GeminiBuilder] = {
+BUILDERS_GEMINI: dict[ChatMode, GeminiBuilder] = {
     "dungeon_generator": build_dungeon_gemini,
     "item_description": build_simple_gemini,
     # "npc_dialogue": build_npc_dialogue, # Пример для будущего расширения

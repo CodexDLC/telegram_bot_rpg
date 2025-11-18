@@ -1,21 +1,19 @@
 # database/session.py
-from loguru import logger as log
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
+from loguru import logger as log
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
-
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
-    create_async_engine,
     AsyncSession,
     async_sessionmaker,
+    create_async_engine,
 )
-from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import DB_URL_SQLALCHEMY
 from database.model_orm import Base
-
 
 
 @event.listens_for(Engine, "connect")
@@ -31,8 +29,9 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor.execute("PRAGMA foreign_keys = ON;")
         cursor.close()
         log.debug("PRAGMA foreign_keys=ON включен для нового соединения.")
-    except Exception as e:
+    except SQLAlchemyError as e:
         log.error(f"Не удалось включить PRAGMA foreign_keys: {e}")
+
 
 # Создание асинхронного "движка" для подключения к базе данных.
 # Движок - это фабрика соединений, управляющая пулом подключений.
@@ -40,7 +39,7 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 # Это полезно для отладки, но в продакшене лучше установить в False.
 async_engine = create_async_engine(
     DB_URL_SQLALCHEMY,
-    echo=False  # В продакшене рекомендуется отключать
+    echo=False,  # В продакшене рекомендуется отключать
 )
 
 # Создание фабрики сессий.

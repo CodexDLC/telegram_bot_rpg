@@ -9,7 +9,4 @@ from .tutorial_skill import router as tutorial_skill_router
 tutorial_router_group = Router(name="tutorial_group")
 
 # Собираем "цепочку"
-tutorial_router_group.include_routers(
-    tutorial_game_router,
-    tutorial_skill_router
-)
+tutorial_router_group.include_routers(tutorial_game_router, tutorial_skill_router)

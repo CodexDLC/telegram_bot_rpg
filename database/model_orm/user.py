@@ -1,10 +1,12 @@
 # database/model_orm/user.py
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, Optional
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import BigInteger, String
 
-from database.model_orm.base import TimestampMixin, Base
+from typing import TYPE_CHECKING
+
+from sqlalchemy import BigInteger, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from database.model_orm.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from .character import Character  # Изменено на единственное число для соответствия PEP-8
@@ -35,25 +37,25 @@ class User(Base, TimestampMixin):
         created_at (Mapped[str]): Время создания записи (наследуется от TimestampMixin).
         updated_at (Mapped[str]): Время последнего обновления (наследуется от TimestampMixin).
     """
+
     __tablename__ = "users"
 
     # Явно указываем типы данных для лучшей совместимости с PostgreSQL
     telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     first_name: Mapped[str] = mapped_column(String(64))
-    username: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
-    last_name: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     language_code: Mapped[str] = mapped_column(String(10), default="ru", nullable=False)
     is_premium: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     # Связь с персонажами. `back_populates` обеспечивает двустороннюю связь.
-    characters: Mapped[List["Character"]] = relationship(
+    characters: Mapped[list[Character]] = relationship(
         back_populates="user",
-        cascade="all, delete-orphan"  # При удалении юзера удаляются и его персонажи
+        cascade="all, delete-orphan",  # При удалении юзера удаляются и его персонажи
     )
 
     def __repr__(self) -> str:
         """
         Возвращает строковое представление объекта User.
         """
-        return (f"<User(telegram_id={self.telegram_id}, "
-                f"first_name='{self.first_name}', username='{self.username}')>")
+        return f"<User(telegram_id={self.telegram_id}, first_name='{self.first_name}', username='{self.username}')>"

@@ -1,7 +1,8 @@
 # app/services/report_service.py
-from loguru import logger as log
 from aiogram import Bot
-from aiogram.fsm.context import FSMContext
+from aiogram.exceptions import TelegramAPIError
+from loguru import logger as log
+
 from app.core.config import BUG_REPORT_CHANNEL_ID  # <--- ID канала
 
 
@@ -26,13 +27,9 @@ class ReportService:
         )
 
         try:
-            await bot.send_message(
-                chat_id=BUG_REPORT_CHANNEL_ID,
-                text=message_text,
-                parse_mode="HTML"
-            )
+            await bot.send_message(chat_id=BUG_REPORT_CHANNEL_ID, text=message_text, parse_mode="HTML")
             log.info(f"Отчет от {user_id} ({report_type}) успешно отправлен в канал.")
             return True
-        except Exception as e:
+        except TelegramAPIError as e:
             log.error(f"Критическая ошибка при отправке отчета в канал {BUG_REPORT_CHANNEL_ID}: {e}", exc_info=True)
             return False

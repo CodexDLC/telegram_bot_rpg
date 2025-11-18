@@ -1,10 +1,12 @@
 # database/db_contract/i_characters_repo.py
-from abc import abstractmethod, ABC
-from typing import Dict, Optional, List
+from abc import ABC, abstractmethod
 
 from app.resources.schemas_dto.character_dto import (
-    CharacterReadDTO, CharacterShellCreateDTO, CharacterOnboardingUpdateDTO,
-    CharacterStatsReadDTO, CharacterStatsUpdateDTO,
+    CharacterOnboardingUpdateDTO,
+    CharacterReadDTO,
+    CharacterShellCreateDTO,
+    CharacterStatsReadDTO,
+    CharacterStatsUpdateDTO,
 )
 
 
@@ -33,9 +35,7 @@ class ICharactersRepo(ABC):
 
     @abstractmethod
     async def update_character_onboarding(
-            self,
-            character_id: int,
-            character_data: CharacterOnboardingUpdateDTO
+        self, character_id: int, character_data: CharacterOnboardingUpdateDTO
     ) -> None:
         """
         Обновляет данные персонажа после этапа онбординга.
@@ -54,7 +54,7 @@ class ICharactersRepo(ABC):
         pass
 
     @abstractmethod
-    async def get_character(self, character_id: int, **kwargs) -> Optional[CharacterReadDTO]:
+    async def get_character(self, character_id: int, **kwargs) -> CharacterReadDTO | None:
         """
         Находит и возвращает одного персонажа по его `character_id`.
 
@@ -69,7 +69,7 @@ class ICharactersRepo(ABC):
         pass
 
     @abstractmethod
-    async def get_characters(self, user_id: int, **kwargs) -> List[CharacterReadDTO]:
+    async def get_characters(self, user_id: int, **kwargs) -> list[CharacterReadDTO]:
         """
         Возвращает список всех персонажей, принадлежащих одному пользователю.
 
@@ -117,7 +117,7 @@ class ICharacterStatsRepo(ABC):
     """
 
     @abstractmethod
-    async def get_stats(self, character_id: int, **kwargs) -> Optional[CharacterStatsReadDTO]:
+    async def get_stats(self, character_id: int, **kwargs) -> CharacterStatsReadDTO | None:
         """
         Возвращает характеристики (статы) персонажа.
 
@@ -147,7 +147,7 @@ class ICharacterStatsRepo(ABC):
         pass
 
     @abstractmethod
-    async def add_stats(self, character_id: int, stats_to_add: Dict[str, int]) -> Optional[CharacterStatsReadDTO]:
+    async def add_stats(self, character_id: int, stats_to_add: dict[str, int]) -> CharacterStatsReadDTO | None:
         """
         Атомарно добавляет значения к существующим характеристикам.
 

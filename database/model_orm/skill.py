@@ -1,8 +1,10 @@
 # database/model_orm/skill.py
 from __future__ import annotations
+
 import enum
 from typing import TYPE_CHECKING
-from sqlalchemy import ForeignKey, String, Integer, PrimaryKeyConstraint, Enum
+
+from sqlalchemy import Enum, ForeignKey, Integer, PrimaryKeyConstraint, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.model_orm.base import Base, TimestampMixin
@@ -19,6 +21,7 @@ class SkillProgressState(enum.Enum):
     - PAUSE: Развитие навыка приостановлено.
     - MINUS: Развитие навыка замедлено или регрессирует.
     """
+
     PLUS = "PLUS"
     PAUSE = "PAUSE"
     MINUS = "MINUS"
@@ -40,26 +43,23 @@ class CharacterSkillRate(Base):
 
         character (Mapped["Character"]): Обратная связь с моделью Character.
     """
+
     __tablename__ = "character_skill_rate"
 
-    character_id: Mapped[int] = mapped_column(
-        ForeignKey("characters.character_id", ondelete="CASCADE"),
-        nullable=False
-    )
+    character_id: Mapped[int] = mapped_column(ForeignKey("characters.character_id", ondelete="CASCADE"), nullable=False)
     skill_key: Mapped[str] = mapped_column(String(50), nullable=False)
     xp_per_tick: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    character: Mapped["Character"] = relationship(back_populates="skill_rate")
+    character: Mapped[Character] = relationship(back_populates="skill_rate")
 
     # Составной первичный ключ гарантирует, что для одного персонажа
     # может быть только одна запись для каждого навыка.
-    __table_args__ = (
-        PrimaryKeyConstraint("character_id", "skill_key"),
-    )
+    __table_args__ = (PrimaryKeyConstraint("character_id", "skill_key"),)
 
     def __repr__(self) -> str:
-        return (f"<CharacterSkillRate(char_id={self.character_id}, "
-                f"skill='{self.skill_key}', xp_rate={self.xp_per_tick})>")
+        return (
+            f"<CharacterSkillRate(char_id={self.character_id}, skill='{self.skill_key}', xp_rate={self.xp_per_tick})>"
+        )
 
 
 class CharacterSkillProgress(Base, TimestampMixin):
@@ -79,12 +79,10 @@ class CharacterSkillProgress(Base, TimestampMixin):
         character (Mapped["Character"]): Обратная связь с моделью Character.
         created_at, updated_at: Временные метки.
     """
+
     __tablename__ = "character_skill_progress"
 
-    character_id: Mapped[int] = mapped_column(
-        ForeignKey("characters.character_id", ondelete="CASCADE"),
-        nullable=False
-    )
+    character_id: Mapped[int] = mapped_column(ForeignKey("characters.character_id", ondelete="CASCADE"), nullable=False)
     skill_key: Mapped[str] = mapped_column(String(50), nullable=False)
     total_xp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_unlocked: Mapped[bool] = mapped_column(default=False, nullable=False)
@@ -92,16 +90,16 @@ class CharacterSkillProgress(Base, TimestampMixin):
     progress_state: Mapped[SkillProgressState] = mapped_column(
         Enum(SkillProgressState, name="skill_progress_state_enum", create_type=True),
         default=SkillProgressState.PAUSE,
-        nullable=False
+        nullable=False,
     )
 
-    character: Mapped["Character"] = relationship(back_populates="skill_progress")
+    character: Mapped[Character] = relationship(back_populates="skill_progress")
 
-    __table_args__ = (
-        PrimaryKeyConstraint("character_id", "skill_key"),
-    )
+    __table_args__ = (PrimaryKeyConstraint("character_id", "skill_key"),)
 
     def __repr__(self) -> str:
-        return (f"<CharacterSkillProgress(char_id={self.character_id}, "
-                f"skill='{self.skill_key}', xp={self.total_xp}, "
-                f"state='{self.progress_state.name}')>")
+        return (
+            f"<CharacterSkillProgress(char_id={self.character_id}, "
+            f"skill='{self.skill_key}', xp={self.total_xp}, "
+            f"state='{self.progress_state.name}')>"
+        )

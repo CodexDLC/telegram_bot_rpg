@@ -1,6 +1,7 @@
 # app/resources/schemas_dto/character_dto.py
 from datetime import datetime
 from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
 
 Gender = Literal["male", "female", "other"]
@@ -11,12 +12,15 @@ class CharacterShellCreateDTO(BaseModel):
     DTO для 'входа' (создание "оболочки" персонажа).
     Содержит ТОЛЬКО ID пользователя.
     """
+
     user_id: int
+
 
 class CharacterOnboardingUpdateDTO(BaseModel):
     """
     DTO для 'входа' (обновление персонажа после онбординга).
     """
+
     name: str
     gender: Gender  # (Gender у вас уже определен)
     game_stage: str
@@ -27,6 +31,7 @@ class CharacterReadDTO(BaseModel):
     DTO для выхода
 
     """
+
     character_id: int
     user_id: int
     name: str
@@ -42,6 +47,7 @@ class CharacterStatsUpdateDTO(BaseModel):
     """
     DTO для обновления данных.
     """
+
     strength: int
     agility: int
     endurance: int

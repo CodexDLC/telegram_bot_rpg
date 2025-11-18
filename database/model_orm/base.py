@@ -1,12 +1,8 @@
 # 1. Импортируем 'datetime' из стандартной библиотеки
 from datetime import datetime
+
 from sqlalchemy import text
-from sqlalchemy.orm import (
-    declarative_base,
-    Mapped,
-    mapped_column
-)
-from sqlalchemy.types import TIMESTAMP
+from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 
 # Создание декларативной базы.
 Base = declarative_base()
@@ -27,15 +23,13 @@ class TimestampMixin:
         updated_at (Mapped[datetime]): Время последнего обновления записи (UTC).
             Обновляется триггерами БД при изменении строки.
     """
+
     __abstract__ = True
 
     created_at: Mapped[datetime] = mapped_column(
-        server_default=text("STRFTIME('%Y-%m-%d %H:%M:%S', 'now')"),
-        nullable=False
+        server_default=text("STRFTIME('%Y-%m-%d %H:%M:%S', 'now')"), nullable=False
     )
 
     updated_at: Mapped[datetime] = mapped_column(
-        server_default=text("STRFTIME('%Y-%m-%d %H:%M:%S', 'now')"),
-        nullable=False
-
+        server_default=text("STRFTIME('%Y-%m-%d %H:%M:%S', 'now')"), nullable=False
     )

@@ -1,8 +1,9 @@
 # app/services/helpers_module/data_loader_service.py
 import asyncio
-from loguru import logger as log
-from typing import List, Dict, Any, Callable, Tuple
+from collections.abc import Callable
+from typing import Any
 
+from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM, CharacterStatsRepoORM
@@ -10,11 +11,10 @@ from database.repositories.ORM.skill_repo import SkillProgressRepo
 from database.repositories.ORM.users_repo_orm import UsersRepoORM
 from database.session import get_async_session
 
-
 # Карта загрузчиков данных.
 # Ключ - строка, которую мы используем в `include`.
 # Значение - кортеж из (фабрика_репозитория, имя_метода_в_репозитории).
-DATA_LOADERS_MAP: Dict[str, Tuple[Callable[[AsyncSession], Any], str]] = {
+DATA_LOADERS_MAP: dict[str, tuple[Callable[[AsyncSession], Any], str]] = {
     "user": (UsersRepoORM, "get_user"),
     "character": (CharactersRepoORM, "get_character"),
     "characters": (CharactersRepoORM, "get_characters"),
@@ -24,7 +24,7 @@ DATA_LOADERS_MAP: Dict[str, Tuple[Callable[[AsyncSession], Any], str]] = {
 log.debug(f"Карта DATA_LOADERS_MAP инициализирована с {len(DATA_LOADERS_MAP)} загрузчиками.")
 
 
-async def load_data_auto(include: List[str], **kwargs: Any) -> Dict[str, Any]:
+async def load_data_auto(include: list[str], **kwargs: Any) -> dict[str, Any]:
     """
     Асинхронно загружает различные наборы данных из базы данных.
 
@@ -52,7 +52,7 @@ async def load_data_auto(include: List[str], **kwargs: Any) -> Dict[str, Any]:
         return {}
 
     log.info(f"Запрос на асинхронную загрузку данных: {include} с параметрами: {kwargs}")
-    results: Dict[str, Any] = {}
+    results: dict[str, Any] = {}
 
     async with get_async_session() as session:
         tasks = []
@@ -75,7 +75,7 @@ async def load_data_auto(include: List[str], **kwargs: Any) -> Dict[str, Any]:
         task_results = await asyncio.gather(*[t for _, t in tasks])
 
         # Собираем результаты в словарь.
-        for (key, _), result_value in zip(tasks, task_results):
+        for (key, _), result_value in zip(tasks, task_results, strict=True):
             results[key] = result_value
 
     log.info(f"Загрузка данных завершена. Получены ключи: {list(results.keys())}")

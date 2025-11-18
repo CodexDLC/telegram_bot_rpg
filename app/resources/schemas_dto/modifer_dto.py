@@ -1,6 +1,6 @@
 # app/resources/schemas_dto/modifier_dto.py
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -12,6 +12,7 @@ class CharacterModifiersDTO(BaseModel):
     между различными частями приложения. Поля соответствуют
     ORM-модели `CharacterModifiers`.
     """
+
     character_id: int
 
     # --- Физические боевые модификаторы ---
@@ -58,11 +59,11 @@ class CharacterModifiersDTO(BaseModel):
     shock_resistance: float
 
     # --- Экипировка (может быть не надета) ---
-    armor_shield: Optional[str] = None
-    armor_head: Optional[str] = None
-    armor_chest: Optional[str] = None
-    armor_legs: Optional[str] = None
-    armor_feet: Optional[str] = None
+    armor_shield: str | None = None
+    armor_head: str | None = None
+    armor_chest: str | None = None
+    armor_legs: str | None = None
+    armor_feet: str | None = None
 
     # --- Утилитарные и экономические модификаторы ---
     received_healing_bonus: float
@@ -85,6 +86,7 @@ class CharacterModifiersSaveDto(BaseModel):
     DTO для СОХРАНЕНИЯ/ОБНОВЛЕНИЯ CharacterModifiers.
     Содержит ТОЛЬКО модификаторы, рассчитанные из Lvl 1 Статов.
     """
+
     # --- Таблица 1: Физический Блок ---
     physical_damage_bonus: float
     physical_penetration: float

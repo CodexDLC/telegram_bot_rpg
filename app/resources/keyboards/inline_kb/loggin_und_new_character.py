@@ -1,11 +1,8 @@
 # app/keyboards/inline.py
-from loguru import logger as log
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.resources.texts.buttons_callback import Buttons
-
-
 
 
 def get_start_adventure_kb() -> InlineKeyboardMarkup:
@@ -31,6 +28,7 @@ def gender_kb() -> InlineKeyboardMarkup:
 
     return kb.as_markup()
 
+
 def confirm_kb() -> InlineKeyboardMarkup:
     """
     Возвращает Inline-клавиатуру с кнопкой подтверждения.
@@ -41,6 +39,3 @@ def confirm_kb() -> InlineKeyboardMarkup:
         kb.button(text=value, callback_data=key)
 
     return kb.as_markup()
-
-
-

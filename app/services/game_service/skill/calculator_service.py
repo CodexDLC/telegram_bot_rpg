@@ -1,11 +1,8 @@
 # app/services/game_service/skill/calculator_service.py
 from loguru import logger as log
-from app.resources.game_data.skill_library import (
-    SKILL_RECIPES,
-    TITLE_THRESHOLDS_PERCENT,
-    BASE_MAX_XP
-)
-from app.resources.schemas_dto.skill import SkillProgressDTO, SkillDisplayDTO
+
+from app.resources.game_data.skill_library import BASE_MAX_XP, SKILL_RECIPES, TITLE_THRESHOLDS_PERCENT
+from app.resources.schemas_dto.skill import SkillDisplayDTO, SkillProgressDTO
 
 
 class SkillCalculatorService:
@@ -41,11 +38,20 @@ class SkillCalculatorService:
 
         # Шаг 1: Получение множителя опыта из библиотеки.
         skill_info = SKILL_RECIPES.get(skill_key)
-        if not skill_info or "xp_multiplier" not in skill_info:
-            log.warning(f"Не найден 'xp_multiplier' для '{skill_key}' в SKILL_RECIPES. Используется множитель 1.0.")
-            multiplier = 1.0
+        multiplier = 1.0
+        if skill_info and isinstance(skill_info, dict) and "xp_multiplier" in skill_info:
+            xp_multiplier = skill_info["xp_multiplier"]
+            # FIX: Заменено (int, float) на int | float согласно правилу Ruff UP038
+            if isinstance(xp_multiplier, int | float):
+                multiplier = float(xp_multiplier)
+            else:
+                log.warning(
+                    f"Неверный тип 'xp_multiplier' для '{skill_key}' в SKILL_RECIPES. "
+                    f"Ожидался int или float, получен {type(xp_multiplier)}. Используется множитель 1.0."
+                )
         else:
-            multiplier = skill_info["xp_multiplier"]
+            log.warning(f"Не найден 'xp_multiplier' для '{skill_key}' в SKILL_RECIPES. Используется множитель 1.0.")
+
         log.debug(f"  - Множитель опыта (multiplier): {multiplier}")
 
         # Шаг 2: Расчет эффективного максимального опыта.
@@ -77,7 +83,7 @@ class SkillCalculatorService:
             title=current_title,
             percentage=round(percentage, 2),
             total_xp=total_xp,
-            effective_max_xp=effective_max_xp
+            effective_max_xp=effective_max_xp,
         )
         log.debug(f"Сформирован SkillDisplayDTO: {display_dto.model_dump_json()}")
         return display_dto

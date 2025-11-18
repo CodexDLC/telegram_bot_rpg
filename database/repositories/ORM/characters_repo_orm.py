@@ -1,14 +1,16 @@
 # database/repositories/ORM/characters_repo_orm.py
-from loguru import logger as log
-from typing import Optional, List, Dict
 
-from sqlalchemy import select, update, delete
-from sqlalchemy.ext.asyncio import AsyncSession
+from loguru import logger as log
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.schemas_dto.character_dto import (
-    CharacterStatsReadDTO, CharacterStatsUpdateDTO,
-    CharacterReadDTO, CharacterShellCreateDTO, CharacterOnboardingUpdateDTO
+    CharacterOnboardingUpdateDTO,
+    CharacterReadDTO,
+    CharacterShellCreateDTO,
+    CharacterStatsReadDTO,
+    CharacterStatsUpdateDTO,
 )
 from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
 from database.model_orm import CharacterModifiers
@@ -55,17 +57,13 @@ class CharactersRepoORM(ICharactersRepo):
             raise
 
     async def update_character_onboarding(
-            self,
-            character_id: int,
-            character_data: CharacterOnboardingUpdateDTO
+        self, character_id: int, character_data: CharacterOnboardingUpdateDTO
     ) -> None:
         """Обновляет данные персонажа после онбординга (имя, пол, стадия)."""
-        log.debug(f"Обновление данных онбординга для character_id={character_id} на: {character_data.model_dump_json()}")
-        stmt = (
-            update(Character)
-            .where(Character.character_id == character_id)
-            .values(**character_data.model_dump())
+        log.debug(
+            f"Обновление данных онбординга для character_id={character_id} на: {character_data.model_dump_json()}"
         )
+        stmt = update(Character).where(Character.character_id == character_id).values(**character_data.model_dump())
         try:
             await self.session.execute(stmt)
             log.debug(f"Данные персонажа {character_id} были успешно обновлены.")
@@ -73,7 +71,7 @@ class CharactersRepoORM(ICharactersRepo):
             log.exception(f"Ошибка SQLAlchemy при обновлении данных онбординга для character_id={character_id}: {e}")
             raise
 
-    async def get_character(self, character_id: int, **kwargs) -> Optional[CharacterReadDTO]:
+    async def get_character(self, character_id: int, **kwargs) -> CharacterReadDTO | None:
         """Возвращает DTO персонажа по его ID."""
         log.debug(f"Запрос на получение персонажа по character_id={character_id}")
         stmt = select(Character).where(Character.character_id == character_id)
@@ -90,7 +88,7 @@ class CharactersRepoORM(ICharactersRepo):
             log.exception(f"Ошибка SQLAlchemy при получении персонажа {character_id}: {e}")
             raise
 
-    async def get_characters(self, user_id: int, **kwargs) -> List[CharacterReadDTO]:
+    async def get_characters(self, user_id: int, **kwargs) -> list[CharacterReadDTO]:
         """Возвращает список DTO персонажей для указанного пользователя."""
         log.debug(f"Запрос на получение списка персонажей для user_id={user_id}")
         stmt = select(Character).where(Character.user_id == user_id)
@@ -134,7 +132,7 @@ class CharacterStatsRepoORM(ICharacterStatsRepo):
         self.session = session
         log.debug(f"Инициализирован {self.__class__.__name__} с сессией: {session}")
 
-    async def get_stats(self, character_id: int, **kwargs) -> Optional[CharacterStatsReadDTO]:
+    async def get_stats(self, character_id: int, **kwargs) -> CharacterStatsReadDTO | None:
         """Возвращает DTO характеристик персонажа."""
         log.debug(f"Запрос на получение статов для character_id={character_id}")
         stmt = select(CharacterStats).where(CharacterStats.character_id == character_id)
@@ -155,9 +153,7 @@ class CharacterStatsRepoORM(ICharacterStatsRepo):
         """Полностью перезаписывает характеристики персонажа."""
         log.debug(f"Запрос на полное обновление статов для character_id={character_id}")
         stmt = (
-            update(CharacterStats)
-            .where(CharacterStats.character_id == character_id)
-            .values(**stats_data.model_dump())
+            update(CharacterStats).where(CharacterStats.character_id == character_id).values(**stats_data.model_dump())
         )
         try:
             await self.session.execute(stmt)
@@ -166,17 +162,27 @@ class CharacterStatsRepoORM(ICharacterStatsRepo):
             log.exception(f"Ошибка SQLAlchemy при обновлении статов для character_id={character_id}: {e}")
             raise
 
-    async def add_stats(self, character_id: int, stats_to_add: Dict[str, int]) -> Optional[CharacterStatsReadDTO]:
+    async def add_stats(self, character_id: int, stats_to_add: dict[str, int]) -> CharacterStatsReadDTO | None:
         """Атомарно добавляет значения к существующим статам и возвращает обновленные данные."""
         if not stats_to_add:
             log.warning(f"Вызван add_stats для character_id={character_id} с пустым словарем бонусов.")
             return None
 
         log.debug(f"Запрос на атомарное добавление статов для character_id={character_id}: {stats_to_add}")
-        ALLOWED_STATS = {"strength", "agility", "endurance", "charisma", "intelligence", "perception", "luck"}
+        allowed_stats = {
+            "strength",
+            "agility",
+            "endurance",
+            "intelligence",
+            "wisdom",
+            "men",
+            "perception",
+            "charisma",
+            "luck",
+        }
         values_to_update = {}
         for stat, value in stats_to_add.items():
-            if stat in ALLOWED_STATS:
+            if stat in allowed_stats:
                 orm_column = getattr(CharacterStats, stat)
                 values_to_update[stat] = orm_column + value
 
@@ -184,11 +190,7 @@ class CharacterStatsRepoORM(ICharacterStatsRepo):
             log.warning(f"В add_stats для character_id={character_id} не передано валидных статов.")
             return None
 
-        stmt = (
-            update(CharacterStats)
-            .where(CharacterStats.character_id == character_id)
-            .values(**values_to_update)
-        )
+        stmt = update(CharacterStats).where(CharacterStats.character_id == character_id).values(**values_to_update)
 
         try:
             # Шаг 1: Просто выполняем обновление

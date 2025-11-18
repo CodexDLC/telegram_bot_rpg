@@ -1,17 +1,19 @@
-#app/services/ui_service/tutorial/tutorial_service_skill.py
-from loguru import logger as log
-from typing import Tuple, Union, List, Dict, Any
+# app/services/ui_service/tutorial/tutorial_service_skill.py
+from typing import Any
 
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
 
-
+from app.resources.keyboards.callback_data import LobbySelectionCallback, TutorialQuestCallback
 from app.resources.texts.buttons_callback import GameStage
-from app.resources.texts.game_messages.tutorial_messages_skill import TUTORIAL_SKILL_EVENTS, TUTORIAL_SKILL_FINALE, \
-    TUTORIAL_PHASE_SKILL
-from app.resources.keyboards.callback_data import TutorialQuestCallback, LobbySelectionCallback
-from database.repositories import SkillProgressRepo, CharactersRepoORM
+from app.resources.texts.game_messages.tutorial_messages_skill import (
+    TUTORIAL_PHASE_SKILL,
+    TUTORIAL_SKILL_EVENTS,
+    TUTORIAL_SKILL_FINALE,
+)
+from database.repositories import CharactersRepoORM, SkillProgressRepo
 from database.session import get_async_session
 
 
@@ -25,7 +27,7 @@ class TutorialServiceSkills:
     кнопок на каждом шаге туториала.
     """
 
-    def __init__(self, skills_db: list[str]= None, callback_data: TutorialQuestCallback = None):
+    def __init__(self, skills_db: list[str] | None = None, callback_data: TutorialQuestCallback | None = None):
         """
         Инициализирует сервис на основе данных обратного вызова.
 
@@ -37,13 +39,12 @@ class TutorialServiceSkills:
         """
         self.data_pool = TUTORIAL_SKILL_EVENTS
         self.data_final = TUTORIAL_SKILL_FINALE
-        self.skills_db = skills_db
-
+        self.skills_db: list[str] | None = skills_db
 
         if callback_data:
-            self.phase = callback_data.phase
-            self.branch = callback_data.branch
-            self.value = callback_data.value
+            self.phase: str | None = callback_data.phase
+            self.branch: str | None = callback_data.branch
+            self.value: str | None = callback_data.value
         else:
             self.phase = None
             self.branch = None
@@ -54,7 +55,7 @@ class TutorialServiceSkills:
             f"phase='{self.phase}', branch='{self.branch}', value='{self.value}'"
         )
 
-    def _add_skill_db(self, value: str = None):
+    def _add_skill_db(self, value: str | None = None) -> None:
         """
         Добавляет выбранный навык в базу данных навыков персонажа.
 
@@ -72,7 +73,7 @@ class TutorialServiceSkills:
         else:
             log.debug(f"Skipped adding skill. skills_db is None or value is '{value}'.")
 
-    def get_skills_db(self) -> List[str]:
+    def get_skills_db(self) -> list[str] | None:
         """
         Возвращает список накопленных навыков.
 
@@ -83,7 +84,7 @@ class TutorialServiceSkills:
         log.debug(f"Returning skills_db: {self.skills_db}")
         return self.skills_db
 
-    def _get_branch_step1(self, branch: str, phase: str) -> Dict[str, Any]:
+    def _get_branch_step1(self, branch: str, phase: str) -> dict[str, Any]:
         """
         Извлекает данные для шага туториала по ветке и фазе.
 
@@ -99,18 +100,18 @@ class TutorialServiceSkills:
         """
         log.debug(f"Getting data for branch='{branch}', phase='{phase}'")
         branch_data = self.data_pool.get(branch)
-        if branch_data is None:
-            log.error(f"Branch '{branch}' not found in data pool.")
+        if not isinstance(branch_data, dict):
+            log.error(f"Branch '{branch}' not found in data pool or is not a dict.")
             raise ValueError(f"Branch '{branch}' not found")
 
         phase_data = branch_data.get(phase)
-        if phase_data is None:
-            log.error(f"Phase '{phase}' not found in branch '{branch}'.")
+        if not isinstance(phase_data, dict):
+            log.error(f"Phase '{phase}' not found in branch '{branch}' or is not a dict.")
             raise ValueError(f"Phase '{phase}' not found in branch '{branch}'")
 
         return phase_data
 
-    def _get_branch_step2(self, branch: str, phase: str, value: str) -> Dict[str, Any]:
+    def _get_branch_step2(self, branch: str, phase: str, value: str) -> dict[str, Any]:
         """
         Проверяет корректность пути и извлекает данные для шага туториала.
 
@@ -131,23 +132,23 @@ class TutorialServiceSkills:
         """
         log.debug(f"Validating and getting data for branch='{branch}', phase='{phase}', value='{value}'")
         branch_data = self.data_pool.get(branch)
-        if branch_data is None:
-            log.error(f"Branch '{branch}' not found in data pool.")
+        if not isinstance(branch_data, dict):
+            log.error(f"Branch '{branch}' not found in data pool or is not a dict.")
             raise ValueError(f"Branch '{branch}' not found")
 
         phase_data = branch_data.get(phase)
-        if phase_data is None:
-            log.error(f"Phase '{phase}' not found in branch '{branch}'.")
+        if not isinstance(phase_data, dict):
+            log.error(f"Phase '{phase}' not found in branch '{branch}' or is not a dict.")
             raise ValueError(f"Phase '{phase}' not found in branch '{branch}'")
 
         value_data = phase_data.get(value)
-        if value_data is None:
-            log.error(f"Value '{value}' not found in phase '{phase}' of branch '{branch}'.")
+        if not isinstance(value_data, dict):
+            log.error(f"Value '{value}' not found in phase '{phase}' of branch '{branch}' or is not a dict.")
             raise ValueError(f"Value '{value}' not found")
 
         return value_data
 
-    def get_start_data(self) -> Tuple[str, InlineKeyboardMarkup]:
+    def get_start_data(self) -> tuple[str, InlineKeyboardMarkup] | tuple[None, None]:
         """
         Возвращает данные для самого первого шага туториала.
 
@@ -157,13 +158,18 @@ class TutorialServiceSkills:
         """
         log.debug("Getting start data for the tutorial.")
         data = self.data_pool.get("start_skill_phase")
+        if not isinstance(data, dict):
+            return None, None
 
         text = data.get("text")
-        kb = self._step_inline_kb(data.get("buttons"))
+        buttons = data.get("buttons")
+        if not isinstance(text, str) or not isinstance(buttons, dict):
+            return None, None
+        kb = self._step_inline_kb(buttons)
 
         return text, kb
 
-    def get_next_data(self) -> Tuple[Union[str, List], InlineKeyboardMarkup]:
+    def get_next_data(self) -> tuple[str | list[Any], InlineKeyboardMarkup] | tuple[None, None]:
         """
         Определяет и возвращает данные для следующего шага туториала.
 
@@ -180,57 +186,59 @@ class TutorialServiceSkills:
         """
         log.debug(f"Getting next data for state: phase='{self.phase}', branch='{self.branch}', value='{self.value}'")
 
+        if not self.phase or not self.branch or not self.value:
+            raise ValueError("Invalid state for get_next_data")
 
+        data: dict[str, Any] | None = None
+        text_or_list: str | list[Any] | None = None
 
         if self.phase == "step_1":
             log.debug("Processing 'step_1'.")
             data = self._get_branch_step1(branch=self.branch, phase=self.phase)
             self._add_skill_db(value=TUTORIAL_PHASE_SKILL.get(self.branch))
-            text = data.get("text")
-            kb = self._step_inline_kb(data.get("buttons"))
-            return text, kb
+            text_or_list = data.get("text")
 
         elif self.phase == "step_2":
             log.debug("Processing 'step_2'.")
             data = self._get_branch_step2(branch=self.branch, phase=self.phase, value=self.value)
             self._add_skill_db()
-            text = data.get("text")
-            kb = self._step_inline_kb(data.get("buttons"))
-            return text, kb
+            text_or_list = data.get("text")
 
         elif self.phase == "step_3":
             log.debug("Processing 'step_3'.")
             data = self._get_branch_step2(branch=self.branch, phase=self.phase, value=self.value)
             self._add_skill_db()
-            text_or_list: list[tuple[str, float]] = data.get("combat_log")
-            kb = self._step_inline_kb(data.get("buttons"))
-            return text_or_list, kb
+            text_or_list = data.get("combat_log")
 
         elif self.phase == "finale":
             log.debug("Processing 'finale'.")
             data = self._get_branch_step1(branch=self.phase, phase=self.value)
             self._add_skill_db()
-            text = data.get("text")
-            kb = self._step_inline_kb(data.get("buttons"))
-            return text, kb
+            text_or_list = data.get("text")
 
         elif self.phase == "p_end":
             log.debug("Processing 'p_end'.")
             data = self._get_branch_step1(branch=self.phase, phase=self.value)
             self._add_skill_db()
-            text = data.get("text")
-            kb = self._step_inline_kb(data.get("buttons"))
-            return text, kb
+            text_or_list = data.get("text")
 
         else:
             log.error(f"Could not determine next step for phase: '{self.phase}'")
             raise ValueError(f"Не получилось вернуть данные для фазы '{self.phase}'")
 
+        if data and text_or_list:
+            buttons = data.get("buttons")
+            if isinstance(buttons, dict):
+                kb = self._step_inline_kb(buttons)
+                return text_or_list, kb
+
+        return None, None
+
     def get_awakening_data(
-            self,
-            char_id: int,
-            final_choice_key: str  # <- Добавил этот аргумент
-    ) -> Tuple[str, InlineKeyboardMarkup]:
+        self,
+        char_id: int,
+        final_choice_key: str,  # <- Добавил этот аргумент
+    ) -> tuple[str, InlineKeyboardMarkup]:
         """
         Формирует финальное "пробуждающее" сообщение и клавиатуру.
 
@@ -248,41 +256,36 @@ class TutorialServiceSkills:
             Tuple[str, InlineKeyboardMarkup]: Отформатированный текст и
                                               финальная клавиатура.
         """
-        log.debug(
-            f"Подготовка 'awakening_data' для char_id={char_id} с выбором '{final_choice_key}'"
-        )
+        log.debug(f"Подготовка 'awakening_data' для char_id={char_id} с выбором '{final_choice_key}'")
 
         kb = InlineKeyboardBuilder()
 
-        # 1. Получаем данные из 'self'
-        # Убедись, что self.data_final ссылается на TUTORIAL_SKILL_FINALE
-        text_template = self.data_final["text"]
-        button_data = self.data_final["button"]
+        text_template = self.data_final.get("text", "")
+        button_data = self.data_final.get("button", {})
 
-        # 2. Форматируем текст
-        # (Тут можно усложнить и найти красивое имя по ключу, но пока и так сойдет)
-        try:
-            text = text_template.format(choice_name=final_choice_key)
-        except KeyError:
-            log.warning(
-                f"Не удалось отформатировать 'choice_name' в TUTORIAL_SKILL_FINALE. Используется ключ '{final_choice_key}'.")
-            text = text_template.format(choice_name=final_choice_key)  # На всякий случай
+        # Убедимся, что text_template - это строка
+        if isinstance(text_template, list):
+            text_template = "\n".join(map(str, text_template))
 
-        # 3. Собираем Callback
-        callback = LobbySelectionCallback(
-            action=button_data.get("action"),  # "login"
-            char_id=char_id
-        ).pack()
+        # Проверка, что final_choice_key является строкой
+        safe_choice_name = str(final_choice_key) if final_choice_key is not None else "неизвестный выбор"
 
-        # 4. Собираем кнопку
-        kb.button(text=button_data.get("text"), callback_data=callback)  # "[ 👁️ Открыть глаза ]"
-        kb.adjust(1)
+        text = text_template.format(choice_name=safe_choice_name)
 
-        log.debug(f"Финальная 'awakening' клавиатура для char_id={char_id} создана.")
+        action = button_data.get("action") if isinstance(button_data, dict) else None
+        button_text = button_data.get("text") if isinstance(button_data, dict) else "Продолжить"
+
+        if action and isinstance(button_text, str):
+            callback = LobbySelectionCallback(
+                action=action,
+                char_id=char_id,
+            ).pack()
+            kb.button(text=button_text, callback_data=callback)
+            kb.adjust(1)
 
         return text, kb.as_markup()
 
-    def _step_inline_kb(self, buttons: dict) -> InlineKeyboardMarkup:
+    def _step_inline_kb(self, buttons: dict[str, Any]) -> InlineKeyboardMarkup:
         """
         Создает инлайн-клавиатуру на основе словаря кнопок.
 
@@ -305,20 +308,14 @@ class TutorialServiceSkills:
             value = parts[1]
 
             if self.branch is None:
-                # Состояние 1: Начало. Ключ вида "step_1:path_melee"
-                # phase="step_1", branch="path_melee", value="none"
                 log.debug(f"Creating START callback: phase='{phase}', branch='{value}'")
                 cb = TutorialQuestCallback(phase=phase, branch=value, value="none")
 
             elif self.branch == "finale":
-                # Состояние 2: Финал. Ключ вида "p_end:mining"
-                # phase="p_end", branch="none", value="mining"
                 log.debug(f"Creating FINALE callback: phase='{phase}', value='{value}'")
                 cb = TutorialQuestCallback(phase=phase, branch="none", value=value)
 
             else:
-                # Состояние 3: Середина квеста. Ключ вида "step_2:light_armor"
-                # phase="step_2", branch=self.branch, value="light_armor"
                 log.debug(f"Creating MIDDLE callback: phase='{phase}', branch='{self.branch}', value='{value}'")
                 cb = TutorialQuestCallback(phase=phase, branch=self.branch, value=value)
 
@@ -327,10 +324,7 @@ class TutorialServiceSkills:
         kb.adjust(1)
         return kb.as_markup()
 
-    async def finalize_skill_selection(
-            self,
-            char_id: int
-    ):
+    async def finalize_skill_selection(self, char_id: int) -> None:
         """
         Финализирует туториал по навыкам, управляя собственной транзакцией.
 
@@ -352,44 +346,27 @@ class TutorialServiceSkills:
                        и проброшена).
         """
 
-        # self.skills_db берется из экземпляра класса,
-        # который хэндлер должен был правильно инициализировать
         if not self.skills_db:
             log.warning(f"Попытка финализировать навыки для char_id={char_id}, но 'self.skills_db' пуст.")
             return
 
         log.info(f"Начало финализации туториала навыков для char_id={char_id} в БД (внутренняя сессия)...")
 
-        # 1. Создаем сессию (как ты и просил)
         try:
             async with get_async_session() as session:
-
-                # 2. Создаем два объекта репозитория
                 progress_repo = SkillProgressRepo(session)
                 char_repo = CharactersRepoORM(session)
 
-                # 3. Вызываем методы
-
-                # Шаг 1: Разблокируем навыки
                 log.debug(f"Шаг 1/2: Обновление 'is_unlocked=True' для char_id={char_id}. Навыки: {self.skills_db}")
                 await progress_repo.update_skill_unlocked_state(
-                    character_id=char_id,
-                    skill_key_list=self.skills_db,
-                    state=True
+                    character_id=char_id, skill_key_list=self.skills_db, state=True
                 )
 
-                # Шаг 2: Обновляем этап игры
                 log.debug(f"Шаг 2/2: Обновление 'game_stage' на '{GameStage.IN_GAME}' для char_id={char_id}.")
-                await char_repo.update_character_game_stage(
-                    character_id=char_id,
-                    game_stage=GameStage.IN_GAME
-                )
+                await char_repo.update_character_game_stage(character_id=char_id, game_stage=GameStage.IN_GAME)
 
             log.info(f"Финализация навыков и game_stage для char_id={char_id} УСПЕШНО ЗАКОММИЧЕНА.")
 
         except (SQLAlchemyError, Exception) as e:
-            # 5. Сессия 'get_async_session' автоматически
-            #    поймает ошибку, выполнит session.rollback() и закроет сессию.
-            log.exception(
-                f"Ошибка при финализации навыков для char_id={char_id}. ТРАНЗАКЦИЯ ОТКАТИЛАСЬ. Ошибка: {e}")
-            raise  # Пробрасываем, чтобы хэндлер показал 'ERR.generic_error(call)'
+            log.exception(f"Ошибка при финализации навыков для char_id={char_id}. ТРАНЗАКЦИЯ ОТКАТИЛАСЬ. Ошибка: {e}")
+            raise

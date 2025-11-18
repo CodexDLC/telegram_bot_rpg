@@ -1,5 +1,6 @@
 # app/resources/texts/game_messages/lobby_messages.py
 
+
 class LobbyMessages:
     """
     Тексты для сцены "Лобби" (создание и выбор персонажа).

@@ -1,8 +1,7 @@
 # app/services/game_service/shard_template_reader.py
+from typing import Any
+
 from loguru import logger as log
-from typing import Dict, List, Any
-
-
 
 
 class ShardTemplateReader:
@@ -27,19 +26,14 @@ class ShardTemplateReader:
         # Логируем основную информацию о загруженном шаблоне для отладки.
         try:
             name = self.template.get("dungeon_meta", {}).get("name", "N/A")
-            level = self.template.get("dungeon_meta", {}).get("level", "?")
+            level = self.template.get("dunegon_meta", {}).get("level", "?")
             rooms_count = len(self.template.get("rooms", {}))
 
-            log.debug(
-                f"{self.__class__.__name__} initialized: "
-                f"Name='{name}', Level={level}, Rooms={rooms_count}"
-            )
-        except Exception as e:
+            log.debug(f"{self.__class__.__name__} initialized: Name='{name}', Level={level}, Rooms={rooms_count}")
+        except (KeyError, TypeError) as e:
             # Если при логировании метаданных происходит ошибка, это не должно
             # прерывать выполнение. Просто выводим предупреждение.
             log.warning(f"Failed to log template metadata on init: {e}")
-            
-            
 
     def get_room_description(self, room_id: str) -> str:
         """
@@ -74,7 +68,7 @@ class ShardTemplateReader:
         log.debug(f"get_room_name(room_id={room_id}): Returning name: '{data}'")
         return data
 
-    def get_room_exits(self, room_id: str) -> Dict[str, str]:
+    def get_room_exits(self, room_id: str) -> dict[str, str]:
         """
         Возвращает словарь выходов из указанной комнаты.
 
@@ -89,7 +83,7 @@ class ShardTemplateReader:
         log.debug(f"get_room_exits(room_id={room_id}): Returning exits dict: {data}")
         return data
 
-    def get_room_tags(self, room_id: str) -> List[str]:
+    def get_room_tags(self, room_id: str) -> list[str]:
         """
         Возвращает список тегов окружения для указанной комнаты.
 
@@ -103,7 +97,7 @@ class ShardTemplateReader:
         log.debug(f"get_room_tags(room_id={room_id}): Returning tags list: {data}")
         return data
 
-    def get_meta_rooms(self) -> Dict[str, str]:
+    def get_meta_rooms(self) -> dict[str, str]:
         """
         Возвращает словарь "мета-комнат" из метаданных подземелья.
 
@@ -118,7 +112,7 @@ class ShardTemplateReader:
         log.debug(f"get_meta_rooms(): Returning meta_rooms dict: {data}")
         return data
 
-    def get_room_data(self, room_id: str) -> Dict[str, Any]:
+    def get_room_data(self, room_id: str) -> dict[str, Any]:
         """
         Возвращает полный "сырой" словарь (dict) для указанной комнаты.
 

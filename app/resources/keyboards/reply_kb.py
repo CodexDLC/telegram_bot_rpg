@@ -1,7 +1,7 @@
 # app/resources/keyboards/reply_kb.py
-from loguru import logger as log
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from loguru import logger as log
 
 # Кнопки будут использовать эти тексты
 RESTART_BUTTON_TEXT = "🔄 Рестарт"
@@ -24,7 +24,4 @@ def get_error_recovery_kb() -> ReplyKeyboardMarkup:
     # Сетка 1x2 (Рестарт сверху, Настройки и Баг-репорт снизу)
     kb.adjust(1, 2)
 
-    return kb.as_markup(
-        resize_keyboard=True,
-        input_field_placeholder="Произошла ошибка. Используйте кнопки..."
-    )
+    return kb.as_markup(resize_keyboard=True, input_field_placeholder="Произошла ошибка. Используйте кнопки...")

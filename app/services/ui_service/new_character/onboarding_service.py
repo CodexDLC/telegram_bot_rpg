@@ -1,7 +1,6 @@
-from loguru import logger as log
-from typing import Optional, Tuple
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from loguru import logger as log
 
 from app.resources.schemas_dto.character_dto import CharacterOnboardingUpdateDTO
 from app.resources.texts.buttons_callback import Buttons
@@ -19,7 +18,7 @@ class OnboardingService:
     от выбора пола до ввода имени и начала туториала.
     """
 
-    def __init__(self, user_id: int, char_id: Optional[int] = None):
+    def __init__(self, user_id: int, char_id: int | None = None):
         """
         Инициализирует сервис создания персонажа.
 
@@ -35,7 +34,7 @@ class OnboardingService:
         self.char_id = char_id
         log.debug(f"Инициализирован {self.__class__.__name__} для user_id={user_id}, char_id={char_id}.")
 
-    def get_data_start_creation_content(self) -> Tuple[str, InlineKeyboardMarkup]:
+    def get_data_start_creation_content(self) -> tuple[str, InlineKeyboardMarkup]:
         """
         Возвращает данные (текст и клавиатуру) для первого шага: выбор пола.
 
@@ -43,12 +42,14 @@ class OnboardingService:
             Tuple[str, InlineKeyboardMarkup]: Текст с предложением выбрать
             пол и клавиатура с вариантами.
         """
-        log.debug(f"Получение данных для стартового контентного сообщения создания персонажа для user_id={self.user_id}.")
+        log.debug(
+            f"Получение данных для стартового контентного сообщения создания персонажа для user_id={self.user_id}."
+        )
         text = self.new_char.GENDER_CHOICE
         kb = self._start_creation_kb()
         return text, kb
 
-    def get_data_start_gender(self, gender_callback: str) -> Tuple[str, str, str]:
+    def get_data_start_gender(self, gender_callback: str) -> tuple[str, str, str]:
         """
         Обрабатывает выбор пола и возвращает данные для следующего шага (ввод имени).
 
@@ -103,17 +104,14 @@ class OnboardingService:
         async with get_async_session() as session:
             char_repo = CharactersRepoORM(session)
             try:
-                await char_repo.update_character_onboarding(
-                    character_id=self.char_id,
-                    character_data=char_update_dto
-                )
+                await char_repo.update_character_onboarding(character_id=self.char_id, character_data=char_update_dto)
                 log.info(f"Данные персонажа {self.char_id} успешно обновлены в БД.")
             except Exception as e:
                 log.exception(f"Ошибка при обновлении данных персонажа {self.char_id} для user_id={self.user_id}: {e}")
                 await session.rollback()
                 raise
 
-    def get_data_start(self, name: str, gender: str) -> Tuple[str, InlineKeyboardMarkup]:
+    def get_data_start(self, name: str, gender: str) -> tuple[str, InlineKeyboardMarkup]:
         """
         Возвращает данные для финального сообщения перед туториалом.
 
@@ -125,7 +123,9 @@ class OnboardingService:
             Tuple[str, InlineKeyboardMarkup]: Финальный текст и клавиатура
             для начала туториала.
         """
-        log.debug(f"Получение данных для стартового сообщения туториала для персонажа '{name}' (user_id={self.user_id}).")
+        log.debug(
+            f"Получение данных для стартового сообщения туториала для персонажа '{name}' (user_id={self.user_id})."
+        )
         text = self.new_char.FINAL_CONFIRMATION.format(name=name, gender=gender)
         kb = self._tutorial_kb()
         return text, kb

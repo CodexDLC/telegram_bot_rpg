@@ -1,15 +1,13 @@
 # app/services/game_service/skill/skill_service.py
-from loguru import logger as log
-from typing import Optional, Dict
 
+from loguru import logger as log
+
+from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.services.game_service.modifiers_calculator_service import ModifiersCalculatorService as MCService
+from app.services.game_service.skill.rate_service import calculate_rates_data
 from database.db_contract.i_characters_repo import ICharacterStatsRepo
 from database.db_contract.i_modifiers_repo import ICharacterModifiersRepo
-from database.db_contract.i_skill_repo import ISkillRateRepo, ISkillProgressRepo
-from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
-from app.services.game_service.skill.rate_service import calculate_rates_data
-
-
+from database.db_contract.i_skill_repo import ISkillProgressRepo, ISkillRateRepo
 
 
 class CharacterSkillsService:
@@ -23,11 +21,11 @@ class CharacterSkillsService:
     """
 
     def __init__(
-            self,
-            stats_repo: ICharacterStatsRepo,
-            rate_repo: ISkillRateRepo,
-            progress_repo: ISkillProgressRepo,
-            modifiers_repo: ICharacterModifiersRepo
+        self,
+        stats_repo: ICharacterStatsRepo,
+        rate_repo: ISkillRateRepo,
+        progress_repo: ISkillProgressRepo,
+        modifiers_repo: ICharacterModifiersRepo,
     ):
         """
         Инициализирует сервис с помощью инъекции зависимостей.
@@ -44,10 +42,8 @@ class CharacterSkillsService:
         log.debug(f"{self.__class__.__name__} инициализирован с репозиториями.")
 
     async def finalize_tutorial_stats(
-            self,
-            character_id: int,
-            bonus_stats: Dict[str, int]
-    ) -> Optional[CharacterStatsReadDTO]:
+        self, character_id: int, bonus_stats: dict[str, int]
+    ) -> CharacterStatsReadDTO | None:
         """
         Финализирует распределение очков после туториала S.P.E.C.I.A.L.
 

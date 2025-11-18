@@ -1,17 +1,17 @@
 # app/handlers/callback/tutorial/tutorial_game.py
 import time
+from typing import Any
+
+from aiogram import Bot, F, Router
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 
-from aiogram import Router, F, Bot
-from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
-
 from app.resources.fsm_states.states import StartTutorial
-from app.services.helpers_module.callback_exceptions import UIErrorHandler as ERR
+from app.resources.texts.ui_messages import TEXT_AWAIT
+from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.ui_service.helpers_ui.ui_tools import animate_message_sequence, await_min_delay
 from app.services.ui_service.tutorial.tutorial_service import TutorialServiceStats
-from app.resources.texts.ui_messages import TEXT_AWAIT
-
 
 router = Router(name="tutorial_game_router")
 
@@ -39,20 +39,25 @@ async def start_tutorial_handler(call: CallbackQuery, state: FSMContext, bot: Bo
     log.info(f"Хэндлер 'start_tutorial_handler' [tut:start] вызван user_id={user_id}, char_id={char_id}")
     await call.answer()
 
-    if not char_id:
-        log.warning(f"User {user_id} в 'start_tutorial_handler' имел 'char_id=None'. Отправка ошибки.")
-        await ERR.invalid_id(call=call)
+    if not isinstance(char_id, int):
+        log.warning(f"User {user_id} в 'start_tutorial_handler' имел 'char_id=None' или неверный тип. Отправка ошибки.")
+        await Err.invalid_id(call=call)
         return
 
     tut_service = TutorialServiceStats(char_id=char_id, bonus_dict={})
 
-    text, kb = tut_service.get_next_step()
+    next_step_data = tut_service.get_next_step()
+    if next_step_data is None:
+        log.error("get_next_step() вернул None на первом шаге туториала.")
+        await Err.callback_data_missing(call)  # Или другая подходящая ошибка
+        return
+    text, kb = next_step_data
     log.debug(f"Для user_id={user_id} получен первый шаг туториала.")
 
     message_content = state_data.get("message_content")
-    if not message_content:
+    if not isinstance(message_content, dict):
         log.error(f"Не найден 'message_content' в FSM для user_id={user_id}.")
-        await ERR.message_content_not_found_in_fsm(call=call)
+        await Err.message_content_not_found_in_fsm(call=call)
         return
 
     await bot.edit_message_text(
@@ -60,7 +65,7 @@ async def start_tutorial_handler(call: CallbackQuery, state: FSMContext, bot: Bo
         message_id=message_content.get("message_id"),
         text=text,
         parse_mode="html",
-        reply_markup=kb
+        reply_markup=kb,
     )
 
     await state.update_data(**tut_service.get_fsm_data())
@@ -82,8 +87,8 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
     Returns:
         None
     """
-    if not call.from_user:
-        log.warning("Хэндлер 'tutorial_event_stats_handler' получил обновление без 'from_user'.")
+    if not call.from_user or not call.data or not call.message:
+        log.warning("Хэндлер 'tutorial_event_stats_handler' получил обновление без 'from_user', 'data' или 'message'.")
         return
 
     choice = call.data
@@ -93,16 +98,13 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
 
     start_time = time.monotonic()
 
-    await call.message.edit_text(
-        text=TEXT_AWAIT,
-        parse_mode="html",
-        reply_markup=None
-    )
+    if isinstance(call.message, Message):
+        await call.message.edit_text(text=TEXT_AWAIT, parse_mode="html", reply_markup=None)
     state_data = await state.get_data()
     char_id = state_data.get("char_id")
-    if not char_id:
-        log.warning(f"User {user_id} в 'tutorial_event_stats_handler' имел 'char_id=None'.")
-        await ERR.invalid_id(call=call)
+    if not isinstance(char_id, int):
+        log.warning(f"User {user_id} в 'tutorial_event_stats_handler' имел 'char_id=None' или неверный тип.")
+        await Err.invalid_id(call=call)
         return
 
     # Воссоздаем сервис из FSM.
@@ -110,7 +112,7 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
         char_id=char_id,
         event_pool=state_data.get("event_pool"),
         sim_text_count=state_data.get("sim_text_count", 0),
-        bonus_dict=state_data.get("bonus_dict")
+        bonus_dict=state_data.get("bonus_dict"),
     )
     log.debug(f"Сервис туториала для user_id={user_id} воссоздан из FSM.")
 
@@ -122,9 +124,9 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
 
     # 2. Получаем message_content (это можно сделать до проверки)
     message_content = state_data.get("message_content")
-    if not message_content:
+    if not isinstance(message_content, dict):
         log.error(f"Не найден 'message_content' в FSM для user_id={user_id}.")
-        await ERR.message_content_not_found_in_fsm(call)
+        await Err.message_content_not_found_in_fsm(call)
         return
 
     # 3. Обновляем FSM (тоже можно сделать до проверки)
@@ -136,10 +138,7 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
         log.info(f"Туториал для char_id={char_id} завершен. Запуск анимации подсчета.")
         animation_steps, final_kb = tut_service.get_data_animation_steps()
         await animate_message_sequence(
-            message_to_edit=message_content,
-            sequence=animation_steps,
-            bot=bot,
-            final_reply_markup=final_kb
+            message_to_edit=message_content, sequence=animation_steps, bot=bot, final_reply_markup=final_kb
         )
         await state.set_state(StartTutorial.confirmation)
         log.info(f"FSM для user_id={user_id} переведен в состояние 'StartTutorial.confirmation'.")
@@ -154,8 +153,9 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
             message_id=message_content.get("message_id"),
             text=text,
             parse_mode="html",
-            reply_markup=kb
+            reply_markup=kb,
         )
+
 
 @router.callback_query(StartTutorial.confirmation, F.data.startswith("tut:"))
 async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
@@ -170,8 +170,8 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, 
     Returns:
         None
     """
-    if not call.from_user:
-        log.warning("Хэндлер 'tutorial_confirmation_handler' получил обновление без 'from_user'.")
+    if not call.from_user or not call.data:
+        log.warning("Хэндлер 'tutorial_confirmation_handler' получил обновление без 'from_user' или 'data'.")
         return
 
     call_data = call.data
@@ -182,18 +182,18 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, 
 
     state_data = await state.get_data()
     char_id = state_data.get("char_id")
-    message_content = state_data.get("message_content")
+    message_content: dict[str, Any] | None = state_data.get("message_content")
 
-    if not all([char_id, message_content]):
+    if not isinstance(char_id, int) or not isinstance(message_content, dict):
         log.warning(f"Недостаточно данных в FSM для user_id={user_id} в 'tutorial_confirmation_handler'.")
-        await ERR.invalid_id(call)
+        await Err.invalid_id(call)
         return
 
     tut_service = TutorialServiceStats(
         char_id=char_id,
         event_pool=state_data.get("event_pool"),
         sim_text_count=state_data.get("sim_text_count", 0),
-        bonus_dict=state_data.get("bonus_dict")
+        bonus_dict=state_data.get("bonus_dict"),
     )
     log.debug(f"Сервис туториала для user_id={user_id} воссоздан из FSM.")
 
@@ -209,15 +209,15 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, 
             message_id=message_content.get("message_id"),
             text=text,
             parse_mode="html",
-            reply_markup=kb
+            reply_markup=kb,
         )
         log.debug(f"Сообщение о рестарте отправлено user_id={user_id}.")
 
     elif call_data == "tut:continue":
         bonus_dict = state_data.get("bonus_dict")
-        if not bonus_dict:
+        if not isinstance(bonus_dict, dict):
             log.warning(f"User {user_id} попытался продолжить туториал без бонусов.")
-            await ERR.invalid_id(call)
+            await Err.invalid_id(call)
             return
 
         log.info(f"Пользователь {user_id} подтвердил характеристики для char_id={char_id}. Бонусы: {bonus_dict}")
@@ -227,11 +227,10 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, 
             message_id=message_content.get("message_id"),
             text=text,
             parse_mode="html",
-            reply_markup=kb
+            reply_markup=kb,
         )
         log.debug(f"Сообщение с финальными статами отправлено user_id={user_id}.")
 
-
     else:
         log.error(f"Неизвестный callback '{call_data}' в 'tutorial_confirmation_handler' от user_id={user_id}.")
-        await ERR.callback_data_missing(call)
+        await Err.callback_data_missing(call)

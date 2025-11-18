@@ -1,6 +1,6 @@
 # app/services/ui_service/command_service.py
-from loguru import logger as log
 from aiogram.types import User
+from loguru import logger as log
 
 from app.resources.schemas_dto.user_dto import UserUpsertDTO
 from database.repositories.ORM.users_repo_orm import UsersRepoORM
@@ -28,7 +28,7 @@ class CommandService:
             username=user.username,
             last_name=user.last_name,
             language_code=user.language_code,
-            is_premium=bool(user.is_premium)
+            is_premium=bool(user.is_premium),
         )
         log.debug(f"Инициализирован {self.__class__.__name__} для user_id={user.id}.")
         log.debug(f"Данные пользователя: {self.user_dto.model_dump_json()}")
