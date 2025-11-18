@@ -1,16 +1,22 @@
-# app/services/game_service/navigation_service.py
+# app/services/ui_service/navigation_service.py
+from typing import Any, Coroutine
+
 from loguru import logger as log
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.services.core_service.manager.account_manager import account_manager
-from app.services.core_service.manager.world_manager import world_manager
 # --- Импорты Уровня 3 (Бизнес-Логика) ---
 from app.services.game_service.game_world_service import game_world_service
-# (Тут будет `game_dungeon_service` в будущем)
+# TODO: В будущем здесь будет `game_dungeon_service`
 
 # --- Импорты Уровня 2 (Репозитории/Менеджеры) ---
+from app.services.core_service.manager.account_manager import account_manager
+from app.services.core_service.manager.world_manager import world_manager
 
+
+# --- Импорты Уровня 1 (Инструменты) ---
+# TODO: нужно создать NavigationCallback в 'app/resources/keyboards/callback_data.py'
+# from app.resources.keyboards.callback_data import NavigationCallback
 
 
 class NavigationService:
@@ -27,40 +33,59 @@ class NavigationService:
         self.state_data = state_data
         log.debug(f"Инициализирован NavigationService для char_id={self.char_id}")
 
-    # --- 1. Метод для UI (то, что ты просил) ---
+    # --- 1. Метод для UI (Вызывается Хэндлером Логина) ---
 
     async def get_navigation_ui(self, state: str, loc_id: str) -> tuple[str, InlineKeyboardMarkup]:
         """
         Главный метод для получения UI.
         Вызывает приватный метод в зависимости от 'state'.
         """
+        log.debug(f"get_navigation_ui: char_id={self.char_id}, state={state}, loc_id={loc_id}")
+
         if state == "world":
+            # --- ВЫПОЛНЯЕМ БИЗНЕС-ЛОГИКУ (как мы и решили) ---
+            # При входе в мир мы добавляем игрока в Set
+            await world_manager.add_player_to_location(loc_id, self.char_id)
+            log.info(f"Игрок {self.char_id} добавлен в 'world:players_loc:{loc_id}'")
+
             return await self._get_world_location_ui(loc_id)
+
         elif state == "s_d":
+            # TODO: Реализовать логику добавления игрока в 's_d' (если она нужна)
             return await self._get_solo_dungeon_ui(loc_id)
+
         else:
             log.error(f"Неизвестный state '{state}' для char_id={self.char_id}")
             return "Ты находишься в пустоте. (Ошибка state)", None
 
-    # --- 2. Метод для Логики Перемещения (то, что ты просил) ---
+    # --- 2. Метод для Логики Перемещения (Вызывается Хэндлером Навигации) ---
 
     async def move_player(self, target_loc_id: str) -> tuple[str, InlineKeyboardMarkup] | None:
         """
         Главный метод для ПЕРЕМЕЩЕНИЯ.
         Вызывает приватный метод в зависимости от 'state'.
         """
+
         # 1. Получить текущее состояние (state, loc_id) из `ac:char_id`
-        # (Твоя логика: `current_data = await account_manager.get_account_data(self.char_id)`)
-        pass
+        current_data = await account_manager.get_account_data(self.char_id)
+        if not current_data:
+            log.error(f"Не удалось найти ac: FSM для char_id={self.char_id} при перемещении.")
+            return None
+
+        current_state = current_data.get("state")
 
         # 2. Вызвать нужный приватный обработчик
-        # if current_data.get("state") == "world":
-        #    return await self._move_in_world(current_data, target_loc_id)
-        pass
+        if current_state == "world":
+            return await self._move_in_world(current_data, target_loc_id)
+        elif current_state == "s_d":
+            # TODO: Реализовать `_move_in_dungeon(current_data, target_loc_id)`
+            pass
 
-    # --- 3. Приватные методы (твоя идея) ---
+        return None
 
-    async def _get_world_location_ui(self, loc_id: str) -> tuple[str, InlineKeyboardMarkup]:
+    # --- 3. Приватные методы (Генераторы UI) ---
+
+    async def _get_world_location_ui(self, loc_id: str) -> tuple[str, None] | tuple[str, InlineKeyboardMarkup]:
         """Формирует UI для МИРОВОЙ локации."""
 
         # 1. Получаем "умные" данные
@@ -71,29 +96,45 @@ class NavigationService:
         # 2. Формируем Текст
         text = f"<b>{nav_data.get('name')}</b>\n\n{nav_data.get('description')}"
 
-        # (Тут же можно добавить: "Здесь также: ... N игроков")
-        # (Твоя логика: `players_set = await world_manager.get_players_in_location(loc_id)`)
-        pass
+        # 3. Добавляем "социальную" информацию
+        players_set = await world_manager.get_players_in_location(loc_id)
+        players_set.discard(str(self.char_id))  # Убираем себя
 
-        # 3. Формируем Клавиатуру
+        if players_set:
+            text += f"\n\n<i>Здесь также: {len(players_set)} (в будущем их имена)</i>"
+
+        # TODO: Добавить логику отображения NPC
+        # npc_list = json.loads(nav_data.get("npc_list", "[]"))
+        # if npc_list:
+        #    text += f"\n\n<i>Вы видите: ... (имена NPC)</i>"
+
+        # 4. Формируем Клавиатуру
         kb = InlineKeyboardBuilder()
         exits_dict = nav_data.get("exits", {})
 
         for target_id, exit_data in exits_dict.items():
             button_text = exit_data.get("text_button", "???")
-            # (Твоя логика: `kb.button(text=button_text, callback_data=...)`
-            #  ...используя *новый* NavigationCallbackData)
+
+            # TODO: Заменить 'pass' на реальный NavigationCallback
+            # kb.button(text=button_text, callback_data=NavigationCallback(
+            #    action="move",
+            #    target_id=target_id
+            # ).pack())
             pass
 
+        kb.adjust(1)
         return text, kb.as_markup()
 
     async def _get_solo_dungeon_ui(self, instance_id: str) -> tuple[str, InlineKeyboardMarkup]:
         """Формирует UI для СОЛО-ДАНЖА."""
-        # (Твоя логика в будущем:
+
+        # TODO: Реализовать логику генерации UI для соло-данжа
         # 1. `dungeon_data = await dungeon_manager.get_solo_dungeon(instance_id)`
         # 2. `room_data = await dungeon_template_service.get_room(dungeon_data["room_id"])`
-        # 3. Собрать UI...)
-        pass
+        # 3. Собрать UI...
+        return f"ЗАГЛУШКА: Вы в соло-данже {instance_id}", None
+
+    # --- 4. Приватные методы (Логика Перемещения) ---
 
     async def _move_in_world(self, current_data: dict, target_loc_id: str) -> tuple[str, InlineKeyboardMarkup]:
         """Обрабатывает перемещение между МИРОВЫМИ локациями."""

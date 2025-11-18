@@ -296,7 +296,6 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     # --- 7. Обновляем FSM ---
 
     # Сначала ОЧИЩАЕМ FSM от мусора, сохраняя только ядро
-    # (Она сама позаботится о char_id, message_menu, message_content)
     await fsm_clean_core_state(state=state, event_source=call)
 
     # А потом УСТАНАВЛИВАЕМ новый стейт
