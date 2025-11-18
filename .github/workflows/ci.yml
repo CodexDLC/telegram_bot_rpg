@@ -1,0 +1,57 @@
+name: CI Code Quality
+
+# Когда запускать проверку:
+# 1. При пуше в main или develop
+# 2. При создании Pull Request в main или develop
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Скачиваем код репозитория
+    - uses: actions/checkout@v4
+
+    # 2. Устанавливаем Python (той же версии, что у тебя)
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    # 3. Кэшируем pip (чтобы быстрее работало)
+    - name: Cache pip
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    # 4. Устанавливаем зависимости
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+
+    # 5. Запускаем Линтер (Ruff)
+    # Если код кривой — CI упадет здесь
+    - name: Lint with Ruff
+      run: |
+        ruff check .
+
+    # 6. Проверяем типы (Mypy)
+    # Если типы не сходятся — CI упадет здесь
+    - name: Type check with Mypy
+      run: |
+        mypy .
+
+    # 7. Запускаем тесты (Pytest)
+    # Если тесты не пройдут — CI упадет здесь
+    - name: Run tests
+      run: |
+        pytest
