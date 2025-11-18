@@ -1,6 +1,5 @@
 import asyncio
 
-# Шаг 1: Заменили 'import logging' на 'from loguru...'
 from loguru import logger as log
 
 from app.core.bot_factory import build_app
