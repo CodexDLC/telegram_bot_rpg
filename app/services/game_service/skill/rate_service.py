@@ -1,15 +1,13 @@
 # app/services/game_service/skill/rate_service.py
+from typing import Any
+
 from loguru import logger as log
-from typing import Dict, List, Any
 
 from app.resources.game_data.skill_library import SKILL_RECIPES
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 
 
-def calculate_rates_data(
-    character_id: int,
-    stats_dto: CharacterStatsReadDTO
-) -> List[Dict[str, Any]]:
+def calculate_rates_data(character_id: int, stats_dto: CharacterStatsReadDTO) -> list[dict[str, Any]]:
     """
     Рассчитывает "Базовую Ставку Опыта" (БСО) для всех навыков.
 
@@ -31,9 +29,11 @@ def calculate_rates_data(
     """
     log.debug(f"Начало расчета БСО для character_id={character_id} на основе статов: {stats_dto.model_dump_json()}")
 
-    rates_to_upsert: List[Dict[str, Any]] = []
+    rates_to_upsert: list[dict[str, Any]] = []
 
     for skill_key, recipe in SKILL_RECIPES.items():
+        if not isinstance(recipe, dict):
+            continue
         # 1. Инициализируй счетчик для этого навыка
         total_xp_tick = 0.0
 
@@ -42,23 +42,19 @@ def calculate_rates_data(
         stat_weights = recipe.get("stat_weights", {})
 
         # 3. Запусти *внутренний* цикл по твоему словарю весов
-        for stat_name, multiplier in stat_weights.items():
-            # 4. Безопасно получи значение стата из DTO
-            #    (getattr нужен, т.к. stat_name - это строка)
-            stat_value = getattr(stats_dto, stat_name, 0)
+        if isinstance(stat_weights, dict):
+            for stat_name, multiplier in stat_weights.items():
+                # 4. Безопасно получи значение стата из DTO
+                #    (getattr нужен, т.к. stat_name - это строка)
+                stat_value = getattr(stats_dto, stat_name, 0)
 
-            # 5. Рассчитай вклад этого стата и добавь к счетчику
-            total_xp_tick += stat_value * multiplier
+                # 5. Рассчитай вклад этого стата и добавь к счетчику
+                total_xp_tick += stat_value * multiplier
 
         # 6. После внутреннего цикла, округли результат до int
         xp_tick_rate = int(total_xp_tick)
 
-
-        rates_to_upsert.append({
-            "character_id": character_id,
-            "skill_key": skill_key,
-            "xp_per_tick": xp_tick_rate
-        })
+        rates_to_upsert.append({"character_id": character_id, "skill_key": skill_key, "xp_per_tick": xp_tick_rate})
 
     log.info(f"Для character_id={character_id} рассчитано {len(rates_to_upsert)} ставок БСО.")
     return rates_to_upsert

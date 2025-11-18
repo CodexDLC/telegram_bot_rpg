@@ -1,7 +1,4 @@
-
-from typing import Optional
-
-from aiogram.types import User, Message, Chat
+from aiogram.types import Chat, Message, User
 
 
 class MessageInfoFormatter:
@@ -9,7 +6,7 @@ class MessageInfoFormatter:
 
     def _format_user_info(self, user: User) -> str:
         """Форматирует информацию о пользователе"""
-        info = f"👤 <b>Пользователь:</b>\n"
+        info = "👤 <b>Пользователь:</b>\n"
         info += f"  • ID: <code>{user.id}</code>\n"
         info += f"  • Username: @{user.username}\n" if user.username else ""
         info += f"  • Имя: {user.first_name}"
@@ -17,16 +14,16 @@ class MessageInfoFormatter:
         info += f"\n  • Бот: {'Да' if user.is_bot else 'Нет'}\n"
         return info
 
-    def _format_chat_info(self, chat: Chat, message_thread_id: Optional[int] = None) -> str:
+    def _format_chat_info(self, chat: Chat, message_thread_id: int | None = None) -> str:
         """Форматирует информацию о чате"""
         chat_types = {
-            'private': '💬 Личный чат',
-            'group': '👥 Группа',
-            'supergroup': '👥 Супергруппа',
-            'channel': '📢 Канал'
+            "private": "💬 Личный чат",
+            "group": "👥 Группа",
+            "supergroup": "👥 Супергруппа",
+            "channel": "📢 Канал",
         }
 
-        info = f"📍 <b>Чат:</b>\n"
+        info = "📍 <b>Чат:</b>\n"
         info += f"  • ID: <code>{chat.id}</code>\n"
         info += f"  • Тип: {chat_types.get(chat.type, chat.type)}\n"
 
@@ -41,7 +38,7 @@ class MessageInfoFormatter:
 
     def _format_message_info(self, message: Message) -> str:
         """Форматирует информацию о сообщении"""
-        info = f"✉️ <b>Сообщение:</b>\n"
+        info = "✉️ <b>Сообщение:</b>\n"
         info += f"  • ID: <code>{message.message_id}</code>\n"
         info += f"  • Дата: {message.date.strftime('%d.%m.%Y %H:%M:%S')}\n"
 
@@ -59,17 +56,16 @@ class MessageInfoFormatter:
         if message.from_user:
             parts.append(formatter._format_user_info(message.from_user))
 
-        parts.append(formatter._format_chat_info(
-            message.chat,
-            message.message_thread_id
-        ))
+        parts.append(formatter._format_chat_info(message.chat, message.message_thread_id))
 
         parts.append(formatter._format_message_info(message))
 
         # Дополнительная информация
         extras = []
         if message.text:
-            extras.append(f"📝 Текст: {message.text[:50]}..." if len(message.text) > 50 else f"📝 Текст: {message.text}")
+            extras.append(
+                f"📝 Текст: {message.text[:50]}..." if len(message.text) > 50 else f"📝 Текст: {message.text}"
+            )
         if message.photo:
             extras.append("🖼 Содержит фото")
         if message.document:

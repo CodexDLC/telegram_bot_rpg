@@ -1,12 +1,11 @@
 # database/repositories/ORM/users_repo_orm.py
+
 from loguru import logger as log
-from typing import Optional, List
-
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.resources.schemas_dto.user_dto import UserUpsertDTO, UserDTO
+from app.resources.schemas_dto.user_dto import UserDTO, UserUpsertDTO
 from database.db_contract.i_users_repo import IUserRepo
 from database.model_orm.user import User
 
@@ -59,7 +58,7 @@ class UsersRepoORM(IUserRepo):
             log.exception(f"Ошибка SQLAlchemy при выполнении 'upsert_user' для telegram_id={orm_user.telegram_id}: {e}")
             raise
 
-    async def get_user(self, telegram_id: int, **kwargs) -> Optional[UserDTO]:
+    async def get_user(self, telegram_id: int, **kwargs) -> UserDTO | None:
         """
         Находит и возвращает одного пользователя по его `telegram_id` с помощью ORM.
 
@@ -78,7 +77,7 @@ class UsersRepoORM(IUserRepo):
 
         try:
             result = await self.session.execute(stmt)
-            orm_user: Optional[User] = result.scalar_one_or_none()
+            orm_user: User | None = result.scalar_one_or_none()
 
             if orm_user:
                 log.debug(f"Пользователь с telegram_id={telegram_id} найден.")
@@ -90,7 +89,7 @@ class UsersRepoORM(IUserRepo):
             log.exception(f"Ошибка SQLAlchemy при выполнении 'get_user' для telegram_id={telegram_id}: {e}")
             raise
 
-    async def get_users(self, **kwargs) -> List[UserDTO]:
+    async def get_users(self, **kwargs) -> list[UserDTO]:
         """
         Возвращает список всех пользователей с помощью ORM.
 

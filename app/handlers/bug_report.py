@@ -1,14 +1,17 @@
-from loguru import logger as log
-from aiogram import Router, F, Bot
+import contextlib
+
+from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from loguru import logger as log
 
 # Импорты для FSM, кнопок и сервисов
 from app.resources.fsm_states.states import BugReport
 from app.resources.keyboards.reply_kb import BUG_REPORT_BUTTON_TEXT, get_error_recovery_kb
-from app.services.report_service import ReportService
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
+from app.services.report_service import ReportService
 
 router = Router(name="bug_report_router")
 
@@ -19,12 +22,13 @@ router = Router(name="bug_report_router")
 @router.message(F.text == BUG_REPORT_BUTTON_TEXT)
 async def start_bug_report_handler(m: Message, state: FSMContext) -> None:
     """Обрабатывает нажатие Reply-кнопки и начинает FSM с выбором типа отчета."""
+    if not m.from_user:
+        return
     log.info(f"User {m.from_user.id} начал создание баг-репорта.")
 
     # 1. Удаляем сообщение с командой/кнопкой, чтобы не засорять чат
-    try:
+    with contextlib.suppress(TelegramAPIError):
         await m.delete()
-    except Exception:
         log.warning(f"Не удалось удалить сообщение {m.message_id}")
 
     # 2. Формируем клавиатуру для выбора типа
@@ -42,10 +46,7 @@ async def start_bug_report_handler(m: Message, state: FSMContext) -> None:
     # 3. Отправляем сообщение и сохраняем его ID для редактирования
     msg = await m.answer(text=text, parse_mode="html", reply_markup=kb.as_markup())
 
-    await state.update_data(
-        report_message_id=msg.message_id,
-        report_chat_id=msg.chat.id
-    )
+    await state.update_data(report_message_id=msg.message_id, report_chat_id=msg.chat.id)
     await state.set_state(BugReport.choosing_type)
     log.info(f"User {m.from_user.id} переведен в состояние BugReport.choosing_type.")
 
@@ -56,15 +57,13 @@ async def start_bug_report_handler(m: Message, state: FSMContext) -> None:
 @router.callback_query(BugReport.choosing_type, F.data.startswith("bug_type:"))
 async def choose_report_type_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     """Обрабатывает выбор типа отчета и переводит в ожидание текста."""
+    if not call.data or not call.from_user:
+        return
     await call.answer()
 
     # 1. Определяем тип отчета
     report_type_key = call.data.split(":")[-1]
-    type_map = {
-        "logic": "Баг в логике",
-        "typo": "Опечатка/текст",
-        "critical": "Критический сбой"
-    }
+    type_map = {"logic": "Баг в логике", "typo": "Опечатка/текст", "critical": "Критический сбой"}
     report_type_display = type_map.get(report_type_key, "Неизвестный")
 
     log.info(f"User {call.from_user.id} выбрал тип отчета: {report_type_display}")
@@ -87,7 +86,7 @@ async def choose_report_type_handler(call: CallbackQuery, state: FSMContext, bot
             message_id=msg_id,
             text=text,
             parse_mode="html",
-            reply_markup=None  # Убираем кнопки
+            reply_markup=None,  # Убираем кнопки
         )
 
     # 4. Обновляем FSM
@@ -102,6 +101,8 @@ async def choose_report_type_handler(call: CallbackQuery, state: FSMContext, bot
 @router.message(BugReport.awaiting_report_text, F.text)
 async def process_report_text_handler(m: Message, state: FSMContext, bot: Bot) -> None:
     """Принимает текст отчета, отправляет его в канал и завершает FSM."""
+    if not m.from_user or not m.text:
+        return
     user = m.from_user
     report_text = m.text[:1000].strip()  # Обрезаем текст
 
@@ -118,14 +119,12 @@ async def process_report_text_handler(m: Message, state: FSMContext, bot: Bot) -
         user_id=user.id,
         username=user.username or user.first_name,
         report_type=report_type,
-        report_text=report_text
+        report_text=report_text,
     )
 
     # 2. Удаляем сообщение с текстом отчета, чтобы не дублировать
-    try:
+    with contextlib.suppress(Exception):
         await m.delete()
-    except Exception:
-        pass
 
     # 3. Формируем финальное сообщение для пользователя
     final_text = ""
@@ -140,11 +139,7 @@ async def process_report_text_handler(m: Message, state: FSMContext, bot: Bot) -
     # 4. Редактируем сообщение FSM или отправляем новое (если старого нет)
     if msg_id and chat_id:
         await bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=msg_id,
-            text=final_text,
-            parse_mode="html",
-            reply_markup=None
+            chat_id=chat_id, message_id=msg_id, text=final_text, parse_mode="html", reply_markup=None
         )
     else:
         await m.answer(final_text, reply_markup=get_error_recovery_kb())

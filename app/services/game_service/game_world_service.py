@@ -1,13 +1,13 @@
 # app/services/game_service/game_world_service.py
 import json
-from loguru import logger as log
 
-# 1. Импортируем "глупый" Менеджер (Репозиторий)
-from app.services.core_service.manager.world_manager import world_manager
+from loguru import logger as log
 
 # 2. Импортируем "сырые" данные о мире
 from app.resources.game_data.graf_data_world.start_vilage import WORLD_DATA
 
+# 1. Импортируем "глупый" Менеджер (Репозиторий)
+from app.services.core_service.manager.world_manager import world_manager
 
 
 class GameWorldService:
@@ -31,21 +31,19 @@ class GameWorldService:
 
         # 1. Начать цикл (как ты и сказал)
         for loc_id, loc_data in WORLD_DATA.items():
-
             data_to_write = {
                 "name": loc_data.get("title"),
                 "description": loc_data.get("description"),
                 "exits": json.dumps(loc_data.get("exits", {})),
-                "tags": json.dumps(loc_data.get("environment_tags", []))
+                "tags": json.dumps(loc_data.get("environment_tags", [])),
             }
 
             # 4. Вызвать "глупый" менеджер для записи
             await world_manager.write_location_meta(loc_id, data_to_write)
             locations_loaded += 1
-            log.debug(f"Локация = {loc_data.get("title")} загружена в Redis.")
+            log.debug(f"Локация = {loc_data.get('title')} загружена в Redis.")
 
         log.info(f"Инициализация мира завершена. Загружено/проверено {locations_loaded} локаций.")
-
 
     async def add_npc_to_location(self, npc_id: int, loc_id: str) -> None:
         """

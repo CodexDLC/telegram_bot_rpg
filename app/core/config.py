@@ -15,11 +15,11 @@ python-dotenv для загрузки переменных из файла `.env
 При отсутствии обязательных переменных модуль вызывает `RuntimeError`,
 предотвращая запуск приложения с неполной конфигурацией.
 """
+
 import os
-from loguru import logger as log
-from typing import Optional
 
 from dotenv import load_dotenv
+from loguru import logger as log
 
 # Инициализируем логгер до того, как что-то может пойти не так.
 
@@ -31,32 +31,26 @@ log.debug(".env файл успешно загружен.")
 
 # --- Telegram Bot Token ---
 # Критически важная переменная для подключения к API Telegram.
-BOT_TOKEN: Optional[str] = os.getenv("BOT_TOKEN")
+BOT_TOKEN: str | None = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     log.critical("Переменная окружения BOT_TOKEN не найдена!")
-    raise RuntimeError(
-        "BOT_TOKEN не найден. Проверьте .env файл или переменные окружения."
-    )
+    raise RuntimeError("BOT_TOKEN не найден. Проверьте .env файл или переменные окружения.")
 log.info("BOT_TOKEN успешно загружен.")
 
 # --- Gemini API Token ---
 # Токен для доступа к API генеративной модели Gemini.
-GEMINI_TOKEN: Optional[str] = os.getenv("GEMINI_TOKEN")
+GEMINI_TOKEN: str | None = os.getenv("GEMINI_TOKEN")
 if not GEMINI_TOKEN:
     log.critical("Переменная окружения GEMINI_TOKEN не найдена!")
-    raise RuntimeError(
-        "GEMINI_TOKEN не найден. Проверьте .env файл или переменные окружения."
-    )
+    raise RuntimeError("GEMINI_TOKEN не найден. Проверьте .env файл или переменные окружения.")
 log.info("GEMINI_TOKEN успешно загружен.")
 
 # --- Database Configuration ---
 # Имя файла базы данных SQLite.
-DB_NAME: Optional[str] = os.getenv("DB_NAME_SQLITE")
+DB_NAME: str | None = os.getenv("DB_NAME_SQLITE")
 if not DB_NAME:
     log.critical("Переменная окружения DB_NAME_SQLITE не найдена!")
-    raise RuntimeError(
-        "DB_NAME_SQLITE не найден. Проверьте .env файл или переменные окружения."
-    )
+    raise RuntimeError("DB_NAME_SQLITE не найден. Проверьте .env файл или переменные окружения.")
 
 # Формируем URL для подключения к базе данных SQLite через SQLAlchemy.
 # Формат: 'dialect+driver://path'
@@ -68,17 +62,19 @@ log.info(f"Сформирован URL для подключения к SQLite: {
 # Используем значения по умолчанию ('localhost', 6379), если они не заданы в .env.
 REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT: int = int(os.getenv("REDIS_PORT", 6379))
-REDIS_PASSWORD: Optional[str] = os.getenv("REDIS_PASSWORD")
+REDIS_PASSWORD: str | None = os.getenv("REDIS_PASSWORD")
 
 # Формируем URL для подключения к Redis в зависимости от наличия пароля.
+redis_url_value: str
 if REDIS_PASSWORD:
     # Формат URL с паролем
-    REDIS_URL: str = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}"
+    redis_url_value = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}"
     log.info(f"Сформирован URL для Redis с паролем: redis://:***@{REDIS_HOST}:{REDIS_PORT}")
 else:
     # Формат URL без пароля
-    REDIS_URL: str = f"redis://{REDIS_HOST}:{REDIS_PORT}"
-    log.info(f"Сформирован URL для Redis без пароля: {REDIS_URL}")
+    redis_url_value = f"redis://{REDIS_HOST}:{REDIS_PORT}"
+    log.info(f"Сформирован URL для Redis без пароля: {redis_url_value}")
+REDIS_URL: str = redis_url_value
 
-
-BUG_REPORT_CHANNEL_ID: Optional[int] = os.getenv("BUG_REPORT_CHANNEL_ID")
+bug_report_channel_id_str = os.getenv("BUG_REPORT_CHANNEL_ID")
+BUG_REPORT_CHANNEL_ID: int | None = int(bug_report_channel_id_str) if bug_report_channel_id_str else None

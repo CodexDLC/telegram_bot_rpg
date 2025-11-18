@@ -1,15 +1,17 @@
 # database/model_orm/character.py
 from __future__ import annotations
-from typing import TYPE_CHECKING, List
-from sqlalchemy import ForeignKey, String, Integer
+
+from typing import TYPE_CHECKING
+
+from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.model_orm.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from .user import User
-    from .skill import CharacterSkillRate, CharacterSkillProgress
     from .modifiers import CharacterModifiers
+    from .skill import CharacterSkillProgress, CharacterSkillRate
+    from .user import User
 
 
 # ВОЗВРАЩАЮ ИСХОДНОЕ ИМЯ КЛАССА
@@ -40,6 +42,7 @@ class Character(Base, TimestampMixin):
 
         created_at, updated_at: Временные метки (наследуются от TimestampMixin).
     """
+
     __tablename__ = "characters"
 
     character_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -49,22 +52,14 @@ class Character(Base, TimestampMixin):
     game_stage: Mapped[str] = mapped_column(String(50), default="creation", nullable=False)
 
     # Связи
-    user: Mapped["User"] = relationship(back_populates="characters")
-    stats: Mapped["CharacterStats"] = relationship(
-        back_populates="character",
-        cascade="all, delete-orphan"
+    user: Mapped[User] = relationship(back_populates="characters")
+    stats: Mapped[CharacterStats] = relationship(back_populates="character", cascade="all, delete-orphan")
+    modifiers: Mapped[CharacterModifiers] = relationship(back_populates="character", cascade="all, delete-orphan")
+    skill_rate: Mapped[list[CharacterSkillRate]] = relationship(
+        back_populates="character", cascade="all, delete-orphan"
     )
-    modifiers: Mapped["CharacterModifiers"] = relationship(
-        back_populates="character",
-        cascade="all, delete-orphan"
-    )
-    skill_rate: Mapped[List["CharacterSkillRate"]] = relationship(
-        back_populates="character",
-        cascade="all, delete-orphan"
-    )
-    skill_progress: Mapped[List["CharacterSkillProgress"]] = relationship(
-        back_populates="character",
-        cascade="all, delete-orphan"
+    skill_progress: Mapped[list[CharacterSkillProgress]] = relationship(
+        back_populates="character", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
@@ -90,11 +85,12 @@ class CharacterStats(Base, TimestampMixin):
 
         created_at, updated_at: Временные метки (наследуются от TimestampMixin).
     """
+
     __tablename__ = "character_stats"
 
     character_id: Mapped[int] = mapped_column(
         ForeignKey("characters.character_id", ondelete="CASCADE"),  # <-- "characters.character_id" (таблица) - ВЕРНО
-        primary_key=True
+        primary_key=True,
     )
     # Физические
     strength: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
@@ -111,9 +107,8 @@ class CharacterStats(Base, TimestampMixin):
     charisma: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     luck: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
 
-
     # ИСПРАВЛЯЮ ОБРАТНУЮ СВЯЗЬ
-    character: Mapped["Character"] = relationship(back_populates="stats")  # <-- БЫЛО 'Characters'
+    character: Mapped[Character] = relationship(back_populates="stats")  # <-- БЫЛО 'Characters'
 
     def __repr__(self) -> str:
         return f"<CharacterStats(character_id={self.character_id})>"

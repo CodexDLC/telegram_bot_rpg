@@ -1,6 +1,6 @@
-from loguru import logger as log
-from aiogram.types import CallbackQuery
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.types import CallbackQuery
+from loguru import logger as log
 
 from app.resources.keyboards.reply_kb import get_error_recovery_kb
 
@@ -45,12 +45,13 @@ class UIErrorHandler:
                 # 2. --- (ДОБАВИТЬ reply_markup) ---
                 await call.message.answer(
                     f"⚠️ {message_text}\n\nПожалуйста, попробуйте начать заново с команды /start или кнопки 'Рестарт'.",
-                    reply_markup=get_error_recovery_kb()
+                    reply_markup=get_error_recovery_kb(),
                 )
                 log.debug(f"Сообщение об ошибке и Reply-клавиатура успешно отправлены user_id={user_id}.")
             else:
                 log.error(
-                    f"Не удалось отправить сообщение об ошибке для user_id={user_id}, так как call.message отсутствует.")
+                    f"Не удалось отправить сообщение об ошибке для user_id={user_id}, так как call.message отсутствует."
+                )
         except TelegramBadRequest as e:
             log.error(f"Не удалось отправить сообщение об ошибке для user_id={user_id}: {e}")
 
@@ -64,10 +65,7 @@ class UIErrorHandler:
             call: Объект CallbackQuery.
             error_text: Описание ошибки для пользователя.
         """
-        await UIErrorHandler._error_msg_default(
-            call,
-            message_text=error_text
-        )
+        await UIErrorHandler._error_msg_default(call, message_text=error_text)
 
     # --- Публичные методы для конкретных ошибок ---
 
@@ -77,10 +75,7 @@ class UIErrorHandler:
         Общая ошибка "Что-то пошло не так".
         (Бывшая error_msg_default)
         """
-        await UIErrorHandler._error_msg_default(
-            call,
-            message_text="Что-то пошло не так. Данные не найдены."
-        )
+        await UIErrorHandler._error_msg_default(call, message_text="Что-то пошло не так. Данные не найдены.")
 
     @staticmethod
     async def invalid_id(call: CallbackQuery) -> None:
@@ -88,10 +83,7 @@ class UIErrorHandler:
         Специализированная функция для ошибок, связанных с неверным ID из callback.
         (Бывшая error_int_id)
         """
-        await UIErrorHandler._error_msg_default(
-            call,
-            message_text="Произошел сбой. ID персонажа не прошел валидацию."
-        )
+        await UIErrorHandler._error_msg_default(call, message_text="Произошел сбой. ID персонажа не прошел валидацию.")
 
     @staticmethod
     async def char_id_not_found_in_fsm(call: CallbackQuery) -> None:
@@ -99,8 +91,7 @@ class UIErrorHandler:
         Вызывается, когда 'char_id' не найден в FSM (критическая ошибка состояния).
         """
         await UIErrorHandler._error_msg_default(
-            call,
-            message_text="Что-то пошло не так. Данные о персонаже утеряны из памяти (FSM)."
+            call, message_text="Что-то пошло не так. Данные о персонаже утеряны из памяти (FSM)."
         )
 
     @staticmethod
@@ -109,8 +100,7 @@ class UIErrorHandler:
         Вызывается, когда 'message_content' (chat_id, message_id) не найден в FSM.
         """
         await UIErrorHandler._error_msg_default(
-            call,
-            message_text="Что-то пошло не так. Не удалось найти сообщение для редактирования."
+            call, message_text="Что-то пошло не так. Не удалось найти сообщение для редактирования."
         )
 
     @staticmethod
@@ -119,6 +109,5 @@ class UIErrorHandler:
         Вызывается, когда хэндлер ожидал данные от callback, но они не пришли.
         """
         await UIErrorHandler._error_msg_default(
-            call,
-            message_text="Произошел сбой. Данные (callback data) не были получены."
+            call, message_text="Произошел сбой. Данные (callback data) не были получены."
         )

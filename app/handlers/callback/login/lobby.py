@@ -1,19 +1,20 @@
 # app/handlers/callback/login/lobby.py
-from loguru import logger as log
 import time
-from aiogram import Router, F, Bot
+from typing import Any
+
+from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
+from loguru import logger as log
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.handlers.callback.login.char_creation import start_creation_handler
 from app.resources.fsm_states.states import CharacterLobby
 from app.resources.keyboards.callback_data import LobbySelectionCallback
+from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.ui_service.command_service import CommandService
-
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.lobby_service import LobbyService
-from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
-
 
 router = Router(name="login_lobby_router")
 
@@ -34,8 +35,8 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
     Returns:
         None
     """
-    if not call.from_user:
-        log.warning("Хэндлер 'start_login_handler' получил обновление без 'from_user'.")
+    if not call.from_user or not call.message:
+        log.warning("Хэндлер 'start_login_handler' получил обновление без 'from_user' или 'message'.")
         return
 
     log.info(f"Хэндлер 'start_login_handler' [start_adventure] вызван user_id={call.from_user.id}")
@@ -48,7 +49,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
         com_service = CommandService(user)
         await com_service.create_user_in_db()
         log.debug(f"Failsafe: Пользователь {user.id} проверен/создан перед загрузкой персонажей.")
-    except Exception as e:
+    except SQLAlchemyError as e:
         log.error(f"Критическая ошибка: Не удалось выполнить failsafe user creation для {user.id}: {e}", exc_info=True)
         await Err.generic_error(call=call)
         return
@@ -73,12 +74,17 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
 
         await await_min_delay(start_time, min_delay=0.5)
 
-        await call.message.edit_text(text=text, parse_mode="html", reply_markup=kb)
+        if isinstance(call.message, Message):
+            await call.message.edit_text(text=text, parse_mode="html", reply_markup=kb)
         log.debug(f"Сообщение-лобби отправлено user_id={user.id}")
     else:
         # Если персонажей нет, запускаем процесс создания.
         log.info(f"У user_id={user.id} нет персонажей. Запуск процесса создания.")
         state_data = await state.get_data()
+        message_menu: dict[str, Any] | None = state_data.get("message_menu")
+        if not message_menu:
+            await Err.generic_error(call)
+            return
 
         # Создаем "пустую" запись персонажа в БД и получаем его ID.
         char_id = await lobby_service.create_und_get_character_id()
@@ -92,9 +98,9 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
             call=call,
             state=state,
             user_id=lobby_service.user_id,
-            message_menu=state_data.get("message_menu"),
+            message_menu=message_menu,
             bot=bot,
-            char_id=char_id
+            char_id=char_id,
         )
 
 
@@ -118,7 +124,10 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
     log.info(f"Хэндлер 'create_character_handler' [lobby:create] вызван user_id={call.from_user.id}")
     user_id = call.from_user.id
     state_data = await state.get_data()
-    message_menu = state_data.get("message_menu")
+    message_menu: dict[str, Any] | None = state_data.get("message_menu")
+    if not message_menu:
+        await Err.generic_error(call)
+        return
 
     # Создаем "пустую" запись для нового персонажа в БД.
     lobby_service = LobbyService(user=call.from_user, state_data=state_data)
@@ -130,13 +139,5 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
 
     # Передаем управление основному обработчику создания персонажа.
     await start_creation_handler(
-        call=call,
-        state=state,
-        bot=bot,
-        user_id=user_id,
-        char_id=char_id,
-        message_menu=message_menu
+        call=call, state=state, bot=bot, user_id=user_id, char_id=char_id, message_menu=message_menu
     )
-
-
-

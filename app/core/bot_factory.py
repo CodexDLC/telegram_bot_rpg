@@ -1,17 +1,16 @@
-from loguru import logger as log
-from typing import Tuple
-
 from aiogram import Bot, Dispatcher
+
 # 1. ДОБАВИТЬ ЭТОТ ИМПОРТ
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
+from loguru import logger as log
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-from app.core.config import REDIS_URL, BOT_TOKEN
+from app.core.config import BOT_TOKEN, REDIS_URL
 from app.core.redis_client import redis_client
 
 
-async def build_app() -> Tuple[Bot, Dispatcher]:
+async def build_app() -> tuple[Bot, Dispatcher]:
     """
     Асинхронно создает и конфигурирует экземпляры Bot и Dispatcher.
 
@@ -35,6 +34,10 @@ async def build_app() -> Tuple[Bot, Dispatcher]:
     """
     log.info("Начало создания экземпляров Bot и Dispatcher...")
 
+    if not BOT_TOKEN:
+        log.critical("BOT_TOKEN не найден. Невозможно создать бота.")
+        raise RuntimeError("BOT_TOKEN не найден.")
+
     # --- Создание бота ---
     # 2. ИЗМЕНИТЬ ЭТУ СТРОКУ
     # БЫЛО: bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
@@ -42,7 +45,7 @@ async def build_app() -> Tuple[Bot, Dispatcher]:
 
     log.debug("Экземпляр Bot создан.")
 
-    log.debug(f"Попытка подключения к Redis (проверка .ping())")
+    log.debug("Попытка подключения к Redis (проверка .ping())")
     try:
         # Вот здесь 'await' сработает, потому что мы внутри async def!
         if not await redis_client.ping():
@@ -51,7 +54,7 @@ async def build_app() -> Tuple[Bot, Dispatcher]:
 
     except RedisConnectionError as e:
         log.critical(f"Не удалось подключиться к Redis: {e}")
-        raise RuntimeError(f"Критическая ошибка: не удалось подключиться к Redis по адресу {REDIS_URL}")
+        raise RuntimeError(f"Критическая ошибка: не удалось подключиться к Redis по адресу {REDIS_URL}") from e
 
     # RedisStorage будет использоваться для машины состояний (FSM).
     storage = RedisStorage(redis=redis_client)

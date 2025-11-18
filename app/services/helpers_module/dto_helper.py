@@ -1,21 +1,20 @@
-# app/services/helpers_module/DTO_helper.py
-from loguru import logger as log
-from typing import Any, List, Dict, Type, Union
+# app/services/helpers_module/dto_helper.py
+from typing import Any
+
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State
 from aiogram.types import CallbackQuery, Message
-from pydantic import BaseModel
+from loguru import logger as log
+from pydantic import BaseModel, ValidationError
 
 from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterStatsReadDTO
 from app.resources.schemas_dto.skill import SkillProgressDTO
-
 
 FSM_CORE_KEYS = ["user_id", "char_id", "message_menu", "message_content"]
 
 
 # Карта для сопоставления ключей FSM с классами DTO.
 # Это позволяет автоматически восстанавливать Pydantic модели из словарей.
-DTO_MAP: Dict[str, Type[BaseModel]] = {
+DTO_MAP: dict[str, type[BaseModel]] = {
     "character": CharacterReadDTO,
     "characters": CharacterReadDTO,  # Используется для списков
     "character_stats": CharacterStatsReadDTO,
@@ -24,8 +23,7 @@ DTO_MAP: Dict[str, Type[BaseModel]] = {
 log.debug(f"Карта DTO_MAP инициализирована с {len(DTO_MAP)} записями.")
 
 
-
-async def fsm_store(value: Any) -> Union[Dict, List[Dict], Any]:
+async def fsm_store(value: Any) -> dict | list[dict] | Any:
     """
     Сериализует Pydantic модели (DTO) в словари для безопасного хранения в FSM.
 
@@ -40,10 +38,10 @@ async def fsm_store(value: Any) -> Union[Dict, List[Dict], Any]:
     """
     if isinstance(value, BaseModel):
         log.debug(f"Сериализация Pydantic модели '{type(value).__name__}' в словарь.")
-        return value.model_dump(mode='json')
+        return value.model_dump(mode="json")
     elif isinstance(value, list) and value and isinstance(value[0], BaseModel):
         log.debug(f"Сериализация списка из {len(value)} Pydantic моделей '{type(value[0]).__name__}'.")
-        return [v.model_dump(mode='json') for v in value]
+        return [v.model_dump(mode="json") for v in value]
     else:
         log.debug(f"Значение типа '{type(value).__name__}' не требует сериализации.")
         return value
@@ -103,18 +101,17 @@ async def fsm_convector(value: Any, key: str) -> Any:
             log.debug(f"Десериализация словаря по ключу '{key}' в модель '{dto_class.__name__}'.")
             return dto_class.model_validate(value)
         else:
-            log.warning(f"Ожидался dict или list для ключа '{key}', но получен '{type(value).__name__}'. Преобразование невозможно.")
+            log.warning(
+                f"Ожидался dict или list для ключа '{key}', но получен '{type(value).__name__}'. Преобразование невозможно."
+            )
             return value
-    except Exception as e:
+    except (ValidationError, TypeError) as e:
         log.exception(f"Ошибка валидации Pydantic при преобразовании данных для ключа '{key}': {e}")
         # В случае ошибки возвращаем исходное значение, чтобы не сломать логику.
         return value
 
 
-async def fsm_clean_core_state(
-        state: FSMContext,
-        event_source: Union[CallbackQuery, Message]
-) -> None:
+async def fsm_clean_core_state(state: FSMContext, event_source: CallbackQuery | Message) -> None:
     """
     Очищает FSM, сохраняя "ядро" состояния.
 
@@ -158,7 +155,7 @@ async def fsm_clean_core_state(
         if "user_id" not in clean_data:
             if event_source and event_source.from_user:
                 clean_data["user_id"] = event_source.from_user.id
-                log.debug(f"fsm_clean_core_state: 'user_id' добавлен из 'event_source'.")
+                log.debug("fsm_clean_core_state: 'user_id' добавлен из 'event_source'.")
             else:
                 log.error("fsm_clean_core_state: 'user_id' не найден ни в FSM, ни в 'event_source'!")
 

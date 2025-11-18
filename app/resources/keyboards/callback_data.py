@@ -1,6 +1,5 @@
 # app/resources/keyboards/callback_data.py
 
-from typing import Optional
 
 from aiogram.filters.callback_data import CallbackData
 
@@ -23,9 +22,10 @@ class LobbySelectionCallback(CallbackData, prefix="lsc"):
     action: 'select', 'create', 'login', 'logout'
     char_id: ID персонажа (используется только для action='select')
     """
+
     action: str
     # Используем Optional, т.к. 'create' не требует ID
-    char_id: Optional[int] = None
+    char_id: int | None = None
 
 
 class TutorialQuestCallback(CallbackData, prefix="tut_quest"):
@@ -33,6 +33,7 @@ class TutorialQuestCallback(CallbackData, prefix="tut_quest"):
     Управляет навигацией по всему FSM-квесту создания персонажа.
 
     """
+
     branch: str
     phase: str
     value: str

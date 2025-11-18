@@ -1,12 +1,11 @@
 # app/services/ui_service/helpers_ui/ui_tools.py
 import asyncio
 import time
-from loguru import logger as log
-from typing import Dict, Tuple, Optional, List
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.types import InlineKeyboardMarkup
-from aiogram.exceptions import TelegramBadRequest
+from loguru import logger as log
 
 
 async def await_min_delay(start_time: float, min_delay: float = 0.5) -> None:
@@ -32,10 +31,10 @@ async def await_min_delay(start_time: float, min_delay: float = 0.5) -> None:
 
 
 async def animate_message_sequence(
-        message_to_edit: Dict[str, int],
-        sequence: Tuple[Tuple[str, float], ...],
-        bot: Bot,
-        final_reply_markup: Optional[InlineKeyboardMarkup] = None
+    message_to_edit: dict[str, int],
+    sequence: tuple[tuple[str, float], ...],
+    bot: Bot,
+    final_reply_markup: InlineKeyboardMarkup | None = None,
 ) -> None:
     """
     Анимирует сообщение, последовательно редактируя его текст.
@@ -62,18 +61,14 @@ async def animate_message_sequence(
     log.debug(f"Начало анимации сообщения {message_id} в чате {chat_id} ({total_steps} шагов).")
 
     for i, (text_line, pause_duration) in enumerate(sequence):
-        is_last_step = (i == total_steps - 1)
+        is_last_step = i == total_steps - 1
         markup = final_reply_markup if is_last_step else None
 
         try:
             await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=text_line,
-                parse_mode='HTML',
-                reply_markup=markup
+                chat_id=chat_id, message_id=message_id, text=text_line, parse_mode="HTML", reply_markup=markup
             )
-            log.debug(f"Шаг {i+1}/{total_steps} анимации выполнен.")
+            log.debug(f"Шаг {i + 1}/{total_steps} анимации выполнен.")
         except TelegramBadRequest as e:
             # Игнорируем ошибку, если сообщение не изменилось, но логируем остальные.
             if "message is not modified" in str(e).lower():
@@ -82,7 +77,7 @@ async def animate_message_sequence(
                 log.warning(f"Ошибка Telegram API при анимации сообщения: {e}")
                 # Прерываем анимацию в случае серьезной ошибки.
                 break
-        except Exception as e:
+        except TelegramAPIError as e:
             log.exception(f"Критическая ошибка при анимации сообщения: {e}")
             break
 

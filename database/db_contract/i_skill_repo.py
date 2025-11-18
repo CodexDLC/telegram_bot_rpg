@@ -1,8 +1,9 @@
 # database/db_contract/i_skill_repo.py
-from abc import abstractmethod, ABC
-from typing import Optional, List, Dict
+from abc import ABC, abstractmethod
+from typing import Any
+
+from app.resources.schemas_dto.skill import SkillProgressDTO, SkillRateDTO
 from database.model_orm.skill import SkillProgressState
-from app.resources.schemas_dto.skill import SkillRateDTO, SkillProgressDTO
 
 
 class ISkillRateRepo(ABC):
@@ -15,7 +16,7 @@ class ISkillRateRepo(ABC):
     """
 
     @abstractmethod
-    async def upsert_skill_rates(self, rates_data: List[Dict[str, any]]) -> None:
+    async def upsert_skill_rates(self, rates_data: list[dict[str, Any]]) -> None:
         """
         Массово создает или обновляет ставки навыков для персонажа.
 
@@ -34,7 +35,7 @@ class ISkillRateRepo(ABC):
         pass
 
     @abstractmethod
-    async def get_all_skill_rates(self, character_id: int) -> List[SkillRateDTO]:
+    async def get_all_skill_rates(self, character_id: int) -> list[SkillRateDTO]:
         """
         Возвращает все рассчитанные ставки навыков для одного персонажа.
 
@@ -73,7 +74,7 @@ class ISkillProgressRepo(ABC):
         pass
 
     @abstractmethod
-    async def add_skill_xp(self, character_id: int, skill_key: str, xp_to_add: int) -> Optional[SkillProgressDTO]:
+    async def add_skill_xp(self, character_id: int, skill_key: str, xp_to_add: int) -> SkillProgressDTO | None:
         """
         Атомарно добавляет опыт к указанному навыку персонажа.
 
@@ -108,7 +109,7 @@ class ISkillProgressRepo(ABC):
         pass
 
     @abstractmethod
-    async def update_skill_unlocked_state(self, character_id: int, skill_key_list: list[str], state: bool):
+    async def update_skill_unlocked_state(self, character_id: int, skill_key_list: list[str], state: bool) -> None:
         """
         Массово обновляет статус `is_unlocked` для списка навыков персонажа.
 
@@ -130,7 +131,7 @@ class ISkillProgressRepo(ABC):
         pass
 
     @abstractmethod
-    async def get_all_skills_progress(self, character_id: int) -> List[SkillProgressDTO]:
+    async def get_all_skills_progress(self, character_id: int) -> list[SkillProgressDTO]:
         """
         Возвращает прогресс всех навыков для одного персонажа.
 

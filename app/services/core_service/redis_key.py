@@ -1,5 +1,4 @@
 # app/services/core_service/redis_key.py
-from loguru import logger as log
 
 
 class RedisKeys:

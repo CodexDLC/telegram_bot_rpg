@@ -1,10 +1,9 @@
 # app/services/helpers_module/game_validator.py
-from loguru import logger as log
 import re
-from typing import Tuple, Optional
+
+from loguru import logger as log
 
 from app.resources.texts.profanity_list import FORBIDDEN_WORDS
-
 
 # --- Правила валидации имени персонажа ---
 MIN_NAME_LENGTH = 3
@@ -14,7 +13,7 @@ MAX_NAME_LENGTH = 16
 NAME_PATTERN = re.compile(r"^[a-zA-Zа-яА-Я0-9]+$")
 
 
-def validate_character_name(name: str) -> Tuple[bool, Optional[str]]:
+def validate_character_name(name: str) -> tuple[bool, str | None]:
     """
     Проверяет имя персонажа на соответствие игровым правилам.
 

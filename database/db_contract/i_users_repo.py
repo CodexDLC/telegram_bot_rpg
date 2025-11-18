@@ -1,8 +1,7 @@
 # database/db_contract/i_users_repo.py
-from abc import abstractmethod, ABC
-from typing import Optional, List
+from abc import ABC, abstractmethod
 
-from app.resources.schemas_dto.user_dto import UserUpsertDTO, UserDTO
+from app.resources.schemas_dto.user_dto import UserDTO, UserUpsertDTO
 
 
 class IUserRepo(ABC):
@@ -32,7 +31,7 @@ class IUserRepo(ABC):
         pass
 
     @abstractmethod
-    async def get_user(self, telegram_id: int, **kwargs) -> Optional[UserDTO]:
+    async def get_user(self, telegram_id: int, **kwargs) -> UserDTO | None:
         """
         Находит и возвращает одного пользователя по его `telegram_id`.
 
@@ -47,7 +46,7 @@ class IUserRepo(ABC):
         pass
 
     @abstractmethod
-    async def get_users(self, **kwargs) -> List[UserDTO]:
+    async def get_users(self, **kwargs) -> list[UserDTO]:
         """
         Возвращает список всех пользователей в системе.
 

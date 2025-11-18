@@ -1,34 +1,41 @@
-#
+from typing import Any
+
 from loguru import logger as log
-from typing import Dict, Optional, Any, Union
 
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.resources.schemas_dto.modifer_dto import CharacterModifiersDTO
 
-
-
 PERCENT_KEYS = {
-        "physical_damage_bonus", "physical_penetration", "physical_crit_chance",
-        "magical_damage_bonus", "magical_penetration", "magical_crit_chance",
-        "spell_land_chance", "magical_accuracy", "dodge_chance", "debuff_avoidance",
-        "shield_block_chance", "physical_resistance", "control_resistance",
-        "magical_resistance", "shock_resistance", "trade_discount", "find_loot_chance",
-        "crafting_critical_chance", "skill_gain_bonus", "crafting_success_chance",
-        # Добавь сюда любые другие ключи-проценты из modifer_dto.py
-    }
-
-
+    "physical_damage_bonus",
+    "physical_penetration",
+    "physical_crit_chance",
+    "magical_damage_bonus",
+    "magical_penetration",
+    "magical_crit_chance",
+    "spell_land_chance",
+    "magical_accuracy",
+    "dodge_chance",
+    "debuff_avoidance",
+    "shield_block_chance",
+    "physical_resistance",
+    "control_resistance",
+    "magical_resistance",
+    "shock_resistance",
+    "trade_discount",
+    "find_loot_chance",
+    "crafting_critical_chance",
+    "skill_gain_bonus",
+    "crafting_success_chance",
+}
 
 
 class ModifierFormatters:
-
     @staticmethod
-    def group_modifier(data: Dict[str, str], char_name: str, actor_name: str) -> Optional[str]:
+    def group_modifier(data: dict[str, str], char_name: str, actor_name: str) -> str | None:
         """
         Форматирует текст для отображения списка групп модификаторов.
         """
         log.debug(f"Форматирование списка групп модификаторов для персонажа '{char_name}'.")
-
 
         if not data:
             log.error("Отсутствуют данные о группах навыков для форматирования.")
@@ -64,10 +71,10 @@ class ModifierFormatters:
 
     @staticmethod
     def format_stats_list(
-            data: Dict[str, Any],  # group_data из MODIFIER_HIERARCHY
-            dto_to_use: Union[CharacterStatsReadDTO, CharacterModifiersDTO],
-            actor_name: str
-    ) -> Optional[str]:
+        data: dict[str, Any],  # group_data из MODIFIER_HIERARCHY
+        dto_to_use: CharacterStatsReadDTO | CharacterModifiersDTO,
+        actor_name: str,
+    ) -> str | None:
         """
         Форматирует список статов ИЛИ модификаторов в <code> таблицу,
         безопасную для мобильных, в формате (Значение | Параметр).
@@ -78,7 +85,7 @@ class ModifierFormatters:
 
         data_items = data.get("items")
         if not data_items:
-            log.error(f"В словаре 'data' не найден ключ 'items'.")
+            log.error("В словаре 'data' не найден ключ 'items'.")
             return None
 
         # 1. Задаем БЕЗОПАСНУЮ ширину (Total ~ 8 + 3 + 18 = 29)
@@ -100,7 +107,8 @@ class ModifierFormatters:
             value = getattr(dto_to_use, key, "N/A")
 
             # 3. Форматируем ЗНАЧЕНИЕ (справа)
-            if key in PERCENT_KEYS and isinstance(value, (float, int)):
+            # FIX: Заменено (float, int) на float | int согласно правилу Ruff UP038
+            if key in PERCENT_KEYS and isinstance(value, float | int):
                 formatted_value = f"{value * 100:.2f}%"
             elif isinstance(value, float):
                 formatted_value = f"{value:.2f}"
@@ -112,10 +120,9 @@ class ModifierFormatters:
 
             # 4. Форматируем НАЗВАНИЕ (слева)
             # Обрезаем длинные заголовки, чтобы не сломать таблицу
-            if len(title) > title_width:
-                formatted_title = title[:(title_width - 3)] + "..."
-            else:
-                formatted_title = f"{title:<{title_width}}"  # Выравниваем слева
+            formatted_title = (
+                (title[: (title_width - 3)] + "...") if len(title) > title_width else f"{title:<{title_width}}"
+            )
 
             # 5. Собираем строку: ЗНАЧЕНИЕ | НАЗВАНИЕ
             formatted_lines.append(f"{formatted_val_str}{separator}{formatted_title}")
@@ -128,21 +135,17 @@ class ModifierFormatters:
         description = data.get("description", "...")
 
         # --- Собираем финальный текст ---
-        text = (
-            f"<b>{title}</b>\n\n"
-            f"<i>{actor_name}: {description}</i>\n\n"
-            f"{stats_list_text}"
-        )
+        text = f"<b>{title}</b>\n\n<i>{actor_name}: {description}</i>\n\n{stats_list_text}"
 
         return text
 
     @staticmethod
     def format_modifier_detail(
-            data: Dict[str, Any],  # Данные из MODIFIER_HIERARCHY
-            value: Any,  # Значение (e.g., 5.25 или 150)
-            key: str,  # Ключ (e.g., "energy_regen")
-            actor_name: str
-    ) -> Optional[str]:
+        data: dict[str, Any],  # Данные из MODIFIER_HIERARCHY
+        value: Any,  # Значение (e.g., 5.25 или 150)
+        key: str,  # Ключ (e.g., "energy_regen")
+        actor_name: str,
+    ) -> str | None:
         """
         Форматирует "карточку" (Lvl 2) для конкретного модификатора.
         """
@@ -155,7 +158,8 @@ class ModifierFormatters:
         description = data.get("description", "...")
 
         # 2. Форматируем значение (проверяем, нужно ли ставить %)
-        if key in PERCENT_KEYS and isinstance(value, (float, int)):
+        # FIX: Заменено (float, int) на float | int согласно правилу Ruff UP038
+        if key in PERCENT_KEYS and isinstance(value, float | int):
             formatted_value = f"{value * 100:.2f}%"
         elif isinstance(value, float):
             formatted_value = f"{value:.2f}"

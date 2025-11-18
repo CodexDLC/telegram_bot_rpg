@@ -1,20 +1,21 @@
 # app/services/ui_service/lobby_service.py
 
-from loguru import logger as log
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Any
 
-from aiogram.types import InlineKeyboardMarkup, User, InlineKeyboardButton
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, User
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from loguru import logger as log
+from sqlalchemy.exc import SQLAlchemyError
 
+from app.resources.keyboards.callback_data import LobbySelectionCallback
 from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterShellCreateDTO
 from app.resources.texts.buttons_callback import Buttons
-from app.services.helpers_module.DTO_helper import fsm_store
+from app.services.helpers_module.dto_helper import fsm_store
 from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
 from database.repositories import get_character_repo
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from database.session import get_async_session
-from app.resources.keyboards.callback_data import LobbySelectionCallback
 
 
 class LobbyService(BaseUIService):
@@ -25,11 +26,12 @@ class LobbyService(BaseUIService):
     созданием клавиатур и взаимодействием с БД для создания персонажей.
     """
 
-    def __init__(self,
-                 user: User,
-                 state_data: Dict[str, Any],  # Теперь state_data обязателен
-                 char_id: int = None,
-                ):
+    def __init__(
+        self,
+        user: User,
+        state_data: dict[str, Any],  # Теперь state_data обязателен
+        char_id: int | None = None,
+    ):
         """
         Инициализирует сервис лобби.
         """
@@ -42,35 +44,23 @@ class LobbyService(BaseUIService):
 
         # А уже ПОСЛЕ этого устанавливаем свои свойства
         self.user_id = user.id
-        self.char_id = char_id  # self.char_id МОЖЕТ быть None, это нормально
+        self.char_id: int = safe_char_id  # self.char_id МОЖЕТ быть None, это нормально
 
-        log.debug(
-            f"Инициализирован {self.__class__.__name__} для user_id={self.user_id}.")
-
+        log.debug(f"Инициализирован {self.__class__.__name__} для user_id={self.user_id}.")
 
     def get_message_delete(self, char_name: str) -> tuple[str, InlineKeyboardMarkup]:
-
-        text =  f"⚠️ Вы уверены, что хотите удалить персонажа <b>{char_name}</b>?\n\nЭто действие необратимо."
+        text = f"⚠️ Вы уверены, что хотите удалить персонажа <b>{char_name}</b>?\n\nЭто действие необратимо."
 
         kb = self._kb_delete()
 
         return text, kb
 
-
-    def _kb_delete(self):
-
+    def _kb_delete(self) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()
 
-        yes_b = LobbySelectionCallback(
-            action="delete_yes",
-            char_id=self.char_id
+        yes_b = LobbySelectionCallback(action="delete_yes", char_id=self.char_id).pack()
 
-        ).pack()
-
-        no_b = LobbySelectionCallback(
-            action="delete_no",
-            char_id=self.char_id
-        ).pack()
+        no_b = LobbySelectionCallback(action="delete_no", char_id=self.char_id).pack()
 
         kb.button(text="Да", callback_data=yes_b)
         kb.button(text="Нет", callback_data=no_b)
@@ -79,12 +69,9 @@ class LobbyService(BaseUIService):
 
         return kb.as_markup()
 
-
-
     def get_data_lobby_start(
-            self,
-            characters: Optional[List[CharacterReadDTO]] = None
-    ) -> Tuple[str, InlineKeyboardMarkup]:
+        self, characters: list[CharacterReadDTO] | None = None
+    ) -> tuple[str, InlineKeyboardMarkup]:
         """
         Подготавливает данные для отображения стартового экрана лобби.
 
@@ -97,9 +84,8 @@ class LobbyService(BaseUIService):
         return text, kb
 
     def _get_character_lobby_kb(
-            self,
-            characters: Optional[List[CharacterReadDTO]],
-            max_slots: int = 4) -> InlineKeyboardMarkup:
+        self, characters: list[CharacterReadDTO] | None, max_slots: int = 4
+    ) -> InlineKeyboardMarkup:
         """
         Создает клавиатуру для лобби выбора персонажа.
 
@@ -116,24 +102,26 @@ class LobbyService(BaseUIService):
         itera_char = len(characters) if characters is not None else 0
 
         # Создаем кнопки для существующих персонажей.
-        for i in range(max_slots):
-            if i < itera_char:
-                char = characters[i]
-                callback = LobbySelectionCallback(
-                    action="select",
-                    char_id=char.character_id
-                )
-                if char.character_id == self.char_id:
-                    text = f"✅ {char.name}"
+        if characters:
+            for i in range(max_slots):
+                if i < itera_char:
+                    char = characters[i]
+                    callback = LobbySelectionCallback(action="select", char_id=char.character_id)
+                    text = f"✅ {char.name}" if char.character_id == self.char_id else f"👤 {char.name}"
+                    kb.button(text=text, callback_data=callback.pack())
                 else:
-                    text = f"👤 {char.name}"
-                kb.button(text=text, callback_data=callback.pack())
-            else:
+                    callback = LobbySelectionCallback(
+                        action="create",
+                    )
+                    # Если слот пуст, добавляем кнопку создания.
+                    kb.button(text=lobby_buttons["create"], callback_data=callback.pack())
+        else:
+            for _ in range(max_slots):
                 callback = LobbySelectionCallback(
                     action="create",
                 )
-                # Если слот пуст, добавляем кнопку создания.
                 kb.button(text=lobby_buttons["create"], callback_data=callback.pack())
+
         kb.adjust(2, 2)
 
         buttons = self._down_button()
@@ -143,20 +131,20 @@ class LobbyService(BaseUIService):
         log.debug("Клавиатура лобби успешно создана.")
         return kb.as_markup()
 
-    def _down_button(self):
+    def _down_button(self) -> list[InlineKeyboardButton]:
         # Допустим, ты передаешь нужные данные как словарь, где ключ - это action
         lobby_buttons_dawn = Buttons.LOBBY_KB_DOWN
         buttons = []
 
         for key, value in lobby_buttons_dawn.items():
-            buttons.append(InlineKeyboardButton(
-                text=value,
-                callback_data=LobbySelectionCallback(action=key, char_id=self.char_id).pack()
-            ))
+            buttons.append(
+                InlineKeyboardButton(
+                    text=value,
+                    callback_data=LobbySelectionCallback(action=key, char_id=self.char_id).pack(),
+                )
+            )
 
         return buttons
-
-
 
     async def create_und_get_character_id(self) -> int:
         """
@@ -176,13 +164,12 @@ class LobbyService(BaseUIService):
                 char_id = await char_repo.create_character_shell(dto_object)
                 log.info(f"Успешно создана 'оболочка' персонажа с char_id={char_id} для user_id={self.user_id}.")
                 return char_id
-            except Exception as e:
+            except SQLAlchemyError as e:
                 log.exception(f"Ошибка при создании 'оболочки' персонажа для user_id={self.user_id}: {e}")
                 await session.rollback()
                 raise
 
-    async def get_data_characters(self):
-
+    async def get_data_characters(self) -> list[CharacterReadDTO] | None:
         try:
             async with get_async_session() as session:
                 char_repo = get_character_repo(session)
@@ -191,32 +178,24 @@ class LobbyService(BaseUIService):
                     return character
                 else:
                     return None
-        except Exception as e:
+        except SQLAlchemyError as e:
             log.exception(f"Ошибка при получении списка персонажей для user_id={self.user_id}: {e}")
+            return None
 
-
-    async def delete_character_ind_db(self):
-
+    async def delete_character_ind_db(self) -> bool:
+        if not self.char_id:
+            return False
         try:
             async with get_async_session() as session:
                 char_repo = get_character_repo(session)
                 await char_repo.delete_characters(self.char_id)
                 return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             log.exception(f"Ошибка при удалении персонажа {self.char_id} ошибка {e}")
+            return False
 
-
-
-
-    async def get_fsm_data(self, characters_dto: List[CharacterReadDTO]) -> Dict[str, Any]:
-        """ Собирает данные сервиса для сохранения в FSM"""
+    async def get_fsm_data(self, characters_dto: list[CharacterReadDTO]) -> dict[str, Any]:
+        """Собирает данные сервиса для сохранения в FSM"""
         characters = await fsm_store(characters_dto)
-        return {
-            "char_id": self.char_id,
-            "characters": characters,
-            "user_id": self.user_id
-        }
-
-
-
+        return {"char_id": self.char_id, "characters": characters, "user_id": self.user_id}

@@ -2,9 +2,9 @@
 
 import logging
 import sys
-from loguru import logger
-from typing import Any
+from types import FrameType
 
+from loguru import logger
 
 
 class InterceptHandler(logging.Handler):
@@ -15,6 +15,7 @@ class InterceptHandler(logging.Handler):
     в 'logging' (например, библиотеками aiogram, sqlalchemy),
     и "передавать" их 'loguru', чтобы они отображались в едином стиле.
     """
+
     def emit(self, record: logging.LogRecord) -> None:
         """
         Этот метод вызывается автоматически для каждой записи лога.
@@ -28,7 +29,8 @@ class InterceptHandler(logging.Handler):
             level = record.levelno
 
         # Находим фрейм (кадр стека вызовов), где был сделан лог
-        frame, depth = logging.currentframe(), 6
+        frame: FrameType | None = logging.currentframe()
+        depth = 6
         while frame and frame.f_code.co_filename == logging.__file__:
             frame = frame.f_back
             depth += 1
@@ -55,9 +57,9 @@ def setup_loguru() -> None:
     # Это то, что ты будешь видеть при запуске бота.
     logger.add(
         sink=sys.stdout,  # "sink" (приемник) - это консоль
-        level="DEBUG",     # В консоль будут падать только 'INFO' и важнее
-        colorize=True,    # Включаем цвета (замена 'colorlog')
-        format=(          # Задаем наш формат
+        level="DEBUG",  # В консоль будут падать только 'INFO' и важнее
+        colorize=True,  # Включаем цвета (замена 'colorlog')
+        format=(  # Задаем наш формат
             "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
             "<level>{level: <8}</level> | "
             "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
@@ -69,9 +71,9 @@ def setup_loguru() -> None:
     # Здесь будут храниться ВСЕ сообщения для детальной отладки.
     logger.add(
         sink="logs/debug.log",  # Файл для логов
-        level="DEBUG",          # Уровень - ВСЕ, начиная с DEBUG
-        rotation="10 MB",       # Ротация файла при достижении 10 MB
-        compression="zip",      # Сжимать старые логи в .zip
+        level="DEBUG",  # Уровень - ВСЕ, начиная с DEBUG
+        rotation="10 MB",  # Ротация файла при достижении 10 MB
+        compression="zip",  # Сжимать старые логи в .zip
         format="{time} | {level: <8} | {name}:{function}:{line} - {message}",
     )
 
@@ -79,9 +81,9 @@ def setup_loguru() -> None:
     # Отдельный файл только для критических сбоев в формате JSON.
     logger.add(
         sink="logs/errors.json",
-        level="ERROR",          # Уровень - ТОЛЬКО ERROR и CRITICAL
-        serialize=True,         # <-- МАГИЯ: Включает JSON-формат
-        rotation="10 MB",       # Тоже с ротацией
+        level="ERROR",  # Уровень - ТОЛЬКО ERROR и CRITICAL
+        serialize=True,  # <-- МАГИЯ: Включает JSON-формат
+        rotation="10 MB",  # Тоже с ротацией
         compression="zip",
     )
 

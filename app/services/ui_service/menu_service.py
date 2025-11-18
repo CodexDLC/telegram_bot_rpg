@@ -1,13 +1,12 @@
 # app/services/ui_service/menu_service.py
-from loguru import logger as log
-from typing import Tuple
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardMarkup
+from loguru import logger as log
 
-from app.resources.keyboards.callback_data import MeinMenuCallback, LobbySelectionCallback
+from app.resources.keyboards.callback_data import LobbySelectionCallback, MeinMenuCallback
 from app.resources.keyboards.status_callback import StatusNavCallback
-# 1. --- ДОБАВЬ ИМПОРТ StatusNavCallback ---
 
+# 1. --- ДОБАВЬ ИМПОРТ StatusNavCallback ---
 from app.resources.texts.menu_data.buttons_text import ButtonsTextData
 
 
@@ -27,7 +26,7 @@ class MenuService:
         self.char_id = char_id
         log.debug(f"Инициализирован {self.__class__.__name__} для game_stage='{self.gs}', char_id={self.char_id}")
 
-    def get_data_menu(self) -> Tuple[str, InlineKeyboardMarkup]:
+    def get_data_menu(self) -> tuple[str, InlineKeyboardMarkup]:
         """
         Возвращает текст и клавиатуру для текущего меню.
         ...
@@ -51,10 +50,7 @@ class MenuService:
                 continue
 
             if key == "status":
-                callback_data = StatusNavCallback(
-                    key="bio",
-                    char_id=self.char_id
-                ).pack()
+                callback_data = StatusNavCallback(key="bio", char_id=self.char_id).pack()
 
             # 2. --- (ИЗМЕНИ ЭТОТ БЛОК) ---
             elif key == "logout":
@@ -66,11 +62,7 @@ class MenuService:
 
             elif key in ("navigation", "inventory"):
                 # Остальные кнопки (пока) используют старый колбэк
-                callback_data = MeinMenuCallback(
-                    action=key,
-                    game_stage=self.gs,
-                    char_id=self.char_id
-                ).pack()
+                callback_data = MeinMenuCallback(action=key, game_stage=self.gs, char_id=self.char_id).pack()
             # --- (КОНЕЦ ИЗМЕНЕНИЙ) ---
             else:
                 continue

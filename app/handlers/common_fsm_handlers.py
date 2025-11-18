@@ -1,9 +1,9 @@
-from loguru import logger as log
-from aiogram import Router, F
+from aiogram import F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import Message
+from loguru import logger as log
 
-from app.resources.fsm_states.states import StartTutorial, CharacterCreation, CharacterLobby, GARBAGE_TEXT_STATES
-
+from app.resources.fsm_states.states import GARBAGE_TEXT_STATES
 
 router = Router(name="common_fsm_router")
 
@@ -27,5 +27,5 @@ async def delete_garbage_text(m: Message):
     try:
         # Просто удаляем сообщение, чтобы оно не мешало.
         await m.delete()
-    except Exception as e:
+    except TelegramAPIError as e:
         log.warning(f"Не удалось удалить 'мусорное' сообщение: {e}")

@@ -1,11 +1,10 @@
 # model_orm
 
 from .base import Base, TimestampMixin
-from .modifiers import CharacterModifiers
-from .skill import CharacterSkillRate, CharacterSkillProgress
-from .user import User
 from .character import Character, CharacterStats
-
+from .modifiers import CharacterModifiers
+from .skill import CharacterSkillProgress, CharacterSkillRate
+from .user import User
 
 __all__ = [
     "Base",
@@ -15,5 +14,5 @@ __all__ = [
     "CharacterStats",
     "CharacterSkillRate",
     "CharacterSkillProgress",
-    "CharacterModifiers"
+    "CharacterModifiers",
 ]

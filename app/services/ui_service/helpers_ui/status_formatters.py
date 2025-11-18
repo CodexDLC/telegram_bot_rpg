@@ -1,9 +1,6 @@
 # app/services/ui_service/helpers_ui/status_formatters.py
-from loguru import logger as log
-from typing import Optional, Any
 
-from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO, CharacterReadDTO
-from app.resources.texts.buttons_callback import Buttons
+from loguru import logger as log
 
 
 class StatusFormatter:
@@ -12,12 +9,7 @@ class StatusFormatter:
     """
 
     @staticmethod
-    def format_character_bio(
-            text_formated: str,
-            actor_name: str
-    ) -> str:
-
-
+    def format_character_bio(text_formated: str, actor_name: str) -> str:
         text = f"""
         
         {actor_name}: Выводим статус пользователя
@@ -26,10 +18,5 @@ class StatusFormatter:
         
         """
 
-
-
         log.debug(f"Сформирован текст биографии персонажа (длина: {len(text)}).")
         return text
-
-
-

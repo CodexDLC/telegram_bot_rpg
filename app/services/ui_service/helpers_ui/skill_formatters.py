@@ -1,8 +1,9 @@
 # app/services/ui_service/helpers_ui/skill_formatters.py
-from loguru import logger as log
-from typing import Any, Dict, Optional, List
+from typing import Any
 
-from app.resources.schemas_dto.skill import SkillProgressDTO, SkillDisplayDTO
+from loguru import logger as log
+
+from app.resources.schemas_dto.skill import SkillDisplayDTO, SkillProgressDTO
 from app.services.game_service.skill.calculator_service import SkillCalculatorService as SkillCal
 
 
@@ -13,7 +14,7 @@ class SkillFormatters:
     """
 
     @staticmethod
-    def group_skill(data: Dict[str, str], char_name: str, actor_name: str) -> Optional[str]:
+    def group_skill(data: dict[str, str], char_name: str, actor_name: str) -> str | None:
         """
         Форматирует текст для отображения списка групп навыков.
 
@@ -61,11 +62,8 @@ class SkillFormatters:
 
     @staticmethod
     def format_skill_list_in_group(
-            char_id: int,
-            data_group: Dict[str, Any],
-            data_skill: List[SkillProgressDTO],
-            actor_name: str
-    ) -> Optional[str]:
+        char_id: int, data_group: dict[str, Any], data_skill: list[SkillProgressDTO], actor_name: str
+    ) -> str | None:
         """
         Форматирует сообщение со списком навыков в выбранной группе.
 
@@ -110,7 +108,7 @@ class SkillFormatters:
                 # 5. Получаем и форматируем Название СЛЕВА (как в Модификаторах)
                 skill_name = data_group_items.get(skill_dto.skill_key, "Неизвестный навык")
                 if len(skill_name) > title_width:
-                    formatted_title = skill_name[:(title_width - 3)] + "..."
+                    formatted_title = skill_name[: (title_width - 3)] + "..."
                 else:
                     formatted_title = f"{skill_name:<{title_width}}"  # Выравниваем слева
 
@@ -131,7 +129,7 @@ class SkillFormatters:
             f"\n"
             f"<code>"
             f"<b>Группа:</b> {group_title}"
-            f"</code>\n"      
+            f"</code>\n"
             f"{table_text}"
         )
         log.debug(f"Сформирован текст для списка навыков в группе '{group_title}' (длина: {len(final_message_text)}).")
@@ -139,11 +137,8 @@ class SkillFormatters:
 
     @staticmethod
     def format_detail_skill_message(
-            data: Dict[str, Any],
-            skill_dto: SkillProgressDTO,
-            skill_display: SkillDisplayDTO,
-            actor_name: str
-    ) -> Optional[str]:
+        data: dict[str, Any], skill_dto: SkillProgressDTO, skill_display: SkillDisplayDTO, actor_name: str
+    ) -> str | None:
         """
         Форматирует детальное описание конкретного навыка.
 
@@ -153,7 +148,9 @@ class SkillFormatters:
         :param actor_name: Имя "рассказчика".
         :return: Готовый текст сообщения или None в случае ошибки.
         """
-        log.debug(f"Форматирование детального описания навыка '{data.get('title')}' для персонажа ID={skill_dto.character_id}.")
+        log.debug(
+            f"Форматирование детального описания навыка '{data.get('title')}' для персонажа ID={skill_dto.character_id}."
+        )
 
         if not all([skill_dto, skill_display, data]):
             log.error("Отсутствуют полные данные о навыке для форматирования.")

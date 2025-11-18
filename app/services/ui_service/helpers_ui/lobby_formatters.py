@@ -1,6 +1,6 @@
 # app/services/ui_service/helpers_ui/lobby_formatters.py
+
 from loguru import logger as log
-from typing import List, Optional
 
 from app.resources.schemas_dto.character_dto import CharacterReadDTO
 from app.resources.texts.buttons_callback import Buttons
@@ -14,7 +14,7 @@ class LobbyFormatter:
     """
 
     @staticmethod
-    def format_character_list(characters: Optional[List[CharacterReadDTO]]) -> str:
+    def format_character_list(characters: list[CharacterReadDTO] | None) -> str:
         """
         Форматирует список персонажей для отображения в лобби.
 
@@ -39,10 +39,7 @@ class LobbyFormatter:
             gender_key = f"gender:{char.gender}"
             gender = Buttons.GENDER.get(gender_key, "Не указан")
 
-            char_info = (
-                f"<b>Персонаж #{i+1}:</b> {name}\n"
-                f"<i>Пол:</i> {gender}"
-            )
+            char_info = f"<b>Персонаж #{i + 1}:</b> {name}\n<i>Пол:</i> {gender}"
             char_list_parts.append(char_info)
             log.debug(f"Отформатирован персонаж: id={char.character_id}, name='{name}'.")
 

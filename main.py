@@ -1,16 +1,16 @@
 import asyncio
+
 # Шаг 1: Заменили 'import logging' на 'from loguru...'
 from loguru import logger as log
 
 from app.core.bot_factory import build_app
 from app.core.config import BOT_TOKEN
 from app.core.loguru_setup import setup_loguru
-
 from app.handlers import router as main_router
 from database.session import create_db_tables as create_tables
 
-
 setup_loguru()
+
 
 @log.catch
 async def main() -> None:
@@ -53,5 +53,5 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         log.info("Бот остановлен.")
-    except Exception as e:
+    except RuntimeError as e:
         log.critical(f"Критическая ошибка при запуске: {e}")

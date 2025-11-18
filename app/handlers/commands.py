@@ -1,23 +1,24 @@
 # app/handlers/commands.py
-from loguru import logger as log
+import contextlib
 import time
 
-from aiogram import Router, F, Bot
+from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, ReplyKeyboardRemove
+from loguru import logger as log
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.resources.keyboards.inline_kb.loggin_und_new_character import get_start_adventure_kb
 
 # Импорты для кнопок
-from app.resources.keyboards.reply_kb import (
-    RESTART_BUTTON_TEXT, SETTINGS_BUTTON_TEXT
-)
-from app.resources.keyboards.inline_kb.loggin_und_new_character import get_start_adventure_kb
+from app.resources.keyboards.reply_kb import RESTART_BUTTON_TEXT, SETTINGS_BUTTON_TEXT
 from app.resources.texts.ui_messages import START_GREETING
+from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.command_service import CommandService
 from app.services.ui_service.helpers_ui.message_info_formatter import MessageInfoFormatter
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
-from app.services.ui_service.base_service import BaseUIService
-
 
 router = Router(name="commands_router")
 
@@ -25,6 +26,7 @@ router = Router(name="commands_router")
 # =================================================================
 # --- 1. ОСНОВНОЙ ХЭНДЛЕР (Полная логика) ---
 # =================================================================
+
 
 @router.message(Command("start"))
 async def cmd_start(m: Message, state: FSMContext, bot: Bot) -> None:
@@ -54,7 +56,7 @@ async def cmd_start(m: Message, state: FSMContext, bot: Bot) -> None:
             await bot.delete_message(chat_id=content_data[0], message_id=content_data[1])
             log.debug(f"Старое message_content {content_data[1]} удалено.")
 
-    except Exception as e:
+    except TelegramAPIError as e:
         log.warning(f"Не удалось удалить старые сообщения при /start: {e}")
 
     # Полностью очищаем состояние FSM
@@ -68,12 +70,9 @@ async def cmd_start(m: Message, state: FSMContext, bot: Bot) -> None:
         com_service = CommandService(user)
         await com_service.create_user_in_db()
         log.debug(f"Пользователь {user.id} обработан сервисом CommandService.")
-    except Exception as e:
+    except SQLAlchemyError as e:
         log.exception(f"Критическая ошибка БД при вызове create_user_in_db для user_id={user.id}: {e}")
-        await m.answer(
-            "⚠️ Не удалось подключиться к базе данных.\n"
-            "Пожалуйста, попробуйте снова через несколько минут."
-        )
+        await m.answer("⚠️ Не удалось подключиться к базе данных.\nПожалуйста, попробуйте снова через несколько минут.")
         # (Удаляем Reply-клавиатуру, если она была)
         await m.answer("...", reply_markup=ReplyKeyboardRemove())
         return
@@ -87,50 +86,45 @@ async def cmd_start(m: Message, state: FSMContext, bot: Bot) -> None:
         reply_markup=get_start_adventure_kb(),
     )
 
-    message_menu = {
-        "message_id": mes.message_id,
-        "chat_id": mes.chat.id
-    }
+    message_menu = {"message_id": mes.message_id, "chat_id": mes.chat.id}
     await state.update_data(message_menu=message_menu)
-    log.debug(f"Состояние FSM обновлено для user_id={user.id} с message_id={mes.message_id}")
+    log.debug(f"Состояние FSM обновлено для user_id={m.from_user.id} с message_id={mes.message_id}")
 
     try:
         await m.delete()
-    except Exception as e:
+    except TelegramAPIError as e:
         log.warning(f"Не удалось удалить сообщение /start для user_id={user.id}: {e}")
-
-
-
-
-
 
 
 # =================================================================
 # --- 2. ХЭНДЛЕРЫ REPLY-КНОПОК (Заглушки и Рестарт) ---
 # =================================================================
 
+
 @router.message(F.text == RESTART_BUTTON_TEXT)
-async def handle_restart_button(m: Message, state: FSMContext, bot: Bot):
+async def handle_restart_button(m: Message, state: FSMContext, bot: Bot) -> None:
     """
     Обрабатывает нажатие Reply-кнопки "Рестарт".
     Просто вызывает /start, который все сделает сам.
     """
+    if not m.from_user:
+        return
     log.info(f"User {m.from_user.id} нажал Reply-кнопку 'Рестарт'. Вызов cmd_start...")
     # Передаем управление в `cmd_start`
     await cmd_start(m, state, bot)
 
 
 @router.message(F.text == SETTINGS_BUTTON_TEXT)
-async def handle_settings_button(m: Message):
+async def handle_settings_button(m: Message) -> None:
     """
     ОБРАБАТЫВАЕТ КНОПКУ "Настройки".
     (Заглушка)
     """
+    if not m.from_user:
+        return
     log.info(f"User {m.from_user.id} нажал Reply-кнопку 'Настройки'. (Заглушка)")
-    try:
+    with contextlib.suppress(TelegramAPIError):
         await m.delete()  # Удаляем сообщение с текстом "⚙️ Настройки"
-    except Exception:
-        pass
 
     await m.answer(
         "⚠️ Меню настроек находится в разработке.",
@@ -140,6 +134,7 @@ async def handle_settings_button(m: Message):
 # =================================================================
 # --- 3. ХЭНДЛЕРЫ КОМАНД (Заглушки) ---
 # =================================================================
+
 
 @router.message(Command("setting"))
 async def cmd_setting(m: Message) -> None:
@@ -152,10 +147,8 @@ async def cmd_setting(m: Message) -> None:
         return
 
     log.info(f"Хэндлер 'cmd_setting' [/setting] вызван user_id={m.from_user.id}. (Заглушка)")
-    try:
+    with contextlib.suppress(TelegramAPIError):
         await m.delete()
-    except Exception:
-        pass
 
     await m.answer(
         "⚠️ Меню настроек находится в разработке.",
@@ -173,10 +166,8 @@ async def cmd_help(m: Message) -> None:
         return
 
     log.info(f"Хэндлер 'cmd_help' [/help] вызван user_id={m.from_user.id}. (Заглушка)")
-    try:
+    with contextlib.suppress(TelegramAPIError):
         await m.delete()
-    except Exception:
-        pass
 
     await m.answer(
         "⚠️ Раздел помощи находится в разработке.",
