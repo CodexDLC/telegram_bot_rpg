@@ -10,7 +10,7 @@ class ReportService:
     @staticmethod
     async def send_report(bot: Bot, user_id: int, username: str, report_type: str, report_text: str) -> bool:
         """
-        Отправляет форматированный отчет в административный канал.!!
+        Отправляет форматированный отчет в административный канал.
         """
         if not BUG_REPORT_CHANNEL_ID:
             log.warning("Отчет не отправлен: BUG_REPORT_CHANNEL_ID не задан.")
