@@ -1,5 +1,5 @@
 # app/services/ui_service/tutorial/tutorial_service_skill.py
-from typing import Any
+from typing import Any, cast
 
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -265,11 +265,17 @@ class TutorialServiceSkills:
 
         # Убедимся, что text_template - это строка
         if isinstance(text_template, list):
-            text_template = "\n".join(map(str, text_template))
+            # 1. Объединяем список в строку. Используем cast, чтобы mypy знал, что мы работаем со списком строк.
+            text_template = "\n".join(cast(list[str], text_template))
+
+        # 2. Гарантируем, что text_template имеет тип str, даже если он был Any из словаря
+        if not isinstance(text_template, str):
+            text_template = str(text_template)
 
         # Проверка, что final_choice_key является строкой
         safe_choice_name = str(final_choice_key) if final_choice_key is not None else "неизвестный выбор"
 
+        # Теперь mypy уверен, что text_template - это str
         text = text_template.format(choice_name=safe_choice_name)
 
         action = button_data.get("action") if isinstance(button_data, dict) else None

@@ -141,7 +141,15 @@ async def select_or_delete_character_handler(
 
         await state.update_data(char_name=char_name)
 
-        chat_id, message_id = lobby_service.get_message_content_data()
+        message_content = lobby_service.get_message_content_data()
+
+        if message_content is None:
+            log.error(f"User {user.id}: Не найден 'message_content' для показа подтверждения удаления.")
+            await Err.message_content_not_found_in_fsm(call)
+            return
+
+        chat_id, message_id = message_content
+
         if chat_id and message_id:
             await bot.edit_message_text(
                 chat_id=chat_id, message_id=message_id, text=text, parse_mode="html", reply_markup=kb

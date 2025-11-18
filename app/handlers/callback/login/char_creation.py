@@ -305,11 +305,13 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: 
     await state.set_state(StartTutorial.start)
     log.info(f"FSM для user_id={user_id} переведен в состояние 'StartTutorial.start'.")
 
-    # Убедимся, что gender_db является одним из ожидаемых литералов
+    name_str: str = cast(str, name)
+
     safe_gender = cast(Any, gender_db)
 
-    char_update_dto = CharacterOnboardingUpdateDTO(name=name, gender=safe_gender, game_stage="tutorial_stats")
+    char_update_dto = CharacterOnboardingUpdateDTO(name=name_str, gender=safe_gender, game_stage="tutorial_stats")
     create_service = OnboardingService(user_id=user_id, char_id=char_id)
+
     await create_service.update_character_db(char_update_dto=char_update_dto)
     log.info(f"Данные персонажа {char_id} (имя, пол, стадия) обновлены в БД.")
 
@@ -335,7 +337,13 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: 
     )
     log.debug(f"Анимация 'пробуждения' для user_id={user_id} завершена.")
 
-    text, kb = create_service.get_data_start(name=name, gender=gender_display)
+    if name and gender_display is not None:
+        text, kb = create_service.get_data_start(name=name, gender=gender_display)
+    else:
+        text = "ошибка"
+        kb = None
+        await Err.generic_error(call=call)
+
     await bot.edit_message_text(
         chat_id=message_content.get("chat_id"),
         message_id=message_content.get("message_id"),

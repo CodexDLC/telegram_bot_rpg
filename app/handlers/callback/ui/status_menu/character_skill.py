@@ -65,7 +65,8 @@ async def character_skill_group_handler(
 
         await await_min_delay(start_time, min_delay=0.5)
 
-        await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb)
+        if text and bot is not None:
+            await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb)
 
         await state.update_data(group_key=key)
         log.debug(f"Successfully displayed skill group '{key}' for char_id={char_id}.")
@@ -133,9 +134,10 @@ async def character_skill_detail_handler(
 
         await await_min_delay(start_time, min_delay=0.5)
 
-        await bot.edit_message_text(
-            chat_id=chat_id, message_id=message_id, text=text, parse_mode="html", reply_markup=kb
-        )
+        if text and bot is not None:
+            await bot.edit_message_text(
+                chat_id=chat_id, message_id=message_id, text=text, parse_mode="html", reply_markup=kb
+            )
         log.debug(f"Successfully displayed skill detail '{key}' for char_id={char_id}.")
 
     except (ValueError, AttributeError, TypeError, KeyError) as e:
@@ -186,13 +188,14 @@ async def character_skill_mode_handler(
             raise ValueError("Не удалось сгенерировать сообщение с деталями навыка")
         text, kb = result
 
-        await bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text=text,
-            parse_mode="html",
-            reply_markup=kb,
-        )
+        if text and bot is not None:
+            await bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text=text,
+                parse_mode="html",
+                reply_markup=kb,
+            )
         log.debug("Сообщение с деталями навыка успешно обновлено.")
 
     except (ValueError, AttributeError, TypeError, KeyError) as e:

@@ -22,16 +22,18 @@ class BaseUIService:
         """
         Извлекает chat_id и message_id из данных состояния FSM.
         """
-        message_content = self.state_data.get("message_content")
-        if not message_content:
+        message_content: dict[str, Any] | None = self.state_data.get("message_content")
+        if not isinstance(message_content, dict):  # <--- Проверка, что это словарь
             log.warning(f"В FSM state для char_id={self.char_id} отсутствует 'message_content'.")
             return None
 
         chat_id = message_content.get("chat_id")
         message_id = message_content.get("message_id")
 
-        if not chat_id or not message_id:
-            log.warning(f"В 'message_content' для char_id={self.char_id} отсутствует 'chat_id' или 'message_id'.")
+        if not isinstance(chat_id, int) or not isinstance(message_id, int):
+            log.warning(
+                f"В 'message_content' для char_id={self.char_id} 'chat_id' или 'message_id' не являются int или отсутствуют."
+            )
             return None
 
         log.debug(f"Извлечены данные сообщения: chat_id={chat_id}, message_id={message_id}.")

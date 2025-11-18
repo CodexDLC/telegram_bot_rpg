@@ -86,9 +86,10 @@ async def character_modifier_group_handler(
 
         await await_min_delay(start_time, min_delay=0.5)
 
-        await bot.edit_message_text(
-            chat_id=chat_id, message_id=message_id, text=text, parse_mode="html", reply_markup=kb
-        )
+        if text and bot is not None:
+            await bot.edit_message_text(
+                chat_id=chat_id, message_id=message_id, text=text, parse_mode="html", reply_markup=kb
+            )
 
         await state.update_data(group_key=key)
 
@@ -168,9 +169,11 @@ async def character_modifier_detail_handler(
         await await_min_delay(start_time, min_delay=0.5)
 
         chat_id, message_id = message_content
-        await bot.edit_message_text(
-            chat_id=chat_id, message_id=message_id, text=text, parse_mode="html", reply_markup=kb
-        )
+
+        if text and bot is not None:
+            await bot.edit_message_text(
+                chat_id=chat_id, message_id=message_id, text=text, parse_mode="html", reply_markup=kb
+            )
 
     except (ValueError, AttributeError, TypeError, KeyError) as e:
         log.exception(f"Критическая ошибка в 'character_modifier_detail_handler' для user {user_id}: {e}")
