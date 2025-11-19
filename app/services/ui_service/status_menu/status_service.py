@@ -3,6 +3,7 @@ from typing import Any
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.game_data.status_menu.bio_group_data import BIO_HIERARCHY, TABS_NAV_DATA
 from app.resources.game_data.status_menu.modifer_group_data import MODIFIER_HIERARCHY
@@ -15,7 +16,6 @@ from app.services.ui_service.helpers_ui.skill_formatters import SkillFormatters 
 from app.services.ui_service.helpers_ui.status_formatters import StatusFormatter as StatusF
 from app.services.ui_service.helpers_ui.status_modiier_formatters import ModifierFormatters as ModifierF
 from database.repositories import get_character_repo
-from database.session import get_async_session
 
 
 class CharacterMenuUIService(BaseUIService):
@@ -189,7 +189,7 @@ class CharacterMenuUIService(BaseUIService):
 
         return buttons_to_add
 
-    async def get_data_service(self) -> CharacterReadDTO | None:
+    async def get_data_service(self, session: AsyncSession) -> CharacterReadDTO | None:
         """
         Асинхронно получает данные персонажа из репозитория.
 
@@ -201,15 +201,14 @@ class CharacterMenuUIService(BaseUIService):
         """
         log.debug(f"Запрос данных для персонажа с char_id={self.char_id} из БД.")
         try:
-            async with get_async_session() as session:
-                char_repo = get_character_repo(session)
-                character = await char_repo.get_character(self.char_id)
-                if character:
-                    log.debug(f"Персонаж с char_id={self.char_id} успешно получен.")
-                    return character
-                else:
-                    log.warning(f"Персонаж с char_id={self.char_id} не найден в БД.")
-                    return None
+            char_repo = get_character_repo(session)
+            character = await char_repo.get_character(self.char_id)
+            if character:
+                log.debug(f"Персонаж с char_id={self.char_id} успешно получен.")
+                return character
+            else:
+                log.warning(f"Персонаж с char_id={self.char_id} не найден в БД.")
+                return None
 
         except Exception as e:
             log.error(f"Ошибка при получении данных для char_id={self.char_id}: {e}", exc_info=True)

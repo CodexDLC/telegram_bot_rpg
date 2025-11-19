@@ -5,6 +5,7 @@ from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.keyboards.callback_data import LobbySelectionCallback, TutorialQuestCallback
 from app.resources.texts.buttons_callback import GameStage
@@ -14,7 +15,6 @@ from app.resources.texts.game_messages.tutorial_messages_skill import (
     TUTORIAL_SKILL_FINALE,
 )
 from database.repositories import CharactersRepoORM, SkillProgressRepo
-from database.session import get_async_session
 
 
 class TutorialServiceSkills:
@@ -330,7 +330,7 @@ class TutorialServiceSkills:
         kb.adjust(1)
         return kb.as_markup()
 
-    async def finalize_skill_selection(self, char_id: int) -> None:
+    async def finalize_skill_selection(self, char_id: int, session: AsyncSession) -> None:
         """
         Финализирует туториал по навыкам, управляя собственной транзакцией.
 
@@ -359,20 +359,20 @@ class TutorialServiceSkills:
         log.info(f"Начало финализации туториала навыков для char_id={char_id} в БД (внутренняя сессия)...")
 
         try:
-            async with get_async_session() as session:
-                progress_repo = SkillProgressRepo(session)
-                char_repo = CharactersRepoORM(session)
+            progress_repo = SkillProgressRepo(session)
+            char_repo = CharactersRepoORM(session)
 
-                log.debug(f"Шаг 1/2: Обновление 'is_unlocked=True' для char_id={char_id}. Навыки: {self.skills_db}")
-                await progress_repo.update_skill_unlocked_state(
-                    character_id=char_id, skill_key_list=self.skills_db, state=True
-                )
+            log.debug(f"Шаг 1/2: Обновление 'is_unlocked=True' для char_id={char_id}. Навыки: {self.skills_db}")
+            await progress_repo.update_skill_unlocked_state(
+                character_id=char_id, skill_key_list=self.skills_db, state=True
+            )
 
-                log.debug(f"Шаг 2/2: Обновление 'game_stage' на '{GameStage.IN_GAME}' для char_id={char_id}.")
-                await char_repo.update_character_game_stage(character_id=char_id, game_stage=GameStage.IN_GAME)
+            log.debug(f"Шаг 2/2: Обновление 'game_stage' на '{GameStage.IN_GAME}' для char_id={char_id}.")
+            await char_repo.update_character_game_stage(character_id=char_id, game_stage=GameStage.IN_GAME)
 
             log.info(f"Финализация навыков и game_stage для char_id={char_id} УСПЕШНО ЗАКОММИЧЕНА.")
 
         except (SQLAlchemyError, Exception) as e:
             log.exception(f"Ошибка при финализации навыков для char_id={char_id}. ТРАНЗАКЦИЯ ОТКАТИЛАСЬ. Ошибка: {e}")
+            await session.rollback()
             raise

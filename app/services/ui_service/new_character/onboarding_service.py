@@ -1,12 +1,12 @@
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.schemas_dto.character_dto import CharacterOnboardingUpdateDTO
 from app.resources.texts.buttons_callback import Buttons
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
-from database.session import get_async_session
 
 
 class OnboardingService:
@@ -80,7 +80,7 @@ class OnboardingService:
         log.debug(f"Получение текста для этапа ввода имени для user_id={self.user_id}.")
         return self.new_char.NAME_INPUT
 
-    async def update_character_db(self, char_update_dto: CharacterOnboardingUpdateDTO) -> None:
+    async def update_character_db(self, char_update_dto: CharacterOnboardingUpdateDTO, session: AsyncSession) -> None:
         """
         Обновляет данные создаваемого персонажа в базе данных.
 
@@ -101,15 +101,15 @@ class OnboardingService:
 
         log.info(f"Запрос на обновление данных персонажа {self.char_id} в БД для user_id={self.user_id}.")
         log.debug(f"Данные для обновления: {char_update_dto.model_dump_json()}")
-        async with get_async_session() as session:
-            char_repo = CharactersRepoORM(session)
-            try:
-                await char_repo.update_character_onboarding(character_id=self.char_id, character_data=char_update_dto)
-                log.info(f"Данные персонажа {self.char_id} успешно обновлены в БД.")
-            except Exception as e:
-                log.exception(f"Ошибка при обновлении данных персонажа {self.char_id} для user_id={self.user_id}: {e}")
-                await session.rollback()
-                raise
+
+        char_repo = CharactersRepoORM(session)
+        try:
+            await char_repo.update_character_onboarding(character_id=self.char_id, character_data=char_update_dto)
+            log.info(f"Данные персонажа {self.char_id} успешно обновлены в БД.")
+        except Exception as e:
+            log.exception(f"Ошибка при обновлении данных персонажа {self.char_id} для user_id={self.user_id}: {e}")
+            await session.rollback()
+            raise
 
     def get_data_start(self, name: str, gender: str) -> tuple[str, InlineKeyboardMarkup]:
         """

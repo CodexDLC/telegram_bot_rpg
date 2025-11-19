@@ -6,6 +6,7 @@ from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.resources.texts.buttons_callback import Buttons, GameStage
@@ -18,7 +19,6 @@ from database.repositories import (
     get_skill_rate_repo,
 )
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
-from database.session import get_async_session
 
 
 class TutorialServiceStats:
@@ -135,10 +135,10 @@ class TutorialServiceStats:
             kb.adjust(1)
         return kb.as_markup()
 
-    async def update_stats_und_get(self) -> tuple[str, InlineKeyboardMarkup]:
+    async def update_stats_und_get(self, session: AsyncSession) -> tuple[str, InlineKeyboardMarkup]:
         """Финализирует характеристики в БД и возвращает финальное сообщение."""
         log.info(f"Начало финализации статов в БД для char_id={self.char_id}.")
-        final_stats_obj = await self._finalize_stats_in_db()
+        final_stats_obj = await self._finalize_stats_in_db(session)
 
         if final_stats_obj:
             final_stats_for_text = final_stats_obj.model_dump()
@@ -151,31 +151,30 @@ class TutorialServiceStats:
         kb = self._tutorial_kb(TutorialMessages.TUTORIAL_CONFIRM_BUTTONS)
         return text, kb
 
-    async def _finalize_stats_in_db(self) -> CharacterStatsReadDTO | None:
+    async def _finalize_stats_in_db(self, session: AsyncSession) -> CharacterStatsReadDTO | None:
         """Атомарно обновляет БД: статы, навыки, этап игры."""
         log.debug(f"Открытие сессии для финализации статов char_id={self.char_id}.")
-        async with get_async_session() as session:
-            try:
-                char_service = CharacterSkillsService(
-                    stats_repo=get_character_stats_repo(session),
-                    rate_repo=get_skill_rate_repo(session),
-                    progress_repo=get_skill_progress_repo(session),
-                    modifiers_repo=get_modifiers_repo(session),
-                )
-                final_stats_obj = await char_service.finalize_tutorial_stats(
-                    character_id=self.char_id, bonus_stats=self.bonus_dict
-                )
-                if not final_stats_obj:
-                    raise ValueError("finalize_tutorial_stats вернул None")
+        try:
+            char_service = CharacterSkillsService(
+                stats_repo=get_character_stats_repo(session),
+                rate_repo=get_skill_rate_repo(session),
+                progress_repo=get_skill_progress_repo(session),
+                modifiers_repo=get_modifiers_repo(session),
+            )
+            final_stats_obj = await char_service.finalize_tutorial_stats(
+                character_id=self.char_id, bonus_stats=self.bonus_dict
+            )
+            if not final_stats_obj:
+                raise ValueError("finalize_tutorial_stats вернул None")
 
-                char_repo = CharactersRepoORM(session)
-                await char_repo.update_character_game_stage(self.char_id, GameStage.TUTORIAL_SKILL)
-                log.debug(f"Игровой этап для char_id={self.char_id} обновлен на '{GameStage.TUTORIAL_SKILL}'.")
-                log.info(f"Транзакция финализации статов для char_id={self.char_id} готова к коммиту.")
-                return final_stats_obj
-            except (SQLAlchemyError, ValueError) as e:
-                log.exception(
-                    f"Ошибка во время финализации статов для char_id={self.char_id}. Откат транзакции. Ошибка: {e}"
-                )
-                await session.rollback()
-                return None
+            char_repo = CharactersRepoORM(session)
+            await char_repo.update_character_game_stage(self.char_id, GameStage.TUTORIAL_SKILL)
+            log.debug(f"Игровой этап для char_id={self.char_id} обновлен на '{GameStage.TUTORIAL_SKILL}'.")
+            log.info(f"Транзакция финализации статов для char_id={self.char_id} готова к коммиту.")
+            return final_stats_obj
+        except (SQLAlchemyError, ValueError) as e:
+            log.exception(
+                f"Ошибка во время финализации статов для char_id={self.char_id}. Откат транзакции. Ошибка: {e}"
+            )
+            await session.rollback()
+            return None
