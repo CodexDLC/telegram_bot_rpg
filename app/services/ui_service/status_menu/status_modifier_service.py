@@ -5,6 +5,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.game_data.status_menu.modifer_group_data import MODIFIER_HIERARCHY
 from app.resources.keyboards.status_callback import StatusModifierCallback, StatusNavCallback
@@ -14,7 +15,6 @@ from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.helpers_ui.status_modiier_formatters import ModifierFormatters as ModifierF
 from database.repositories import get_character_stats_repo, get_modifiers_repo
-from database.session import get_async_session
 
 
 class CharacterModifierUIService(BaseUIService):
@@ -122,30 +122,28 @@ class CharacterModifierUIService(BaseUIService):
         kb.row(InlineKeyboardButton(text="[ ◀️ Назад к группе ]", callback_data=back_callback))
         return kb.as_markup()
 
-    async def get_data_modifier(self) -> CharacterModifiersDTO | None:
+    async def get_data_modifier(self, session: AsyncSession) -> CharacterModifiersDTO | None:
         try:
-            async with get_async_session() as session:
-                modifier_repo = get_modifiers_repo(session)
-                modifiers = await modifier_repo.get_modifiers(self.char_id)
-                if modifiers:
-                    log.debug(f"Персонаж с char_id={self.char_id} успешно получен.")
-                    return modifiers
-                else:
-                    return None
+            modifier_repo = get_modifiers_repo(session)
+            modifiers = await modifier_repo.get_modifiers(self.char_id)
+            if modifiers:
+                log.debug(f"Персонаж с char_id={self.char_id} успешно получен.")
+                return modifiers
+            else:
+                return None
         except SQLAlchemyError as e:
             log.error(f"{e}")
             return None
 
-    async def get_data_stats(self) -> CharacterStatsReadDTO | None:
+    async def get_data_stats(self, session: AsyncSession) -> CharacterStatsReadDTO | None:
         try:
-            async with get_async_session() as session:
-                character_stats = get_character_stats_repo(session)
-                stats = await character_stats.get_stats(self.char_id)
-                if stats:
-                    log.debug(f"Персонаж с char_id={self.char_id} успешно получен.")
-                    return stats
-                else:
-                    return None
+            character_stats = get_character_stats_repo(session)
+            stats = await character_stats.get_stats(self.char_id)
+            if stats:
+                log.debug(f"Персонаж с char_id={self.char_id} успешно получен.")
+                return stats
+            else:
+                return None
         except SQLAlchemyError as e:
             log.error(f"{e}")
             return None

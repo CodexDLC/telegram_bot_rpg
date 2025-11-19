@@ -4,6 +4,7 @@ from typing import Any
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.game_data.status_menu.skill_group_data import SKILL_HIERARCHY
 from app.resources.keyboards.status_callback import SkillModeCallback, StatusNavCallback, StatusSkillsCallback
@@ -14,7 +15,6 @@ from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.helpers_ui.skill_formatters import SkillFormatters as SkillF
 from database.model_orm.skill import SkillProgressState
 from database.repositories import get_skill_progress_repo
-from database.session import get_async_session
 
 
 class CharacterSkillStatusService(BaseUIService):
@@ -31,7 +31,7 @@ class CharacterSkillStatusService(BaseUIService):
         char_id: int,
         key: str,
         state_data: dict[str, Any],
-        syb_name: str | None = None,
+        symbiotic_name: str | None = None,
     ):
         """
         Инициализирует сервис для работы с навыками персонажа.
@@ -42,7 +42,7 @@ class CharacterSkillStatusService(BaseUIService):
         :param syb_name: Имя симбионта (опционально).
         """
         super().__init__(char_id=char_id, state_data=state_data)
-        self.actor_name = syb_name or DEFAULT_ACTOR_NAME
+        self.actor_name = symbiotic_name or DEFAULT_ACTOR_NAME
         self.data_skills = SKILL_HIERARCHY
         self.data_group: dict[str, Any] | None = self.data_skills.get(key)
         self.key = key
@@ -196,7 +196,7 @@ class CharacterSkillStatusService(BaseUIService):
                 return skill_dto
         return None
 
-    async def get_list_skills_dto(self) -> list[SkillProgressDTO] | None:
+    async def get_list_skills_dto(self, session: AsyncSession) -> list[SkillProgressDTO] | None:
         """
         Асинхронно получает список всех DTO прогресса навыков для персонажа из базы данных.
 
@@ -204,28 +204,26 @@ class CharacterSkillStatusService(BaseUIService):
         :raises: Любое исключение, возникшее при работе с БД.
         """
         try:
-            async with get_async_session() as session:
-                skill_progress_repo = get_skill_progress_repo(session)
-                skills_data = await skill_progress_repo.get_all_skills_progress(character_id=self.char_id)
-                if skills_data:
-                    log.debug(f"Найдено {len(skills_data)} навыков для персонажа ID={self.char_id}.")
-                    return skills_data
-                else:
-                    log.warning(f"Навыки для персонажа ID={self.char_id} не найдены.")
-                    return None
+            skill_progress_repo = get_skill_progress_repo(session)
+            skills_data = await skill_progress_repo.get_all_skills_progress(character_id=self.char_id)
+            if skills_data:
+                log.debug(f"Найдено {len(skills_data)} навыков для персонажа ID={self.char_id}.")
+                return skills_data
+            else:
+                log.warning(f"Навыки для персонажа ID={self.char_id} не найдены.")
+                return None
         except Exception as e:
             log.error(f"Ошибка при получении навыков из БД для персонажа ID={self.char_id}: {e}", exc_info=True)
             raise
 
-    async def set_mode_skill(self, mode: str) -> None:
+    async def set_mode_skill(self, mode: str, session: AsyncSession) -> None:
         try:
-            async with get_async_session() as session:
-                skill_progress_repo = get_skill_progress_repo(session)
-                await skill_progress_repo.update_skill_state(
-                    character_id=self.char_id, skill_key=self.key, state=SkillProgressState(mode)
-                )
+            skill_progress_repo = get_skill_progress_repo(session)
+            await skill_progress_repo.update_skill_state(
+                character_id=self.char_id, skill_key=self.key, state=SkillProgressState(mode)
+            )
 
-                log.debug("")
+            log.debug("")
         except Exception as e:
             log.error(f"Ошибка при обновлении режима навыка из БД для персонажа ID={self.char_id}: {e}", exc_info=True)
             raise

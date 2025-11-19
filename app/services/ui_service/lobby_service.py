@@ -6,6 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, User
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.keyboards.callback_data import LobbySelectionCallback
 from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterShellCreateDTO
@@ -15,7 +16,6 @@ from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.helpers_ui.lobby_formatters import LobbyFormatter
 from database.repositories import get_character_repo
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
-from database.session import get_async_session
 
 
 class LobbyService(BaseUIService):
@@ -146,7 +146,7 @@ class LobbyService(BaseUIService):
 
         return buttons
 
-    async def create_und_get_character_id(self) -> int:
+    async def create_und_get_character_id(self, session: AsyncSession) -> int:
         """
         Создает "оболочку" персонажа в БД и возвращает его ID.
 
@@ -158,38 +158,35 @@ class LobbyService(BaseUIService):
         """
         log.info(f"Запрос на создание 'оболочки' персонажа для user_id={self.user_id}.")
         dto_object = CharacterShellCreateDTO(user_id=self.user_id)
-        async with get_async_session() as session:
-            char_repo = CharactersRepoORM(session)
-            try:
-                char_id = await char_repo.create_character_shell(dto_object)
-                log.info(f"Успешно создана 'оболочка' персонажа с char_id={char_id} для user_id={self.user_id}.")
-                return char_id
-            except SQLAlchemyError as e:
-                log.exception(f"Ошибка при создании 'оболочки' персонажа для user_id={self.user_id}: {e}")
-                await session.rollback()
-                raise
-
-    async def get_data_characters(self) -> list[CharacterReadDTO] | None:
+        char_repo = CharactersRepoORM(session)
         try:
-            async with get_async_session() as session:
-                char_repo = get_character_repo(session)
-                character = await char_repo.get_characters(self.user_id)
-                if character:
-                    return character
-                else:
-                    return None
+            char_id = await char_repo.create_character_shell(dto_object)
+            log.info(f"Успешно создана 'оболочка' персонажа с char_id={char_id} для user_id={self.user_id}.")
+            return char_id
+        except SQLAlchemyError as e:
+            log.exception(f"Ошибка при создании 'оболочки' персонажа для user_id={self.user_id}: {e}")
+            await session.rollback()
+            raise
+
+    async def get_data_characters(self, session: AsyncSession) -> list[CharacterReadDTO] | None:
+        try:
+            char_repo = get_character_repo(session)
+            character = await char_repo.get_characters(self.user_id)
+            if character:
+                return character
+            else:
+                return None
         except SQLAlchemyError as e:
             log.exception(f"Ошибка при получении списка персонажей для user_id={self.user_id}: {e}")
             return None
 
-    async def delete_character_ind_db(self) -> bool:
+    async def delete_character_ind_db(self, session: AsyncSession) -> bool:
         if not self.char_id:
             return False
         try:
-            async with get_async_session() as session:
-                char_repo = get_character_repo(session)
-                await char_repo.delete_characters(self.char_id)
-                return True
+            char_repo = get_character_repo(session)
+            await char_repo.delete_characters(self.char_id)
+            return True
 
         except SQLAlchemyError as e:
             log.exception(f"Ошибка при удалении персонажа {self.char_id} ошибка {e}")

@@ -8,6 +8,8 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.core.config import BOT_TOKEN, REDIS_URL
 from app.core.redis_client import redis_client
+from app.middlewares.db_session_middleware import DbSessionMiddleware
+from database.session import async_session_factory
 
 
 async def build_app() -> tuple[Bot, Dispatcher]:
@@ -63,6 +65,9 @@ async def build_app() -> tuple[Bot, Dispatcher]:
     # --- Создание диспетчера ---
     dp = Dispatcher(storage=storage)
     log.debug("Экземпляр Dispatcher создан с RedisStorage.")
+
+    dp.update.middleware(DbSessionMiddleware(session_pool=async_session_factory))
+    log.info("DbSessionMiddleware зарегистрирован (Dependency Injection для БД готово).")
 
     log.info("Экземпляры Bot и Dispatcher успешно созданы и настроены.")
     return bot, dp
