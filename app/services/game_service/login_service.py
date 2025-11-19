@@ -3,10 +3,11 @@ from typing import Any
 
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.resources.texts.buttons_callback import GameStage
 from app.services.core_service.manager.account_manager import account_manager
 from database.repositories import get_character_repo
-from database.session import get_async_session
 
 
 class LoginService:
@@ -23,7 +24,7 @@ class LoginService:
 
     # --- ПУБЛИЧНЫЙ МЕТОД (для Хэндлера) ---
 
-    async def handle_login(self) -> tuple[str, str] | str | None:
+    async def handle_login(self, session: AsyncSession) -> tuple[str, str] | str | None:
         """
         Главный метод входа. Проверяет SQL и загружает/создает сессию Redis.
 
@@ -33,8 +34,8 @@ class LoginService:
         """
 
         # 1. Проверяем SQL (холодное хранилище)
-        game_stage = await self._check_sql_game_stage()
-        if game_stage != "in_game":
+        game_stage = await self._check_sql_game_stage(session)
+        if game_stage != GameStage.IN_GAME:
             log.warning(f"Попытка логина char_id={self.char_id} не из 'in_game' (stage: {game_stage})")
             return game_stage
 
@@ -45,14 +46,13 @@ class LoginService:
         log.info(f"Логин char_id={self.char_id} успешен. Состояние: {state}:{loc_id}")
         return state, loc_id
 
-    async def _check_sql_game_stage(self) -> str | None:
+    async def _check_sql_game_stage(self, session: AsyncSession) -> str | None:
         """Проверяет game_stage персонажа в SQL базе."""
         try:
-            async with get_async_session() as session:
-                char_repo = get_character_repo(session)
-                character_dto = await char_repo.get_character(self.char_id)
-                if character_dto:
-                    return character_dto.game_stage
+            char_repo = get_character_repo(session)
+            character_dto = await char_repo.get_character(self.char_id)
+            if character_dto:
+                return character_dto.game_stage
             return None
         except SQLAlchemyError as e:
             log.exception(f"Ошибка SQL при проверке game_stage для char_id={self.char_id}: {e}")

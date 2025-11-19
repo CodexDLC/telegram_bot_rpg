@@ -6,6 +6,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
 from app.resources.keyboards.status_callback import StatusModifierCallback
@@ -21,7 +22,7 @@ router = Router(name="character_Modifier_menu")
 
 @router.callback_query(StatusModifierCallback.filter(F.level == "group"), StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
 async def character_modifier_group_handler(
-    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: StatusModifierCallback
+    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: StatusModifierCallback, session: AsyncSession
 ) -> None:
     """
     Обрабатывает выбор группы навыков, отображая навыки в этой группе.
@@ -61,9 +62,9 @@ async def character_modifier_group_handler(
 
         dto_to_use: CharacterStatsReadDTO | CharacterModifiersDTO | None = None
         if key == "base_stats":
-            dto_to_use = await modifier_service.get_data_stats()
+            dto_to_use = await modifier_service.get_data_stats(session)
         else:
-            dto_to_use = await modifier_service.get_data_modifier()
+            dto_to_use = await modifier_service.get_data_modifier(session)
 
         if not dto_to_use:
             await Err.generic_error(call)
@@ -99,7 +100,7 @@ async def character_modifier_group_handler(
 
 @router.callback_query(StatusModifierCallback.filter(F.level == "detail"), StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
 async def character_modifier_detail_handler(
-    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: StatusModifierCallback
+    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: StatusModifierCallback, session: AsyncSession
 ) -> None:
     """
     Обрабатывает выбор конкретного модификатора (Lvl 2) и показывает
@@ -142,10 +143,10 @@ async def character_modifier_detail_handler(
         dto_to_use: CharacterStatsReadDTO | CharacterModifiersDTO | None = None
         if group_key == "base_stats":
             log.debug(f"User {user_id}: Запрос данных из get_data_stats() для '{key}'.")
-            dto_to_use = await modifier_service.get_data_stats()
+            dto_to_use = await modifier_service.get_data_stats(session)
         else:
             log.debug(f"User {user_id}: Запрос данных из get_data_modifier() для '{key}'.")
-            dto_to_use = await modifier_service.get_data_modifier()
+            dto_to_use = await modifier_service.get_data_modifier(session)
 
         if not dto_to_use:
             log.warning(f"User {user_id}: DTO (stats или modifiers) не найдены для char_id={char_id}.")
