@@ -21,7 +21,12 @@ class NavigationService(BaseUIService):
     Сервис-Оркестратор для Навигации.
     """
 
-    def __init__(self, char_id: int, state_data: dict[str, Any], symbiote_name: str | None = None):
+    def __init__(
+        self,
+        char_id: int,
+        state_data: dict[str, Any],
+        symbiote_name: str | None = None,
+    ):
         super().__init__(char_id, state_data)
         self.actor_name = symbiote_name or DEFAULT_ACTOR_NAME
         log.debug(f"Инициализирован NavigationService для char_id={self.char_id}")
@@ -37,7 +42,10 @@ class NavigationService(BaseUIService):
 
             # Если данные не найдены — возвращаем None, чтобы запустить Unstuck
             if not nav_data:
-                return f"<b>{self.actor_name}:</b> Ошибка реальности. Локация '{loc_id}' рассыпалась.", None
+                return (
+                    f"<b>{self.actor_name}:</b> Ошибка реальности. Локация '{loc_id}' рассыпалась.",
+                    None,
+                )
 
             account_data = await account_manager.get_account_data(self.char_id)
             prev_loc_id = account_data.get("prev_location_id") if account_data else None
@@ -71,7 +79,7 @@ class NavigationService(BaseUIService):
         # 2. Если клавиатуры нет (kb is None) — значит мы в "черной дыре"
         if kb is None:
             log.warning(
-                f"User char_id={self.char_id} застрял в '{current_loc_id}'. Выполняем аварийный телепорт (Unstuck)."
+                f"User char_id={self.char_id} застрял в '{current_loc_id}'. " "Выполняем аварийный телепорт (Unstuck)."
             )
 
             # АВАРИЙНАЯ ЭВАКУАЦИЯ
@@ -95,7 +103,7 @@ class NavigationService(BaseUIService):
             # Г. Добавляем сообщение о спасении
             text = (
                 f"⚠️ <b>{self.actor_name}:</b> Критический сбой навигации detected.\n"
-                f"🌀 <i>Протокол аварийной эвакуации активирован...</i>\n\n"
+                "🌀 <i>Протокол аварийной эвакуации активирован...</i>\n\n"
                 f"{text}"
             )
 
@@ -129,13 +137,15 @@ class NavigationService(BaseUIService):
                 if isinstance(exit_data, dict):
                     button_text = exit_data.get("text_button", ">>>")
                     kb.button(
-                        text=button_text, callback_data=NavigationCallback(action="move", target_id=target_id).pack()
+                        text=button_text,
+                        callback_data=NavigationCallback(action="move", target_id=target_id).pack(),
                     )
         kb.adjust(1)
 
         if prev_loc_id and prev_loc_id != current_loc_id:
             back_btn = InlineKeyboardButton(
-                text="↩️ Шаг назад", callback_data=NavigationCallback(action="move", target_id=prev_loc_id).pack()
+                text="↩️ Шаг назад",
+                callback_data=NavigationCallback(action="move", target_id=prev_loc_id).pack(),
             )
             kb.row(back_btn)
 
