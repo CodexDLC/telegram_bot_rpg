@@ -80,7 +80,7 @@ class NavigationService(BaseUIService):
         # 2. Если клавиатуры нет (kb is None) — значит мы в "черной дыре"
         if kb is None:
             log.warning(
-                f"User char_id={self.char_id} застрял в '{current_loc_id}'. " "Выполняем аварийный телепорт (Unstuck)."
+                f"User char_id={self.char_id} застрял в '{current_loc_id}'. Выполняем аварийный телепорт (Unstuck)."
             )
 
             # АВАРИЙНАЯ ЭВАКУАЦИЯ
@@ -116,7 +116,7 @@ class NavigationService(BaseUIService):
         loc_name = nav_data.get("name", "Неизвестное место")
         loc_desc = nav_data.get("description", "...")
 
-        text = f"<b>{self.actor_name}:</b> Локация идентифицирована.\n" f"📍 <b>{loc_name}</b>\n\n" f"{loc_desc}"
+        text = f"<b>{self.actor_name}:</b> Локация идентифицирована.\n📍 <b>{loc_name}</b>\n\n{loc_desc}"
 
         exits = nav_data.get("exits", {})
         if isinstance(exits, dict) and exits:
