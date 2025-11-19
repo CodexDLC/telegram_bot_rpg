@@ -2,6 +2,7 @@
 from aiogram import Router
 
 from .bug_report import router as bug_report_router
+from .callback.game import game_router_group
 
 # --- Наши новые "Цепочки" (Группы) ---
 from .callback.login import login_router_group
@@ -24,6 +25,7 @@ router.include_routers(
     login_router_group,
     tutorial_router_group,
     status_menu_router_group,
+    game_router_group,
     # 'common_fsm_handlers' (с F.text) должен идти в самом конце,
     # чтобы не перехватывать FSM-текст (например, ввод имени)
     common_fsm_router,

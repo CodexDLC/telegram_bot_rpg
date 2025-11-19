@@ -1,167 +1,183 @@
 # app/services/ui_service/navigation_service.py
 from typing import Any
 
-from aiogram.types import InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
 
-# TODO: В будущем здесь будет `game_dungeon_service`
-# --- Импорты Уровня 2 (Репозитории/Менеджеры) ---
+from app.resources.keyboards.callback_data import NavigationCallback
+from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.services.core_service.manager.account_manager import account_manager
 from app.services.core_service.manager.world_manager import world_manager
-
-# --- Импорты Уровня 3 (Бизнес-Логика) ---
 from app.services.game_service.game_world_service import game_world_service
+from app.services.ui_service.base_service import BaseUIService
 
-# --- Импорты Уровня 1 (Инструменты) ---
-# TODO: нужно создать NavigationCallback в 'app/resources/keyboards/callback_data.py'
-# from app.resources.keyboards.callback_data import NavigationCallback
+# Точка спавна по умолчанию (Safe Zone)
+DEFAULT_SPAWN_POINT = "portal_plats"
 
 
-class NavigationService:
+class NavigationService(BaseUIService):
     """
     Сервис-Оркестратор для Навигации.
-
-    Отвечает за:
-    1. Формирование UI (текст/кнопки) для локаций/данжей.
-    2. Обработку перемещения игрока (логика `move_player`).
     """
 
-    def __init__(self, char_id: int, state_data: dict[str, Any]):
-        self.char_id = char_id
-        self.state_data = state_data
+    def __init__(self, char_id: int, state_data: dict[str, Any], symbiote_name: str | None = None):
+        super().__init__(char_id, state_data)
+        self.actor_name = symbiote_name or DEFAULT_ACTOR_NAME
         log.debug(f"Инициализирован NavigationService для char_id={self.char_id}")
-
-    # --- 1. Метод для UI (Вызывается Хэндлером Логина) ---
 
     async def get_navigation_ui(self, state: str, loc_id: str) -> tuple[str, InlineKeyboardMarkup | None]:
         """
-        Главный метод для получения UI.
-        Вызывает приватный метод в зависимости от 'state'.
+        Главный метод получения UI.
         """
-        log.debug(f"get_navigation_ui: char_id={self.char_id}, state={state}, loc_id={loc_id}")
-
         if state == "world":
-            # --- ВЫПОЛНЯЕМ БИЗНЕС-ЛОГИКУ (как мы и решили) ---
-            # При входе в мир мы добавляем игрока в Set
             await world_manager.add_player_to_location(loc_id, self.char_id)
-            log.info(f"Игрок {self.char_id} добавлен в 'world:players_loc:{loc_id}'")
 
-            return await self._get_world_location_ui(loc_id)
+            nav_data = await game_world_service.get_location_for_navigation(loc_id)
+
+            # Если данные не найдены — возвращаем None, чтобы запустить Unstuck
+            if not nav_data:
+                return f"<b>{self.actor_name}:</b> Ошибка реальности. Локация '{loc_id}' рассыпалась.", None
+
+            account_data = await account_manager.get_account_data(self.char_id)
+            prev_loc_id = account_data.get("prev_location_id") if account_data else None
+
+            text = await self._format_location_text(nav_data)
+            kb = self._get_world_location_kb(nav_data.get("exits", {}), loc_id, prev_loc_id)
+
+            return text, kb
 
         elif state == "s_d":
-            # TODO: Реализовать логику добавления игрока в 's_d' (если она нужна)
-            return await self._get_solo_dungeon_ui(loc_id)
+            return f"<b>{self.actor_name}:</b> (Заглушка) Вы в подземелье.", None
 
         else:
-            log.error(f"Неизвестный state '{state}' для char_id={self.char_id}")
-            return "Ты находишься в пустоте. (Ошибка state)", None
+            return f"<b>{self.actor_name}:</b> Критическая ошибка координат.", None
 
-    # --- 2. Метод для Логики Перемещения (Вызывается Хэндлером Навигации) ---
-
-    async def move_player(self, target_loc_id: str) -> tuple[str, InlineKeyboardMarkup | None] | None:
+    async def reload_current_ui(self) -> tuple[str, InlineKeyboardMarkup | None]:
         """
-        Главный метод для ПЕРЕМЕЩЕНИЯ.
-        Вызывает приватный метод в зависимости от 'state'.
+        Перезагружает UI. Включает механику 'Unstuck' (Аварийный телепорт).
+        Если текущая локация сломана, переносит игрока на спавн.
         """
+        data = await account_manager.get_account_data(self.char_id)
+        if not data:
+            return "Ошибка аккаунта", None
 
-        # 1. Получить текущее состояние (state, loc_id) из `ac:char_id`
+        current_state = data.get("state", "world")
+        current_loc_id = data.get("location_id", DEFAULT_SPAWN_POINT)
+
+        # 1. Пробуем загрузить текущую локацию
+        text, kb = await self.get_navigation_ui(current_state, current_loc_id)
+
+        # 2. Если клавиатуры нет (kb is None) — значит мы в "черной дыре"
+        if kb is None:
+            log.warning(
+                f"User char_id={self.char_id} застрял в '{current_loc_id}'. Выполняем аварийный телепорт (Unstuck)."
+            )
+
+            # АВАРИЙНАЯ ЭВАКУАЦИЯ
+            target_safe_zone = DEFAULT_SPAWN_POINT
+
+            # А. Удаляем из старой (сломанной) локации (на всякий случай)
+            await world_manager.remove_player_from_location(current_loc_id, self.char_id)
+
+            # Б. Обновляем запись в Redis насильно
+            await account_manager.update_account_fields(
+                self.char_id,
+                {
+                    "location_id": target_safe_zone,
+                    "prev_location_id": target_safe_zone,  # Сбрасываем историю
+                },
+            )
+
+            # В. Получаем UI спавна
+            text, kb = await self.get_navigation_ui("world", target_safe_zone)
+
+            # Г. Добавляем сообщение о спасении
+            text = (
+                f"⚠️ <b>{self.actor_name}:</b> Критический сбой навигации detected.\n"
+                f"🌀 <i>Протокол аварийной эвакуации активирован...</i>\n\n"
+                f"{text}"
+            )
+
+        return text, kb
+
+    # --- 2. Приватные методы (Логика UI) ---
+
+    async def _format_location_text(self, nav_data: dict) -> str:
+        loc_name = nav_data.get("name", "Неизвестное место")
+        loc_desc = nav_data.get("description", "...")
+
+        text = f"<b>{self.actor_name}:</b> Локация идентифицирована.\n" f"📍 <b>{loc_name}</b>\n\n" f"{loc_desc}"
+
+        exits = nav_data.get("exits", {})
+        if isinstance(exits, dict) and exits:
+            text += "\n\n<b>Визуальный обзор путей:</b>"
+            for _target_id, exit_data in exits.items():
+                if isinstance(exit_data, dict):
+                    path_desc = exit_data.get("desc_next_room")
+                    if path_desc:
+                        text += f"\n👁 <i>{path_desc}</i>"
+        return text
+
+    def _get_world_location_kb(
+        self, exits_dict: dict, current_loc_id: str, prev_loc_id: str | None
+    ) -> InlineKeyboardMarkup:
+        kb = InlineKeyboardBuilder()
+
+        if isinstance(exits_dict, dict):
+            for target_id, exit_data in exits_dict.items():
+                if isinstance(exit_data, dict):
+                    button_text = exit_data.get("text_button", ">>>")
+                    kb.button(
+                        text=button_text, callback_data=NavigationCallback(action="move", target_id=target_id).pack()
+                    )
+        kb.adjust(1)
+
+        if prev_loc_id and prev_loc_id != current_loc_id:
+            back_btn = InlineKeyboardButton(
+                text="↩️ Шаг назад", callback_data=NavigationCallback(action="move", target_id=prev_loc_id).pack()
+            )
+            kb.row(back_btn)
+
+        return kb.as_markup()
+
+    # --- 3. Логика Действий (Move) ---
+
+    async def move_player(self, target_loc_id: str) -> tuple[float, str, InlineKeyboardMarkup | None] | None:
         current_data = await account_manager.get_account_data(self.char_id)
         if not current_data:
-            log.error(f"Не удалось найти ac: FSM для char_id={self.char_id} при перемещении.")
             return None
 
-        current_state = current_data.get("state")
+        current_state = current_data.get("state", "world")
+        current_loc_id = current_data.get("location_id")
 
-        # 2. Вызвать нужный приватный обработчик
-        if current_state == "world":
-            return await self._move_in_world(current_data, target_loc_id)
-        elif current_state == "s_d":
-            # TODO: Реализовать `_move_in_dungeon(current_data, target_loc_id)`
-            pass
+        if current_state == "world" and isinstance(current_loc_id, str):
+            # Проверка существования целевой локации
+            target_exists = await game_world_service.get_location_for_navigation(target_loc_id)
+            if not target_exists:
+                error_text = f"<b>{self.actor_name}:</b> Ошибка. Путь '{target_loc_id}' нестабилен или разрушен."
+                return 0.0, error_text, None
+
+            travel_time = 0.0
+            current_loc_data = await game_world_service.get_location_for_navigation(current_loc_id)
+
+            if current_loc_data:
+                exits = current_loc_data.get("exits", {})
+                target_exit = exits.get(target_loc_id)
+                if target_exit and isinstance(target_exit, dict):
+                    travel_time = float(target_exit.get("time_duration", 0))
+
+            await world_manager.remove_player_from_location(current_loc_id, self.char_id)
+
+            await account_manager.update_account_fields(
+                self.char_id,
+                {
+                    "location_id": target_loc_id,
+                    "prev_location_id": current_loc_id,
+                },
+            )
+
+            new_text, new_kb = await self.get_navigation_ui("world", target_loc_id)
+            return travel_time, new_text, new_kb
 
         return None
-
-    # --- 3. Приватные методы (Генераторы UI) ---
-
-    async def _get_world_location_ui(self, loc_id: str) -> tuple[str, InlineKeyboardMarkup | None]:
-        """Формирует UI для МИРОВОЙ локации."""
-
-        # 1. Получаем "умные" данные
-        nav_data = await game_world_service.get_location_for_navigation(loc_id)
-        if not nav_data:
-            return "Ошибка: Локация не найдена.", None
-
-        # 2. Формируем Текст
-        text = f"<b>{nav_data.get('name')}</b>\n\n{nav_data.get('description')}"
-
-        # 3. Добавляем "социальную" информацию
-        players_set = await world_manager.get_players_in_location(loc_id)
-        players_set.discard(str(self.char_id))  # Убираем себя
-
-        if players_set:
-            text += f"\n\n<i>Здесь также: {len(players_set)} (в будущем их имена)</i>"
-
-        # TODO: Добавить логику отображения NPC будем делать сегодня
-        # npc_list = json.loads(nav_data.get("npc_list", "[]"))
-        # if npc_list:
-        #    text += f"\n\n<i>Вы видите: ... (имена NPC)</i>"
-
-        # 4. Формируем Клавиатуру
-        kb = InlineKeyboardBuilder()
-        exits_dict = nav_data.get("exits", {})
-        if isinstance(exits_dict, dict):
-            for _target_id, exit_data in exits_dict.items():
-                if isinstance(exit_data, dict):
-                    exit_data.get("text_button", "???")
-
-                    # TODO: Заменить 'pass' на реальный NavigationCallback
-                    # kb.button(text=button_text, callback_data=NavigationCallback(
-                    #    action="move",
-                    #    target_id=target_id
-                    # ).pack())
-                    pass
-
-        kb.adjust(1)
-        return text, kb.as_markup()
-
-    async def _get_solo_dungeon_ui(self, instance_id: str) -> tuple[str, InlineKeyboardMarkup | None]:
-        """Формирует UI для СОЛО-ДАНЖА."""
-
-        # TODO: Реализовать логику генерации UI для соло-данжа
-        # 1. `dungeon_data = await dungeon_manager.get_solo_dungeon(instance_id)`
-        # 2. `room_data = await dungeon_template_service.get_room(dungeon_data["room_id"])`
-        # 3. Собрать UI...
-        return f"ЗАГЛУШКА: Вы в соло-данже {instance_id}", None
-
-    # --- 4. Приватные методы (Логика Перемещения) ---
-
-    async def _move_in_world(
-        self, current_data: dict[str, Any], target_loc_id: str
-    ) -> tuple[str, InlineKeyboardMarkup | None]:
-        """Обрабатывает перемещение между МИРОВЫМИ локациями."""
-
-        current_loc_id = current_data.get("location_id")
-        if not isinstance(current_loc_id, str):
-            log.error(f"current_loc_id не является строкой для char_id={self.char_id}")
-            return "Ошибка: текущая локация не найдена.", None
-
-        # 1. Убираем игрока со старого места
-        await world_manager.remove_player_from_location(current_loc_id, self.char_id)
-
-        # 2. Добавляем на новое
-        await world_manager.add_player_to_location(target_loc_id, self.char_id)
-
-        # 3. Обновляем "сохранение" игрока в `ac:char_id`
-        await account_manager.update_account_fields(
-            self.char_id,
-            {
-                "location_id": target_loc_id,
-                "prev_location_id": current_loc_id,
-                "state": "world",  # (Остаемся в том же стейте)
-                "prev_state": current_data.get("state", "world"),
-            },
-        )
-
-        # 4. Возвращаем UI *новой* локации
-        return await self._get_world_location_ui(target_loc_id)

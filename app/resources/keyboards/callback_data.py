@@ -37,3 +37,14 @@ class TutorialQuestCallback(CallbackData, prefix="tut_quest"):
     branch: str
     phase: str
     value: str
+
+
+class NavigationCallback(CallbackData, prefix="nav"):
+    """
+    Callback для перемещения и взаимодействия в мире.
+    action: 'move' (переход), 'look' (осмотр) и т.д.
+    target_id: ID локации (куда идем) или объекта.
+    """
+
+    action: str
+    target_id: str

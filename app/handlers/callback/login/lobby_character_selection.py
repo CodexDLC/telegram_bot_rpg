@@ -8,8 +8,9 @@ from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.handlers.callback.ui.status_menu.character_status import show_status_tab_logic
-from app.resources.fsm_states.states import CharacterLobby, InGame
+from app.resources.fsm_states.states import CharacterLobby, InGame, StartTutorial
 from app.resources.keyboards.callback_data import LobbySelectionCallback
+from app.resources.texts.buttons_callback import GameStage
 from app.resources.texts.ui_messages import TEXT_AWAIT
 from app.services.game_service.login_service import LoginService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
@@ -17,6 +18,8 @@ from app.services.helpers_module.dto_helper import fsm_clean_core_state, fsm_loa
 from app.services.ui_service.lobby_service import LobbyService
 from app.services.ui_service.menu_service import MenuService
 from app.services.ui_service.navigation_service import NavigationService
+from app.services.ui_service.tutorial.tutorial_service import TutorialServiceStats
+from app.services.ui_service.tutorial.tutorial_service_skill import TutorialServiceSkills
 
 router = Router(name="lobby_fsm")
 
@@ -222,69 +225,137 @@ async def confirm_delete_handler(
 async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
     """
     Обрабатывает нажатие кнопки "Войти в игру".
-    (Правильная версия, по твоей архитектуре)
+    Реализует вход или редирект в туториал в зависимости от game_stage.
     """
     if not call.from_user:
         log.warning("Хэндлер 'start_logging_handler' получил обновление без 'from_user'.")
         return
 
-    # --- 1. Сбор данных и показ заглушки ---
+    # --- 1. Сбор данных ---
     user_id = call.from_user.id
     state_data = await state.get_data()
     char_id = state_data.get("char_id")
+    # Нам нужны данные о сообщении, чтобы редактировать его
+    message_content: dict[str, Any] | None = state_data.get("message_content")
     message_menu: dict[str, Any] | None = state_data.get("message_menu")
-    message_content: dict[str, Any] | None = state_data.get("message_content")  # <-- Нам нужны ОБА
 
-    if not isinstance(char_id, int) or not isinstance(message_menu, dict) or not isinstance(message_content, dict):
+    if not isinstance(char_id, int) or not isinstance(message_content, dict):
         log.error(f"User {call.from_user.id} нажал 'login', но FSM неполный.")
         await Err.generic_error(call)
         return
 
-    log.info(f"Хэндлер 'start_logging_handler' [lobby:login] вызван user_id={call.from_user.id}, char_id={char_id}")
+    log.info(f"Хэндлер 'start_logging_handler' [lobby:login] вызван user_id={user_id}, char_id={char_id}")
 
-    # Ставим заглушки на ОБА сообщения
-    await bot.edit_message_text(
-        chat_id=message_menu["chat_id"], message_id=message_menu["message_id"], text=TEXT_AWAIT, reply_markup=None
-    )
+    # Ставим "часики" (заглушку), пока грузим
+    await call.answer()
     await bot.edit_message_text(
         chat_id=message_content["chat_id"],
         message_id=message_content["message_id"],
         text=TEXT_AWAIT,
         reply_markup=None,
+        parse_mode="HTML",
     )
 
     # --- 2. Вызываем LoginService (Бизнес-логика) ---
     login_service = LoginService(char_id=char_id, state_data=state_data)
     login_result = await login_service.handle_login(session=session)
 
-    # --- 3. Проверяем результат (Твоя логика редиректа) ---
-    if not login_result or (isinstance(login_result, tuple) and login_result[0] not in ("world", "s_d")):
-        game_stage = login_result[0] if isinstance(login_result, tuple) else "unknown"
-        log.info(f"Редирект: char_id={char_id} не 'in_game'. Stage: {game_stage}")
+    # --- 3. Обработка РЕДИРЕКТА (Если не IN_GAME) ---
+    # Если вернулась строка — это название стадии, на которой застрял игрок
+    if isinstance(login_result, str):
+        game_stage = login_result
+        log.info(f"Редирект логина: char_id={char_id} имеет стадию '{game_stage}'. Запуск сценария восстановления.")
 
-        # TODO: логика для перевода игрока в туториал
-        # ... await redirect_to_tutorial_stats(call, state, bot, char_id) ...
-        await call.answer(f"Вход невозможен. Сначала завершите этап: {game_stage}", show_alert=True)
-        # (Тут нужно вернуть UI лобби, но пока просто прерываем)
-        return
+        # Очищаем лишнее из FSM, оставляя ядро (user_id, char_id...)
+        await fsm_clean_core_state(state=state, event_source=call)
 
+        # === ВЕТКА 1: ТУТОРИАЛ СТАТОВ (S.P.E.C.I.A.L.) ===
+        if game_stage == GameStage.TUTORIAL_STATS:
+            # [ИМЯ ПЕРЕМЕННОЙ]: tut_stats_service (Явно указываем тип)
+            tut_stats_service = TutorialServiceStats(char_id=char_id)
+
+            # Вызываем метод именно у stats-сервиса
+            text, kb = tut_stats_service.get_restart_stats()
+
+            await bot.edit_message_text(
+                chat_id=message_content["chat_id"],
+                message_id=message_content["message_id"],
+                text=text,
+                reply_markup=kb,
+                parse_mode="HTML",
+            )
+
+            await state.set_state(StartTutorial.start)
+            await state.update_data(bonus_dict={}, event_pool=None, sim_text_count=0)
+            return
+
+        # === ВЕТКА 2: ТУТОРИАЛ СКИЛЛОВ (ВЫБОР КЛАССА) ===
+        elif game_stage == GameStage.TUTORIAL_SKILL:
+            skill_choices_list: list[str] = []
+
+            # [ИМЯ ПЕРЕМЕННОЙ]: tut_skill_service (Теперь mypy видит, что это другой тип)
+            tut_skill_service = TutorialServiceSkills(skills_db=skill_choices_list)
+
+            # Теперь mypy знает, что у tut_skill_service есть метод get_start_data
+            text_skill, kb_skill = tut_skill_service.get_start_data()
+
+            if text_skill and kb_skill:
+                await bot.edit_message_text(
+                    chat_id=message_content["chat_id"],
+                    message_id=message_content["message_id"],
+                    text=text_skill,
+                    reply_markup=kb_skill,
+                    parse_mode="HTML",
+                )
+
+                await state.set_state(StartTutorial.in_skills_progres)
+                await state.update_data(skill_choices_list=skill_choices_list)
+            else:
+                log.error(f"Не удалось получить данные старта скиллов для char_id={char_id}")
+                await Err.generic_error(call)
+            return
+
+        # === ВЕТКА: CREATION (Если вдруг создали, но не назвали) ===
+        elif game_stage == GameStage.CREATION:
+            # Тут сложнее, так как нужно восстанавливать контекст создания.
+            # Пока предложим удалить и создать заново.
+            await bot.edit_message_text(
+                chat_id=message_content["chat_id"],
+                message_id=message_content["message_id"],
+                text="⚠️ <b>Ошибка состояния:</b> Персонаж не завершил этап создания имени.\nПожалуйста, удалите его и создайте заново.",
+                reply_markup=None,  # Можно добавить кнопку "Назад в меню"
+                parse_mode="HTML",
+            )
+            # Возвращаем в лобби выбор
+            await state.set_state(CharacterLobby.selection)
+            return
+
+        else:
+            log.warning(f"Неизвестная стадия '{game_stage}' при логине.")
+            await Err.generic_error(call)
+            return
+
+    # Если пришел None или ошибка структуры
     if not isinstance(login_result, tuple):
         await Err.generic_error(call)
         return
-    # --- 4. Логин УСПЕШЕН. Получаем ДАННЫЕ ---
+
+    # --- 4. ЛОГИН УСПЕШЕН (IN_GAME) ---
     state_name, loc_id = login_result
     log.info(f"Логин для char_id={char_id} успешен. Вход в: {state_name}:{loc_id}")
 
-    # --- 5. Вызываем Сервисы для UI ---
+    # --- 5. UI для ИГРЫ ---
     nav_service = NavigationService(char_id=char_id, state_data=state_data)
-    nav_text, nav_kb = await nav_service.get_navigation_ui(state_name, loc_id)  # (UI для низа)
+    nav_text, nav_kb = await nav_service.get_navigation_ui(state_name, loc_id)
 
     menu_service = MenuService(game_stage="in_game", char_id=char_id)
-    menu_text, menu_kb = menu_service.get_data_menu()  # (UI для верха)
+    menu_text, menu_kb = menu_service.get_data_menu()
 
-    # --- 6. Перестраиваем UI (Правильный способ) ---
+    if not message_menu:
+        await Err.generic_error(call)
+        return
 
-    # A. Редактируем ВЕРХНЕЕ сообщение (`message_menu`)
+    # Обновляем ВЕРХНЕЕ (Меню)
     await bot.edit_message_text(
         chat_id=message_menu["chat_id"],
         message_id=message_menu["message_id"],
@@ -293,7 +364,7 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
         parse_mode="HTML",
     )
 
-    # Б. Редактируем НИЖНЕЕ сообщение (`message_content`)
+    # Обновляем НИЖНЕЕ (Контент/Навигация)
     await bot.edit_message_text(
         chat_id=message_content["chat_id"],
         message_id=message_content["message_id"],
@@ -302,12 +373,7 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
         parse_mode="HTML",
     )
 
-    # --- 7. Обновляем FSM ---
-
-    # Сначала ОЧИЩАЕМ FSM от мусора, сохраняя только ядро
+    # --- 6. Финализация FSM ---
     await fsm_clean_core_state(state=state, event_source=call)
-
-    # А потом УСТАНАВЛИВАЕМ новый стейт
     await state.set_state(InGame.navigation)
-
     log.info(f"User {user_id} (char_id={char_id}) вошел в мир. FSM: InGame.navigation.")
