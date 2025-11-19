@@ -140,9 +140,8 @@ async def navigation_move_handler(
                         chat_id=chat_id, message_id=message_id, text=wait_text, reply_markup=None, parse_mode="HTML"
                     )
 
-                step = 1.5
-                await asyncio.sleep(step)
-                remaining_time -= int(step) if step >= 1 else 1
+                await asyncio.sleep(1)
+                remaining_time -= 1
 
         except asyncio.CancelledError:
             log.warning("Анимация перехода была отменена.")
