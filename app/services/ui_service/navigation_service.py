@@ -19,6 +19,7 @@ DEFAULT_SPAWN_POINT = "portal_plats"
 class NavigationService(BaseUIService):
     """
     Сервис-Оркестратор для Навигации.
+    Используется в хандлерах
     """
 
     def __init__(
