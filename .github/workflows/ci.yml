@@ -2,9 +2,9 @@ name: CI Code Quality
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "devops" ]
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "devops" ]
 
 jobs:
   # --- ПОТОК 1: Линтер (Стиль и синтаксис) ---
