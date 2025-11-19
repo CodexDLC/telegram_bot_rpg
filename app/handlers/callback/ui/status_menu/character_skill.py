@@ -6,6 +6,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
 from app.resources.keyboards.status_callback import SkillModeCallback, StatusSkillsCallback
@@ -19,7 +20,7 @@ router = Router(name="character_skill_menu")
 
 @router.callback_query(StatusSkillsCallback.filter(F.level == "group"), StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
 async def character_skill_group_handler(
-    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: StatusSkillsCallback
+    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: StatusSkillsCallback, session: AsyncSession
 ) -> None:
     """
     Обрабатывает нажатие на группу навыков и отображает список навыков в ней.
@@ -44,7 +45,7 @@ async def character_skill_group_handler(
 
     try:
         char_skill_ser = CharacterSkillStatusService(char_id=char_id, key=key, state_data=await state.get_data())
-        skills_data = await char_skill_ser.get_list_skills_dto()
+        skills_data = await char_skill_ser.get_list_skills_dto(session)
 
         if skills_data is None:
             log.warning(f"No skill data found for char_id={char_id}. Aborting.")
@@ -78,7 +79,7 @@ async def character_skill_group_handler(
 
 @router.callback_query(StatusSkillsCallback.filter(F.level == "detail"), StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
 async def character_skill_detail_handler(
-    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: StatusSkillsCallback
+    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: StatusSkillsCallback, session: AsyncSession
 ) -> None:
     """
     Обрабатывает нажатие на конкретный навык и отображает его детальную информацию.
@@ -113,7 +114,7 @@ async def character_skill_detail_handler(
 
     try:
         char_skill_ser = CharacterSkillStatusService(char_id=char_id, key=key, state_data=state_data)
-        skills_data = await char_skill_ser.get_list_skills_dto()
+        skills_data = await char_skill_ser.get_list_skills_dto(session)
 
         if skills_data is None:
             log.warning(f"No skill data found for char_id={char_id}. Aborting detail view.")
@@ -147,7 +148,7 @@ async def character_skill_detail_handler(
 
 @router.callback_query(SkillModeCallback.filter(), StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
 async def character_skill_mode_handler(
-    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: SkillModeCallback
+    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: SkillModeCallback, session: AsyncSession
 ) -> None:
     """
     Обрабатывает изменение режима прокачки и ПОЛНОСТЬЮ ОБНОВЛЯЕТ
@@ -174,9 +175,9 @@ async def character_skill_mode_handler(
             state_data=state_data,
         )
 
-        await char_skill_ser.set_mode_skill(mode=callback_data.new_mode)
+        await char_skill_ser.set_mode_skill(session=session, mode=callback_data.new_mode)
 
-        skills_data = await char_skill_ser.get_list_skills_dto()
+        skills_data = await char_skill_ser.get_list_skills_dto(session)
         if not skills_data:
             raise ValueError("Не удалось получить DTO навыков после обновления")
 

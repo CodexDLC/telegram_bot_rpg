@@ -5,6 +5,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # --- ОБЩИЕ ИМПОРТЫ ---
 from app.resources.keyboards.status_callback import StatusNavCallback
@@ -20,7 +21,9 @@ router = Router(name="character_status_menu")
 # =================================================================
 # 2. ЕДИНАЯ ФУНКЦИЯ-ВОРКЕР (которую будут вызывать все)
 # =================================================================
-async def show_status_tab_logic(call: CallbackQuery, state: FSMContext, bot: Bot, char_id: int, key: str) -> None:
+async def show_status_tab_logic(
+    call: CallbackQuery, state: FSMContext, bot: Bot, char_id: int, key: str, session: AsyncSession
+) -> None:
     """
     Единая функция-воркер для отображения любой вкладки 0-го уровня.
 
@@ -62,7 +65,7 @@ async def show_status_tab_logic(call: CallbackQuery, state: FSMContext, bot: Bot
         await Err.handle_exception(call, "Не удалось определить чат для отправки сообщения.")
         return
 
-    character = await ui_service.get_data_service()
+    character = await ui_service.get_data_service(session)
 
     if not character:
         log.warning(f"Персонаж с char_id={char_id} не найден для user {user_id}.")
@@ -134,7 +137,7 @@ async def show_status_tab_logic(call: CallbackQuery, state: FSMContext, bot: Bot
 # =================================================================
 @router.callback_query(StatusNavCallback.filter())
 async def status_menu_router_handler(
-    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: StatusNavCallback
+    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: StatusNavCallback, session: AsyncSession
 ) -> None:
     """
     Главный роутер для навигации по вкладкам 0-го уровня (Био, Статы, Навыки).
@@ -166,4 +169,4 @@ async def status_menu_router_handler(
         return
 
     # --- Вызов Воркера ---
-    await show_status_tab_logic(call=call, state=state, bot=bot, char_id=char_id, key=key)
+    await show_status_tab_logic(call=call, state=state, bot=bot, char_id=char_id, key=key, session=session)
