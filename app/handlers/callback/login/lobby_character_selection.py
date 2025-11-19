@@ -5,6 +5,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.handlers.callback.ui.status_menu.character_status import show_status_tab_logic
 from app.resources.fsm_states.states import CharacterLobby, InGame
@@ -23,7 +24,7 @@ router = Router(name="lobby_fsm")
 # 1. ДЕКОРАТОР ТЕПЕРЬ ЛОВИТ СПИСОК {"select", "delete"}
 @router.callback_query(CharacterLobby.selection, LobbySelectionCallback.filter(F.action.in_({"select", "delete"})))
 async def select_or_delete_character_handler(
-    call: CallbackQuery, callback_data: LobbySelectionCallback, state: FSMContext, bot: Bot
+    call: CallbackQuery, callback_data: LobbySelectionCallback, state: FSMContext, bot: Bot, session: AsyncSession
 ) -> None:
     """
     Обрабатывает ВЫБОР или УДАЛЕНИЕ персонажа в лобби.
@@ -71,7 +72,7 @@ async def select_or_delete_character_handler(
     # Если в FSM данных нет, загружаем их из БД.
     if characters is None:
         log.info(f"Данные 'characters' для user_id={user.id} не найдены в FSM, загрузка из БД...")
-        characters = await lobby_service.get_data_characters()
+        characters = await lobby_service.get_data_characters(session)
         # Сохраняем в FSM
         if characters:
             await state.update_data(characters=await fsm_store(value=characters))
@@ -105,7 +106,7 @@ async def select_or_delete_character_handler(
             await state.update_data(**fsm_data)
 
             # Вызываем обработчик меню статуса для отображения информации.
-            await show_status_tab_logic(char_id=char_id, state=state, bot=bot, call=call, key="bio")
+            await show_status_tab_logic(char_id=char_id, state=state, bot=bot, call=call, key="bio", session=session)
         else:
             log.warning(f"У user_id={user.id} нет персонажей, хотя он находится в лобби выбора.")
             await Err.generic_error(call=call)
@@ -158,7 +159,7 @@ async def select_or_delete_character_handler(
 
 @router.callback_query(CharacterLobby.confirm_delete, LobbySelectionCallback.filter())
 async def confirm_delete_handler(
-    call: CallbackQuery, state: FSMContext, callback_data: LobbySelectionCallback, bot: Bot
+    call: CallbackQuery, state: FSMContext, callback_data: LobbySelectionCallback, bot: Bot, session: AsyncSession
 ) -> None:
     """
     Обрабатывает подтверждение ("Да") или отмену ("Нет") удаления персонажа.
@@ -185,12 +186,12 @@ async def confirm_delete_handler(
     if callback_data.action == "delete_yes":
         log.info("Хэндлер 'confirm_delete_handler' [lobby:delete_yes] вызван")
 
-        await lobby_service.delete_character_ind_db()
+        await lobby_service.delete_character_ind_db(session)
         char_name = state_data.get("char_name")
         text = f"персонаж {char_name} удален"
         if isinstance(call.message, Message):
             await call.message.edit_text(text=text, reply_markup=None)
-        characters = await lobby_service.get_data_characters()
+        characters = await lobby_service.get_data_characters(session)
         text, kb = lobby_service.get_data_lobby_start(characters)
         message_menu_data = lobby_service.get_message_menu_data()
         if message_menu_data:
@@ -213,11 +214,12 @@ async def confirm_delete_handler(
             bot=bot,
             call=call,  # `show_status_tab_logic` сам возьмет `call.message`
             key="bio",
+            session=session,
         )
 
 
 @router.callback_query(CharacterLobby.selection, LobbySelectionCallback.filter(F.action == "login"))
-async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
     """
     Обрабатывает нажатие кнопки "Войти в игру".
     (Правильная версия, по твоей архитектуре)
@@ -253,7 +255,7 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
 
     # --- 2. Вызываем LoginService (Бизнес-логика) ---
     login_service = LoginService(char_id=char_id, state_data=state_data)
-    login_result = await login_service.handle_login()
+    login_result = await login_service.handle_login(session=session)
 
     # --- 3. Проверяем результат (Твоя логика редиректа) ---
     if not login_result or (isinstance(login_result, tuple) and login_result[0] not in ("world", "s_d")):

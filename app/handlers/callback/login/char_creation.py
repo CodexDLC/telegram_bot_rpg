@@ -7,6 +7,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import CharacterCreation, StartTutorial
 from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb
@@ -258,7 +259,7 @@ async def choosing_name_handler(m: Message, state: FSMContext, bot: Bot) -> None
 
 
 @router.callback_query(CharacterCreation.confirm, F.data == "confirm")
-async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
     """
     Обрабатывает финальное подтверждение создания персонажа.
 
@@ -312,7 +313,7 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: 
     char_update_dto = CharacterOnboardingUpdateDTO(name=name_str, gender=safe_gender, game_stage="tutorial_stats")
     create_service = OnboardingService(user_id=user_id, char_id=char_id)
 
-    await create_service.update_character_db(char_update_dto=char_update_dto)
+    await create_service.update_character_db(session=session, char_update_dto=char_update_dto)
     log.info(f"Данные персонажа {char_id} (имя, пол, стадия) обновлены в БД.")
 
     message_menu = state_data.get("message_menu")

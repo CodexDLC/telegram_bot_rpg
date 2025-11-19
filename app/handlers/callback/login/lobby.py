@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.handlers.callback.login.char_creation import start_creation_handler
 from app.resources.fsm_states.states import CharacterLobby
@@ -20,7 +21,7 @@ router = Router(name="login_lobby_router")
 
 
 @router.callback_query(F.data == "start_adventure")
-async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
     """
     Обрабатывает нажатие кнопки "Начать приключение".
 
@@ -47,7 +48,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
 
     try:
         com_service = CommandService(user)
-        await com_service.create_user_in_db()
+        await com_service.create_user_in_db(session)
         log.debug(f"Failsafe: Пользователь {user.id} проверен/создан перед загрузкой персонажей.")
     except SQLAlchemyError as e:
         log.error(f"Критическая ошибка: Не удалось выполнить failsafe user creation для {user.id}: {e}", exc_info=True)
@@ -58,7 +59,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
     log.debug(f"Загрузка персонажей для user_id={user.id}")
     lobby_service = LobbyService(user=user, state_data=await state.get_data())
 
-    character_list = await lobby_service.get_data_characters()
+    character_list = await lobby_service.get_data_characters(session)
 
     log.debug(f"Получены персонажи: {character_list}")
 
@@ -87,7 +88,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
             return
 
         # Создаем "пустую" запись персонажа в БД и получаем его ID.
-        char_id = await lobby_service.create_und_get_character_id()
+        char_id = await lobby_service.create_und_get_character_id(session)
         if not char_id:
             log.error(f"Не удалось создать 'оболочку' персонажа для user_id={user.id}")
             await Err.invalid_id(call=call)
@@ -105,7 +106,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot) 
 
 
 @router.callback_query(CharacterLobby.selection, LobbySelectionCallback.filter(F.action == "create"))
-async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
     """
     Обрабатывает нажатие "Создать нового персонажа" из лобби.
 
@@ -131,7 +132,7 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
 
     # Создаем "пустую" запись для нового персонажа в БД.
     lobby_service = LobbyService(user=call.from_user, state_data=state_data)
-    char_id = await lobby_service.create_und_get_character_id()
+    char_id = await lobby_service.create_und_get_character_id(session)
     if not char_id:
         log.error(f"Не удалось создать 'оболочку' персонажа для user_id={user_id} из лобби.")
         await Err.invalid_id(call=call)

@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import CharacterLobby, StartTutorial
 from app.resources.keyboards.callback_data import TutorialQuestCallback
@@ -171,6 +172,7 @@ async def skill_confirm_handler(
     state: FSMContext,
     callback_data: TutorialQuestCallback,
     bot: Bot,
+    session: AsyncSession,
 ) -> None:
     """
     Обрабатывает финальный выбор в туториале по навыкам (выбор профессии/лута).
@@ -225,7 +227,7 @@ async def skill_confirm_handler(
     # Все критические операции в ОДНОМ блоке try...except
     try:
         # Шаг 1: Работа с Базой Данных
-        await tut_service.finalize_skill_selection(char_id=char_id)
+        await tut_service.finalize_skill_selection(session=session, char_id=char_id)
         log.info(f"DB-операции для char_id={char_id} (навыки, game_stage) успешно завершены.")
 
         # Задержка перед обновлением UI

@@ -9,6 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, ReplyKeyboardRemove
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.keyboards.inline_kb.loggin_und_new_character import get_start_adventure_kb
 
@@ -29,7 +30,7 @@ router = Router(name="commands_router")
 
 
 @router.message(Command("start"))
-async def cmd_start(m: Message, state: FSMContext, bot: Bot) -> None:
+async def cmd_start(m: Message, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
     """
     Обрабатывает команду /start.
     (Очищает UI, сбрасывает FSM, обрабатывает ошибки БД и запускает меню)
@@ -68,7 +69,7 @@ async def cmd_start(m: Message, state: FSMContext, bot: Bot) -> None:
     # --- (БЛОК try...except ДЛЯ БД) ---
     try:
         com_service = CommandService(user)
-        await com_service.create_user_in_db()
+        await com_service.create_user_in_db(session)
         log.debug(f"Пользователь {user.id} обработан сервисом CommandService.")
     except SQLAlchemyError as e:
         log.exception(f"Критическая ошибка БД при вызове create_user_in_db для user_id={user.id}: {e}")
@@ -102,7 +103,7 @@ async def cmd_start(m: Message, state: FSMContext, bot: Bot) -> None:
 
 
 @router.message(F.text == RESTART_BUTTON_TEXT)
-async def handle_restart_button(m: Message, state: FSMContext, bot: Bot) -> None:
+async def handle_restart_button(m: Message, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
     """
     Обрабатывает нажатие Reply-кнопки "Рестарт".
     Просто вызывает /start, который все сделает сам.
@@ -111,7 +112,7 @@ async def handle_restart_button(m: Message, state: FSMContext, bot: Bot) -> None
         return
     log.info(f"User {m.from_user.id} нажал Reply-кнопку 'Рестарт'. Вызов cmd_start...")
     # Передаем управление в `cmd_start`
-    await cmd_start(m, state, bot)
+    await cmd_start(m, state, bot, session)
 
 
 @router.message(F.text == SETTINGS_BUTTON_TEXT)

@@ -6,6 +6,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import StartTutorial
 from app.resources.texts.ui_messages import TEXT_AWAIT
@@ -158,7 +159,9 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
 
 
 @router.callback_query(StartTutorial.confirmation, F.data.startswith("tut:"))
-async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+async def tutorial_confirmation_handler(
+    call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession
+) -> None:
     """
     Обрабатывает финальный выбор после распределения характеристик.
 
@@ -221,7 +224,7 @@ async def tutorial_confirmation_handler(call: CallbackQuery, state: FSMContext, 
             return
 
         log.info(f"Пользователь {user_id} подтвердил характеристики для char_id={char_id}. Бонусы: {bonus_dict}")
-        text, kb = await tut_service.update_stats_und_get()
+        text, kb = await tut_service.update_stats_und_get(session)
         await bot.edit_message_text(
             chat_id=message_content.get("chat_id"),
             message_id=message_content.get("message_id"),
