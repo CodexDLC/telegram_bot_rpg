@@ -102,7 +102,7 @@ class NavigationService:
         if players_set:
             text += f"\n\n<i>Здесь также: {len(players_set)} (в будущем их имена)</i>"
 
-        # TODO: Добавить логику отображения NPC
+        # TODO: Добавить логику отображения NPC будем делать сегодня
         # npc_list = json.loads(nav_data.get("npc_list", "[]"))
         # if npc_list:
         #    text += f"\n\n<i>Вы видите: ... (имена NPC)</i>"
