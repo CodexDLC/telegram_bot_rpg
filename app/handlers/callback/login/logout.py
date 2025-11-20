@@ -66,7 +66,7 @@ async def global_logout_handler(call: CallbackQuery, state: FSMContext, bot: Bot
         except TelegramAPIError as e:
             log.error(f"Не удалось отправить новое меню при logout: {e}")
 
-    # 4. Удаляем НИЖНЕЕ сообщение (message_content), если оно было
+        # 4. Удаляем НИЖНЕЕ сообщение (message_content), если оно было
     ui_service = BaseUIService(state_data=state_data)
     message_content_data = ui_service.get_message_content_data()
 
@@ -81,9 +81,15 @@ async def global_logout_handler(call: CallbackQuery, state: FSMContext, bot: Bot
         except TelegramAPIError as e:
             log.warning(f"Не удалось удалить message_content {message_content_data[1]} при logout: {e}")
 
-    # 5. Сохраняем только необходимое ядро в FSM, перезаписывая все старые данные
-    if message_menu:
-        clean_session = SessionDataDTO(
-            user_id=call.from_user.id, message_menu=message_menu, char_id=None, message_content=None
-        )
-        await state.set_data({FSM_CONTEXT_KEY: await fsm_store(clean_session)})
+        # 5. Сохраняем только необходимое ядро в FSM, перезаписывая все старые данные
+        # ИСПРАВЛЕНИЕ: Логика вынесена из 'if message_menu', чтобы гарантировать очистку FSM.
+    clean_session = SessionDataDTO(
+        user_id=call.from_user.id,
+        # message_menu может быть None, если редактирование/отправка нового меню не удалась
+        message_menu=message_menu,
+        char_id=None,
+        message_content=None,
+    )
+
+    # state.set_data полностью перезаписывает ВЕСЬ FSM новым, чистым DTO.
+    await state.set_data({FSM_CONTEXT_KEY: await fsm_store(clean_session)})
