@@ -1,17 +1,19 @@
 # app/handlers/callback/ui/status_menu/character_skill.py
-import time
+import asyncio
 
 from aiogram import Bot, F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
 from app.resources.keyboards.status_callback import SkillModeCallback, StatusSkillsCallback
-from app.resources.texts.ui_messages import TEXT_AWAIT
+from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
+from app.services.ui_service.helpers_ui.ui_animation_service import UIAnimationService
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.status_menu.status_skill_service import CharacterSkillStatusService
 
@@ -24,57 +26,61 @@ async def character_skill_group_handler(
 ) -> None:
     """
     Обрабатывает нажатие на группу навыков и отображает список навыков в ней.
-
-    :param call: Входящий CallbackQuery.
-    :param state: Контекст состояния FSM.
-    :param bot: Экземпляр бота.
-    :param callback_data: Данные из Callback-кнопки.
     """
     if not call.from_user or not call.message:
         log.warning("Handler 'character_skill_group_handler' received an update without 'from_user' or 'message'.")
         return
 
-    start_time = time.monotonic()
+    await call.answer()
     user_id = call.from_user.id
     char_id = callback_data.char_id
     key = callback_data.key
     log.info(f"User {user_id} triggered 'character_skill_group_handler' for char_id={char_id}, key='{key}'.")
 
-    if isinstance(call.message, Message):
-        await call.message.edit_text(TEXT_AWAIT, parse_mode="html")
+    state_data = await state.get_data()
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    session_dto = SessionDataDTO(**session_context)
+    anim_service = UIAnimationService(bot=bot, message_data=session_dto)
 
-    try:
-        char_skill_ser = CharacterSkillStatusService(char_id=char_id, key=key, state_data=await state.get_data())
-        skills_data = await char_skill_ser.get_list_skills_dto(session)
+    async def run_logic():
+        try:
+            char_skill_ser = CharacterSkillStatusService(char_id=char_id, key=key, state_data=state_data)
+            skills_data = await char_skill_ser.get_list_skills_dto(session)
 
-        if skills_data is None:
-            log.warning(f"No skill data found for char_id={char_id}. Aborting.")
+            if skills_data is None:
+                log.warning(f"No skill data found for char_id={char_id}.")
+                await Err.generic_error(call=call)
+                return None, None, None
+
+            result = char_skill_ser.status_group_skill_message(character_skills=skills_data)
+            if not result or not result[0] or not result[1]:
+                await Err.generic_error(call=call)
+                return None, None, None
+
+            message_data = char_skill_ser.get_message_content_data()
+            if not message_data:
+                await Err.generic_error(call=call)
+                return None, None, None
+
+            return result[0], result[1], message_data
+        except (ValueError, AttributeError, TypeError, KeyError) as e:
+            log.error(f"An error occurred in 'character_skill_group_handler' for user {user_id}: {e}", exc_info=True)
             await Err.generic_error(call=call)
-            return
+            return None, None, None
 
-        result = char_skill_ser.status_group_skill_message(character_skills=skills_data)
-        if not result or not result[0] or not result[1]:
-            await Err.generic_error(call=call)
-            return
-        text, kb = result
+    results = await asyncio.gather(
+        anim_service.animate_loading(duration=1.0, text="📚 <b>Загрузка...</b>"),
+        run_logic(),
+    )
 
-        message_data = char_skill_ser.get_message_content_data()
-        if not message_data:
-            await Err.generic_error(call=call)
-            return
-        chat_id, message_id = message_data
+    text, kb, message_data = results[1]
+    if text is None:
+        return
 
-        await await_min_delay(start_time, min_delay=0.5)
-
-        if text and bot is not None:
-            await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb)
-
-        await state.update_data(group_key=key)
-        log.debug(f"Successfully displayed skill group '{key}' for char_id={char_id}.")
-
-    except (ValueError, AttributeError, TypeError, KeyError) as e:
-        log.error(f"An error occurred in 'character_skill_group_handler' for user {user_id}: {e}", exc_info=True)
-        await Err.generic_error(call=call)
+    chat_id, message_id = message_data
+    await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb)
+    await state.update_data(group_key=key)
+    log.debug(f"Successfully displayed skill group '{key}' for char_id={char_id}.")
 
 
 @router.callback_query(StatusSkillsCallback.filter(F.level == "detail"), StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
@@ -83,17 +89,12 @@ async def character_skill_detail_handler(
 ) -> None:
     """
     Обрабатывает нажатие на конкретный навык и отображает его детальную информацию.
-
-    :param call: Входящий CallbackQuery.
-    :param state: Контекст состояния FSM.
-    :param bot: Экземпляр бота.
-    :param callback_data: Данные из Callback-кнопки.
     """
     if not call.from_user:
         log.warning("Handler 'character_skill_detail_handler' received an update without 'from_user'.")
         return
 
-    start_time = time.monotonic()
+    start_time = asyncio.get_event_loop().time()
     user_id = call.from_user.id
     char_id = callback_data.char_id
     key = callback_data.key
@@ -106,7 +107,6 @@ async def character_skill_detail_handler(
         return
 
     group_key = state_data.get("group_key")
-
     if not group_key:
         log.warning(f"'group_key' is missing in state data for user {user_id}.")
         await Err.callback_data_missing(call=call)

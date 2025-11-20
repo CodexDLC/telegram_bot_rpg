@@ -35,6 +35,11 @@ async def cmd_start(m: Message, state: FSMContext, bot: Bot, session: AsyncSessi
     """
     Обрабатывает команду /start.
     (Очищает UI, сбрасывает FSM, обрабатывает ошибки БД и запускает меню)
+
+    :param m: Объект сообщения.
+    :param state: Контекст FSM.
+    :param bot: Экземпляр бота.
+    :param session: Сессия базы данных.
     """
     if not m.from_user:
         log.warning("Хэндлер 'cmd_start' получил обновление без 'from_user'.")
@@ -108,6 +113,11 @@ async def handle_restart_button(m: Message, state: FSMContext, bot: Bot, session
     """
     Обрабатывает нажатие Reply-кнопки "Рестарт".
     Просто вызывает /start, который все сделает сам.
+
+    :param m: Объект сообщения.
+    :param state: Контекст FSM.
+    :param bot: Экземпляр бота.
+    :param session: Сессия базы данных.
     """
     if not m.from_user:
         return

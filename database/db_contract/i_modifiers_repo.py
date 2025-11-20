@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from app.resources.schemas_dto.modifer_dto import CharacterModifiersDTO, CharacterModifiersSaveDto
+from app.resources.schemas_dto.modifier_dto import CharacterModifiersDTO, CharacterModifiersSaveDto
 
 
 class ICharacterModifiersRepo(ABC):

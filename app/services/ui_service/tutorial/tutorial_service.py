@@ -135,7 +135,7 @@ class TutorialServiceStats:
             kb.adjust(1)
         return kb.as_markup()
 
-    async def update_stats_und_get(self, session: AsyncSession) -> tuple[str, InlineKeyboardMarkup]:
+    async def finalize_stats(self, session: AsyncSession) -> tuple[str, InlineKeyboardMarkup]:
         """Финализирует характеристики в БД и возвращает финальное сообщение."""
         log.info(f"Начало финализации статов в БД для char_id={self.char_id}.")
         final_stats_obj = await self._finalize_stats_in_db(session)

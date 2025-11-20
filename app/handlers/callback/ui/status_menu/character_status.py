@@ -76,23 +76,23 @@ async def show_status_tab_logic(
     try:
         if key == "bio":
             log.debug(f"User {user_id}: Генерация вкладки 'bio'.")
-            text, kb = ui_service.staus_bio_message(character=character)
+            text, kb = ui_service.status_bio_message(character=character)
 
         elif key == "skills":
             log.debug(f"User {user_id}: Генерация вкладки 'skills'.")
-            result = ui_service.status_message_skill_message(character=character)
+            result = ui_service.get_skill_group_view(character=character)
             if result:
                 text, kb = result
 
         elif key == "stats":
             log.info(f"User {user_id}: Заглушка для 'Модификаторов' (stats) вызвана.")
-            result = ui_service.status_message_modifier_message(character=character)
+            result = ui_service.get_modifier_group_view(character=character)
             if result:
                 text, kb = result
 
         else:
             log.warning(f"Неизвестный ключ '{key}' в `show_status_tab_logic`. Показ 'bio'.")
-            text, kb = ui_service.staus_bio_message(character=character)
+            text, kb = ui_service.status_bio_message(character=character)
 
     except (ValueError, AttributeError, TypeError, KeyError) as e:
         log.exception(f"Критическая ошибка при *генерации* вкладки '{key}' для user {user_id}: {e}")

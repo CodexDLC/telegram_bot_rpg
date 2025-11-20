@@ -32,7 +32,7 @@ class OnboardingService:
         self.buttons = Buttons
         self.new_char = LobbyMessages.NewCharacter
         self.char_id = char_id
-        log.debug(f"Инициализирован {self.__class__.__name__} для user_id={user_id}, char_id={char_id}.")
+        log.debug(f"Инициализирован {self.__class__.__name__} для user_id={self.user_id}, char_id={char_id}.")
 
     def get_data_start_creation_content(self) -> tuple[str, InlineKeyboardMarkup]:
         """
@@ -87,6 +87,7 @@ class OnboardingService:
         Args:
             char_update_dto (CharacterOnboardingUpdateDTO): DTO с данными
                 (имя, пол, этап игры) для обновления.
+            session (AsyncSession): Сессия базы данных.
 
         Returns:
             None
