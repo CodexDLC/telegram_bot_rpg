@@ -73,6 +73,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, 
         current_data = await state.get_data()
         session_context = current_data.get(FSM_CONTEXT_KEY, {})
         session_context["user_id"] = user.id
+        session_context["char_id"] = None
         session_context["message_content"] = None
         await state.update_data({FSM_CONTEXT_KEY: session_context})
         log.debug(f"Состояние установлено в CharacterLobby.selection для user_id={user.id}")
