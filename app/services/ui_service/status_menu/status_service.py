@@ -56,7 +56,7 @@ class CharacterMenuUIService(BaseUIService):
             f"call_type='{self.call_type}', actor='{self.actor_name}'"
         )
 
-    def staus_bio_message(
+    def status_bio_message(
         self,
         character: CharacterReadDTO,
     ) -> tuple[str, InlineKeyboardMarkup]:
@@ -89,7 +89,7 @@ class CharacterMenuUIService(BaseUIService):
         log.debug(f"Сообщение 'Биография' для char_id={self.char_id} успешно сформировано.")
         return text, kb
 
-    def status_message_skill_message(
+    def get_skill_group_view(
         self, character: CharacterReadDTO
     ) -> tuple[str | None, InlineKeyboardMarkup] | tuple[str, None]:
         """
@@ -114,7 +114,7 @@ class CharacterMenuUIService(BaseUIService):
         kb = self._build_group_kb(items=data, callback_factory=StatusSkillsCallback)
         return text, kb
 
-    def status_message_modifier_message(
+    def get_modifier_group_view(
         self, character: CharacterReadDTO
     ) -> tuple[str | None, InlineKeyboardMarkup] | tuple[str, None]:
         data_stats = self.data_mod.get("stats", {})

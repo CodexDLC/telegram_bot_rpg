@@ -3,7 +3,7 @@ from typing import Any
 from loguru import logger as log
 
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
-from app.resources.schemas_dto.modifer_dto import CharacterModifiersDTO
+from app.resources.schemas_dto.modifier_dto import CharacterModifiersDTO
 
 PERCENT_KEYS = {
     "physical_damage_bonus",

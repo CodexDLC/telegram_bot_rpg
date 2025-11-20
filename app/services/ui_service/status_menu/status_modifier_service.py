@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.resources.game_data.status_menu.modifer_group_data import MODIFIER_HIERARCHY
 from app.resources.keyboards.status_callback import StatusModifierCallback, StatusNavCallback
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
-from app.resources.schemas_dto.modifer_dto import CharacterModifiersDTO
+from app.resources.schemas_dto.modifier_dto import CharacterModifiersDTO
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.helpers_ui.status_modiier_formatters import ModifierFormatters as ModifierF

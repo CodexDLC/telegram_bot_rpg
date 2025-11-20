@@ -71,10 +71,10 @@ async def fsm_load_auto(state: FSMContext, key: str) -> Any:
         log.debug(f"Данные по ключу '{key}' в FSM не найдены.")
         return None
 
-    return await fsm_convector(value, key)
+    return await fsm_converter(value, key)
 
 
-async def fsm_convector(value: Any, key: str) -> Any:
+async def fsm_converter(value: Any, key: str) -> Any:
     """
     Преобразует сырые данные (словарь/список) в Pydantic модель.
 
@@ -148,7 +148,7 @@ async def fsm_clean_core_state(state: FSMContext, event_source: CallbackQuery | 
             # Мы должны его прочитать, изменить и записать обратно.
 
             # Читаем DTO из словаря (десериализуем)
-            migrated_dto = await fsm_convector(clean_data[FSM_CONTEXT_KEY], FSM_CONTEXT_KEY)
+            migrated_dto = await fsm_converter(clean_data[FSM_CONTEXT_KEY], FSM_CONTEXT_KEY)
             if isinstance(migrated_dto, SessionDataDTO):
                 migrated_dto.user_id = event_source.from_user.id
                 # Записываем обратно как словарь (сериализуем)

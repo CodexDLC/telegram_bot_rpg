@@ -146,7 +146,7 @@ class LobbyService(BaseUIService):
 
         return buttons
 
-    async def create_und_get_character_id(self, session: AsyncSession) -> int:
+    async def create_and_get_character_id(self, session: AsyncSession) -> int:
         """
         Создает "оболочку" персонажа в БД и возвращает его ID.
 
@@ -192,7 +192,7 @@ class LobbyService(BaseUIService):
             log.exception(f"Ошибка при получении списка персонажей для user_id={self.user_id}: {e}")
             return None
 
-    async def delete_character_ind_db(self, session: AsyncSession) -> bool:
+    async def delete_character(self, session: AsyncSession) -> bool:
         """
         Удаляет персонажа из базы данных.
 

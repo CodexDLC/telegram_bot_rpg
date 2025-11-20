@@ -6,7 +6,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.resources.schemas_dto.modifer_dto import CharacterModifiersDTO, CharacterModifiersSaveDto
+from app.resources.schemas_dto.modifier_dto import CharacterModifiersDTO, CharacterModifiersSaveDto
 from database.db_contract.i_modifiers_repo import ICharacterModifiersRepo
 from database.model_orm import CharacterModifiers
 

@@ -12,12 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.resources.fsm_states.states import CharacterCreation, StartTutorial
 from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb
 from app.resources.schemas_dto.character_dto import CharacterOnboardingUpdateDTO
+from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.helpers_module.game_validator import validate_character_name
-from app.services.ui_service.helpers_ui.ui_tools import animate_message_sequence, await_min_delay
+from app.services.ui_service.helpers_ui.ui_animation_service import UIAnimationService
+from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.menu_service import MenuService
 from app.services.ui_service.new_character.onboarding_service import OnboardingService
 
@@ -25,7 +27,7 @@ router = Router(name="character_creation_fsm")
 
 
 async def start_creation_handler(
-    call: CallbackQuery, state: FSMContext, bot: Bot, user_id: int, char_id: int, message_menu: dict[str, int]
+    call: CallbackQuery, state: FSMContext, bot: Bot, user_id: int, char_id: int, message_menu: dict[str, Any]
 ) -> None:
     """
     Инициирует процесс создания нового персонажа.
@@ -40,7 +42,7 @@ async def start_creation_handler(
         bot (Bot): Экземпляр бота.
         user_id (int): ID пользователя Telegram.
         char_id (int): ID создаваемого персонажа в базе данных.
-        message_menu (dict[str, int]): ID чата и сообщения для меню.
+        message_menu (dict[str, Any]): ID чата и сообщения для меню.
 
     Returns:
         None
@@ -318,7 +320,6 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: 
     log.info(f"FSM для user_id={user_id} переведен в состояние 'StartTutorial.start'.")
 
     name_str: str = cast(str, name)
-
     safe_gender = cast(Any, gender_db)
 
     char_update_dto = CharacterOnboardingUpdateDTO(name=name_str, gender=safe_gender, game_stage="tutorial_stats")
@@ -345,9 +346,9 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: 
         await Err.generic_error(call)
         return
 
-    await animate_message_sequence(
-        message_to_edit=message_content, sequence=TutorialMessages.WAKING_UP_SEQUENCE, bot=bot, final_reply_markup=None
-    )
+    session_dto = SessionDataDTO(**session_context)
+    anim_service = UIAnimationService(bot=bot, message_data=session_dto)
+    await anim_service.animate_sequence(sequence=TutorialMessages.WAKING_UP_SEQUENCE, final_kb=None)
     log.debug(f"Анимация 'пробуждения' для user_id={user_id} завершена.")
 
     if name and gender_display is not None:
