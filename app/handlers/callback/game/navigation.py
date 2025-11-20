@@ -1,7 +1,6 @@
 # app/handlers/callback/game/navigation.py
 import asyncio
 import contextlib
-import random
 import time
 
 from aiogram import Bot, F, Router
@@ -13,8 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import InGame
 from app.resources.keyboards.callback_data import NavigationCallback
+from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
+from app.services.ui_service.helpers_ui.ui_animation_service import UIAnimationService
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.navigation_service import NavigationService
 
@@ -114,44 +115,19 @@ async def navigation_move_handler(
 
     # Если ошибок нет, запускаем таймер пути
     if total_travel_time > 2:
-        remaining_time = int(total_travel_time)
-        flavor_text = random.choice(TRAVEL_FLAVOR_TEXTS)
+        # 1. Превращаем словарь session_context обратно в DTO
+        # (UIAnimationService ожидает объект, а не словарь)
+        session_dto = SessionDataDTO(**session_context)
 
-        try:
-            while remaining_time > 0:
-                # Рисуем прогресс-бар
-                filled = int(total_travel_time) - remaining_time
-                empty = remaining_time
-                # Ограничиваем длину бара
-                max_bar_len = 10
-                if total_travel_time > max_bar_len:
-                    scale = max_bar_len / total_travel_time
-                    filled = int(filled * scale)
-                    empty = max_bar_len - filled
+        # 2. Инициализируем сервис анимации
+        anim_service = UIAnimationService(bot=bot, message_data=session_dto)
 
-                progress_bar = "■" * filled + "□" * empty
-
-                wait_text = (
-                    f"👣 <b>В пути...</b>\n"
-                    f"<i>{flavor_text}</i>\n\n"
-                    f"⏳ <code>[{progress_bar}] {remaining_time} сек.</code>"
-                )
-
-                with contextlib.suppress(TelegramBadRequest):
-                    await bot.edit_message_text(
-                        chat_id=chat_id, message_id=message_id, text=wait_text, reply_markup=None, parse_mode="HTML"
-                    )
-
-                await asyncio.sleep(1)
-                remaining_time -= 1
-
-        except asyncio.CancelledError:
-            log.warning("Анимация перехода была отменена.")
-        except Exception as e:  # noqa: BLE001
-            log.warning(f"Ошибка в цикле анимации перехода: {e}")
+        # 3. Запускаем анимацию навигации
+        # (TRAVEL_FLAVOR_TEXTS берем из этого же файла, он определен выше)
+        await anim_service.animate_navigation(duration=total_travel_time, flavor_texts=TRAVEL_FLAVOR_TEXTS)
 
     else:
-        # Короткая задержка
+        # Короткая задержка для быстрых переходов
         await await_min_delay(start_time, min_delay=total_travel_time or 0.3)
 
     # Финальное обновление UI (Показ новой локации)

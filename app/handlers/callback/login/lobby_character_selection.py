@@ -1,4 +1,5 @@
 # app/handlers/callback/login/lobby_character_selection.py
+import asyncio
 from typing import Any
 
 from aiogram import Bot, F, Router
@@ -8,11 +9,12 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.handlers.callback.login.char_creation import start_creation_handler
 from app.handlers.callback.ui.status_menu.character_status import show_status_tab_logic
 from app.resources.fsm_states.states import CharacterLobby, InGame, StartTutorial
 from app.resources.keyboards.callback_data import LobbySelectionCallback
+from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
 from app.resources.texts.buttons_callback import GameStage
-from app.resources.texts.ui_messages import TEXT_AWAIT
 from app.services.game_service.login_service import LoginService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import (
@@ -21,6 +23,7 @@ from app.services.helpers_module.dto_helper import (
     fsm_load_auto,
     fsm_store,
 )
+from app.services.ui_service.helpers_ui.ui_animation_service import UIAnimationService
 from app.services.ui_service.lobby_service import LobbyService
 from app.services.ui_service.menu_service import MenuService
 from app.services.ui_service.navigation_service import NavigationService
@@ -43,9 +46,10 @@ async def select_or_delete_character_handler(
 
     Args:
         call (CallbackQuery): Callback от выбора персонажа.
+        callback_data (LobbySelectionCallback): Данные обратного вызова.
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
-        callback_data:
+        session (AsyncSession): Сессия базы данных.
 
     Returns:
         None
@@ -176,6 +180,13 @@ async def confirm_delete_handler(
 ) -> None:
     """
     Обрабатывает подтверждение ("Да") или отмену ("Нет") удаления персонажа.
+
+    Args:
+        call (CallbackQuery): Входящий callback.
+        state (FSMContext): Состояние FSM.
+        callback_data (LobbySelectionCallback): Данные обратного вызова.
+        bot (Bot): Экземпляр бота.
+        session (AsyncSession): Сессия базы данных.
     """
 
     if not call.from_user or not call.message:
@@ -201,7 +212,7 @@ async def confirm_delete_handler(
         log.info(f"User {user.id} подтвердил удаление персонажа {char_id}.")
 
         # 1. Удаляем персонажа из БД
-        delete_success = await lobby_service.delete_character_ind_db(session)
+        delete_success = await lobby_service.delete_character(session)
 
         if not delete_success:
             log.error(f"Не удалось удалить персонажа {char_id} из БД.")
@@ -265,6 +276,12 @@ async def confirm_delete_handler(
 async def logout_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
     """
     Обрабатывает выход из игрового мира обратно в лобби.
+
+    Args:
+        call (CallbackQuery): Входящий callback.
+        state (FSMContext): Состояние FSM.
+        bot (Bot): Экземпляр бота.
+        session (AsyncSession): Сессия базы данных.
     """
     if not call.from_user:
         log.warning("Хэндлер 'logout_handler' получил обновление без 'from_user'.")
@@ -326,6 +343,12 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     """
     Обрабатывает нажатие кнопки "Войти в игру".
     Реализует вход или редирект в туториал в зависимости от game_stage.
+
+    Args:
+        call (CallbackQuery): Входящий callback.
+        state (FSMContext): Состояние FSM.
+        bot (Bot): Экземпляр бота.
+        session (AsyncSession): Сессия базы данных.
     """
     if not call.from_user:
         log.warning("Хэндлер 'start_logging_handler' получил обновление без 'from_user'.")
@@ -346,20 +369,22 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
         return
 
     log.info(f"Хэндлер 'start_logging_handler' [lobby:login] вызван user_id={user_id}, char_id={char_id}")
-
-    # Ставим "часики" (заглушку), пока грузим
     await call.answer()
-    await bot.edit_message_text(
-        chat_id=message_content["chat_id"],
-        message_id=message_content["message_id"],
-        text=TEXT_AWAIT,
-        reply_markup=None,
-        parse_mode="HTML",
+
+    # --- 2. Анимация и Бизнес-логика (параллельно) ---
+    session_dto = SessionDataDTO(**session_context)
+    anim_service = UIAnimationService(bot=bot, message_data=session_dto)
+    login_service = LoginService(char_id=char_id, state_data=state_data)
+
+    async def run_login():
+        return await login_service.handle_login(session=session)
+
+    results = await asyncio.gather(
+        anim_service.animate_loading(duration=2.0, text="📡 <b>Установка нейро-связи...</b>"),
+        run_login(),
     )
 
-    # --- 2. Вызываем LoginService (Бизнес-логика) ---
-    login_service = LoginService(char_id=char_id, state_data=state_data)
-    login_result = await login_service.handle_login(session=session)
+    login_result = results[1]
 
     # --- 3. Обработка РЕДИРЕКТА (Если не IN_GAME) ---
     # Если вернулась строка — это название стадии, на которой застрял игрок
@@ -418,17 +443,18 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
 
         # === ВЕТКА: CREATION (Если вдруг создали, но не назвали) ===
         elif game_stage == GameStage.CREATION:
-            # Тут сложнее, так как нужно восстанавливать контекст создания.
-            # Пока предложим удалить и создать заново.
-            await bot.edit_message_text(
-                chat_id=message_content["chat_id"],
-                message_id=message_content["message_id"],
-                text="⚠️ <b>Ошибка состояния:</b> Персонаж не завершил этап создания имени.\nПожалуйста, удалите его и создайте заново.",
-                reply_markup=None,  # Можно добавить кнопку "Назад в меню"
-                parse_mode="HTML",
+            log.info(f"Char_id={char_id} не завершил создание. Редирект в start_creation_handler.")
+
+            if not isinstance(message_menu, dict):
+                log.error(f"User {user_id}: 'message_menu' не найден в FSM для редиректа в CREATION.")
+                await Err.generic_error(call)
+                return
+
+            # Просто передаем управление хэндлеру создания.
+            # Он сам обновит меню, контент и выставит нужный State (choosing_gender).
+            await start_creation_handler(
+                call=call, state=state, bot=bot, user_id=user_id, char_id=char_id, message_menu=message_menu
             )
-            # Возвращаем в лобби выбор
-            await state.set_state(CharacterLobby.selection)
             return
 
         else:

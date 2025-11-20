@@ -30,10 +30,10 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, 
     выбора. Если нет, запускает процесс создания нового персонажа.
 
     Args:
-        session:
         call (CallbackQuery): Входящий callback от кнопки.
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
+        session (AsyncSession): Сессия базы данных.
 
     Returns:
         None
@@ -96,7 +96,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, 
             return
 
         # Создаем "пустую" запись персонажа в БД и получаем его ID.
-        char_id = await lobby_service.create_und_get_character_id(session)
+        char_id = await lobby_service.create_and_get_character_id(session)
         if not char_id:
             log.error(f"Не удалось создать 'оболочку' персонажа для user_id={user.id}")
             await Err.invalid_id(call=call)
@@ -119,10 +119,10 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
     Обрабатывает нажатие "Создать нового персонажа" из лобби.
 
     Args:
-        session
         call (CallbackQuery): Входящий callback от кнопки "Создать".
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
+        session (AsyncSession): Сессия базы данных.
 
     Returns:
         None
@@ -142,7 +142,7 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
 
     # Создаем "пустую" запись для нового персонажа в БД.
     lobby_service = LobbyService(user=call.from_user, state_data=state_data)
-    char_id = await lobby_service.create_und_get_character_id(session)
+    char_id = await lobby_service.create_and_get_character_id(session)
     if not char_id:
         log.error(f"Не удалось создать 'оболочку' персонажа для user_id={user_id} из лобби.")
         await Err.invalid_id(call=call)

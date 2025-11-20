@@ -1,6 +1,6 @@
 # app/services/game_service/modifiers_calculator_service.py
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
-from app.resources.schemas_dto.modifer_dto import CharacterModifiersSaveDto
+from app.resources.schemas_dto.modifier_dto import CharacterModifiersSaveDto
 
 
 class ModifiersCalculatorService:

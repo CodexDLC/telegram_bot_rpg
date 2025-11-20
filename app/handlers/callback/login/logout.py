@@ -1,12 +1,9 @@
 # app/handlers/callback/login/logout.py
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger as log
-
-from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
 
 # 1. --- (ТЕПЕРЬ НУЖЕН ТОЛЬКО ОДИН КОЛБЭК) ---
 from app.resources.keyboards.callback_data import LobbySelectionCallback
@@ -21,7 +18,7 @@ from app.services.ui_service.base_service import BaseUIService
 router = Router(name="logout_router")
 
 
-@router.callback_query(LobbySelectionCallback.filter(F.action == "logout"), StateFilter(*FSM_CONTEX_CHARACTER_STATUS))
+@router.callback_query(LobbySelectionCallback.filter(F.action == "logout"))
 async def global_logout_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     """
     Глобальный обработчик выхода из мира (Logout).

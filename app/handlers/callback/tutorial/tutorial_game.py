@@ -1,18 +1,20 @@
 # app/handlers/callback/tutorial/tutorial_game.py
+import asyncio
 import time
 from typing import Any
 
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import StartTutorial
-from app.resources.texts.ui_messages import TEXT_AWAIT
+from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
-from app.services.ui_service.helpers_ui.ui_tools import animate_message_sequence, await_min_delay
+from app.services.ui_service.helpers_ui.ui_animation_service import UIAnimationService
+from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.tutorial.tutorial_service import TutorialServiceStats
 
 router = Router(name="tutorial_game_router")
@@ -99,10 +101,6 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
     log.info(f"Хэндлер 'tutorial_event_stats_handler' [{choice}] вызван user_id={user_id}")
     await call.answer()
 
-    start_time = time.monotonic()
-
-    if isinstance(call.message, Message):
-        await call.message.edit_text(text=TEXT_AWAIT, parse_mode="html", reply_markup=None)
     state_data = await state.get_data()
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     char_id = session_context.get("char_id")
@@ -111,47 +109,49 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
         await Err.invalid_id(call=call)
         return
 
-    # Воссоздаем сервис из FSM.
-    tut_service = TutorialServiceStats(
-        char_id=char_id,
-        event_pool=state_data.get("event_pool"),
-        sim_text_count=state_data.get("sim_text_count", 0),
-        bonus_dict=state_data.get("bonus_dict"),
+    # --- Анимация и логика ---
+    session_dto = SessionDataDTO(**session_context)
+    anim_service = UIAnimationService(bot=bot, message_data=session_dto)
+
+    # Определяем асинхронную под-задачу для логики, чтобы запустить параллельно с анимацией
+    async def run_logic():
+        tut_service = TutorialServiceStats(
+            char_id=char_id,
+            event_pool=state_data.get("event_pool"),
+            sim_text_count=state_data.get("sim_text_count", 0),
+            bonus_dict=state_data.get("bonus_dict"),
+        )
+        tut_service.add_bonus(choice_key=choice)
+        next_step = tut_service.get_next_step()
+        await state.update_data(**tut_service.get_fsm_data())
+        return next_step, tut_service
+
+    # Запускаем анимацию и логику параллельно и ждем, пока ОБЕ завершатся.
+    # `gather` дождется окончания самой долгой задачи, в нашем случае - анимации.
+    results = await asyncio.gather(
+        anim_service.animate_loading(duration=1.5, text="⚙️ <b>Анализ выбора...</b>"),
+        run_logic(),
     )
-    log.debug(f"Сервис туториала для user_id={user_id} воссоздан из FSM.")
 
-    tut_service.add_bonus(choice_key=choice)
-    log.debug(f"Бонус '{choice}' добавлен для char_id={char_id}. Текущие бонусы: {tut_service.bonus_dict}")
+    # Извлекаем результат из задачи с логикой
+    next_step_data, tut_service = results[1]
 
-    # 1. Сначала получаем результат в ОДНУ переменную
-    next_step_data = tut_service.get_next_step()
-
-    # 2. Получаем message_content (это можно сделать до проверки)
     message_content = session_context.get("message_content")
     if not isinstance(message_content, dict):
         log.error(f"Не найден 'message_content' в FSM для user_id={user_id}.")
         await Err.message_content_not_found_in_fsm(call)
         return
 
-    # 3. Обновляем FSM (тоже можно сделать до проверки)
-    await state.update_data(**tut_service.get_fsm_data())
-    log.debug(f"Данные FSM для user_id={user_id} обновлены.")
-
-    # 4. Теперь ПРОВЕРЯЕМ, не None ли результат
+    # Теперь, после завершения анимации, решаем, что показать
     if next_step_data is None:
         log.info(f"Туториал для char_id={char_id} завершен. Запуск анимации подсчета.")
         animation_steps, final_kb = tut_service.get_data_animation_steps()
-        await animate_message_sequence(
-            message_to_edit=message_content, sequence=animation_steps, bot=bot, final_reply_markup=final_kb
-        )
+        await anim_service.animate_sequence(sequence=animation_steps, final_kb=final_kb)
         await state.set_state(StartTutorial.confirmation)
         log.info(f"FSM для user_id={user_id} переведен в состояние 'StartTutorial.confirmation'.")
     else:
-        # 5. И ТОЛЬКО ЕСЛИ НЕ None, мы его распаковываем
         text, kb = next_step_data
-
         log.debug(f"Отображение следующего шага туториала для char_id={char_id}.")
-        await await_min_delay(start_time, min_delay=0.8)
         await bot.edit_message_text(
             chat_id=message_content.get("chat_id"),
             message_id=message_content.get("message_id"),
@@ -204,8 +204,6 @@ async def tutorial_confirmation_handler(
     )
     log.debug(f"Сервис туториала для user_id={user_id} воссоздан из FSM.")
 
-    await await_min_delay(start_time, min_delay=0.3)
-
     if call_data == "tut:restart":
         log.info(f"Пользователь {user_id} перезапускает туториал для char_id={char_id}.")
         await state.set_state(StartTutorial.start)
@@ -227,8 +225,11 @@ async def tutorial_confirmation_handler(
             await Err.invalid_id(call)
             return
 
+        # Добавляем задержку, чтобы пользователь успел прочитать финальный кадр анимации
+        await await_min_delay(start_time, min_delay=2.0)
+
         log.info(f"Пользователь {user_id} подтвердил характеристики для char_id={char_id}. Бонусы: {bonus_dict}")
-        text, kb = await tut_service.update_stats_und_get(session)
+        text, kb = await tut_service.finalize_stats(session)
         await bot.edit_message_text(
             chat_id=message_content.get("chat_id"),
             message_id=message_content.get("message_id"),

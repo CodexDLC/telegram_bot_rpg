@@ -28,6 +28,9 @@ class LoginService:
         """
         Главный метод входа. Проверяет SQL и загружает/создает сессию Redis.
 
+        Args:
+            session (AsyncSession): Сессия базы данных.
+
         Returns:
             tuple[str, str] | None: (state, location_id) или None в случае
                                     ошибки (например, не пройден туториал).
@@ -47,7 +50,12 @@ class LoginService:
         return state, loc_id
 
     async def _check_sql_game_stage(self, session: AsyncSession) -> str | None:
-        """Проверяет game_stage персонажа в SQL базе."""
+        """
+        Проверяет game_stage персонажа в SQL базе.
+
+        Args:
+            session (AsyncSession): Сессия базы данных.
+        """
         try:
             char_repo = get_character_repo(session)
             character_dto = await char_repo.get_character(self.char_id)

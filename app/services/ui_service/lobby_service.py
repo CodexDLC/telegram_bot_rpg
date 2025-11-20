@@ -146,12 +146,15 @@ class LobbyService(BaseUIService):
 
         return buttons
 
-    async def create_und_get_character_id(self, session: AsyncSession) -> int:
+    async def create_and_get_character_id(self, session: AsyncSession) -> int:
         """
         Создает "оболочку" персонажа в БД и возвращает его ID.
 
         "Оболочка" - это минимальная запись, создаваемая до ввода имени/пола.
         Использует собственную сессию для выполнения этой изолированной операции.
+
+        Args:
+            session (AsyncSession): Сессия базы данных.
 
         Returns:
             int: ID созданного персонажа.
@@ -169,6 +172,15 @@ class LobbyService(BaseUIService):
             raise
 
     async def get_data_characters(self, session: AsyncSession) -> list[CharacterReadDTO] | None:
+        """
+        Получает список персонажей пользователя из базы данных.
+
+        Args:
+            session (AsyncSession): Сессия базы данных.
+
+        Returns:
+            list[CharacterReadDTO] | None: Список персонажей или None в случае ошибки.
+        """
         try:
             char_repo = get_character_repo(session)
             character = await char_repo.get_characters(self.user_id)
@@ -180,7 +192,16 @@ class LobbyService(BaseUIService):
             log.exception(f"Ошибка при получении списка персонажей для user_id={self.user_id}: {e}")
             return None
 
-    async def delete_character_ind_db(self, session: AsyncSession) -> bool:
+    async def delete_character(self, session: AsyncSession) -> bool:
+        """
+        Удаляет персонажа из базы данных.
+
+        Args:
+            session (AsyncSession): Сессия базы данных.
+
+        Returns:
+            bool: True в случае успеха, иначе False.
+        """
         if not self.char_id:
             return False
         try:
