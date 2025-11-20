@@ -1,5 +1,6 @@
 # app/handlers/callback/ui/status_menu/character_skill.py
 import asyncio
+import time
 
 from aiogram import Bot, F, Router
 from aiogram.filters import StateFilter
@@ -26,6 +27,11 @@ async def character_skill_group_handler(
 ) -> None:
     """
     Обрабатывает нажатие на группу навыков и отображает список навыков в ней.
+
+    :param call: Входящий CallbackQuery.
+    :param state: Контекст состояния FSM.
+    :param bot: Экземпляр бота.
+    :param callback_data: Данные из Callback-кнопки.
     """
     if not call.from_user or not call.message:
         log.warning("Handler 'character_skill_group_handler' received an update without 'from_user' or 'message'.")
@@ -89,12 +95,16 @@ async def character_skill_detail_handler(
 ) -> None:
     """
     Обрабатывает нажатие на конкретный навык и отображает его детальную информацию.
+    :param call: Входящий CallbackQuery.
+    :param state: Контекст состояния FSM.
+    :param bot: Экземпляр бота.
+    :param callback_data: Данные из Callback-кнопки.
     """
     if not call.from_user:
         log.warning("Handler 'character_skill_detail_handler' received an update without 'from_user'.")
         return
 
-    start_time = asyncio.get_event_loop().time()
+    start_time = time.monotonic()
     user_id = call.from_user.id
     char_id = callback_data.char_id
     key = callback_data.key
