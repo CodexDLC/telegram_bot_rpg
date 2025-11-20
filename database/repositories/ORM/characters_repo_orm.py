@@ -193,19 +193,21 @@ class CharacterStatsRepoORM(ICharacterStatsRepo):
         stmt = update(CharacterStats).where(CharacterStats.character_id == character_id).values(**values_to_update)
 
         try:
-            # Шаг 1: Просто выполняем обновление
             await self.session.execute(stmt)
-            log.debug(f"Атомарное обновление статов для {character_id} выполнено.")
+            await self.session.flush()  # Принудительно отправляем изменения в БД
 
-            # Шаг 2: Получаем обновленные данные отдельным запросом
+            log.debug(f"Атомарное обновление статов для {character_id} выполнено и 'сброшено' в БД.")
+
+            # Теперь, когда flush выполнен, get_stats должен увидеть обновленные данные
             updated_stats_dto = await self.get_stats(character_id=character_id)
 
             if updated_stats_dto:
-                log.debug(f"Успешно получены обновленные статы для {character_id}.")
+                log.debug(f"Успешно получены обновленные статы для {character_id} после flush.")
                 return updated_stats_dto
 
-            # Эта ситуация теперь почти невозможна, если UPDATE прошел
-            log.warning(f"Не удалось получить статы после обновления для character_id={character_id}.")
+            log.error(
+                f"Критическая ошибка: не удалось получить статы для character_id={character_id} даже после flush."
+            )
             return None
 
         except SQLAlchemyError as e:

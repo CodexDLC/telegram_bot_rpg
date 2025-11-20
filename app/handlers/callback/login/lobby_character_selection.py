@@ -2,8 +2,9 @@
 from typing import Any
 
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +15,12 @@ from app.resources.texts.buttons_callback import GameStage
 from app.resources.texts.ui_messages import TEXT_AWAIT
 from app.services.game_service.login_service import LoginService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
-from app.services.helpers_module.dto_helper import fsm_clean_core_state, fsm_load_auto, fsm_store
+from app.services.helpers_module.dto_helper import (
+    FSM_CONTEXT_KEY,
+    fsm_clean_core_state,
+    fsm_load_auto,
+    fsm_store,
+)
 from app.services.ui_service.lobby_service import LobbyService
 from app.services.ui_service.menu_service import MenuService
 from app.services.ui_service.navigation_service import NavigationService
@@ -60,8 +66,9 @@ async def select_or_delete_character_handler(
     # Отвечаем на call сразу (важно для delete, чтобы убрать часики)
     await call.answer()
     state_data = await state.get_data()
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
 
-    current_char_id_in_fsm = state_data.get("char_id")
+    current_char_id_in_fsm = session_context.get("char_id")
     if action == "select" and char_id == current_char_id_in_fsm:
         log.debug(f"User {user.id} повторно нажал на уже выбранного персонажа {char_id}. Игнорируем.")
         return
@@ -90,7 +97,7 @@ async def select_or_delete_character_handler(
         if characters:
             text, kb = lobby_service.get_data_lobby_start(characters)
 
-            message_menu: dict[str, Any] | None = state_data.get("message_menu")
+            message_menu: dict[str, Any] | None = session_context.get("message_menu")
             log.debug(f"message_menu = {message_menu} ")
 
             if message_menu:
@@ -104,9 +111,12 @@ async def select_or_delete_character_handler(
 
             # (Исправленный вызов, как мы обсуждали)
             fsm_data = await lobby_service.get_fsm_data(characters)
-
-            # Сохраняем ID выбранного персонажа.
-            await state.update_data(**fsm_data)
+            current_data = await state.get_data()
+            session_context = current_data.get(FSM_CONTEXT_KEY, {})
+            session_context["char_id"] = fsm_data.get("char_id")
+            session_context["user_id"] = fsm_data.get("user_id")
+            await state.update_data({FSM_CONTEXT_KEY: session_context})
+            await state.update_data(characters=fsm_data.get("characters"))
 
             # Вызываем обработчик меню статуса для отображения информации.
             await show_status_tab_logic(char_id=char_id, state=state, bot=bot, call=call, key="bio", session=session)
@@ -125,7 +135,7 @@ async def select_or_delete_character_handler(
             return
 
             # 1. Получаем message_content (где висит статус)
-        message_content = state_data.get("message_content")
+        message_content = session_context.get("message_content")
 
         if not isinstance(message_content, dict):
             log.error(f"User {user.id}: Не найден 'message_content' для показа подтверждения удаления.")
@@ -175,8 +185,9 @@ async def confirm_delete_handler(
     await call.answer()  # Отвечаем на call в любом случае
 
     state_data = await state.get_data()
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
     # char_id для "Нет" берем из callback, для "Да" - лучше из state
-    char_id = callback_data.char_id or state_data.get("char_id")
+    char_id = callback_data.char_id or session_context.get("char_id")
     user = call.from_user
 
     if not char_id:
@@ -187,21 +198,50 @@ async def confirm_delete_handler(
     lobby_service = LobbyService(user=user, char_id=char_id, state_data=state_data)
 
     if callback_data.action == "delete_yes":
-        log.info("Хэндлер 'confirm_delete_handler' [lobby:delete_yes] вызван")
+        log.info(f"User {user.id} подтвердил удаление персонажа {char_id}.")
 
-        await lobby_service.delete_character_ind_db(session)
-        char_name = state_data.get("char_name")
-        text = f"персонаж {char_name} удален"
-        if isinstance(call.message, Message):
-            await call.message.edit_text(text=text, reply_markup=None)
+        # 1. Удаляем персонажа из БД
+        delete_success = await lobby_service.delete_character_ind_db(session)
+
+        if not delete_success:
+            log.error(f"Не удалось удалить персонажа {char_id} из БД.")
+            await Err.generic_error(call)
+            return
+
+        # 2. Обновляем список персонажей в FSM
         characters = await lobby_service.get_data_characters(session)
-        text, kb = lobby_service.get_data_lobby_start(characters)
+        await state.update_data(characters=await fsm_store(value=characters))
+
+        # 3. Обновляем UI
+        # Верхнее сообщение (список персонажей)
+        text_lobby, kb_lobby = lobby_service.get_data_lobby_start(characters)
         message_menu_data = lobby_service.get_message_menu_data()
         if message_menu_data:
             chat_id, message_id = message_menu_data
             if chat_id and message_id:
-                await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb)
+                await bot.edit_message_text(
+                    chat_id=chat_id, message_id=message_id, text=text_lobby, reply_markup=kb_lobby
+                )
+
+        # Нижнее сообщение (статус)
+        message_content_data = lobby_service.get_message_content_data()
+        if message_content_data:
+            chat_id, message_id = message_content_data
+            if chat_id and message_id:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text="Персонаж удален. Выберите другого персонажа или создайте нового.",
+                    reply_markup=None,
+                )
+
+        # 4. Сбрасываем char_id в FSM
+        session_context["char_id"] = None
+        await state.update_data({FSM_CONTEXT_KEY: session_context})
+
+        # 5. Возвращаем стейт в лобби
         await state.set_state(CharacterLobby.selection)
+        log.info(f"Персонаж {char_id} успешно удален. UI обновлен.")
 
     elif callback_data.action == "delete_no":
         log.info(f"User {user.id} отменил удаление персонажа {char_id}.")
@@ -221,6 +261,66 @@ async def confirm_delete_handler(
         )
 
 
+@router.callback_query(InGame.navigation, LobbySelectionCallback.filter(F.action == "logout"))
+async def logout_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
+    """
+    Обрабатывает выход из игрового мира обратно в лобби.
+    """
+    if not call.from_user:
+        log.warning("Хэндлер 'logout_handler' получил обновление без 'from_user'.")
+        return
+
+    user = call.from_user
+    log.info(f"Хэндлер 'logout_handler' [logout] вызван user_id={user.id}")
+    await call.answer()
+
+    state_data = await state.get_data()
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    char_id = session_context.get("char_id")
+
+    lobby_service = LobbyService(user=user, char_id=char_id, state_data=state_data)
+
+    # 1. Получаем ID сообщений
+    message_menu_data = lobby_service.get_message_menu_data()
+    message_content_data = lobby_service.get_message_content_data()
+
+    if not message_menu_data or not message_content_data:
+        log.error(f"User {user.id}: Не найдены message_menu или message_content для выхода из мира.")
+        await Err.generic_error(call)
+        return
+
+    menu_chat_id, menu_message_id = message_menu_data
+    content_chat_id, content_message_id = message_content_data
+
+    # 2. Удаляем нижнее сообщение (навигация)
+    try:
+        await bot.delete_message(chat_id=content_chat_id, message_id=content_message_id)
+    except TelegramAPIError as e:
+        log.warning(f"Не удалось удалить content_message при выходе: {e}")
+
+    # 3. Редактируем верхнее сообщение в лобби
+    characters = await lobby_service.get_data_characters(session)
+    text, kb = lobby_service.get_data_lobby_start(characters)
+    await bot.edit_message_text(chat_id=menu_chat_id, message_id=menu_message_id, text=text, reply_markup=kb)
+
+    # 4. Сбрасываем состояние и данные FSM
+    await state.set_state(CharacterLobby.selection)
+
+    # Создаем новый, чистый session_context, сохраняя только самое необходимое
+    new_session_context = {
+        "user_id": user.id,
+        "message_menu": message_menu_data,
+        "char_id": None,
+        "message_content": None,  # Явно сбрасываем, так как оно удалено
+    }
+    await state.set_data({FSM_CONTEXT_KEY: new_session_context})
+
+    if characters:
+        await state.update_data(characters=await fsm_store(value=characters))
+
+    log.info(f"User {user.id} успешно вышел в лобби. FSM сброшен.")
+
+
 @router.callback_query(CharacterLobby.selection, LobbySelectionCallback.filter(F.action == "login"))
 async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
     """
@@ -234,10 +334,11 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     # --- 1. Сбор данных ---
     user_id = call.from_user.id
     state_data = await state.get_data()
-    char_id = state_data.get("char_id")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    char_id = session_context.get("char_id")
     # Нам нужны данные о сообщении, чтобы редактировать его
-    message_content: dict[str, Any] | None = state_data.get("message_content")
-    message_menu: dict[str, Any] | None = state_data.get("message_menu")
+    message_content: dict[str, Any] | None = session_context.get("message_content")
+    message_menu: dict[str, Any] | None = session_context.get("message_menu")
 
     if not isinstance(char_id, int) or not isinstance(message_content, dict):
         log.error(f"User {call.from_user.id} нажал 'login', но FSM неполный.")
@@ -348,7 +449,7 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     nav_service = NavigationService(char_id=char_id, state_data=state_data)
     nav_text, nav_kb = await nav_service.get_navigation_ui(state_name, loc_id)
 
-    menu_service = MenuService(game_stage="in_game", char_id=char_id)
+    menu_service = MenuService(game_stage="in_game", state_data=state_data)
     menu_text, menu_kb = menu_service.get_data_menu()
 
     if not message_menu:

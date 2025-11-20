@@ -3,6 +3,8 @@ from typing import Any
 
 from loguru import logger as log
 
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
+
 
 class BaseUIService:
     """
@@ -10,19 +12,21 @@ class BaseUIService:
     Содержит общую логику, например, для работы с FSM.
     """
 
-    def __init__(self, char_id: int, state_data: dict[str, Any]):
+    def __init__(self, state_data: dict[str, Any], char_id: int | None = None):
         """
         Инициализирует базовые атрибуты, нужные ВСЕМ сервисам.
         """
-        self.char_id = char_id
         self.state_data = state_data
-        log.debug(f"Инициализирован BaseUIService для char_id={char_id}.")
+        session_context = self.state_data.get(FSM_CONTEXT_KEY, {})
+        self.char_id = char_id or session_context.get("char_id")
+        log.debug(f"Инициализирован BaseUIService для char_id={self.char_id}.")
 
     def get_message_content_data(self) -> tuple[int, int] | None:
         """
         Извлекает chat_id и message_id из данных состояния FSM.
         """
-        message_content: dict[str, Any] | None = self.state_data.get("message_content")
+        session_context = self.state_data.get(FSM_CONTEXT_KEY, {})
+        message_content: dict[str, Any] | None = session_context.get("message_content")
         if not isinstance(message_content, dict):  # <--- Проверка, что это словарь
             log.warning(f"В FSM state для char_id={self.char_id} отсутствует 'message_content'.")
             return None
@@ -43,7 +47,8 @@ class BaseUIService:
         """
         Извлекает chat_id и message_id из 'message_menu'.
         """
-        message_menu = self.state_data.get("message_menu")
+        session_context = self.state_data.get(FSM_CONTEXT_KEY, {})
+        message_menu = session_context.get("message_menu")
         if not message_menu:
             log.warning(f"В FSM state для char_id={self.char_id} отсутствует 'message_menu'.")
             return None

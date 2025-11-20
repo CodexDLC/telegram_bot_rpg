@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # --- ОБЩИЕ ИМПОРТЫ ---
 from app.resources.keyboards.status_callback import StatusNavCallback
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
-from app.services.helpers_module.dto_helper import fsm_clean_core_state
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY, fsm_clean_core_state
 
 # --- ИМПОРТЫ ДЛЯ ГЕНЕРАЦИИ 'text, kb' ---
 from app.services.ui_service.status_menu.status_service import CharacterMenuUIService
@@ -45,7 +45,7 @@ async def show_status_tab_logic(
     callback_for_service = StatusNavCallback(key=key, char_id=char_id)
 
     try:
-        ui_service = CharacterMenuUIService(char_id=char_id, callback_data=callback_for_service, state_data=state_data)
+        ui_service = CharacterMenuUIService(callback_data=callback_for_service, state_data=state_data)
     except (ValueError, AttributeError, TypeError) as e:
         log.error(f"Ошибка инициализации CharacterMenuUIService для user {user_id}: {e}", exc_info=True)
         await Err.handle_exception(call, "Ошибка при инициализации интерфейса.")
@@ -115,7 +115,10 @@ async def show_status_tab_logic(
 
             # 2. Сохраняем ID НОВОГО сообщения в FSM
             new_content = {"chat_id": msg.chat.id, "message_id": msg.message_id}
-            await state.update_data(message_content=new_content)
+            current_data = await state.get_data()
+            session_context = current_data.get(FSM_CONTEXT_KEY, {})
+            session_context["message_content"] = new_content
+            await state.update_data({FSM_CONTEXT_KEY: session_context})
             log.info(f"User {user_id}: Создано message_content (id: {msg.message_id}) и сохранено в FSM.")
 
         else:
@@ -161,7 +164,7 @@ async def status_menu_router_handler(
         # Очищаем FSM от старого UI-состояния (кроме "ядра")
         # и устанавливаем актуальный char_id.
         await fsm_clean_core_state(state=state, event_source=call)
-        await state.update_data(char_id=char_id)
+        # await state.update_data(char_id=char_id)
         log.debug(f"FSM state cleaned and char_id set to {char_id} for user {user_id}.")
     except (ValueError, AttributeError, TypeError, KeyError) as e:
         log.error(f"Ошибка при очистке FSM для user {user_id}: {e}", exc_info=True)

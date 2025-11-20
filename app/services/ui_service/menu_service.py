@@ -5,9 +5,8 @@ from loguru import logger as log
 
 from app.resources.keyboards.callback_data import LobbySelectionCallback, MeinMenuCallback
 from app.resources.keyboards.status_callback import StatusNavCallback
-
-# 1. --- ДОБАВЬ ИМПОРТ StatusNavCallback ---
 from app.resources.texts.menu_data.buttons_text import ButtonsTextData
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 
 
 class MenuService:
@@ -16,14 +15,16 @@ class MenuService:
     ...
     """
 
-    def __init__(self, game_stage: str, char_id: int):
+    def __init__(self, game_stage: str, state_data: dict):
         """
         Инициализирует сервис меню.
         ...
         """
         self.data = ButtonsTextData
         self.gs = game_stage
-        self.char_id = char_id
+        self.state_data = state_data
+        session_context = self.state_data.get(FSM_CONTEXT_KEY, {})
+        self.char_id = session_context.get("char_id")
         log.debug(f"Инициализирован {self.__class__.__name__} для game_stage='{self.gs}', char_id={self.char_id}")
 
     def get_data_menu(self) -> tuple[str, InlineKeyboardMarkup]:
@@ -52,18 +53,11 @@ class MenuService:
             if key == "status":
                 callback_data = StatusNavCallback(key="bio", char_id=self.char_id).pack()
 
-            # 2. --- (ИЗМЕНИ ЭТОТ БЛОК) ---
             elif key == "logout":
-                # Теперь "logout" использует LobbySelectionCallback, как в LobbyService
-                callback_data = LobbySelectionCallback(
-                    action=key
-                    # char_id не нужен, так как он Optional
-                ).pack()
+                callback_data = LobbySelectionCallback(action=key).pack()
 
             elif key in ("navigation", "inventory"):
-                # Остальные кнопки (пока) используют старый колбэк
                 callback_data = MeinMenuCallback(action=key, game_stage=self.gs, char_id=self.char_id).pack()
-            # --- (КОНЕЦ ИЗМЕНЕНИЙ) ---
             else:
                 continue
 

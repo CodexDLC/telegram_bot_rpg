@@ -28,7 +28,6 @@ class CharacterMenuUIService(BaseUIService):
 
     def __init__(
         self,
-        char_id: int,
         callback_data: StatusNavCallback,
         state_data: dict[str, Any],
         syb_name: str | None = None,
@@ -37,14 +36,13 @@ class CharacterMenuUIService(BaseUIService):
         Инициализирует сервис для меню статуса персонажа.
 
         Args:
-            char_id: Уникальный идентификатор персонажа.
             callback_data: Данные из callback-кнопки, определяющие текущую вкладку.
             state_data: Данные из FSM-состояния.
             syb_name: Имя "рассказчика" (актора), от лица которого
                       отображается информация. Если None, используется
                       значение по умолчанию.
         """
-        super().__init__(char_id=char_id, state_data=state_data)
+        super().__init__(state_data=state_data, char_id=callback_data.char_id)
 
         self.actor_name = syb_name or DEFAULT_ACTOR_NAME
         self.status_buttons = TABS_NAV_DATA
@@ -54,7 +52,7 @@ class CharacterMenuUIService(BaseUIService):
         self.call_type = callback_data.key
 
         log.debug(
-            f"Initialized {self.__class__.__name__} for char_id={char_id}, "
+            f"Initialized {self.__class__.__name__} for char_id={self.char_id}, "
             f"call_type='{self.call_type}', actor='{self.actor_name}'"
         )
 

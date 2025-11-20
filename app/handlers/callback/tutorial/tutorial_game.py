@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.resources.fsm_states.states import StartTutorial
 from app.resources.texts.ui_messages import TEXT_AWAIT
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.helpers_ui.ui_tools import animate_message_sequence, await_min_delay
 from app.services.ui_service.tutorial.tutorial_service import TutorialServiceStats
 
@@ -36,7 +37,8 @@ async def start_tutorial_handler(call: CallbackQuery, state: FSMContext, bot: Bo
 
     user_id = call.from_user.id
     state_data = await state.get_data()
-    char_id = state_data.get("char_id")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    char_id = session_context.get("char_id")
     log.info(f"Хэндлер 'start_tutorial_handler' [tut:start] вызван user_id={user_id}, char_id={char_id}")
     await call.answer()
 
@@ -55,7 +57,7 @@ async def start_tutorial_handler(call: CallbackQuery, state: FSMContext, bot: Bo
     text, kb = next_step_data
     log.debug(f"Для user_id={user_id} получен первый шаг туториала.")
 
-    message_content = state_data.get("message_content")
+    message_content = session_context.get("message_content")
     if not isinstance(message_content, dict):
         log.error(f"Не найден 'message_content' в FSM для user_id={user_id}.")
         await Err.message_content_not_found_in_fsm(call=call)
@@ -102,7 +104,8 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
     if isinstance(call.message, Message):
         await call.message.edit_text(text=TEXT_AWAIT, parse_mode="html", reply_markup=None)
     state_data = await state.get_data()
-    char_id = state_data.get("char_id")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    char_id = session_context.get("char_id")
     if not isinstance(char_id, int):
         log.warning(f"User {user_id} в 'tutorial_event_stats_handler' имел 'char_id=None' или неверный тип.")
         await Err.invalid_id(call=call)
@@ -124,7 +127,7 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
     next_step_data = tut_service.get_next_step()
 
     # 2. Получаем message_content (это можно сделать до проверки)
-    message_content = state_data.get("message_content")
+    message_content = session_context.get("message_content")
     if not isinstance(message_content, dict):
         log.error(f"Не найден 'message_content' в FSM для user_id={user_id}.")
         await Err.message_content_not_found_in_fsm(call)
@@ -184,8 +187,9 @@ async def tutorial_confirmation_handler(
     start_time = time.monotonic()
 
     state_data = await state.get_data()
-    char_id = state_data.get("char_id")
-    message_content: dict[str, Any] | None = state_data.get("message_content")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    char_id = session_context.get("char_id")
+    message_content: dict[str, Any] | None = session_context.get("message_content")
 
     if not isinstance(char_id, int) or not isinstance(message_content, dict):
         log.warning(f"Недостаточно данных в FSM для user_id={user_id} в 'tutorial_confirmation_handler'.")

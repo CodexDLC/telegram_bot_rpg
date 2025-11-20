@@ -13,7 +13,7 @@ from app.resources.fsm_states.states import CharacterLobby, StartTutorial
 from app.resources.keyboards.callback_data import TutorialQuestCallback
 from app.resources.texts.ui_messages import TEXT_AWAIT
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
-from app.services.helpers_module.dto_helper import fsm_clean_core_state
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY, fsm_clean_core_state
 from app.services.ui_service.helpers_ui.ui_tools import animate_message_sequence, await_min_delay
 from app.services.ui_service.tutorial.tutorial_service_skill import TutorialServiceSkills
 
@@ -42,7 +42,8 @@ async def start_skill_phase_handler(call: CallbackQuery, state: FSMContext, bot:
     log.debug(f"User {call.from_user.id} started skill phase.")
 
     state_data = await state.get_data()
-    message_content: dict[str, Any] | None = state_data.get("message_content")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    message_content: dict[str, Any] | None = session_context.get("message_content")
 
     # Проверка наличия message_content в состоянии FSM
     if not message_content or "chat_id" not in message_content or "message_id" not in message_content:
@@ -106,7 +107,8 @@ async def in_skills_progres_handler(
     )
 
     state_data = await state.get_data()
-    message_content: dict[str, Any] | None = state_data.get("message_content")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    message_content: dict[str, Any] | None = session_context.get("message_content")
     skill_choices_list: list[str] = state_data.get("skill_choices_list", [])
 
     # Проверка наличия message_content
@@ -198,9 +200,10 @@ async def skill_confirm_handler(
     user_id = call.from_user.id
 
     state_data = await state.get_data()
-    char_id = state_data.get("char_id")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    char_id = session_context.get("char_id")
     skill_choices_list: list[str] = state_data.get("skill_choices_list", [])
-    message_content: dict[str, Any] | None = state_data.get("message_content")
+    message_content: dict[str, Any] | None = session_context.get("message_content")
 
     log.info(f"Хэндлер 'skill_confirm_handler' [p_end:{final_choice}] вызван user_id={user_id}, char_id={char_id}")
     await call.answer()

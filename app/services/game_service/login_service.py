@@ -67,6 +67,17 @@ class LoginService:
             if data:
                 state = data.get("state", "world")
                 loc_id = data.get("location_id", "portal_plats")
+
+                # --- Временная миграция для исправления неверного ID локации ---
+                if loc_id == "town_hall_in":
+                    log.warning(
+                        f"Обнаружен устаревший location_id 'town_hall_in' для char_id={self.char_id}. "
+                        f"Автоматическая миграция на 'town_hall_interior'."
+                    )
+                    loc_id = "town_hall_interior"
+                    await account_manager.update_account_fields(self.char_id, {"location_id": loc_id})
+                # --- Конец миграции ---
+
                 log.debug(f"Загружена сессия Redis для char_id={self.char_id} (state={state})")
                 return state, loc_id
             else:

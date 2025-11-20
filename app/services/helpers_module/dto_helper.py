@@ -7,10 +7,10 @@ from loguru import logger as log
 from pydantic import BaseModel, ValidationError
 
 from app.resources.schemas_dto.character_dto import CharacterReadDTO, CharacterStatsReadDTO
+from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
 from app.resources.schemas_dto.skill import SkillProgressDTO
 
-FSM_CORE_KEYS = ["user_id", "char_id", "message_menu", "message_content"]
-
+FSM_CONTEXT_KEY = "session_context"
 
 # Карта для сопоставления ключей FSM с классами DTO.
 # Это позволяет автоматически восстанавливать Pydantic модели из словарей.
@@ -19,6 +19,7 @@ DTO_MAP: dict[str, type[BaseModel]] = {
     "characters": CharacterReadDTO,  # Используется для списков
     "character_stats": CharacterStatsReadDTO,
     "character_progress": SkillProgressDTO,
+    FSM_CONTEXT_KEY: SessionDataDTO,
 }
 log.debug(f"Карта DTO_MAP инициализирована с {len(DTO_MAP)} записями.")
 
@@ -113,62 +114,52 @@ async def fsm_convector(value: Any, key: str) -> Any:
 
 async def fsm_clean_core_state(state: FSMContext, event_source: CallbackQuery | Message) -> None:
     """
-    Очищает FSM, сохраняя "ядро" состояния.
-
-    Эта функция-хелпер:
-    1. Получает текущие данные из FSM.
-    2. Создает новый, чистый словарь.
-    3. Переносит в него *только* ключи из 'FSM_CORE_KEYS' (белый список).
-    4. Пытается взять 'user_id' из 'event_source', если он отсутствует в FSM.
-    5. Полностью перезаписывает состояние FSM (`set_data`).
-
-    ВАЖНО: Эта функция НЕ меняет FSM-стейт (не вызывает set_state).
-    За смену стейта отвечает вызвавший ее хэндлер.
-
-    Args:
-        state (FSMContext): Текущий FSM-контекст.
-        event_source (Union[CallbackQuery, Message]): Событие (call или m),
-            вызвавшее переход, для фоллбэка 'user_id'.
-
-    Raises:
-        Exception: Пробрасывает любую ошибку, возникшую в процессе,
-                   чтобы хэндлер мог ее поймать (например, для ERR.generic_error).
+    Очищает FSM, сохраняя "ядро" состояния (SessionDataDTO).
+    Выполняет миграцию плоских ключей в контейнер при первом вызове.
     """
     log.debug("Запуск 'fsm_clean_core_state' для очистки FSM...")
 
     try:
-        # 1. Получаем старые данные
         old_data = await state.get_data()
-        log.debug(f"Полный state_data перед очисткой: {old_data}")
-
         clean_data = {}
 
-        # 2. Собираем "чистый" словарь по "белому списку"
-        for key in FSM_CORE_KEYS:
-            if key in old_data:
-                clean_data[key] = old_data[key]
+        # 1. Проверяем, существует ли уже новый контейнер FSM_CONTEXT_KEY.
+        if FSM_CONTEXT_KEY in old_data:
+            # СЛУЧАЙ 1: Контейнер уже создан. Просто сохраняем его.
+            clean_data[FSM_CONTEXT_KEY] = old_data[FSM_CONTEXT_KEY]
+            log.debug("Контейнер 'session_context' найден, сохраняется без изменений.")
+        else:
+            # СЛУЧАЙ 2: Миграция. Собираем DTO из старых плоских ключей.
+            log.warning("Контейнер 'session_context' не найден. Выполняется миграция старых ключей.")
+
+            # ВАЖНО: Мы должны использовать имена полей из SessionDataDTO.
+            core_keys = SessionDataDTO.model_fields.keys()
+            migrated_fields = {key: old_data.get(key) for key in core_keys}
+
+            # Создаем DTO (Pydantic сам обработает Optional и проверит типы)
+            core_dto = SessionDataDTO(**migrated_fields)
+
+            # Сохраняем DTO как словарь (сериализуем) под новым ключом.
+            clean_data[FSM_CONTEXT_KEY] = await fsm_store(core_dto)
+
+        # 2. Обработка фоллбэка user_id, если он не был найден в DTO
+        if not clean_data.get(FSM_CONTEXT_KEY, {}).get("user_id") and event_source and event_source.from_user:
+            # ВАЖНО: Мы не можем напрямую писать в словарь, который может быть DTO.
+            # Мы должны его прочитать, изменить и записать обратно.
+
+            # Читаем DTO из словаря (десериализуем)
+            migrated_dto = await fsm_convector(clean_data[FSM_CONTEXT_KEY], FSM_CONTEXT_KEY)
+            if isinstance(migrated_dto, SessionDataDTO):
+                migrated_dto.user_id = event_source.from_user.id
+                # Записываем обратно как словарь (сериализуем)
+                clean_data[FSM_CONTEXT_KEY] = await fsm_store(migrated_dto)
+                log.debug(f"User ID {event_source.from_user.id} добавлен в контейнер из event_source.")
             else:
-                # Логируем, если важный ключ не найден
-                log.warning(f"fsm_clean_core_state: Ключ ядра '{key}' не найден в FSM state.")
+                log.error("Миграция провалилась, не могу получить DTO из контейнера.")
 
-        # 3. Дополнительная логика (фоллбэк user_id, как ты и предлагал)
-        if "user_id" not in clean_data:
-            if event_source and event_source.from_user:
-                clean_data["user_id"] = event_source.from_user.id
-                log.debug("fsm_clean_core_state: 'user_id' добавлен из 'event_source'.")
-            else:
-                log.error("fsm_clean_core_state: 'user_id' не найден ни в FSM, ни в 'event_source'!")
-
-        # 4. Важная проверка на char_id
-        if "char_id" not in clean_data:
-            log.error("fsm_clean_core_state: 'char_id' отсутствует в данных для перехода!")
-
-        log.debug(f"Очищенный state_data для установки: {clean_data}")
-
-        # 5. Полностью ПЕРЕЗАПИСЫВАЕМ стейт (как ты и просил)
+        # 3. Полностью ПЕРЕЗАПИСЫВАЕМ стейт (удаляя все временные поля)
         await state.set_data(clean_data)
-
-        log.info("FSM state успешно очищен (сохранено только 'ядро').")
+        log.info("FSM state успешно очищен (сохранен только контейнер 'session_context').")
 
     except Exception as e:
         log.exception(f"Критическая ошибка во время 'fsm_clean_core_state': {e}")
