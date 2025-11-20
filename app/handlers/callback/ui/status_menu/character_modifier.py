@@ -27,6 +27,15 @@ async def character_modifier_group_handler(
 ) -> None:
     """
     Обрабатывает выбор группы навыков, отображая навыки в этой группе.
+
+    Args:
+        call (CallbackQuery): Callback от кнопки выбора группы.
+        state (FSMContext): Состояние FSM.
+        bot (Bot): Экземпляр бота.
+        callback_data (StatusModifierCallback): Данные из callback.
+
+    Returns:
+        None
     """
     if not call.from_user or not call.message:
         log.warning("Хэндлер 'character_skill_group_handler' получил обновление без 'from_user' или 'message'.")
