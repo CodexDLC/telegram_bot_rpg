@@ -201,7 +201,7 @@ async def confirm_delete_handler(
         log.info(f"User {user.id} подтвердил удаление персонажа {char_id}.")
 
         # 1. Удаляем персонажа из БД
-        delete_success = await lobby_service.delete_character_in_db(session)
+        delete_success = await lobby_service.delete_character_ind_db(session)
 
         if not delete_success:
             log.error(f"Не удалось удалить персонажа {char_id} из БД.")
