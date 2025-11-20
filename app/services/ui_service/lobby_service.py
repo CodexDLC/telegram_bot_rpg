@@ -40,11 +40,11 @@ class LobbyService(BaseUIService):
 
         safe_char_id = char_id or 0
 
-        super().__init__(safe_char_id, safe_state_data)
+        super().__init__(state_data=safe_state_data, char_id=safe_char_id)
 
         # А уже ПОСЛЕ этого устанавливаем свои свойства
         self.user_id = user.id
-        self.char_id: int = safe_char_id  # self.char_id МОЖЕТ быть None, это нормально
+        # self.char_id: int = safe_char_id  # self.char_id МОЖЕТ быть None, это нормально
 
         log.debug(f"Инициализирован {self.__class__.__name__} для user_id={self.user_id}.")
 

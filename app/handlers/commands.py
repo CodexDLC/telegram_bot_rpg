@@ -16,6 +16,7 @@ from app.resources.keyboards.inline_kb.loggin_und_new_character import get_start
 # Импорты для кнопок
 from app.resources.keyboards.reply_kb import RESTART_BUTTON_TEXT, SETTINGS_BUTTON_TEXT
 from app.resources.texts.ui_messages import START_GREETING
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.command_service import CommandService
 from app.services.ui_service.helpers_ui.message_info_formatter import MessageInfoFormatter
@@ -45,7 +46,7 @@ async def cmd_start(m: Message, state: FSMContext, bot: Bot, session: AsyncSessi
     # --- (ЛОГИКА ОЧИСТКИ UI) ---
     try:
         state_data = await state.get_data()
-        ui_service = BaseUIService(char_id=0, state_data=state_data)
+        ui_service = BaseUIService(state_data=state_data)
 
         menu_data = ui_service.get_message_menu_data()
         if menu_data:
@@ -88,7 +89,7 @@ async def cmd_start(m: Message, state: FSMContext, bot: Bot, session: AsyncSessi
     )
 
     message_menu = {"message_id": mes.message_id, "chat_id": mes.chat.id}
-    await state.update_data(message_menu=message_menu)
+    await state.update_data({FSM_CONTEXT_KEY: {"message_menu": message_menu}})
     log.debug(f"Состояние FSM обновлено для user_id={m.from_user.id} с message_id={mes.message_id}")
 
     try:

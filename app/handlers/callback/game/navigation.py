@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.resources.fsm_states.states import InGame
 from app.resources.keyboards.callback_data import NavigationCallback
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.navigation_service import NavigationService
 
@@ -49,8 +50,9 @@ async def navigation_move_handler(
         await call.answer()
 
     state_data = await state.get_data()
-    char_id = state_data.get("char_id")
-    message_content = state_data.get("message_content")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    char_id = session_context.get("char_id")
+    message_content = session_context.get("message_content")
 
     if not char_id or not message_content:
         log.error(f"В FSM user {user_id} отсутствуют данные char_id или message_content.")

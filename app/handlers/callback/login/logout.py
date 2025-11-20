@@ -12,6 +12,7 @@ from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
 from app.resources.keyboards.callback_data import LobbySelectionCallback
 from app.resources.keyboards.inline_kb.loggin_und_new_character import get_start_adventure_kb
 from app.resources.texts.ui_messages import START_GREETING
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.base_service import BaseUIService
 
 # (FSM импорты не нужны, так как он ловит ВСЕ состояния)
@@ -32,7 +33,8 @@ async def global_logout_handler(call: CallbackQuery, state: FSMContext, bot: Bot
 
     # 1. Получаем данные о сообщениях ДО очистки
     state_data = await state.get_data()
-    message_menu = state_data.get("message_menu")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    message_menu = session_context.get("message_menu")
 
     # 2. Полностью очищаем FSM
     await state.clear()
@@ -64,7 +66,7 @@ async def global_logout_handler(call: CallbackQuery, state: FSMContext, bot: Bot
             log.error(f"Не удалось отправить новое меню при logout: {e}")
 
     # 4. Удаляем НИЖНЕЕ сообщение (message_content), если оно было
-    ui_service = BaseUIService(char_id=0, state_data=state_data)
+    ui_service = BaseUIService(state_data=state_data)
     message_content_data = ui_service.get_message_content_data()
 
     if (
@@ -80,4 +82,4 @@ async def global_logout_handler(call: CallbackQuery, state: FSMContext, bot: Bot
 
     # 5. Сохраняем только message_menu обратно в (теперь уже чистый) FSM
     if message_menu:
-        await state.update_data(message_menu=message_menu)
+        await state.update_data({FSM_CONTEXT_KEY: {"message_menu": message_menu}})

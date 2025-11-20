@@ -13,6 +13,7 @@ from app.handlers.callback.login.char_creation import start_creation_handler
 from app.resources.fsm_states.states import CharacterLobby
 from app.resources.keyboards.callback_data import LobbySelectionCallback
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.command_service import CommandService
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.lobby_service import LobbyService
@@ -29,12 +30,14 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, 
     выбора. Если нет, запускает процесс создания нового персонажа.
 
     Args:
+        session:
         call (CallbackQuery): Входящий callback от кнопки.
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
 
     Returns:
         None
+
     """
     if not call.from_user or not call.message:
         log.warning("Хэндлер 'start_login_handler' получил обновление без 'from_user' или 'message'.")
@@ -67,8 +70,11 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, 
         # Если у пользователя есть персонажи, показываем лобби.
         log.info(f"У user_id={user.id} есть персонажи. Переход в лобби выбора.")
         await state.set_state(CharacterLobby.selection)
-        # Очищаем данные предыдущего выбора, чтобы избежать некорректного состояния.
-        await state.update_data(selected_char_id=None, message_content=None, user_id=user.id)
+        current_data = await state.get_data()
+        session_context = current_data.get(FSM_CONTEXT_KEY, {})
+        session_context["user_id"] = user.id
+        session_context["message_content"] = None
+        await state.update_data({FSM_CONTEXT_KEY: session_context})
         log.debug(f"Состояние установлено в CharacterLobby.selection для user_id={user.id}")
 
         text, kb = lobby_service.get_data_lobby_start(character_list)
@@ -82,7 +88,8 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, 
         # Если персонажей нет, запускаем процесс создания.
         log.info(f"У user_id={user.id} нет персонажей. Запуск процесса создания.")
         state_data = await state.get_data()
-        message_menu: dict[str, Any] | None = state_data.get("message_menu")
+        session_context = state_data.get(FSM_CONTEXT_KEY, {})
+        message_menu: dict[str, Any] | None = session_context.get("message_menu")
         if not message_menu:
             await Err.generic_error(call)
             return
@@ -111,6 +118,7 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
     Обрабатывает нажатие "Создать нового персонажа" из лобби.
 
     Args:
+        session
         call (CallbackQuery): Входящий callback от кнопки "Создать".
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
@@ -125,7 +133,8 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
     log.info(f"Хэндлер 'create_character_handler' [lobby:create] вызван user_id={call.from_user.id}")
     user_id = call.from_user.id
     state_data = await state.get_data()
-    message_menu: dict[str, Any] | None = state_data.get("message_menu")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    message_menu: dict[str, Any] | None = session_context.get("message_menu")
     if not message_menu:
         await Err.generic_error(call)
         return

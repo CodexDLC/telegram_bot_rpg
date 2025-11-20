@@ -28,7 +28,7 @@ class NavigationService(BaseUIService):
         state_data: dict[str, Any],
         symbiote_name: str | None = None,
     ):
-        super().__init__(char_id, state_data)
+        super().__init__(state_data=state_data, char_id=char_id)
         self.actor_name = symbiote_name or DEFAULT_ACTOR_NAME
         log.debug(f"Инициализирован NavigationService для char_id={self.char_id}")
 

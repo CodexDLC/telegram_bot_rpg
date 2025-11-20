@@ -15,6 +15,7 @@ from app.resources.schemas_dto.character_dto import CharacterOnboardingUpdateDTO
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.helpers_module.game_validator import validate_character_name
 from app.services.ui_service.helpers_ui.ui_tools import animate_message_sequence, await_min_delay
 from app.services.ui_service.menu_service import MenuService
@@ -48,8 +49,13 @@ async def start_creation_handler(
     await call.answer()
     start_time = time.monotonic()
 
+    state_data = await state.get_data()
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    session_context.update({"user_id": user_id, "char_id": char_id})
+    await state.update_data({FSM_CONTEXT_KEY: session_context})
+
     # Инициализируем сервис меню для получения нужного текста и клавиатуры.
-    ms = MenuService(game_stage="creation", char_id=char_id)
+    ms = MenuService(game_stage="creation", state_data=await state.get_data())
     text, kb = ms.get_data_menu()
     log.debug("Данные для меню получены от MenuService.")
 
@@ -74,7 +80,6 @@ async def start_creation_handler(
 
     # Устанавливаем следующее состояние FSM.
     await state.set_state(CharacterCreation.choosing_gender)
-    await state.update_data(user_id=user_id, char_id=char_id)
     log.info(f"FSM для user_id={user_id} переведен в состояние 'CharacterCreation.choosing_gender'.")
     log.debug(f"Данные FSM в конце 'start_creation_handler': {await state.get_data()}")
 
@@ -100,7 +105,8 @@ async def create_message_content_start_creation(call: CallbackQuery, state: FSMC
     log.debug("Данные для контентного сообщения получены от OnboardingService.")
 
     state_data = await state.get_data()
-    message_content: dict[str, Any] | None = state_data.get("message_content")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    message_content: dict[str, Any] | None = session_context.get("message_content")
 
     await await_min_delay(start_time, min_delay=0.3)
 
@@ -109,7 +115,8 @@ async def create_message_content_start_creation(call: CallbackQuery, state: FSMC
         if call.message:
             msg = await call.message.answer(text=text, parse_mode="html", reply_markup=kb)
             message_content = {"chat_id": msg.chat.id, "message_id": msg.message_id}
-            await state.update_data(message_content=message_content)
+            session_context["message_content"] = message_content
+            await state.update_data({FSM_CONTEXT_KEY: session_context})
             log.info(f"Создано новое контентное сообщение {msg.message_id} для user_id={user_id}.")
     else:
         log.debug(
@@ -154,9 +161,10 @@ async def choose_gender_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     start_time = time.monotonic()
 
     state_data = await state.get_data()
-    user_id = state_data.get("user_id")
-    char_id = state_data.get("char_id")
-    message_content: dict[str, Any] | None = state_data.get("message_content")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    user_id = session_context.get("user_id")
+    char_id = session_context.get("char_id")
+    message_content: dict[str, Any] | None = session_context.get("message_content")
 
     if not isinstance(user_id, int) or not isinstance(char_id, int) or not isinstance(message_content, dict):
         log.warning(
@@ -208,8 +216,9 @@ async def choosing_name_handler(m: Message, state: FSMContext, bot: Bot) -> None
     log.info(f"Хэндлер 'choosing_name_handler' вызван user_id={m.from_user.id}. Попытка установить имя: '{name}'")
 
     state_data = await state.get_data()
-    message_content: dict[str, Any] | None = state_data.get("message_content")
-    user_id = state_data.get("user_id")
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    message_content: dict[str, Any] | None = session_context.get("message_content")
+    user_id = session_context.get("user_id")
 
     if not isinstance(message_content, dict) or not isinstance(user_id, int):
         log.warning(
@@ -281,8 +290,9 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: 
     await call.answer()
 
     state_data = await state.get_data()
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
     user_id = call.from_user.id
-    char_id = state_data.get("char_id")
+    char_id = session_context.get("char_id")
     name = state_data.get("name")
     gender_db = state_data.get("gender_db")
     gender_display = state_data.get("gender_display")
@@ -316,16 +326,17 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: 
     await create_service.update_character_db(session=session, char_update_dto=char_update_dto)
     log.info(f"Данные персонажа {char_id} (имя, пол, стадия) обновлены в БД.")
 
-    message_menu = state_data.get("message_menu")
-    message_content = state_data.get("message_content")
+    message_menu = session_context.get("message_menu")
+    message_content = session_context.get("message_content")
 
-    await state.set_data(
-        {
-            "message_menu": message_menu,
-            "message_content": message_content,
-            "char_id": char_id,
-        }
-    )
+    # Очищаем FSM от временных данных, сохраняя только необходимое для туториала
+    new_session_context = {
+        "user_id": user_id,
+        "char_id": char_id,
+        "message_menu": message_menu,
+        "message_content": message_content,
+    }
+    await state.set_data({FSM_CONTEXT_KEY: new_session_context})
     log.debug(f"FSM для user_id={user_id} очищен от временных данных создания.")
 
     if not isinstance(message_content, dict):
