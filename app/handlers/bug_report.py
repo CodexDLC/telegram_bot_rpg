@@ -146,5 +146,7 @@ async def process_report_text_handler(m: Message, state: FSMContext, bot: Bot) -
         await m.answer(final_text, reply_markup=get_error_recovery_kb())
 
     # 5. Очищаем состояние FSM
-    await state.clear()
-    log.info(f"FSM для user {user.id} очищен после отправки отчета.")
+    await state.set_state(None)
+
+    # Опционально: точечно почистить мусор от репорта, если он мешает
+    await state.update_data(report_type=None, report_message_id=None, report_chat_id=None)

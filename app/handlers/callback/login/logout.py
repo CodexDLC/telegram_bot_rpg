@@ -11,8 +11,9 @@ from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
 # 1. --- (ТЕПЕРЬ НУЖЕН ТОЛЬКО ОДИН КОЛБЭК) ---
 from app.resources.keyboards.callback_data import LobbySelectionCallback
 from app.resources.keyboards.inline_kb.loggin_und_new_character import get_start_adventure_kb
+from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
 from app.resources.texts.ui_messages import START_GREETING
-from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY, fsm_store
 from app.services.ui_service.base_service import BaseUIService
 
 # (FSM импорты не нужны, так как он ловит ВСЕ состояния)
@@ -37,7 +38,13 @@ async def global_logout_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     message_menu = session_context.get("message_menu")
 
     # 2. Полностью очищаем FSM
-    await state.clear()
+    clean_session = SessionDataDTO(
+        user_id=call.from_user.id, message_menu=message_menu, char_id=None, message_content=None
+    )
+
+    # Перезаписываем состояние (set_data заменяет всё, что было)
+    await state.set_data(await fsm_store(clean_session))  # Или просто словарь с ключом
+    await state.set_state(None)  # Сбрасываем стейт
 
     # 3. Восстанавливаем ВЕРХНЕЕ сообщение (message_menu)
     if message_menu and isinstance(message_menu, dict) and message_menu.get("chat_id"):
