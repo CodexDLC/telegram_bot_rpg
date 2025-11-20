@@ -24,6 +24,15 @@ router = Router(name="tutorial_skill_router")
 async def start_skill_phase_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     """
     Обрабатывает начало фазы выбора навыков в туториале.
+
+    Этот хэндлер запускается, когда пользователь нажимает кнопку,
+    соответствующую началу выбора навыков. Он инициализирует
+    сервис туториала и отображает первый шаг квеста.
+
+    Args:
+        call: Объект CallbackQuery, инициировавший вызов.
+        state: Контекст состояния FSM для управления состоянием пользователя.
+        bot: Экземпляр бота для взаимодействия с API Telegram.
     """
     if not call.from_user:
         log.warning("Handler 'start_skill_phase_handler' received update without 'from_user'.")
@@ -84,6 +93,16 @@ async def in_skills_progres_handler(
 ) -> None:
     """
     Обрабатывает шаги пользователя в процессе выбора навыков.
+
+    Этот хэндлер вызывается на каждом шаге квеста выбора навыков.
+    Он использует TutorialServiceSkills для получения следующего шага,
+    обновляет сообщение и сохраняет выбор пользователя.
+
+    Args:
+        call: Объект CallbackQuery от пользователя.
+        state: Контекст состояния FSM.
+        callback_data: Распарсенные данные из callback-кнопки.
+        bot: Экземпляр бота.
     """
     if not call.from_user:
         log.warning("Handler 'in_skills_progres_handler' received update without 'from_user'.")
@@ -172,6 +191,14 @@ async def skill_confirm_handler(
 ) -> None:
     """
     Обрабатывает финальный выбор в туториале по навыкам (выбор профессии/лута).
+
+    Этот хэндлер:
+    1. Сохраняет финальный выбор.
+    2. Вызывает сервис для "финализации" навыков (разблокировка в БД,
+       смена game_stage).
+    3. Обновляет UI на финальное сообщение "пробуждения".
+    4. Очищает FSM от данных туториала.
+    5. Переводит игрока в состояние лобби.
     """
     if not call.from_user or not call.message:
         log.warning("Handler 'skill_confirm_handler' received update without 'from_user' or 'message'.")
