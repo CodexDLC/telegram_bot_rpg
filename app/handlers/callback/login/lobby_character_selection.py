@@ -43,9 +43,10 @@ async def select_or_delete_character_handler(
 
     Args:
         call (CallbackQuery): Callback от выбора персонажа.
+        callback_data (LobbySelectionCallback): Данные обратного вызова.
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
-        callback_data:
+        session (AsyncSession): Сессия базы данных.
 
     Returns:
         None
@@ -176,6 +177,13 @@ async def confirm_delete_handler(
 ) -> None:
     """
     Обрабатывает подтверждение ("Да") или отмену ("Нет") удаления персонажа.
+
+    Args:
+        call (CallbackQuery): Входящий callback.
+        state (FSMContext): Состояние FSM.
+        callback_data (LobbySelectionCallback): Данные обратного вызова.
+        bot (Bot): Экземпляр бота.
+        session (AsyncSession): Сессия базы данных.
     """
 
     if not call.from_user or not call.message:
@@ -265,6 +273,12 @@ async def confirm_delete_handler(
 async def logout_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
     """
     Обрабатывает выход из игрового мира обратно в лобби.
+
+    Args:
+        call (CallbackQuery): Входящий callback.
+        state (FSMContext): Состояние FSM.
+        bot (Bot): Экземпляр бота.
+        session (AsyncSession): Сессия базы данных.
     """
     if not call.from_user:
         log.warning("Хэндлер 'logout_handler' получил обновление без 'from_user'.")
@@ -326,6 +340,12 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     """
     Обрабатывает нажатие кнопки "Войти в игру".
     Реализует вход или редирект в туториал в зависимости от game_stage.
+
+    Args:
+        call (CallbackQuery): Входящий callback.
+        state (FSMContext): Состояние FSM.
+        bot (Bot): Экземпляр бота.
+        session (AsyncSession): Сессия базы данных.
     """
     if not call.from_user:
         log.warning("Хэндлер 'start_logging_handler' получил обновление без 'from_user'.")

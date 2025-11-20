@@ -30,10 +30,10 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, 
     выбора. Если нет, запускает процесс создания нового персонажа.
 
     Args:
-        session:
         call (CallbackQuery): Входящий callback от кнопки.
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
+        session (AsyncSession): Сессия базы данных.
 
     Returns:
         None
@@ -119,10 +119,10 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
     Обрабатывает нажатие "Создать нового персонажа" из лобби.
 
     Args:
-        session
         call (CallbackQuery): Входящий callback от кнопки "Создать".
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
+        session (AsyncSession): Сессия базы данных.
 
     Returns:
         None

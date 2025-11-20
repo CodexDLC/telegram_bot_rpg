@@ -278,6 +278,7 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: 
         call (CallbackQuery): Callback от кнопки подтверждения.
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
+        session (AsyncSession): Сессия базы данных.
 
     Returns:
         None
