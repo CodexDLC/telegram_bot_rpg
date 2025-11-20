@@ -33,6 +33,7 @@ async def character_modifier_group_handler(
         state (FSMContext): Состояние FSM.
         bot (Bot): Экземпляр бота.
         callback_data (StatusModifierCallback): Данные из callback.
+        session (AsyncSession): Сессия для работы с базой данных.
 
     Returns:
         None
