@@ -37,14 +37,8 @@ async def global_logout_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     message_menu = session_context.get("message_menu")
 
-    # 2. Полностью очищаем FSM
-    clean_session = SessionDataDTO(
-        user_id=call.from_user.id, message_menu=message_menu, char_id=None, message_content=None
-    )
-
-    # Перезаписываем состояние (set_data заменяет всё, что было)
-    await state.set_data(await fsm_store(clean_session))  # Или просто словарь с ключом
-    await state.set_state(None)  # Сбрасываем стейт
+    # 2. Сбрасываем FSM state
+    await state.set_state(None)
 
     # 3. Восстанавливаем ВЕРХНЕЕ сообщение (message_menu)
     if message_menu and isinstance(message_menu, dict) and message_menu.get("chat_id"):
@@ -87,6 +81,9 @@ async def global_logout_handler(call: CallbackQuery, state: FSMContext, bot: Bot
         except TelegramAPIError as e:
             log.warning(f"Не удалось удалить message_content {message_content_data[1]} при logout: {e}")
 
-    # 5. Сохраняем только message_menu обратно в (теперь уже чистый) FSM
+    # 5. Сохраняем только необходимое ядро в FSM, перезаписывая все старые данные
     if message_menu:
-        await state.update_data({FSM_CONTEXT_KEY: {"message_menu": message_menu}})
+        clean_session = SessionDataDTO(
+            user_id=call.from_user.id, message_menu=message_menu, char_id=None, message_content=None
+        )
+        await state.set_data({FSM_CONTEXT_KEY: await fsm_store(clean_session)})
