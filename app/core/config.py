@@ -78,3 +78,7 @@ REDIS_URL: str = redis_url_value
 
 bug_report_channel_id_str = os.getenv("BUG_REPORT_CHANNEL_ID")
 BUG_REPORT_CHANNEL_ID: int | None = int(bug_report_channel_id_str) if bug_report_channel_id_str else None
+
+
+SYSTEM_USER_ID = 2_000_000_000
+SYSTEM_CHAR_ID = 2_000_000_000

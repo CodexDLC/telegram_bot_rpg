@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database.model_orm.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
+    from .inventory import InventoryItem
     from .modifiers import CharacterModifiers
     from .skill import CharacterSkillProgress, CharacterSkillRate
     from .user import User
@@ -39,6 +40,8 @@ class Character(Base, TimestampMixin):
             со ставками навыков персонажа.
         skill_progress (Mapped[List["CharacterSkillProgress"]]): Связь "один-ко-многим"
             с прогрессом навыков персонажа.
+        inventory (Mapped[list["InventoryItem"]]): Связь "один-ко-многим" с инвентарем
+            персонажа.
 
         created_at, updated_at: Временные метки (наследуются от TimestampMixin).
     """
@@ -61,6 +64,7 @@ class Character(Base, TimestampMixin):
     skill_progress: Mapped[list[CharacterSkillProgress]] = relationship(
         back_populates="character", cascade="all, delete-orphan"
     )
+    inventory: Mapped[list[InventoryItem]] = relationship(back_populates="character", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         # 3. ИСПРАВЬТЕ ИМЯ КЛАССА В ВЫВОДЕ
@@ -69,19 +73,18 @@ class Character(Base, TimestampMixin):
 
 class CharacterStats(Base, TimestampMixin):
     """
-
     ORM-модель для таблицы `character_stats`.
 
-    Хранит основные характеристики (S.P.E.C.I.A.L.) персонажа.
-    Связана с `Characters` отношением "один-к-одному".
+    Хранит основные характеристики персонажа.
+    Связана с `Character` отношением "один-к-одному".
 
     Attributes:
         character_id (Mapped[int]): ID персонажа (первичный и внешний ключ).
-        strength, perception, endurance, charisma, intelligence, agility, luck:
+        strength, agility, endurance, intelligence, wisdom, men, perception, charisma, luck:
             Числовые значения характеристик.
 
-        character (Mapped["Characters"]): Обратная связь "один-к-одному" с моделью
-            Characters.
+        character (Mapped["Character"]): Обратная связь "один-к-одному" с моделью
+            Character.
 
         created_at, updated_at: Временные метки (наследуются от TimestampMixin).
     """

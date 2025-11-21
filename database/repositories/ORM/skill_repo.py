@@ -31,7 +31,6 @@ class SkillRateRepo(ISkillRateRepo):
         char_id = rates_data[0].get("character_id")
         log.debug(f"Запрос на UPSERT {len(rates_data)} ставок БСО для character_id={char_id}")
 
-        # ИСПРАВЛЕНО: Используем `sqlite_insert` вместо `pg_insert`
         stmt = sqlite_insert(CharacterSkillRate).values(rates_data)
 
         # ИСПРАВЛЕНО: Используем синтаксис on_conflict_do_update для SQLite
