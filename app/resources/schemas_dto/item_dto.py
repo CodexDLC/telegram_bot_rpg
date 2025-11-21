@@ -14,10 +14,10 @@ class ItemType(StrEnum):
 
 class ItemRarity(StrEnum):
     COMMON = "common"  # 0 бонусов
-    UNCOMMON = "uncommon"  # 1-2 бонуса
-    RARE = "rare"  # 2-3 бонуса
-    EPIC = "epic"  # 3-4 бонуса + усиленные статы
-    LEGENDARY = "legendary"  # 4+ бонусов + уникальная механика
+    UNCOMMON = "uncommon"  # 1 бонус
+    RARE = "rare"  # 2 бонуса
+    EPIC = "epic"  # 3 бонуса + усиленные статы
+    LEGENDARY = "legendary"  # 4 бонуса + уникальная механика
 
 
 # --- Бонусы ---
