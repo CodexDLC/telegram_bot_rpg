@@ -40,6 +40,7 @@ class InventoryRepo(IInventoryRepo):
             rarity=rarity,
             location=location,
             item_data=item_data,
+            quantity=quantity,
         )
 
         try:
