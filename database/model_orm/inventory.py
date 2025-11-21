@@ -43,7 +43,7 @@ class InventoryItem(Base):
     # - stats (урон, защита)
     # - bonuses (словарь +сила, +крит)
     # - durability, enchant_level
-    item_data: Mapped[dict] = mapped_column(JSON, default={})
+    item_data: Mapped[dict] = mapped_column(JSON, default=dict)
 
     # Связь
     character: Mapped[Character] = relationship(back_populates="inventory")
