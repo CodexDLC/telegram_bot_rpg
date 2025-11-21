@@ -81,4 +81,4 @@ BUG_REPORT_CHANNEL_ID: int | None = int(bug_report_channel_id_str) if bug_report
 
 
 SYSTEM_USER_ID = 2_000_000_000
-SYSTEM_CHAR_ID = 2_000_000_000
+SYSTEM_CHAR_ID = SYSTEM_USER_ID
