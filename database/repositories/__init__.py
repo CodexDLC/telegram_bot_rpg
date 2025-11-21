@@ -4,12 +4,14 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
+from database.db_contract.i_inventory_repo import IInventoryRepo
 from database.db_contract.i_modifiers_repo import ICharacterModifiersRepo
 from database.db_contract.i_skill_repo import ISkillProgressRepo, ISkillRateRepo
 
 # 2. Мы импортируем КОНТРАКТЫ (Интерфейсы)
 from database.db_contract.i_users_repo import IUserRepo
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM, CharacterStatsRepoORM
+from database.repositories.ORM.inventory_repo import InventoryRepo
 from database.repositories.ORM.modifiers_repo import CharacterModifiersRepo
 from database.repositories.ORM.skill_repo import SkillProgressRepo, SkillRateRepo
 from database.repositories.ORM.users_repo_orm import UsersRepoORM
@@ -68,3 +70,14 @@ def get_modifiers_repo(session: AsyncSession) -> ICharacterModifiersRepo:
     """
 
     return CharacterModifiersRepo(session=session)
+
+
+def get_inventory_repo(session: AsyncSession) -> IInventoryRepo:
+    """
+    Эта функция - ЕДИНСТВЕННОЕ
+    место, которое знает,
+    какую реализацию IInventoryRepo
+    мы используем.
+    """
+
+    return InventoryRepo(session=session)
