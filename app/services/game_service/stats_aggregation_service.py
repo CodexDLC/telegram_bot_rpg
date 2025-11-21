@@ -112,7 +112,7 @@ class StatsAggregationService:
         for key, value in data.items():
             if target_keys is not None and key not in target_keys:
                 continue
-            if not value or isinstance(value, dict):
+            if not isinstance(value, (int, float)):
                 continue
             pool[key]["sources"][source_name] = value
             pool[key]["total"] += value
