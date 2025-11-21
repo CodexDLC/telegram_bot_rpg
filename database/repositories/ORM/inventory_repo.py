@@ -132,7 +132,8 @@ class InventoryRepo(IInventoryRepo):
         try:
             await self.session.execute(stmt)
             return True
-        except SQLAlchemyError:
+        except SQLAlchemyError as e:
+            log.exception(f"Ошибка перемещения предмета {inventory_id}: {e}")
             return False
 
     async def delete_item(self, inventory_id: int) -> bool:
