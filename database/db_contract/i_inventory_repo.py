@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from app.resources.schemas_dto.item_dto import InventoryItemDTO
-from database.model_orm.inventory import InventoryItem
 
 
 class IInventoryRepo(ABC):
@@ -109,23 +108,5 @@ class IInventoryRepo(ABC):
         - Заточка (изменился enchant_level).
         - Поломка/Починка (изменилась durability).
         - Реролл бонусов (изменились bonuses).
-        """
-        pass
-
-    @abstractmethod
-    def _to_dto(self, orm_item: InventoryItem) -> InventoryItemDTO:
-        """
-        Служебный метод маппинга.
-        Конвертирует "плоскую" строку БД (InventoryItem) во вложенную структуру (InventoryItemDTO).
-
-        Задача метода:
-        1. Взять JSON из `orm_item.item_data`.
-        2. Разделить данные на две части для DTO:
-           - `item`: "Шаблонные" данные (тип, имя, вес, базовые статы).
-           - `instance_data`: Уникальные данные (сгенерированные бонусы, заточка, переопределение имени).
-        3. Вернуть валидный Pydantic объект.
-
-        :param orm_item: Объект SQLAlchemy (строка таблицы).
-        :return: Объект InventoryItemDTO, готовый к отправке в сервис/UI.
         """
         pass

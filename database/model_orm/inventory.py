@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, ForeignKey, String
+from sqlalchemy import JSON, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.model_orm.base import Base
@@ -36,6 +36,8 @@ class InventoryItem(Base):
 
     # Где лежит: inventory, equipped, auction, bank
     location: Mapped[str] = mapped_column(String(20), default="inventory")
+
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
 
     # --- JSON "PAYLOAD" ---
     # Здесь лежит ВСЁ остальное:

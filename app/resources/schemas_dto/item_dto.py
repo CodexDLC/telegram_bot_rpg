@@ -90,6 +90,7 @@ class AccessoryItemDTO(BaseModel):
     rarity: ItemRarity
     data: AccessoryData
 
+
 class ConsumableItemDTO(BaseModel):
     inventory_id: int
     item_type: Literal[ItemType.CONSUMABLE]
