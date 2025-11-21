@@ -90,6 +90,15 @@ class AccessoryItemDTO(BaseModel):
     rarity: ItemRarity
     data: AccessoryData
 
+class ConsumableItemDTO(BaseModel):
+    inventory_id: int
+    item_type: Literal[ItemType.CONSUMABLE]
+    subtype: str
+    rarity: ItemRarity
+    data: ConsumableData
+
 
 # Полиморфный тип
-InventoryItemDTO = Annotated[WeaponItemDTO | ArmorItemDTO | AccessoryItemDTO, Field(discriminator="item_type")]
+InventoryItemDTO = Annotated[
+    WeaponItemDTO | ArmorItemDTO | AccessoryItemDTO | ConsumableItemDTO, Field(discriminator="item_type")
+]
