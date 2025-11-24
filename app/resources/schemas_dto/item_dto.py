@@ -10,6 +10,7 @@ class ItemType(StrEnum):
     ARMOR = "armor"
     ACCESSORY = "accessory"
     CONSUMABLE = "consumable"
+    CONTAINER = "container"
 
 
 class ItemRarity(StrEnum):
@@ -31,6 +32,7 @@ class ItemCoreData(BaseModel):
     base_price: int  # Расчитывается формулой от рарности
     weight: float
 
+    material: str
     # Бонусы (те самые аффиксы, которые наролил генератор)
     bonuses: ItemBonuses = Field(default_factory=dict)
 
