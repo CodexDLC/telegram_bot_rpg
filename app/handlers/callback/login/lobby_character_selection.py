@@ -343,12 +343,6 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     """
     Обрабатывает нажатие кнопки "Войти в игру".
     Реализует вход или редирект в туториал в зависимости от game_stage.
-
-    Args:
-        call (CallbackQuery): Входящий callback.
-        state (FSMContext): Состояние FSM.
-        bot (Bot): Экземпляр бота.
-        session (AsyncSession): Сессия базы данных.
     """
     if not call.from_user:
         log.warning("Хэндлер 'start_logging_handler' получил обновление без 'from_user'.")
@@ -359,6 +353,7 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     state_data = await state.get_data()
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     char_id = session_context.get("char_id")
+
     # Нам нужны данные о сообщении, чтобы редактировать его
     message_content: dict[str, Any] | None = session_context.get("message_content")
     message_menu: dict[str, Any] | None = session_context.get("message_menu")
@@ -376,18 +371,17 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     anim_service = UIAnimationService(bot=bot, message_data=session_dto)
     login_service = LoginService(char_id=char_id, state_data=state_data)
 
-    async def run_login():
+    async def run_logic():
         return await login_service.handle_login(session=session)
 
     results = await asyncio.gather(
         anim_service.animate_loading(duration=2.0, text="📡 <b>Установка нейро-связи...</b>"),
-        run_login(),
+        run_logic(),
     )
 
     login_result = results[1]
 
     # --- 3. Обработка РЕДИРЕКТА (Если не IN_GAME) ---
-    # Если вернулась строка — это название стадии, на которой застрял игрок
     if isinstance(login_result, str):
         game_stage = login_result
         log.info(f"Редирект логина: char_id={char_id} имеет стадию '{game_stage}'. Запуск сценария восстановления.")
@@ -395,12 +389,27 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
         # Очищаем лишнее из FSM, оставляя ядро (user_id, char_id...)
         await fsm_clean_core_state(state=state, event_source=call)
 
+        # 🔥 ФИКС: ОБНОВЛЕНИЕ ВЕРХНЕГО МЕНЮ ПРИ РЕДИРЕКТЕ 🔥
+        # Чтобы убрать кнопку "Войти" и показать "Выйти" (Logout)
+        if message_menu:
+            try:
+                ms = MenuService(game_stage=game_stage, state_data=await state.get_data())
+                menu_text, menu_kb = ms.get_data_menu()
+
+                await bot.edit_message_text(
+                    chat_id=message_menu["chat_id"],
+                    message_id=message_menu["message_id"],
+                    text=menu_text,
+                    reply_markup=menu_kb,
+                    parse_mode="HTML",
+                )
+                log.debug(f"Меню обновлено под стадию '{game_stage}' при редиректе.")
+            except TelegramAPIError as e:
+                log.warning(f"Не удалось обновить меню при редиректе: {e}")
+
         # === ВЕТКА 1: ТУТОРИАЛ СТАТОВ (S.P.E.C.I.A.L.) ===
         if game_stage == GameStage.TUTORIAL_STATS:
-            # [ИМЯ ПЕРЕМЕННОЙ]: tut_stats_service (Явно указываем тип)
             tut_stats_service = TutorialServiceStats(char_id=char_id)
-
-            # Вызываем метод именно у stats-сервиса
             text, kb = tut_stats_service.get_restart_stats()
 
             await bot.edit_message_text(
@@ -418,11 +427,7 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
         # === ВЕТКА 2: ТУТОРИАЛ СКИЛЛОВ (ВЫБОР КЛАССА) ===
         elif game_stage == GameStage.TUTORIAL_SKILL:
             skill_choices_list: list[str] = []
-
-            # [ИМЯ ПЕРЕМЕННОЙ]: tut_skill_service (Теперь mypy видит, что это другой тип)
             tut_skill_service = TutorialServiceSkills(skills_db=skill_choices_list)
-
-            # Теперь mypy знает, что у tut_skill_service есть метод get_start_data
             text_skill, kb_skill = tut_skill_service.get_start_data()
 
             if text_skill and kb_skill:
@@ -441,17 +446,11 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
                 await Err.generic_error(call)
             return
 
-        # === ВЕТКА: CREATION (Если вдруг создали, но не назвали) ===
+        # === ВЕТКА: CREATION ===
         elif game_stage == GameStage.CREATION:
-            log.info(f"Char_id={char_id} не завершил создание. Редирект в start_creation_handler.")
-
             if not isinstance(message_menu, dict):
-                log.error(f"User {user_id}: 'message_menu' не найден в FSM для редиректа в CREATION.")
                 await Err.generic_error(call)
                 return
-
-            # Просто передаем управление хэндлеру создания.
-            # Он сам обновит меню, контент и выставит нужный State (choosing_gender).
             await start_creation_handler(
                 call=call, state=state, bot=bot, user_id=user_id, char_id=char_id, message_menu=message_menu
             )
