@@ -4,8 +4,6 @@ from loguru import logger as log
 
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 
-# from app.resources.schemas_dto.modifier_dto import CharacterModifiersDTO # TODO: REFACTOR FOR SYMBIOTE
-
 PERCENT_KEYS = {
     "physical_damage_bonus",
     "physical_penetration",
@@ -72,8 +70,8 @@ class ModifierFormatters:
 
     @staticmethod
     def format_stats_list(
-        data: dict[str, Any],  # group_data из MODIFIER_HIERARCHY
-        dto_to_use: CharacterStatsReadDTO,  # | CharacterModifiersDTO, # TODO: REFACTOR FOR SYMBIOTE
+        data: dict[str, Any],
+        dto_to_use: CharacterStatsReadDTO,
         actor_name: str,
     ) -> str | None:
         """

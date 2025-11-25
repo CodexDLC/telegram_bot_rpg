@@ -5,8 +5,6 @@ from loguru import logger as log
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.services.game_service.skill.rate_service import calculate_rates_data
 from database.db_contract.i_characters_repo import ICharacterStatsRepo
-
-# from database.db_contract.i_modifiers_repo import ICharacterModifiersRepo # TODO: REFACTOR FOR SYMBIOTE
 from database.db_contract.i_skill_repo import ISkillProgressRepo, ISkillRateRepo
 
 
@@ -20,13 +18,7 @@ class CharacterSkillsService:
     реализации от хэндлеров.
     """
 
-    def __init__(
-        self,
-        stats_repo: ICharacterStatsRepo,
-        rate_repo: ISkillRateRepo,
-        progress_repo: ISkillProgressRepo,
-        # modifiers_repo: ICharacterModifiersRepo, # TODO: REFACTOR FOR SYMBIOTE
-    ):
+    def __init__(self, stats_repo: ICharacterStatsRepo, rate_repo: ISkillRateRepo, progress_repo: ISkillProgressRepo):
         """
         Инициализирует сервис с помощью инъекции зависимостей.
 
@@ -38,7 +30,6 @@ class CharacterSkillsService:
         self._stats_repo = stats_repo
         self._rate_repo = rate_repo
         self._progress_repo = progress_repo
-        # self._modifiers_repo = modifiers_repo # TODO: REFACTOR FOR SYMBIOTE
         log.debug(f"{self.__class__.__name__} инициализирован с репозиториями.")
 
     async def finalize_tutorial_stats(
@@ -82,11 +73,6 @@ class CharacterSkillsService:
         rates_data = calculate_rates_data(character_id, final_stats_dto)
         await self._rate_repo.upsert_skill_rates(rates_data)
         log.debug(f"БСО для character_id={character_id} успешно рассчитаны и сохранены.")
-
-        # Шаг 4: Расчитывает модификаторы от статов и сохронять в таблицу
-        # log.debug(f"Шаг 4/4: Расчет и сохранение модификаторов для character_id={character_id}") # TODO: REFACTOR FOR SYMBIOTE
-        # modifiers_data_dto = MCService.calculate_all_modifiers_for_stats(final_stats_dto) # TODO: REFACTOR FOR SYMBIOTE
-        # await self._modifiers_repo.save_modifiers(character_id, modifiers_data_dto) # TODO: REFACTOR FOR SYMBIOTE
 
         log.info(f"Успешная финализация туториала для character_id={character_id}.")
         return final_stats_dto
