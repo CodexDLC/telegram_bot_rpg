@@ -21,7 +21,7 @@ class InventoryUIService(BaseUIService):
         """
         Инициализация базового UI сервиса.
         """
-        pass
+        super().__init__(char_id=char_id, state_data=state_data)
 
     async def render_main_menu(self, session: AsyncSession) -> tuple[str, InlineKeyboardMarkup]:
         """

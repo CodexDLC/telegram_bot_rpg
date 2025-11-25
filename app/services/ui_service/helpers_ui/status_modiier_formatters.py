@@ -2,8 +2,6 @@ from typing import Any
 
 from loguru import logger as log
 
-from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
-
 PERCENT_KEYS = {
     "physical_damage_bonus",
     "physical_penetration",
@@ -69,11 +67,7 @@ class ModifierFormatters:
         return final_message_text
 
     @staticmethod
-    def format_stats_list(
-        data: dict[str, Any],
-        dto_to_use: CharacterStatsReadDTO,
-        actor_name: str,
-    ) -> str | None:
+    def format_stats_list(data: dict[str, Any], dto_to_use: Any, actor_name: str) -> str | None:
         """
         Форматирует список статов ИЛИ модификаторов в <code> таблицу,
         безопасную для мобильных, в формате (Значение | Параметр).
