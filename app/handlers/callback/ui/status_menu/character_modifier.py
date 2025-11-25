@@ -71,8 +71,7 @@ async def character_modifier_group_handler(
 
             return result[0], result[1], message_content
 
-        except (ValueError, AttributeError) as e:
-            log.exception(f"Ошибка в хэндлере модификаторов: {e}")
+        except (ValueError, AttributeError, TypeError) as e:
             await Err.generic_error(call)
             return None, None, None
 
