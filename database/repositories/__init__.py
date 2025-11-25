@@ -7,14 +7,14 @@ from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterSt
 from database.db_contract.i_inventory_repo import IInventoryRepo
 from database.db_contract.i_skill_repo import ISkillProgressRepo, ISkillRateRepo
 from database.db_contract.i_symbiote_repo import ISymbioteRepo
-
-# 2. Мы импортируем КОНТРАКТЫ (Интерфейсы)
 from database.db_contract.i_users_repo import IUserRepo
+from database.db_contract.i_wallet_repo import IWalletRepo
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM, CharacterStatsRepoORM
 from database.repositories.ORM.inventory_repo import InventoryRepo
 from database.repositories.ORM.skill_repo import SkillProgressRepo, SkillRateRepo
 from database.repositories.ORM.symbiote_repo import SymbioteRepoORM
 from database.repositories.ORM.users_repo_orm import UsersRepoORM
+from database.repositories.ORM.wallet_repo import WalletRepoORM
 
 
 def get_user_repo(session: AsyncSession) -> IUserRepo:
@@ -77,3 +77,10 @@ def get_symbiote_repo(session: AsyncSession) -> ISymbioteRepo:
     Возвращает репозиторий для работы с Симбиотом.
     """
     return SymbioteRepoORM(session=session)
+
+
+def get_wallet_repo(session: AsyncSession) -> IWalletRepo:
+    """
+    Возвращает репозиторий для работы с Кошельком.
+    """
+    return WalletRepoORM(session=session)

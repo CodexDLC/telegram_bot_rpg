@@ -55,3 +55,35 @@ class InventoryItem(Base):
 
     def __repr__(self):
         return f"<Item {self.id} ({self.rarity} {self.subtype})>"
+
+
+class ResourceWallet(Base):
+    """
+    "Пространственный карман" для ресурсов.
+    Одна строка на одного персонажа.
+    Хранит ресурсы группами в JSON: {"iron_ore": 100, "gold_ore": 5}
+    """
+
+    __tablename__ = "resource_wallets"
+
+    character_id: Mapped[int] = mapped_column(
+        ForeignKey("characters.character_id", ondelete="CASCADE"), primary_key=True
+    )
+
+    # --- Группы ресурсов (как ты просил) ---
+    currency: Mapped[dict] = mapped_column(JSON, default=dict)  # Пыль, Осколки
+
+    # Сырье
+    ores: Mapped[dict] = mapped_column(JSON, default=dict)  # Руды, Камни
+    leathers: Mapped[dict] = mapped_column(JSON, default=dict)  # Шкуры, Кожа
+    fabrics: Mapped[dict] = mapped_column(JSON, default=dict)  # Ткани, Нитки
+    organics: Mapped[dict] = mapped_column(JSON, default=dict)  # Травы, Еда, Части монстров
+
+    # Компоненты
+    parts: Mapped[dict] = mapped_column(JSON, default=dict)  # Шестеренки, Эссенции
+
+    # Связь (если нужно будет получать через character.wallet)
+    # character: Mapped["Character"] = relationship(...)
+
+    def __repr__(self):
+        return f"<Wallet char_id={self.character_id}>"
