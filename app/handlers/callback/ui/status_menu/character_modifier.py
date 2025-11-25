@@ -12,7 +12,8 @@ from app.resources.fsm_states.states import FSM_CONTEX_CHARACTER_STATUS
 from app.resources.keyboards.status_callback import StatusModifierCallback
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
-from app.resources.schemas_dto.modifier_dto import CharacterModifiersDTO
+
+# from app.resources.schemas_dto.modifier_dto import CharacterModifiersDTO # TODO: REFACTOR FOR SYMBIOTE
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.helpers_ui.ui_animation_service import UIAnimationService
@@ -56,11 +57,12 @@ async def character_modifier_group_handler(
     async def run_logic():
         try:
             modifier_service = CharacterModifierUIService(char_id=char_id, key=key, state_data=state_data)
-            dto_to_use: CharacterStatsReadDTO | CharacterModifiersDTO | None
+            dto_to_use: CharacterStatsReadDTO | None  # | CharacterModifiersDTO # TODO: REFACTOR FOR SYMBIOTE
             if key == "base_stats":
                 dto_to_use = await modifier_service.get_data_stats(session)
             else:
-                dto_to_use = await modifier_service.get_data_modifier(session)
+                # dto_to_use = await modifier_service.get_data_modifier(session) # TODO: REFACTOR FOR SYMBIOTE
+                pass
 
             if not dto_to_use:
                 await Err.generic_error(call)
@@ -128,11 +130,12 @@ async def character_modifier_detail_handler(
                 return None, None, None
 
             modifier_service = CharacterModifierUIService(char_id=char_id, key=key, state_data=state_data)
-            dto_to_use: CharacterStatsReadDTO | CharacterModifiersDTO | None
+            dto_to_use: CharacterStatsReadDTO | None  # | CharacterModifiersDTO # TODO: REFACTOR FOR SYMBIOTE
             if group_key == "base_stats":
                 dto_to_use = await modifier_service.get_data_stats(session)
             else:
-                dto_to_use = await modifier_service.get_data_modifier(session)
+                # dto_to_use = await modifier_service.get_data_modifier(session) # TODO: REFACTOR FOR SYMBIOTE
+                pass
 
             if not dto_to_use:
                 log.warning(f"User {user_id}: DTO не найдены для char_id={char_id}.")

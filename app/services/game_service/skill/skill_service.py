@@ -3,10 +3,10 @@
 from loguru import logger as log
 
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
-from app.services.game_service.modifiers_calculator_service import ModifiersCalculatorService as MCService
 from app.services.game_service.skill.rate_service import calculate_rates_data
 from database.db_contract.i_characters_repo import ICharacterStatsRepo
-from database.db_contract.i_modifiers_repo import ICharacterModifiersRepo
+
+# from database.db_contract.i_modifiers_repo import ICharacterModifiersRepo # TODO: REFACTOR FOR SYMBIOTE
 from database.db_contract.i_skill_repo import ISkillProgressRepo, ISkillRateRepo
 
 
@@ -25,7 +25,7 @@ class CharacterSkillsService:
         stats_repo: ICharacterStatsRepo,
         rate_repo: ISkillRateRepo,
         progress_repo: ISkillProgressRepo,
-        modifiers_repo: ICharacterModifiersRepo,
+        # modifiers_repo: ICharacterModifiersRepo, # TODO: REFACTOR FOR SYMBIOTE
     ):
         """
         Инициализирует сервис с помощью инъекции зависимостей.
@@ -38,14 +38,14 @@ class CharacterSkillsService:
         self._stats_repo = stats_repo
         self._rate_repo = rate_repo
         self._progress_repo = progress_repo
-        self._modifiers_repo = modifiers_repo
+        # self._modifiers_repo = modifiers_repo # TODO: REFACTOR FOR SYMBIOTE
         log.debug(f"{self.__class__.__name__} инициализирован с репозиториями.")
 
     async def finalize_tutorial_stats(
         self, character_id: int, bonus_stats: dict[str, int]
     ) -> CharacterStatsReadDTO | None:
         """
-        Финализирует распределение очков после туториала S.P.E.C.I.A.L.
+        Финализирует распределение очков после туториала характеристик.
 
         Выполняет 3 критических шага в рамках одной транзакции (предполагается,
         что сессия управляется извне, например, через Unit of Work):
@@ -64,7 +64,7 @@ class CharacterSkillsService:
         """
         log.info(f"Начало финализации статов туториала для character_id={character_id} с бонусами: {bonus_stats}")
 
-        # Шаг 1: Применение финальных статов S.P.E.C.I.A.L.
+        # Шаг 1: Применение финальных базовых характеристик.
         log.debug(f"Шаг 1/3: Добавление бонусных статов для character_id={character_id}.")
         final_stats_dto = await self._stats_repo.add_stats(character_id, bonus_stats)
         if not final_stats_dto:
@@ -84,9 +84,9 @@ class CharacterSkillsService:
         log.debug(f"БСО для character_id={character_id} успешно рассчитаны и сохранены.")
 
         # Шаг 4: Расчитывает модификаторы от статов и сохронять в таблицу
-        log.debug(f"Шаг 4/4: Расчет и сохранение модификаторов для character_id={character_id}")
-        modifiers_data_dto = MCService.calculate_all_modifiers_for_stats(final_stats_dto)
-        await self._modifiers_repo.save_modifiers(character_id, modifiers_data_dto)
+        # log.debug(f"Шаг 4/4: Расчет и сохранение модификаторов для character_id={character_id}") # TODO: REFACTOR FOR SYMBIOTE
+        # modifiers_data_dto = MCService.calculate_all_modifiers_for_stats(final_stats_dto) # TODO: REFACTOR FOR SYMBIOTE
+        # await self._modifiers_repo.save_modifiers(character_id, modifiers_data_dto) # TODO: REFACTOR FOR SYMBIOTE
 
         log.info(f"Успешная финализация туториала для character_id={character_id}.")
         return final_stats_dto

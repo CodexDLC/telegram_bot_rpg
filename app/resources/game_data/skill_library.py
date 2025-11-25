@@ -28,13 +28,6 @@ SKILL_RECIPES = {
         "prerequisite_skill": None,
         "prerequisite_title": None,
     },
-    "magic_weapons": {
-        "stat_weights": {"intelligence": 2.0, "charisma": 1.0},
-        "title_ru": "Магическое оружие",
-        "xp_multiplier": 1.0,
-        "prerequisite_skill": None,
-        "prerequisite_title": None,
-    },
     # ------------------
     # 🛡 Уровень 1: ЗАЩИТНЫЕ НАВЫКИ
     # ------------------
@@ -94,68 +87,6 @@ SKILL_RECIPES = {
         "stat_weights": {"strength": 2.0, "intelligence": 1.0},
         "title_ru": "Настойчивость",
         "xp_multiplier": 0.8,
-        "prerequisite_skill": None,
-        "prerequisite_title": None,
-    },
-    # ------------------
-    # 🌪️ Уровень 1: ШКОЛЫ МАГИИ Стихий
-    # ------------------
-    "fire_magic": {
-        "stat_weights": {"intelligence": 2.0, "wisdom": 1.0},
-        "title_ru": "Магия Огня",
-        "xp_multiplier": 1.2,
-        "prerequisite_skill": None,
-        "prerequisite_title": None,
-    },
-    "air_magic": {
-        "stat_weights": {"intelligence": 2.0, "wisdom": 1.0},
-        "title_ru": "Магия Воздуха",
-        "xp_multiplier": 1.2,
-        "prerequisite_skill": None,
-        "prerequisite_title": None,
-    },
-    "water_magic": {
-        "stat_weights": {"intelligence": 2.0, "wisdom": 1.0},
-        "title_ru": "Магия Воды",
-        "xp_multiplier": 1.2,
-        "prerequisite_skill": None,
-        "prerequisite_title": None,
-    },
-    "earth_magic": {
-        "stat_weights": {"intelligence": 2.0, "wisdom": 1.0},
-        "title_ru": "Магия Земли",
-        "xp_multiplier": 1.2,
-        "prerequisite_skill": None,
-        "prerequisite_title": None,
-    },
-    # ------------------
-    # 🔮 Уровень 1: ШКОЛЫ МАГИИ аспектов
-    # ------------------
-    "dark_magic": {
-        "stat_weights": {"perception": 2.0, "intelligence": 1.0},
-        "title_ru": "Магия Тьмы",
-        "xp_multiplier": 1.5,
-        "prerequisite_skill": None,
-        "prerequisite_title": None,
-    },
-    "light_magic": {
-        "stat_weights": {"perception": 2.0, "intelligence": 1.0},
-        "title_ru": "Магия Света",
-        "xp_multiplier": 1.5,
-        "prerequisite_skill": None,
-        "prerequisite_title": None,
-    },
-    "arcane_magic": {
-        "stat_weights": {"perception": 2.0, "intelligence": 1.0},
-        "title_ru": "Тайная Магия",
-        "xp_multiplier": 1.5,
-        "prerequisite_skill": None,
-        "prerequisite_title": None,
-    },
-    "nature_magic": {
-        "stat_weights": {"charisma": 2.0, "intelligence": 1.0},
-        "title_ru": "Магия Природы",
-        "xp_multiplier": 1.2,
         "prerequisite_skill": None,
         "prerequisite_title": None,
     },
@@ -333,13 +264,6 @@ SKILL_RECIPES = {
         "title_ru": "Продвинутый дальний бой",
         "xp_multiplier": 5.0,
         "prerequisite_skill": "ranged_combat",
-        "prerequisite_title": "⚜️ Грандмастер",
-    },
-    "advanced_magic_weapons": {
-        "stat_weights": {"intelligence": 2.0, "charisma": 1.0},
-        "title_ru": "Продвинутое маг. оружие",
-        "xp_multiplier": 5.0,
-        "prerequisite_skill": "magic_weapons",
         "prerequisite_title": "⚜️ Грандмастер",
     },
 }

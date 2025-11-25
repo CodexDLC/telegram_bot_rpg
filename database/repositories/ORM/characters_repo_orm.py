@@ -13,7 +13,7 @@ from app.resources.schemas_dto.character_dto import (
     CharacterStatsUpdateDTO,
 )
 from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
-from database.model_orm import CharacterModifiers
+from database.model_orm import CharacterSymbiote
 from database.model_orm.character import Character, CharacterStats
 
 
@@ -41,7 +41,7 @@ class CharactersRepoORM(ICharactersRepo):
             orm_character = Character(**character_data_dict)
             # SQLAlchemy автоматически создаст CharacterStats из-за cascade
             orm_character.stats = CharacterStats()
-            orm_character.modifiers = CharacterModifiers()
+            orm_character.symbiote = CharacterSymbiote()
 
             # Добавление в сессию
 

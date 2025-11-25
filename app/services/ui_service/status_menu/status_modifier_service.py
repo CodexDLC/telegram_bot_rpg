@@ -10,11 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.resources.game_data.status_menu.modifer_group_data import MODIFIER_HIERARCHY
 from app.resources.keyboards.status_callback import StatusModifierCallback, StatusNavCallback
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
-from app.resources.schemas_dto.modifier_dto import CharacterModifiersDTO
+
+# from app.resources.schemas_dto.modifier_dto import CharacterModifiersDTO # TODO: REFACTOR FOR SYMBIOTE
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.helpers_ui.status_modiier_formatters import ModifierFormatters as ModifierF
-from database.repositories import get_character_stats_repo, get_modifiers_repo
+
+# from database.repositories import get_character_stats_repo, get_modifiers_repo # TODO: REFACTOR FOR SYMBIOTE
+from database.repositories import get_character_stats_repo
 
 
 class CharacterModifierUIService(BaseUIService):
@@ -40,7 +43,8 @@ class CharacterModifierUIService(BaseUIService):
         self.key = key
 
     def status_group_modifier_message(
-        self, dto_to_use: CharacterStatsReadDTO | CharacterModifiersDTO
+        self,
+        dto_to_use: CharacterStatsReadDTO,  # | CharacterModifiersDTO # TODO: REFACTOR FOR SYMBIOTE
     ) -> tuple[str | None, InlineKeyboardMarkup] | tuple[str, None]:
         """
         Формирует сообщение со списком модификаторов в выбранной группе.
@@ -73,7 +77,9 @@ class CharacterModifierUIService(BaseUIService):
         return kb.as_markup()
 
     def status_detail_modifier_message(
-        self, dto_to_use: CharacterStatsReadDTO | CharacterModifiersDTO, group_key: str | None
+        self,
+        dto_to_use: CharacterStatsReadDTO,
+        group_key: str | None,  # | CharacterModifiersDTO, # TODO: REFACTOR FOR SYMBIOTE
     ) -> tuple[str | None, InlineKeyboardMarkup] | tuple[str, None]:
         """
         Формирует сообщение с детальной информацией (карточкой) о модификаторе.
@@ -122,18 +128,18 @@ class CharacterModifierUIService(BaseUIService):
         kb.row(InlineKeyboardButton(text="[ ◀️ Назад к группе ]", callback_data=back_callback))
         return kb.as_markup()
 
-    async def get_data_modifier(self, session: AsyncSession) -> CharacterModifiersDTO | None:
-        try:
-            modifier_repo = get_modifiers_repo(session)
-            modifiers = await modifier_repo.get_modifiers(self.char_id)
-            if modifiers:
-                log.debug(f"Персонаж с char_id={self.char_id} успешно получен.")
-                return modifiers
-            else:
-                return None
-        except SQLAlchemyError as e:
-            log.error(f"{e}")
-            return None
+    # async def get_data_modifier(self, session: AsyncSession) -> CharacterModifiersDTO | None: # TODO: REFACTOR FOR SYMBIOTE
+    #     try:
+    #         modifier_repo = get_modifiers_repo(session)
+    #         modifiers = await modifier_repo.get_modifiers(self.char_id)
+    #         if modifiers:
+    #             log.debug(f"Персонаж с char_id={self.char_id} успешно получен.")
+    #             return modifiers
+    #         else:
+    #             return None
+    #     except SQLAlchemyError as e:
+    #         log.error(f"{e}")
+    #         return None
 
     async def get_data_stats(self, session: AsyncSession) -> CharacterStatsReadDTO | None:
         try:
