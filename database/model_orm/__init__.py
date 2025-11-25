@@ -3,8 +3,8 @@
 from .base import Base, TimestampMixin
 from .character import Character, CharacterStats
 from .inventory import InventoryItem
-from .modifiers import CharacterModifiers
 from .skill import CharacterSkillProgress, CharacterSkillRate
+from .symbiote import CharacterSymbiote
 from .user import User
 
 __all__ = [
@@ -15,6 +15,6 @@ __all__ = [
     "CharacterStats",
     "CharacterSkillRate",
     "CharacterSkillProgress",
-    "CharacterModifiers",
     "InventoryItem",
+    "CharacterSymbiote",
 ]

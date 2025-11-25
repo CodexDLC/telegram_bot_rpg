@@ -10,8 +10,8 @@ from database.model_orm.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from .inventory import InventoryItem
-    from .modifiers import CharacterModifiers
     from .skill import CharacterSkillProgress, CharacterSkillRate
+    from .symbiote import CharacterSymbiote
     from .user import User
 
 
@@ -34,8 +34,6 @@ class Character(Base, TimestampMixin):
             Позволяет получить доступ к объекту пользователя-владельца.
         stats (Mapped["CharacterStats"]): Связь "один-к-одному" с характеристиками
             персонажа.
-        modifiers (Mapped["CharacterModifiers"]): Связь "один-к-одному" с модификаторами
-            персонажа.
         skill_rate (Mapped[List["CharacterSkillRate"]]): Связь "один-ко-многим"
             со ставками навыков персонажа.
         skill_progress (Mapped[List["CharacterSkillProgress"]]): Связь "один-ко-многим"
@@ -57,13 +55,16 @@ class Character(Base, TimestampMixin):
     # Связи
     user: Mapped[User] = relationship(back_populates="characters")
     stats: Mapped[CharacterStats] = relationship(back_populates="character", cascade="all, delete-orphan")
-    modifiers: Mapped[CharacterModifiers] = relationship(back_populates="character", cascade="all, delete-orphan")
     skill_rate: Mapped[list[CharacterSkillRate]] = relationship(
         back_populates="character", cascade="all, delete-orphan"
     )
     skill_progress: Mapped[list[CharacterSkillProgress]] = relationship(
         back_populates="character", cascade="all, delete-orphan"
     )
+    symbiote: Mapped[CharacterSymbiote] = relationship(
+        back_populates="character", cascade="all, delete-orphan", uselist=False
+    )
+
     inventory: Mapped[list[InventoryItem]] = relationship(back_populates="character", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:

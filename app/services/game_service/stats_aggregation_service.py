@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.schemas_dto.character_dto import CharacterStatsReadDTO
 from app.resources.schemas_dto.item_dto import InventoryItemDTO, ItemType
-from app.services.game_service.modifiers_calculator_service import ModifiersCalculatorService
+
+# from app.services.game_service.modifiers_calculator_service import ModifiersCalculatorService # TODO: REFACTOR FOR SYMBIOTE
 from database.repositories import get_character_stats_repo, get_inventory_repo
 
 
@@ -40,7 +41,7 @@ class StatsAggregationService:
 
         # Указываем типы для mypy
         stats_pool: defaultdict[str, StatInfo] = defaultdict(factory)
-        modifiers_pool: defaultdict[str, StatInfo] = defaultdict(factory)
+        # modifiers_pool: defaultdict[str, StatInfo] = defaultdict(factory) # TODO: REFACTOR FOR SYMBIOTE
 
         # 1. Загрузка данных
         base_stats_dto = await self.stats_repo.get_stats(char_id)
@@ -62,20 +63,20 @@ class StatsAggregationService:
         # ==========================================
         # ЭТАП 2: Расчет ПРОИЗВОДНЫХ
         # ==========================================
-        total_stats_dto = self._create_stats_dto_from_pool(stats_pool, base_stats_dto)
-        derived_mods_dto = ModifiersCalculatorService.calculate_all_modifiers_for_stats(total_stats_dto)
+        # total_stats_dto = self._create_stats_dto_from_pool(stats_pool, base_stats_dto) # TODO: REFACTOR FOR SYMBIOTE
+        # derived_mods_dto = ModifiersCalculatorService.calculate_all_modifiers_for_stats(total_stats_dto) # TODO: REFACTOR FOR SYMBIOTE
 
-        self._add_layer(
-            pool=modifiers_pool, source_name="from_stats", data=derived_mods_dto.model_dump(), target_keys=None
-        )
+        # self._add_layer( # TODO: REFACTOR FOR SYMBIOTE
+        #     pool=modifiers_pool, source_name="from_stats", data=derived_mods_dto.model_dump(), target_keys=None
+        # )
 
         # ==========================================
         # ЭТАП 3: Сбор БОНУСОВ МОДИФИКАТОРОВ
         # ==========================================
-        self._process_equipment_modifiers(modifiers_pool, equipped_items, base_keys)
+        # self._process_equipment_modifiers(modifiers_pool, equipped_items, base_keys) # TODO: REFACTOR FOR SYMBIOTE
 
         # Превращаем defaultdict в обычный dict перед возвратом
-        return {"stats": dict(stats_pool), "modifiers": dict(modifiers_pool)}
+        return {"stats": dict(stats_pool)}  # , "modifiers": dict(modifiers_pool)} # TODO: REFACTOR FOR SYMBIOTE
 
     # ==================================================
     # Приватные методы обработки
@@ -105,19 +106,19 @@ class StatsAggregationService:
                 target_keys=keys,
             )
 
-    def _process_equipment_modifiers(self, pool: PoolDict, items: ItemList, keys: set[str]):
-        """Добавляет бонусы к МОДИФИКАТОРАМ (Crit, Dmg...) от вещей"""
-        for item in items:
-            if item.item_type == ItemType.CONSUMABLE:
-                continue
+    # def _process_equipment_modifiers(self, pool: PoolDict, items: ItemList, keys: set[str]): # TODO: REFACTOR FOR SYMBIOTE
+    #     """Добавляет бонусы к МОДИФИКАТОРАМ (Crit, Dmg...) от вещей"""
+    #     for item in items:
+    #         if item.item_type == ItemType.CONSUMABLE:
+    #             continue
 
-            bonuses = self._extract_total_bonuses(item)
-            item_name = item.data.name
+    #         bonuses = self._extract_total_bonuses(item)
+    #         item_name = item.data.name
 
-            # Берем только то, чего НЕТ в списке первичных статов
-            mod_bonuses = {k: v for k, v in bonuses.items() if k not in keys}
+    #         # Берем только то, чего НЕТ в списке первичных статов
+    #         mod_bonuses = {k: v for k, v in bonuses.items() if k not in keys}
 
-            self._add_layer(pool=pool, source_name=item_name, data=mod_bonuses, target_keys=None)
+    #         self._add_layer(pool=pool, source_name=item_name, data=mod_bonuses, target_keys=None)
 
     # ==================================================
     # Технические методы (Helpers)
