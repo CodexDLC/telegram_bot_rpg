@@ -1,3 +1,4 @@
+# database/model_orm/inventory.py
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -45,7 +46,9 @@ class InventoryItem(Base):
     # - stats (урон, защита)
     # - bonuses (словарь +сила, +крит)
     # - durability, enchant_level
-    item_data: Mapped[dict] = mapped_column(JSON, default_factory=dict)
+
+    # 🔥 ИСПРАВЛЕНИЕ ЗДЕСЬ: default_factory -> default
+    item_data: Mapped[dict] = mapped_column(JSON, default=dict)
 
     # Связь
     character: Mapped[Character] = relationship(back_populates="inventory")

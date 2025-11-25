@@ -28,10 +28,7 @@ class CharactersRepoORM(ICharactersRepo):
 
     async def create_character_shell(self, character_data: CharacterShellCreateDTO) -> int:
         """
-        Создает "оболочку" персонажа и связанные с ней статы.
-
-        Создает экземпляр `Character` и `CharacterStats`, добавляет их в сессию
-        и использует `flush` для получения `character_id` до коммита.
+        Создает "оболочку" персонажа, связанные с ней статы И СИМБИОТА.
         """
         character_data_dict = character_data.model_dump()
         log.debug(f"Создание 'оболочки' персонажа для user_id={character_data.user_id}")
@@ -39,15 +36,14 @@ class CharactersRepoORM(ICharactersRepo):
         try:
             # noinspection PyArgumentList
             orm_character = Character(**character_data_dict)
-            # SQLAlchemy автоматически создаст CharacterStats из-за cascade
+
+            # 1. Создаем Статы
             orm_character.stats = CharacterStats()
+
+            # 2. Создаем Симбиота (Новая сущность)
             orm_character.symbiote = CharacterSymbiote()
 
-            # Добавление в сессию
-
             self.session.add(orm_character)
-
-            # flush() отправляет изменения в БД и синхронизирует ID
             await self.session.flush()
             log.debug(f"Выполнен flush для Character, получен character_id: {orm_character.character_id}")
 
