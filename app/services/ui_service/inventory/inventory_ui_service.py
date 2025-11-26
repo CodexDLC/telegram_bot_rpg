@@ -133,8 +133,8 @@ class InventoryUIService(BaseUIService):
         sections = {
             "equip": self.InvF.SECTION_NAMES["equip"],
             "resource": self.InvF.SECTION_NAMES["resource"],
-            "component": self.InvF.SECTION_NAMES["component"],
-            "quest": self.InvF.SECTION_NAMES["quest"],
+            # "component": self.InvF.SECTION_NAMES["component"],
+            # "quest": self.InvF.SECTION_NAMES["quest"],
         }
 
         for sec_key, sec_name in sections.items():
@@ -223,4 +223,148 @@ class InventoryUIService(BaseUIService):
         cb_back = InventoryCallback(level=0, user_id=self.user_id).pack()
         kb.row(InlineKeyboardButton(text="↩️ Назад", callback_data=cb_back))
 
+        return kb.as_markup()
+
+    async def render_item_details(self, item_id: int) -> tuple[str, InlineKeyboardMarkup]:
+        """
+        Уровень 2: Карточка предмета с блоком сравнения.
+        """
+        item = await self.inventory_service.inventory_repo.get_item_by_id(item_id)
+
+        if not item or item.character_id != self.char_id:
+            return "❌ Предмет не найден или не принадлежит вам.", self._kb_back_to_list("all", "all", 0)
+
+        # 1. Генерируем базовое описание (из Форматтера)
+        # Используем "System" как заглушку, или self.actor_name, если он есть в BaseUIService
+        details_text = self.InvF.format_item_details(item, actor_name="📦 Инфо")
+
+        # 2. Генерируем Блок Сравнения (только для экипировки)
+        comparison_block = ""
+        if item.item_type in (ItemType.WEAPON, ItemType.ARMOR, ItemType.ACCESSORY) and item.location == "inventory":
+            comparison_block = await self._generate_comparison_block(item)
+
+        # 3. Собираем итоговый текст
+        full_text = f"{details_text}\n{comparison_block}"
+
+        # 4. Клавиатура действий
+        kb = self._kb_item_details(item, self.state_data)
+
+        return full_text, kb
+
+    async def _generate_comparison_block(self, new_item: InventoryItemDTO) -> str:
+        """
+        Математика сравнения: (Новое - Старое).
+        Возвращает отформатированный блок текста.
+        """
+        # 1. Ищем, что сейчас надето в эти слоты
+        # Берем первый валидный слот для простоты сравнения (обычно chest, head и т.д. однозначны)
+        # Для колец/оружия сложнее, но для MVP берем "первое попавшееся" в этом слоте
+        target_slots = getattr(new_item.data, "valid_slots", [])
+        if not target_slots:
+            return ""
+
+        equipped_items = await self.inventory_service.get_items("equipped")
+
+        # Ищем конкурента (предмет, занимающий тот же слот)
+        old_item = None
+        for eq in equipped_items:
+            # Проверяем пересечение слотов (если хоть один совпал - это конкурент)
+            eq_slots = getattr(eq.data, "valid_slots", [])
+            if set(target_slots).intersection(set(eq_slots)):
+                old_item = eq
+                break
+
+                # Если сравнивать не с чем - не показываем блок (или пишем "Слот пуст")
+        if not old_item:
+            return "\n⚖️ <b>Сравнение:</b>\n<i>Слот свободен. Чистая прибавка.</i>"
+
+        # 2. Считаем разницу бонусов
+        diff_lines = []
+
+        # Объединяем ключи бонусов (могут быть разные статы)
+        all_bonuses = set(new_item.data.bonuses.keys()) | set(old_item.data.bonuses.keys())
+
+        # Добавляем базовые статы (Урон / Защита)
+        # Для простоты пока берем только bonuses из JSON,
+        # но в будущем сюда надо добавить damage_min/max и protection
+
+        for stat in all_bonuses:
+            new_val = new_item.data.bonuses.get(stat, 0)
+            old_val = old_item.data.bonuses.get(stat, 0)
+            diff = new_val - old_val
+
+            if diff == 0:
+                continue
+
+            # Форматирование строки
+            sign = "+" if diff > 0 else ""
+            icon = "🟢" if diff > 0 else "🔴"
+
+            # Перевод названий статов (в идеале брать из словаря)
+            stat_name = stat.replace("_", " ").capitalize()
+
+            diff_lines.append(f"{icon} {stat_name}: {sign}{diff}")
+
+        if not diff_lines:
+            return "\n⚖️ <b>Сравнение:</b>\n<i>Характеристики идентичны.</i>"
+
+        return "\n⚖️ <b>Сравнение</b> (с " + old_item.data.name + "):\n<code>" + "\n".join(diff_lines) + "</code>"
+
+    # --- КЛАВИАТУРЫ ---
+
+    def _kb_item_details(self, item: InventoryItemDTO, state_data: dict) -> InlineKeyboardMarkup:
+        kb = InlineKeyboardBuilder()
+
+        # Получаем контекст для кнопки "Назад" (откуда мы пришли?)
+        # Если мы пришли из списка, state должен помнить section/category/page.
+        # Если нет - ставим дефолт.
+        # (Пока упростим и вернем просто в список той же категории)
+
+        # Для простоты возврата используем item_type как категорию фильтра (грубо, но сработает для MVP)
+
+        # === Кнопки Действий ===
+        actions_row = []
+
+        # 1. Надеть / Снять
+        if item.location == "equipped":
+            cb_unequip = InventoryCallback(
+                level=2, user_id=self.user_id, action="unequip", item_id=item.inventory_id
+            ).pack()
+            actions_row.append(InlineKeyboardButton(text="🔻 Снять", callback_data=cb_unequip))
+
+        elif item.location == "inventory":
+            # Проверяем, можно ли надеть (тип)
+            if item.item_type in (ItemType.WEAPON, ItemType.ARMOR, ItemType.ACCESSORY):
+                cb_equip = InventoryCallback(
+                    level=2, user_id=self.user_id, action="equip", item_id=item.inventory_id
+                ).pack()
+                actions_row.append(InlineKeyboardButton(text="✅ Надеть", callback_data=cb_equip))
+
+        # 2. Выбросить / Распылить
+        cb_drop = InventoryCallback(level=2, user_id=self.user_id, action="drop", item_id=item.inventory_id).pack()
+        # Используем иконку мусорки
+        actions_row.append(InlineKeyboardButton(text="🗑", callback_data=cb_drop))
+
+        kb.row(*actions_row)
+
+        # === Кнопка Назад ===
+        # Возвращаемся на Level 1 (Список)
+        # Для точного возврата надо бы хранить page в state, но пока вернем на 0
+        cb_back = InventoryCallback(
+            level=1,
+            user_id=self.user_id,
+            section="equip",  # Тут лучше брать из state, но пока хардкод для MVP
+            category="all",
+            page=0,
+        ).pack()
+
+        kb.row(InlineKeyboardButton(text="🔙 Назад к списку", callback_data=cb_back))
+
+        return kb.as_markup()
+
+    def _kb_back_to_list(self, section: str, category: str, page: int) -> InlineKeyboardMarkup:
+        """Хелпер для кнопки назад при ошибке"""
+        kb = InlineKeyboardBuilder()
+        cb = InventoryCallback(level=1, user_id=self.user_id, section=section, category=category, page=page).pack()
+        kb.button(text="🔙 Назад", callback_data=cb)
         return kb.as_markup()
