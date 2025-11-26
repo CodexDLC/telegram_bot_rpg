@@ -141,20 +141,19 @@ class InventoryService:
         """
         Определяет группу ресурсов для WalletRepo.
         """
-        group: str = "parts"
+        MAPPING = {
+            "currency": ("dust", "shard", "core"),
+            "ores": ("ore", "ingot", "stone"),
+            "leathers": ("leather", "hide", "skin"),
+            "fabrics": ("cloth", "fiber"),
+            "organics": ("herb", "food", "meat"),
+        }
 
-        if "dust" in subtype or "shard" in subtype or "core" in subtype:
-            group = "currency"
-        elif "ore" in subtype or "ingot" in subtype or "stone" in subtype:
-            group = "ores"
-        elif "leather" in subtype or "hide" in subtype or "skin" in subtype:
-            group = "leathers"
-        elif "cloth" in subtype or "fiber" in subtype:
-            group = "fabrics"
-        elif "herb" in subtype or "food" in subtype or "meat" in subtype:
-            group = "organics"
+        for group, keywords in MAPPING.items():
+            if any(keyword in subtype for keyword in keywords):
+                return cast(ResourceTypeGroup, group)
 
-        return cast(ResourceTypeGroup, group)
+        return "parts"
 
     async def _handle_slot_conflicts(self, new_item: InventoryItemDTO) -> None:
         """Авто-снятие вещей при конфликте слотов."""
