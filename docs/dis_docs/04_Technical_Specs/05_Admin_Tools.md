@@ -79,9 +79,13 @@ Python
 
 # app/filters/is_admin.py
 from aiogram.filters import BaseFilter
-from aiogram.types import Message
-from app.core.config import ADMIN_IDS # Нужно добавить в config.py
+from aiogram.types import Message, CallbackQuery # <--- Добавили CallbackQuery
+from app.core.config import ADMIN_IDS 
 
 class IsAdmin(BaseFilter):
-    async def __call__(self, message: Message) -> bool:
-        return message.from_user.id in ADMIN_IDS
+    # Обновленная сигнатура
+    async def __call__(self, event: Message | CallbackQuery) -> bool:
+        user = event.from_user
+        if not user:
+            return False
+        return user.id in ADMIN_IDS

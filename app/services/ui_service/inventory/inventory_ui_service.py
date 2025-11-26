@@ -11,6 +11,13 @@ from app.services.game_service.inventory.inventory_service import InventoryServi
 from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.helpers_ui.inventory_formatters import InventoryFormatter
 
+SECTION_TYPE_MAP = {
+    "equip": [ItemType.WEAPON, ItemType.ARMOR, ItemType.ACCESSORY],
+    "resource": [ItemType.RESOURCE, ItemType.CURRENCY],
+    "consumable": [ItemType.CONSUMABLE],
+    # "quest": [ItemType.QUEST]
+}
+
 
 class InventoryUIService(BaseUIService):
     """
@@ -94,12 +101,7 @@ class InventoryUIService(BaseUIService):
 
         # Маппинг секций на типы предметов
         # (Можно вынести в константы, но пока тут для наглядности)
-        section_type_map = {
-            "equip": [ItemType.WEAPON, ItemType.ARMOR, ItemType.ACCESSORY],
-            "resource": [ItemType.RESOURCE],  # В будущем сюда добавим руды и т.д.
-            "consumable": [ItemType.CONSUMABLE],
-            # "quest": [ItemType.QUEST] # Если появится
-        }
+        section_type_map = SECTION_TYPE_MAP
 
         allowed_types = section_type_map.get(section, [])
 
@@ -110,12 +112,8 @@ class InventoryUIService(BaseUIService):
 
             # 2. Фильтр по Категории (Подтип/Subtype)
             # Если category == "all", то фильтр по подкатегории не применяется.
-            if category != "all":
-                # Предмет должен соответствовать категории либо по основному типу (напр. 'weapon'),
-                # либо по подтипу (напр. 'ores').
-                # Предполагается, что `item.item_type.value` вернет строку, например 'weapon'.
-                if item.item_type.value != category and item.subtype != category:
-                    continue
+            if category != "all" and item.item_type.value != category and item.subtype != category:
+                continue
 
             filtered.append(item)
 
