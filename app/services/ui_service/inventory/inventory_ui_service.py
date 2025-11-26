@@ -103,9 +103,6 @@ class InventoryUIService(BaseUIService):
         section_type_map = SECTION_TYPE_MAP
         allowed_types = section_type_map.get(section, [])
 
-        # Получаем маппинг подтипов для ресурсов из InventoryService
-        resource_subtype_map = InventoryService._map_subtype_to_group
-
         for item in items:
             # 1. Фильтр по Секции (Тип предмета)
             if item.item_type not in allowed_types:
@@ -115,7 +112,7 @@ class InventoryUIService(BaseUIService):
             if category != "all":
                 # Для ресурсов используем гибкое сравнение
                 if section == "resource" and item.subtype:
-                    if resource_subtype_map(self, item.subtype) != category:
+                    if self.inventory_service._map_subtype_to_group(item.subtype) != category:
                         continue
                 # Для остального - точное совпадение
                 elif item.item_type.value != category and item.subtype != category:
@@ -136,8 +133,8 @@ class InventoryUIService(BaseUIService):
         sections = {
             "equip": self.InvF.SECTION_NAMES["equip"],
             "resource": self.InvF.SECTION_NAMES["resource"],
-            "component": "⚙️ Компоненты",  # (Пока нет в ItemType, но заглушка)
-            "quest": "📜 Квестовые",
+            "component": self.InvF.SECTION_NAMES["component"],
+            "quest": self.InvF.SECTION_NAMES["quest"],
         }
 
         for sec_key, sec_name in sections.items():

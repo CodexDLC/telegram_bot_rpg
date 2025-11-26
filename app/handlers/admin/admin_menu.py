@@ -18,7 +18,8 @@ router.callback_query.filter(IsAdmin())
 @router.message(Command("admin"))
 async def admin_start_handler(m: Message, state: FSMContext):
     """Точка входа в админку."""
-    log.info(f"Admin {m.from_user.id} accessed admin panel.")
+    if m.from_user:
+        log.info(f"Admin {m.from_user.id} accessed admin panel.")
 
     await state.clear()
     await state.set_state(AdminMode.menu)
