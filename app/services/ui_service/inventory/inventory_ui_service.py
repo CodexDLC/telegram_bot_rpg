@@ -109,9 +109,13 @@ class InventoryUIService(BaseUIService):
                 continue
 
             # 2. Фильтр по Категории (Подтип/Subtype)
-            # Если category == "all", берем всё в этой секции
-            if category != "all" and item.item_type != category and item.subtype != category:
-                continue
+            # Если category == "all", то фильтр по подкатегории не применяется.
+            if category != "all":
+                # Предмет должен соответствовать категории либо по основному типу (напр. 'weapon'),
+                # либо по подтипу (напр. 'ores').
+                # Предполагается, что `item.item_type.value` вернет строку, например 'weapon'.
+                if item.item_type.value != category and item.subtype != category:
+                    continue
 
             filtered.append(item)
 
