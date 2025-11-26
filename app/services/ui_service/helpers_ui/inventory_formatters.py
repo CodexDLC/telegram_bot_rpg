@@ -68,7 +68,7 @@ class InventoryFormatter:
 
         for item in equipped:
             # Для надетого предмета используем первый слот как ключевой для отображения
-            if item.data.valid_slots:
+            if hasattr(item.data, "valid_slots") and item.data.valid_slots:
                 slot_key = item.data.valid_slots[0]
                 # Проверка на наличие слота в нашем списке (защита от багов)
                 if slot_key in equipped_map:

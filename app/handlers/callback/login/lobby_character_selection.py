@@ -33,7 +33,6 @@ from app.services.ui_service.tutorial.tutorial_service_skill import TutorialServ
 router = Router(name="lobby_fsm")
 
 
-# 1. ДЕКОРАТОР ТЕПЕРЬ ЛОВИТ СПИСОК {"select", "delete"}
 @router.callback_query(CharacterLobby.selection, LobbySelectionCallback.filter(F.action.in_({"select", "delete"})))
 async def select_or_delete_character_handler(
     call: CallbackQuery, callback_data: LobbySelectionCallback, state: FSMContext, bot: Bot, session: AsyncSession

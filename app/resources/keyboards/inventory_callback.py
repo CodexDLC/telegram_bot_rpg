@@ -1,23 +1,30 @@
+# app/resources/keyboards/inventory_callback.py
 from aiogram.filters.callback_data import CallbackData
 
 
 class InventoryCallback(CallbackData, prefix="inv"):
     """
     Универсальный колбэк для системы инвентаря v3.0.
-    Позволяет навигироваться между Куклой, Списками и Деталями.
     """
 
-    # Основная секция: 'pyppet', 'equip', 'resource', 'component', 'quest',
-    level: str
-    # --- Владелец (security) ---
-    # Чтобы Вася не нажимал кнопки в инвентаре Пети
+    # level: 0=Main(Кукла), 1=List(Список), 2=Item(Детали)
+    level: int
+
+    # ID владельца (для защиты от нажатий другими юзерами)
     user_id: int
 
-    # Подкатегория: 'weapon', 'armor', 'dust', 'ore'... (соответствует subtype в БД)
-    category: str = "none"
-    # --- Действия с предметом (для level='item') ---
-    # ID предмета в базе (inventory_id)
+    # Основная секция: 'main', 'equip', 'resource', 'component', 'quest'
+    section: str = "main"
+
+    # Подкатегория (фильтр): 'all', 'weapon', 'armor', 'ores'...
+    # Соответствует ключам в SUB_CATEGORIES или subtype предмета
+    category: str = "all"
+
+    # Пагинация (для level=1)
+    page: int = 0
+
+    # ID предмета (для level=2)
     item_id: int = 0
 
-    # Действие: 'view' (просмотр), 'equip' (надеть), 'unequip' (снять), 'drop' (выбросить)
+    # Действие (для level=2): 'view', 'equip', 'drop'
     action: str = "view"

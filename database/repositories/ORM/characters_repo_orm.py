@@ -15,6 +15,7 @@ from app.resources.schemas_dto.character_dto import (
 from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
 from database.model_orm import CharacterSymbiote
 from database.model_orm.character import Character, CharacterStats
+from database.model_orm.inventory import ResourceWallet
 
 
 class CharactersRepoORM(ICharactersRepo):
@@ -28,8 +29,11 @@ class CharactersRepoORM(ICharactersRepo):
 
     async def create_character_shell(self, character_data: CharacterShellCreateDTO) -> int:
         """
-        Создает "оболочку" персонажа, связанные с ней статы И СИМБИОТА.
+        Создает "оболочку" персонажа, связанные с ней статы, СИМБИОТА и КОШЕЛЕК.
         """
+        # Не забудь импортировать ResourceWallet в начале файла!
+        # from database.model_orm.inventory import ResourceWallet
+
         character_data_dict = character_data.model_dump()
         log.debug(f"Создание 'оболочки' персонажа для user_id={character_data.user_id}")
 
@@ -37,19 +41,25 @@ class CharactersRepoORM(ICharactersRepo):
             # noinspection PyArgumentList
             orm_character = Character(**character_data_dict)
 
-            # 1. Создаем Статы
+            # 1. Создаем Статы (Обязательно)
             orm_character.stats = CharacterStats()
 
-            # 2. Создаем Симбиота (Новая сущность)
+            # 2. Создаем Симбиота (Обязательно)
             orm_character.symbiote = CharacterSymbiote()
+
+            # 3. 🔥 Создаем Кошелек (Обязательно!)
+            # Пустой кошелек, куда потом будем сыпать пыль и руду
+            orm_character.wallet = ResourceWallet()
+
+            # Инвентарь создавать НЕ НАДО. Пустой список items создастся сам (виртуально).
 
             self.session.add(orm_character)
             await self.session.flush()
-            log.debug(f"Выполнен flush для Character, получен character_id: {orm_character.character_id}")
+            log.debug(f"Выполнен flush, получен char_id: {orm_character.character_id}")
 
             return orm_character.character_id
         except SQLAlchemyError as e:
-            log.exception(f"Ошибка SQLAlchemy при создании 'оболочки' персонажа: {e}")
+            log.exception(f"Ошибка SQLAlchemy при создании 'оболочки': {e}")
             raise
 
     async def update_character_onboarding(

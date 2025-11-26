@@ -83,7 +83,7 @@ class ResourceWallet(Base):
     parts: Mapped[dict] = mapped_column(JSON, default=dict)  # Шестеренки, Эссенции
 
     # Связь (если нужно будет получать через character.wallet)
-    # character: Mapped["Character"] = relationship(...)
+    character: Mapped[Character] = relationship("Character", back_populates="wallet")
 
     def __repr__(self):
         return f"<Wallet char_id={self.character_id}>"
