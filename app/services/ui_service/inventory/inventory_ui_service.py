@@ -24,9 +24,9 @@ class InventoryUIService(BaseUIService):
     Сервис для формирования UI инвентаря.
     """
 
-    def __init__(self, state_data: dict[str, Any], char_id: int, user_id: int, session: AsyncSession):
+    def __init__(self, char_id: int, user_id: int, session: AsyncSession, state_data: dict[str, Any]):
         super().__init__(char_id=char_id, state_data=state_data)
-        # user_id берем из state_data, так как он нужен для кнопок (security)
+        # user_id передается напрямую для генерации кнопок (security)
         self.user_id = user_id
         self.session = session
         self.inventory_service = InventoryService(session=self.session, char_id=self.char_id)
@@ -100,10 +100,11 @@ class InventoryUIService(BaseUIService):
         filtered = []
 
         # Маппинг секций на типы предметов
-        # (Можно вынести в константы, но пока тут для наглядности)
         section_type_map = SECTION_TYPE_MAP
-
         allowed_types = section_type_map.get(section, [])
+
+        # Получаем маппинг подтипов для ресурсов из InventoryService
+        resource_subtype_map = InventoryService._map_subtype_to_group
 
         for item in items:
             # 1. Фильтр по Секции (Тип предмета)
@@ -111,9 +112,14 @@ class InventoryUIService(BaseUIService):
                 continue
 
             # 2. Фильтр по Категории (Подтип/Subtype)
-            # Если category == "all", то фильтр по подкатегории не применяется.
-            if category != "all" and item.item_type.value != category and item.subtype != category:
-                continue
+            if category != "all":
+                # Для ресурсов используем гибкое сравнение
+                if section == "resource" and item.subtype:
+                    if self.inventory_service._map_subtype_to_group(item.subtype) != category:
+                        continue
+                # Для остального - точное совпадение
+                elif item.item_type.value != category and item.subtype != category:
+                    continue
 
             filtered.append(item)
 
@@ -127,11 +133,9 @@ class InventoryUIService(BaseUIService):
         """
         kb = InlineKeyboardBuilder()
 
-        # Используем ключи секций из форматтера, но фильтруем 'pyppet' (это заголовок)
-        # Либо задаем жестко, чтобы порядок был красивым (2x2)
         sections = {
-            "equip": "⚔️ Экипировка",
-            "resource": "🎒 Ресурсы",
+            "equip": self.InvF.SECTION_NAMES["equip"],
+            "resource": self.InvF.SECTION_NAMES["resource"],
             "component": "⚙️ Компоненты",  # (Пока нет в ItemType, но заглушка)
             "quest": "📜 Квестовые",
         }
@@ -163,7 +167,7 @@ class InventoryUIService(BaseUIService):
 
             # Добавляем кнопки из подкатегорий
             for f_cat, f_name in filters.items():
-                # Берем иконку из названия (обычно она первая) или просто название
+                # Берем иконку из названия (обычно она первая) или просто Название
                 # Упростим: Если активно -> ✅, иначе просто Название
                 btn_text = f"✅ {f_name}" if category == f_cat else f_name
 

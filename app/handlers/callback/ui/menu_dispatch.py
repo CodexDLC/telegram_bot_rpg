@@ -61,7 +61,7 @@ async def main_menu_dispatcher(
             await state.set_state(InGame.inventory)
 
             # 2. Рендерим "Куклу" (Главная страница инвентаря)
-            service = InventoryUIService(state_data=state_data, char_id=char_id, session=session, user_id=user_id)
+            service = InventoryUIService(char_id=char_id, session=session, user_id=user_id, state_data=state_data)
             text, kb = await service.render_main_menu()
 
         # === ВЕТКА 2: НАВИГАЦИЯ ===

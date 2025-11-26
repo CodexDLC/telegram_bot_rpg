@@ -88,7 +88,7 @@ admin_ids_str = os.getenv("ADMIN_IDS", "")
 ADMIN_IDS: list[int] = []
 if admin_ids_str:
     try:
-        ADMIN_IDS = [int(x.strip()) for x in admin_ids_str.split(",") if x.strip()]
+        ADMIN_IDS = [int(s) for s in (x.strip() for x in admin_ids_str.split(',')) if s]
         log.info(f"Загружено {len(ADMIN_IDS)} администраторов.")
     except ValueError:
         log.error("Ошибка парсинга ADMIN_IDS. Проверьте формат в .env.")
