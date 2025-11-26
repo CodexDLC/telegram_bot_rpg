@@ -42,6 +42,17 @@ class InGame(StatesGroup):
     inventory = State()
 
 
+class AdminMode(StatesGroup):
+    """Состояния для админ-панели"""
+
+    menu = State()
+
+    # Состояния для инструментов
+    item_creation = State()
+    resource_add = State()
+    teleport = State()
+
+
 FSM_CONTEX_CHARACTER_STATUS = [
     CharacterLobby.start_logging,
     CharacterLobby.selection,

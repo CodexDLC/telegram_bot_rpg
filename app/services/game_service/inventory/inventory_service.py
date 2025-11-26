@@ -141,7 +141,7 @@ class InventoryService:
         """
         Определяет группу ресурсов для WalletRepo.
         """
-        MAPPING = {
+        mapping = {
             "currency": ("dust", "shard", "core"),
             "ores": ("ore", "ingot", "stone"),
             "leathers": ("leather", "hide", "skin"),
@@ -149,7 +149,7 @@ class InventoryService:
             "organics": ("herb", "food", "meat"),
         }
 
-        for group, keywords in MAPPING.items():
+        for group, keywords in mapping.items():
             if any(keyword in subtype for keyword in keywords):
                 return cast(ResourceTypeGroup, group)
 

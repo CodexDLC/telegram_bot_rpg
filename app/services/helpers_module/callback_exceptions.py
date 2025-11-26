@@ -1,4 +1,6 @@
-from aiogram.exceptions import TelegramBadRequest
+from contextlib import suppress
+
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.types import CallbackQuery
 from loguru import logger as log
 
@@ -111,3 +113,18 @@ class UIErrorHandler:
         await UIErrorHandler._error_msg_default(
             call, message_text="Произошел сбой. Данные (callback data) не были получены."
         )
+
+    @staticmethod
+    async def access_denied(call: CallbackQuery) -> None:
+        """
+        Вызывается, когда пользователь пытается взаимодействовать с чужим UI.
+        """
+        # Защита: если call.from_user нет (редко, но бывает), просто логируем
+        if not call.from_user:
+            return
+
+        log.info(f"Access denied for user {call.from_user.id}")
+
+        with suppress(TelegramAPIError):
+            # show_alert=True -> всплывающее окно с кнопкой "ОК"
+            await call.answer("⛔ Это не твой интерфейс!", show_alert=True)

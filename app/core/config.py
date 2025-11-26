@@ -82,3 +82,15 @@ BUG_REPORT_CHANNEL_ID: int | None = int(bug_report_channel_id_str) if bug_report
 
 SYSTEM_USER_ID = 2_000_000_000
 SYSTEM_CHAR_ID = SYSTEM_USER_ID
+
+
+admin_ids_str = os.getenv("ADMIN_IDS", "")
+ADMIN_IDS: list[int] = []
+if admin_ids_str:
+    try:
+        ADMIN_IDS = [int(x.strip()) for x in admin_ids_str.split(",") if x.strip()]
+        log.info(f"Загружено {len(ADMIN_IDS)} администраторов.")
+    except ValueError:
+        log.error("Ошибка парсинга ADMIN_IDS. Проверьте формат в .env.")
+else:
+    log.warning("ADMIN_IDS не заданы. Админ-панель будет недоступна.")

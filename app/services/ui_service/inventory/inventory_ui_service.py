@@ -1,41 +1,43 @@
 # app/services/ui_service/inventory/inventory_ui_service.py
 from typing import Any
 
-from aiogram.types import InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.keyboards.inventory_callback import InventoryCallback
+from app.resources.schemas_dto.item_dto import InventoryItemDTO, ItemType
 from app.services.game_service.inventory.inventory_service import InventoryService
 from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.helpers_ui.inventory_formatters import InventoryFormatter
+
+SECTION_TYPE_MAP = {
+    "equip": [ItemType.WEAPON, ItemType.ARMOR, ItemType.ACCESSORY],
+    "resource": [ItemType.RESOURCE, ItemType.CURRENCY],
+    "consumable": [ItemType.CONSUMABLE],
+    # "quest": [ItemType.QUEST]
+}
 
 
 class InventoryUIService(BaseUIService):
     """
     Сервис для формирования UI инвентаря.
-    Строит сообщения (текст) и клавиатуры (markup) для разных экранов:
-    - Главная (Кукла)
-    - Категории
-    - Список предметов
-    - Детали предмета
     """
 
-    def __init__(self, state_data: dict[str, Any], char_id: int):
-        """
-        Инициализация базового UI сервиса.
-        """
+    def __init__(self, state_data: dict[str, Any], char_id: int, user_id: int, session: AsyncSession):
         super().__init__(char_id=char_id, state_data=state_data)
-        self.user_id = state_data.get("user_id")
-        self.session = state_data.get("session")
+        # user_id берем из state_data, так как он нужен для кнопок (security)
+        self.user_id = user_id
+        self.session = session
         self.inventory_service = InventoryService(session=self.session, char_id=self.char_id)
-        self.InvF = InventoryFormatter()
+        self.InvF = InventoryFormatter
+
+        # Размер страницы (сетка 3x3 = 9 предметов)
+        self.PAGE_SIZE = 9
 
     async def render_main_menu(self) -> tuple[str, InlineKeyboardMarkup]:
         """
-        Экран 'Кукла персонажа'.
-        Показывает текущую экипировку (Голова, Тело, Руки...) и кнопки основных категорий (Снаряжение, Ресурсы...).
-        Данные берет через InventoryService.get_character_inventory (фильтруя equipped).
+        Уровень 0: Экран 'Кукла персонажа'.
         """
         equipped = await self.inventory_service.get_items("equipped")
         current_slots, max_slots = await self.inventory_service.get_capacity()
@@ -46,55 +48,178 @@ class InventoryUIService(BaseUIService):
         )
 
         kb = self._kb_main_menu()
-
         return text, kb
-
-    async def render_sub_categories(self, section: str) -> tuple[str, InlineKeyboardMarkup]:
-        """
-        Экран выбора подкатегории.
-        Если section='equip' -> кнопки [Оружие], [Броня], [Бижутерия].
-        """
-        pass
 
     async def render_item_list(self, section: str, category: str, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
         """
-        Экран списка предметов (Сетка 3x3 или список).
-        1. Запрашивает предметы у InventoryService.
-        2. Фильтрует их по section/category.
-        3. Реализует пагинацию (срез списка).
-        4. Генерирует кнопки с названиями предметов.
+        Уровень 1: Экран списка предметов с фильтрами и пагинацией.
         """
-        pass
+        # 1. Получаем ВСЕ предметы из инвентаря (не надетые)
+        all_items = await self.inventory_service.get_items("inventory")
 
-    async def render_item_details(
-        self, item_id: int, from_page: int, from_category: str
-    ) -> tuple[str, InlineKeyboardMarkup]:
-        """
-        Карточка предмета.
-        Показывает статы, описание, редкость.
-        Кнопки действий зависят от состояния предмета:
-        - Если надет -> [Снять]
-        - Если в сумке и type=equip -> [Надеть]
-        - Всегда -> [Выбросить], [Назад]
-        """
-        pass
+        # 2. Фильтруем список в Python (Section -> Category)
+        filtered_items = self._filter_items(all_items, section, category)
 
-    def _kb_main_menu(self, level: str):
+        # 3. Пагинация (Slicing)
+        total_items = len(filtered_items)
+        total_pages = (total_items + self.PAGE_SIZE - 1) // self.PAGE_SIZE
+        # Защита от выхода за границы (если удалили предмет и стр. сместилась)
+        if page >= total_pages and total_pages > 0:
+            page = total_pages - 1
+
+        start_idx = page * self.PAGE_SIZE
+        end_idx = start_idx + self.PAGE_SIZE
+        items_on_page = filtered_items[start_idx:end_idx]
+
+        # 4. Форматируем текст
+        # Передаем items_on_page, чтобы форматтер отрисовал только их
+        text = self.InvF.format_item_list(
+            items=items_on_page,
+            section=section,
+            category=category,
+            page=page,
+            total_pages=total_pages if total_pages > 0 else 1,
+            actor_name="📦 Инвентарь",
+        )
+
+        # 5. Клавиатура
+        kb = self._kb_item_list(
+            section=section,
+            category=category,
+            page=page,
+            total_pages=total_pages if total_pages > 0 else 1,
+            items_on_page=items_on_page,
+        )
+
+        return text, kb
+
+    def _filter_items(self, items: list[InventoryItemDTO], section: str, category: str) -> list[InventoryItemDTO]:
+        """
+        Логика фильтрации списка предметов.
+        """
+        filtered = []
+
+        # Маппинг секций на типы предметов
+        # (Можно вынести в константы, но пока тут для наглядности)
+        section_type_map = SECTION_TYPE_MAP
+
+        allowed_types = section_type_map.get(section, [])
+
+        for item in items:
+            # 1. Фильтр по Секции (Тип предмета)
+            if item.item_type not in allowed_types:
+                continue
+
+            # 2. Фильтр по Категории (Подтип/Subtype)
+            # Если category == "all", то фильтр по подкатегории не применяется.
+            if category != "all" and item.item_type.value != category and item.subtype != category:
+                continue
+
+            filtered.append(item)
+
+        return filtered
+
+    # --- KEYBOARDS ---
+
+    def _kb_main_menu(self) -> InlineKeyboardMarkup:
+        """
+        Клавиатура уровня 0: 4 большие кнопки категорий.
+        """
         kb = InlineKeyboardBuilder()
 
-        section_dict = self.InvF.SECTION_NAMES.get(level)
-        if not section_dict:
-            log.error("")
-            return None
+        # Используем ключи секций из форматтера, но фильтруем 'pyppet' (это заголовок)
+        # Либо задаем жестко, чтобы порядок был красивым (2x2)
+        sections = {
+            "equip": "⚔️ Экипировка",
+            "resource": "🎒 Ресурсы",
+            "component": "⚙️ Компоненты",  # (Пока нет в ItemType, но заглушка)
+            "quest": "📜 Квестовые",
+        }
 
-        for key, value in section_dict:
-            if level == key:
-                continue
+        for sec_key, sec_name in sections.items():
+            cb = InventoryCallback(level=1, user_id=self.user_id, section=sec_key, category="all", page=0).pack()
+            kb.button(text=sec_name, callback_data=cb)
+
+        kb.adjust(2)  # Сетка 2x2
+        return kb.as_markup()
+
+    def _kb_item_list(
+        self, section: str, category: str, page: int, total_pages: int, items_on_page: list[InventoryItemDTO]
+    ) -> InlineKeyboardMarkup:
+        """
+        Клавиатура уровня 1 (Универсальная): Фильтры + Сетка + Навигация.
+        """
+        kb = InlineKeyboardBuilder()
+
+        # 1. Ряд фильтров (Динамический из SUB_CATEGORIES)
+        # Получаем словарь подкатегорий для текущей секции (например, equip -> {weapon:..., armor:...})
+        filters = self.InvF.SUB_CATEGORIES.get(section)
+
+        if filters:
+            # Добавляем кнопку "Все" (сброс фильтра)
+            all_text = "✅ Все" if category == "all" else "Все"
+            cb_all = InventoryCallback(level=1, user_id=self.user_id, section=section, category="all", page=0).pack()
+            kb.button(text=all_text, callback_data=cb_all)
+
+            # Добавляем кнопки из подкатегорий
+            for f_cat, f_name in filters.items():
+                # Берем иконку из названия (обычно она первая) или просто название
+                # Упростим: Если активно -> ✅, иначе просто Название
+                btn_text = f"✅ {f_name}" if category == f_cat else f_name
+
+                cb = InventoryCallback(level=1, user_id=self.user_id, section=section, category=f_cat, page=0).pack()
+                kb.button(text=btn_text, callback_data=cb)
+
+            # Выравниваем: Кнопка "Все" + сколько влезет (по 3 в ряд)
+            kb.adjust(3)
+
+            # 2. Цифровая панель (1-9)
+        num_row = []
+        # Используем enumerate(start=1), чтобы цифры совпадали с текстом (1. Меч...)
+        for i, item in enumerate(items_on_page, start=(page * self.PAGE_SIZE) + 1):
+            # Вычисляем "локальный" номер для кнопки (1-9 на текущей странице)
+            button_num = i - (page * self.PAGE_SIZE)
+
             cb = InventoryCallback(
-                level=level,
+                level=2,  # Переход к деталям
                 user_id=self.user_id,
+                section=section,
+                category=category,
+                page=page,
+                item_id=item.inventory_id,
             ).pack()
+            num_row.append(InlineKeyboardButton(text=str(button_num), callback_data=cb))
 
-            kb.button(text=value, callback_data=cb)
+        if num_row:
+            kb.row(*num_row)
+
+        # 3. Пагинация
+        nav_row = []
+        # Назад
+        if page > 0:
+            cb_prev = InventoryCallback(
+                level=1, user_id=self.user_id, section=section, category=category, page=page - 1
+            ).pack()
+            nav_row.append(InlineKeyboardButton(text="◀️", callback_data=cb_prev))
+        else:
+            nav_row.append(InlineKeyboardButton(text=" ", callback_data="ignore"))  # Заглушка для красоты
+
+        # Счетчик
+        nav_row.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="ignore"))
+
+        # Вперед
+        if page < total_pages - 1:
+            cb_next = InventoryCallback(
+                level=1, user_id=self.user_id, section=section, category=category, page=page + 1
+            ).pack()
+            nav_row.append(InlineKeyboardButton(text="▶️", callback_data=cb_next))
+        else:
+            nav_row.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
+
+        kb.row(*nav_row)
+
+        # 4. Кнопка "Назад" (на уровень 0)
+        cb_back = InventoryCallback(level=0, user_id=self.user_id).pack()
+        kb.row(InlineKeyboardButton(text="↩️ Назад", callback_data=cb_back))
 
         return kb.as_markup()

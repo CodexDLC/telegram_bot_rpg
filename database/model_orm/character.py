@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database.model_orm.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from .inventory import InventoryItem
+    from .inventory import InventoryItem, ResourceWallet
     from .skill import CharacterSkillProgress, CharacterSkillRate
     from .symbiote import CharacterSymbiote
     from .user import User
@@ -66,6 +66,10 @@ class Character(Base, TimestampMixin):
     )
 
     inventory: Mapped[list[InventoryItem]] = relationship(back_populates="character", cascade="all, delete-orphan")
+
+    wallet: Mapped[ResourceWallet] = relationship(
+        back_populates="character", cascade="all, delete-orphan", uselist=False
+    )
 
     def __repr__(self) -> str:
         # 3. ИСПРАВЬТЕ ИМЯ КЛАССА В ВЫВОДЕ
