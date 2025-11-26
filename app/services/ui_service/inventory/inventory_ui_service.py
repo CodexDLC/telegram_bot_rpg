@@ -115,7 +115,7 @@ class InventoryUIService(BaseUIService):
             if category != "all":
                 # Для ресурсов используем гибкое сравнение
                 if section == "resource" and item.subtype:
-                    if resource_subtype_map(self, item.subtype) != category:
+                    if self.inventory_service._map_subtype_to_group(item.subtype) != category:
                         continue
                 # Для остального - точное совпадение
                 elif item.item_type.value != category and item.subtype != category:
