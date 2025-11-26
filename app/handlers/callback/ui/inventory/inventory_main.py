@@ -37,6 +37,10 @@ async def inventory_main_handler(
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     user_id = session_context.get("user_id") or call.from_user.id
     char_id = session_context.get("char_id")
+    if not char_id:
+        log.error(f"char_id not found in FSM for user {call.from_user.id}")
+        await Err.char_id_not_found_in_fsm(call)
+        return
 
     service = InventoryUIService(char_id=char_id, session=session, state_data=state_data, user_id=user_id)
 
