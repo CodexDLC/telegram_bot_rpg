@@ -34,6 +34,9 @@ class InventoryService:
         log.info(f"Wallet: +{amount} {subtype} (Total: {new_total})")
         return new_total
 
+    async def get_dust_amount(self):
+        return await self.wallet_repo.get_resource_amount(char_id=self.char_id, group="currency", key="dust")
+
     async def consume_resource(self, subtype: str, amount: int) -> bool:
         group = self._map_subtype_to_group(subtype)
 
@@ -49,7 +52,6 @@ class InventoryService:
         Считает бонус от статов (Perception) через Агрегатор.
         """
         # 1. Считаем занятые слоты (только то, что в сумке)
-        # Можно оптимизировать через COUNT(*) в репо, но пока так:
         all_items = await self.inventory_repo.get_all_items(self.char_id)
         in_bag = [i for i in all_items if i.location == "inventory"]
         current_slots = len(in_bag)
