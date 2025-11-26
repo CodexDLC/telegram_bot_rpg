@@ -5,8 +5,11 @@ from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.schemas_dto.item_dto import InventoryItemDTO, ItemType
+from app.services.game_service.stats_aggregation_service import StatsAggregationService
 from database.repositories import get_inventory_repo, get_wallet_repo
 from database.repositories.ORM.wallet_repo import ResourceTypeGroup
+
+BASE_INVENTORY_SIZE = 20
 
 
 class InventoryService:
@@ -31,10 +34,47 @@ class InventoryService:
         log.info(f"Wallet: +{amount} {subtype} (Total: {new_total})")
         return new_total
 
+    async def get_dust_amount(self):
+        return await self.wallet_repo.get_resource_amount(char_id=self.char_id, group="currency", key="dust")
+
     async def consume_resource(self, subtype: str, amount: int) -> bool:
         group = self._map_subtype_to_group(subtype)
 
         return await self.wallet_repo.remove_resource(char_id=self.char_id, group=group, key=subtype, amount=amount)
+
+        # =========================================================================
+        # 🛠 ЛОГИКА ВМЕСТИМОСТИ (Новое)
+        # =========================================================================
+
+    async def get_capacity(self) -> tuple[int, int]:
+        """
+        Возвращает (занято, всего).
+        Считает бонус от статов (Perception) через Агрегатор.
+        """
+        # 1. Считаем занятые слоты (только то, что в сумке)
+        all_items = await self.inventory_repo.get_all_items(self.char_id)
+        in_bag = [i for i in all_items if i.location == "inventory"]
+        current_slots = len(in_bag)
+
+        # 2. Считаем Максимум через Агрегатор
+        agg_service = StatsAggregationService(self.session)
+        total_stats = await agg_service.get_character_total_stats(self.char_id)
+
+        slots_bonus = 0
+        # Безопасно достаем модификатор inventory_slots_bonus
+        if total_stats and "modifiers" in total_stats:
+            mod_data = total_stats["modifiers"].get("inventory_slots_bonus")
+            if mod_data:
+                slots_bonus = int(mod_data.get("total", 0))
+
+        max_slots = BASE_INVENTORY_SIZE + slots_bonus
+
+        return current_slots, max_slots
+
+    async def has_free_slots(self, amount: int = 1) -> bool:
+        """Проверяет, есть ли место для N предметов."""
+        current, max_cap = await self.get_capacity()
+        return (current + amount) <= max_cap
 
     # =========================================================================
     # 2. ПРЕДМЕТЫ (Inventory)

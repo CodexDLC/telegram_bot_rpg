@@ -2,9 +2,13 @@
 from typing import Any
 
 from aiogram.types import InlineKeyboardMarkup
-from sqlalchemy.ext.asyncio import AsyncSession
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from loguru import logger as log
 
+from app.resources.keyboards.inventory_callback import InventoryCallback
+from app.services.game_service.inventory.inventory_service import InventoryService
 from app.services.ui_service.base_service import BaseUIService
+from app.services.ui_service.helpers_ui.inventory_formatters import InventoryFormatter
 
 
 class InventoryUIService(BaseUIService):
@@ -21,15 +25,29 @@ class InventoryUIService(BaseUIService):
         """
         Инициализация базового UI сервиса.
         """
-        pass
+        super().__init__(char_id=char_id, state_data=state_data)
+        self.user_id = state_data.get("user_id")
+        self.session = state_data.get("session")
+        self.inventory_service = InventoryService(session=self.session, char_id=self.char_id)
+        self.InvF = InventoryFormatter()
 
-    async def render_main_menu(self, session: AsyncSession) -> tuple[str, InlineKeyboardMarkup]:
+    async def render_main_menu(self) -> tuple[str, InlineKeyboardMarkup]:
         """
         Экран 'Кукла персонажа'.
         Показывает текущую экипировку (Голова, Тело, Руки...) и кнопки основных категорий (Снаряжение, Ресурсы...).
         Данные берет через InventoryService.get_character_inventory (фильтруя equipped).
         """
-        pass
+        equipped = await self.inventory_service.get_items("equipped")
+        current_slots, max_slots = await self.inventory_service.get_capacity()
+        dust_amount = await self.inventory_service.get_dust_amount()
+
+        text = self.InvF.format_main_menu(
+            equipped=equipped, current_slots=current_slots, max_slots=max_slots, dust_amount=dust_amount
+        )
+
+        kb = self._kb_main_menu()
+
+        return text, kb
 
     async def render_sub_categories(self, section: str) -> tuple[str, InlineKeyboardMarkup]:
         """
@@ -38,9 +56,7 @@ class InventoryUIService(BaseUIService):
         """
         pass
 
-    async def render_item_list(
-        self, session: AsyncSession, section: str, category: str, page: int = 0
-    ) -> tuple[str, InlineKeyboardMarkup]:
+    async def render_item_list(self, section: str, category: str, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
         """
         Экран списка предметов (Сетка 3x3 или список).
         1. Запрашивает предметы у InventoryService.
@@ -51,7 +67,7 @@ class InventoryUIService(BaseUIService):
         pass
 
     async def render_item_details(
-        self, session: AsyncSession, item_id: int, from_page: int, from_category: str
+        self, item_id: int, from_page: int, from_category: str
     ) -> tuple[str, InlineKeyboardMarkup]:
         """
         Карточка предмета.
@@ -62,3 +78,23 @@ class InventoryUIService(BaseUIService):
         - Всегда -> [Выбросить], [Назад]
         """
         pass
+
+    def _kb_main_menu(self, level: str):
+        kb = InlineKeyboardBuilder()
+
+        section_dict = self.InvF.SECTION_NAMES.get(level)
+        if not section_dict:
+            log.error("")
+            return None
+
+        for key, value in section_dict:
+            if level == key:
+                continue
+            cb = InventoryCallback(
+                level=level,
+                user_id=self.user_id,
+            ).pack()
+
+            kb.button(text=value, callback_data=cb)
+
+        return kb.as_markup()
