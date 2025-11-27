@@ -44,7 +44,16 @@ class CombatService:
         container.name = name
         container.is_ai = is_ai
 
+        # Рассчитываем итоговые статы для инициализации состояния
+        final_stats = StatsCalculator.aggregate_all(container.stats)
+        hp_max = int(final_stats.get("hp_max", 1))
+        energy_max = int(final_stats.get("energy_max", 0))
+
+        # Инициализируем динамическое состояние бойца
+        container.state = FighterStateDTO(hp_current=hp_max, energy_current=energy_max)
+
         # TODO: Здесь можно добавить загрузку текущего HP из БД, если оно не полное
+        # и если оно меньше максимального, то перезаписать container.state.hp_current
 
         await combat_manager.save_actor_json(self.session_id, char_id, container.model_dump_json())
 
