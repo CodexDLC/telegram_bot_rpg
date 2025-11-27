@@ -71,3 +71,26 @@ class RedisKeys:
         """
         # Используем твой префикс g_d:
         return f"g_d:{instance_id}"
+
+    @staticmethod
+    def get_combat_actor_key(session_id: str, char_id: int) -> str:
+        """Хранит JSON (CombatSessionContainerDTO)."""
+        return f"combat:sess:{session_id}:actor:{char_id}"
+
+    @staticmethod
+    def get_combat_pending_move_key(session_id: str, char_id: int) -> str:
+        """
+        Хранит JSON заявки игрока: {target_id, attack, block, timestamp}.
+        Удаляется после расчета.
+        """
+        return f"combat:sess:{session_id}:pending:{char_id}"
+
+    @staticmethod
+    def get_combat_log_key(session_id: str) -> str:
+        """Redis List для логов боя (rpush)."""
+        return f"combat:sess:{session_id}:logs"
+
+    @staticmethod
+    def get_combat_meta_key(session_id: str) -> str:
+        """Общая инфа: {start_time, type (pve/pvp), is_active}."""
+        return f"combat:sess:{session_id}:meta"
