@@ -213,7 +213,9 @@ class CombatUIService(BaseUIService):
         now = time.time()
         for actor in all_actors:
             # Определяем статус готовности (pending move)
-            is_ready = False
+            # Определяем, сделал ли этот участник ход против нас
+            pending_move = await combat_manager.get_pending_move(self.session_id, actor.char_id, self.char_id)
+            is_ready = bool(pending_move)
 
             hp_max = 100
             if actor.stats:
