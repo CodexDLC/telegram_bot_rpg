@@ -40,6 +40,7 @@ class InGame(StatesGroup):
 
     navigation = State()
     inventory = State()
+    combat = State()
 
 
 class AdminMode(StatesGroup):

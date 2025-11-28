@@ -1,6 +1,8 @@
 import asyncio
 import contextlib
 import random
+import time
+from collections.abc import Awaitable, Callable
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -32,6 +34,24 @@ class UIAnimationService:
             await self.bot.edit_message_text(
                 chat_id=self.chat_id, message_id=self.message_id, text=text, reply_markup=kb, parse_mode="HTML"
             )
+
+    async def animate_polling(self, text: str, check_func: Callable[[], Awaitable[bool]], timeout: int = 60) -> bool:
+        """
+        Крутит анимацию, пока check_func() не вернет True или не истечет timeout.
+        """
+        start = time.time()
+        while (time.time() - start) < timeout:
+            # 1. Рисуем кадр (можно менять смайлики ⏳ -> ⌛ -> 🐢)
+            await self._render_frame(f"{text}\n⏱ {int(time.time() - start)} сек.")
+
+            # 2. Проверяем условие (БД/Redis)
+            if await check_func():
+                return True
+
+            # 3. Ждем перед следующим кадром
+            await asyncio.sleep(3)
+
+        return False
 
     # --- 1. ЗАМЕНА СТАРОГО ХЕЛПЕРА (Сюжетные вставки) ---
     async def animate_sequence(self, sequence: tuple[tuple[str, float], ...], final_kb=None) -> None:

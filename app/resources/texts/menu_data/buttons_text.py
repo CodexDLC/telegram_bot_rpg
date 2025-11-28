@@ -3,7 +3,7 @@ class ButtonsTextData:
         "creation": ["logout"],
         "tutorial_stats": ["status", "logout"],
         "tutorial_skill": ["status", "navigation", "logout"],
-        "in_game": ["status", "inventory", "navigation", "logout"],
+        "in_game": ["status", "inventory", "navigation", "arena_test", "logout"],
     }
 
     BUTTONS_MENU_FULL = {
@@ -11,6 +11,7 @@ class ButtonsTextData:
         "inventory": "📦 Инвентарь",
         "navigation": "🗺️ Навигация",
         "logout": "[🔙 Выйти из мира ]",
+        "arena_test": "⚔️ Тренировка (Тест)",
     }
 
     TEXT_MENU = "<code>Игровое меню</code>"
