@@ -223,7 +223,7 @@ class CombatCalculator:
         skill_crit = flags.get("bonus_crit", 0.0)
 
         # 3. Анти-крит врага
-        anti_crit = stats_def.get("anti_crit_chance", 0.0)
+        anti_crit = stats_def.get(f"anti_{cat_prefix}_crit_chance", 0.0) + stats_def.get("anti_crit_chance", 0.0)
 
         # 4. Кап крита
         crit_cap = stats_atk.get(f"{cat_prefix}_crit_cap", 0.75)
