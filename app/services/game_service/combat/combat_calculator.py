@@ -8,11 +8,8 @@ from loguru import logger as log
 class CombatCalculator:
     """
     Чистая математика боя (Pure Logic).
+    v4: Поддержка динамических статов (DTO), капов и флагов способностей.
     """
-
-    CAP_PHYS_CRIT = 0.75
-    CAP_MAGIC_CRIT = 0.50
-    CAP_DODGE = 0.75
 
     @staticmethod
     def calculate_hit(
@@ -21,8 +18,23 @@ class CombatCalculator:
         current_shield: int,
         attack_zones: list[str],
         block_zones: list[str],
-        damage_type: str = "phys",
+        damage_type: str = "physical",
+        flags: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """
+        Рассчитывает результат одного удара.
+
+        Args:
+            flags: Словарь правил из активного скилла (ignore_block, damage_mult...).
+        """
+
+        if flags is None:
+            flags = {}
+
+        # Скилл может подменить тип урона (например, меч -> огонь)
+        if "override_damage_type" in flags:
+            damage_type = flags["override_damage_type"]
+
         ctx: dict[str, Any] = {
             "logs": [],
             "is_crit": False,
@@ -37,144 +49,206 @@ class CombatCalculator:
             "tokens_gained_atk": {},
             "tokens_gained_def": {},
         }
-        log.debug(
-            f"Расчет удара: Тип={damage_type}, Щит цели={current_shield}, "
-            f"Зоны атаки={attack_zones}, Зоны блока={block_zones}"
-        )
 
-        if CombatCalculator._step_parry(stats_def, damage_type, ctx):
-            ctx["tokens_gained_def"]["parry"] = 1
-            log.debug("Результат: Парирование")
-            return CombatCalculator._finalize_log(ctx, 0, 0, attack_zones, block_zones)
+        log.trace(f"Calc Start: Type={damage_type}, Flags={flags}")
 
-        if CombatCalculator._step_dodge(stats_atk, stats_def, damage_type, ctx):
-            if ctx["is_counter"]:
-                ctx["tokens_gained_def"]["counter"] = 1
-            log.debug(f"Результат: Уклонение (Контратака: {ctx['is_counter']})")
-            return CombatCalculator._finalize_log(ctx, 0, 0, attack_zones, block_zones)
+        # ==========================================================================
+        # 1. ПАРИРОВАНИЕ (Parry)
+        # ==========================================================================
+        # Парировать можно только физику (по умолчанию), если флаг не говорит обратное
+        can_parry = damage_type == "physical"
 
-        CombatCalculator._step_block(stats_def, attack_zones, block_zones, ctx)
-        CombatCalculator._step_roll_damage(stats_atk, stats_def, damage_type, ctx)
+        if not flags.get("ignore_parry") and can_parry:
+            parry_chance = stats_def.get("parry_chance", 0.0)
+            parry_cap = stats_def.get("parry_cap", 0.50)  # Читаем кап из DTO
+
+            final_chance = min(parry_chance, parry_cap)
+
+            if CombatCalculator._check_chance(final_chance):
+                ctx["is_parried"] = True
+                ctx["tokens_gained_def"]["parry"] = 1
+                return CombatCalculator._finalize_log(ctx, 0, 0, attack_zones, block_zones)
+
+        # ==========================================================================
+        # 2. УКЛОНЕНИЕ (Dodge)
+        # ==========================================================================
+        if not flags.get("ignore_dodge"):
+            dodge_val = stats_def.get("dodge_chance", 0.0)
+
+            # Анти-уворот (Точность)
+            anti_dodge = stats_atk.get("anti_dodge_chance", 0.0)
+
+            # Кап уворота
+            dodge_cap = stats_def.get("dodge_cap", 0.75)
+
+            # Формула: (Уворот - Точность), но не больше Капа и не меньше 0
+            final_dodge = max(0.0, min(dodge_cap, dodge_val - anti_dodge))
+
+            if CombatCalculator._check_chance(final_dodge):
+                ctx["is_dodged"] = True
+
+                # Попытка контратаки при увороте
+                counter_chance = stats_def.get("counter_attack_chance", 0.0)
+                if CombatCalculator._check_chance(counter_chance):
+                    ctx["is_counter"] = True
+                    ctx["tokens_gained_def"]["counter"] = 1
+
+                return CombatCalculator._finalize_log(ctx, 0, 0, attack_zones, block_zones)
+
+        # ==========================================================================
+        # 3. БЛОК (Block)
+        # ==========================================================================
+        if not flags.get("ignore_block"):
+            CombatCalculator._step_block(stats_def, attack_zones, block_zones, ctx)
+        else:
+            log.trace("Блок проигнорирован флагом ignore_block")
+
+        # ==========================================================================
+        # 4. РАСЧЕТ УРОНА (Roll Damage)
+        # ==========================================================================
+        CombatCalculator._step_roll_damage(stats_atk, stats_def, damage_type, ctx, flags)
+
+        # ==========================================================================
+        # 5. СНИЖЕНИЕ УРОНА (Mitigation)
+        # ==========================================================================
         CombatCalculator._step_mitigation(stats_atk, stats_def, damage_type, ctx)
+
+        # ==========================================================================
+        # 6. ЭФФЕКТЫ ПОСЛЕ УРОНА (Vampirism etc)
+        # ==========================================================================
         CombatCalculator._step_vampirism(stats_atk, ctx)
 
+        # Начисление токенов за результат
         if ctx["is_blocked"]:
             ctx["tokens_gained_def"]["block"] = 1
-        elif ctx["damage_final"] > 0 and not ctx["is_dodged"] and not ctx["is_parried"]:
+        elif ctx["damage_final"] > 0:
             ctx["tokens_gained_atk"]["hit"] = 1
 
         if ctx["is_crit"]:
             ctx["tokens_gained_atk"]["crit"] = 1
 
+        # Распределение по Щиту и HP
         dmg_shield, dmg_hp = CombatCalculator._distribute_damage(current_shield, ctx["damage_final"])
-        log.debug(f"Итог: Урон по щиту={dmg_shield}, Урон по HP={dmg_hp}, Крит={ctx['is_crit']}")
 
         return CombatCalculator._finalize_log(ctx, dmg_shield, dmg_hp, attack_zones, block_zones)
 
-    @staticmethod
-    def _finalize_log(ctx: dict, shield_dmg: int, hp_dmg: int, attack_zones: list, block_zones: list) -> dict:
-        visual_bar = CombatCalculator._generate_visual_bar(attack_zones, block_zones, ctx)
-        ctx["visual_bar"] = visual_bar
-        ctx["logs"] = []
-        return CombatCalculator._pack_result(ctx, shield_dmg, hp_dmg)
-
-    @staticmethod
-    def _generate_visual_bar(attack_zones: list, block_zones: list, ctx: dict) -> str:
-        zones_order = ["head", "chest", "legs", "feet"]
-        symbols = []
-        if ctx["is_dodged"] or ctx["is_parried"]:
-            return ""
-        for zone in zones_order:
-            is_attacked = zone in (attack_zones or [])
-            is_blocked = zone in (block_zones or [])
-            if is_attacked and is_blocked:
-                symbols.append("🛡")
-            elif is_attacked:
-                symbols.append("🟥")
-            elif is_blocked:
-                symbols.append("🟦")
-            else:
-                symbols.append("▫️")
-        return f"[{''.join(symbols)}]"
-
-    @staticmethod
-    def _step_parry(stats_def: dict, damage_type: str, ctx: dict) -> bool:
-        parry_chance = stats_def.get("parry_chance", 0.0)
-        if damage_type == "phys" and CombatCalculator._check_chance(parry_chance):
-            ctx["is_parried"] = True
-            log.trace(f"Шаг: Парирование (Шанс: {parry_chance:.2f}) -> Успех")
-            return True
-        return False
-
-    @staticmethod
-    def _step_dodge(stats_atk: dict, stats_def: dict, damage_type: str, ctx: dict) -> bool:
-        if damage_type == "phys":
-            dodge_chance = max(
-                0.0,
-                min(
-                    CombatCalculator.CAP_DODGE,
-                    stats_def.get("dodge_chance", 0.0) - stats_atk.get("anti_dodge", 0.0),
-                ),
-            )
-            if CombatCalculator._check_chance(dodge_chance):
-                ctx["is_dodged"] = True
-                log.trace(f"Шаг: Уклонение (Шанс: {dodge_chance:.2f}) -> Успех")
-                counter_chance = stats_def.get("counter_attack_chance", 0.0)
-                if CombatCalculator._check_chance(counter_chance):
-                    ctx["is_counter"] = True
-                    log.trace(f"Шаг: Контратака (Шанс: {counter_chance:.2f}) -> Успех")
-                return True
-        return False
+    # --------------------------------------------------------------------------
+    # ВНУТРЕННИЕ ШАГИ (Steps)
+    # --------------------------------------------------------------------------
 
     @staticmethod
     def _step_block(stats_def: dict, attack_zones: list, block_zones: list, ctx: dict) -> None:
+        # 1. Геометрический блок (Угадал зону)
         atk_set = set(attack_zones) if attack_zones else set()
         blk_set = set(block_zones) if block_zones else set()
+
         if atk_set.intersection(blk_set):
             ctx["is_blocked"] = True
             ctx["block_type"] = "geo"
-            log.trace("Шаг: Блок -> Успех (Геометрический)")
             return
-        shield_block_chance = stats_def.get("shield_block_chance", 0.0)
-        if CombatCalculator._check_chance(shield_block_chance):
+
+        # 2. Пассивный блок щитом (Stat Check)
+        block_chance = stats_def.get("shield_block_chance", 0.0)
+        block_cap = stats_def.get("shield_block_cap", 0.75)
+
+        final_chance = min(block_chance, block_cap)
+
+        if CombatCalculator._check_chance(final_chance):
             ctx["is_blocked"] = True
             ctx["block_type"] = "passive"
-            log.trace(f"Шаг: Блок (Шанс: {shield_block_chance:.2f}) -> Успех (Пассивный)")
 
     @staticmethod
-    def _step_roll_damage(stats_atk: dict, stats_def: dict, damage_type: str, ctx: dict) -> None:
-        # 1. Определяем правильный префикс (physical или magical)
-        # Если damage_type="phys", то prefix="physical". Это совпадает с ключами Агрегатора.
-        prefix = "magical" if damage_type == "magic" else "physical"
+    def _step_roll_damage(stats_atk: dict, stats_def: dict, damage_type: str, ctx: dict, flags: dict) -> None:
+        """
+        Полностью динамический ролл урона на основе damage_type.
+        """
+        # Определяем категорию (физика или магия) для фоллбэков
+        cat_prefix = "physical" if damage_type == "physical" else "magical"
 
-        # 2. Ищем ключи 'physical_damage_min' / 'physical_damage_max'
-        # Используем prefix, а не dmg_prefix
-        d_min = int(stats_atk.get(f"{prefix}_damage_min", 1))
-        d_max = int(stats_atk.get(f"{prefix}_damage_max", 2))
+        # --- А. Базовый Ролл (Base Roll) ---
+        d_min, d_max = 0, 0
 
-        # 3. Роллим урон
+        if damage_type == "physical":
+            # Классика для оружия: Мин - Макс
+            d_min = int(stats_atk.get("physical_damage_min", 1))
+            d_max = int(stats_atk.get("physical_damage_max", 2))
+        else:
+            # Магия / Стихии: От "Силы Магии" (Power)
+            power = stats_atk.get("magical_damage_power", 0.0)
+
+            # Если Power > 0, считаем разброс +/- 10%
+            if power > 0:
+                d_min = int(power * 0.9)
+                d_max = int(power * 1.1)
+            else:
+                # Фоллбэк: если вдруг кто-то задал старые min/max для магии
+                d_min = int(stats_atk.get("magical_damage_min", 0))
+                d_max = int(stats_atk.get("magical_damage_max", 0))
+
+        # Защита от нулевого урона (кроме кулаков)
+        if d_max == 0 and damage_type == "physical":
+            d_min, d_max = 1, 2
+
+        if d_max == 0:
+            ctx["damage_raw"] = 0
+            # Если урона нет, выходим сразу (но это не промах, просто 0 урона)
+            return
+
         dmg = random.randint(d_min, max(d_min, d_max))
 
-        log.trace(f"Шаг: Ролл урона -> База: {dmg} (из [{d_min}-{d_max}])")
+        # --- Б. Бонусы (Damage Bonus) ---
+        # 1. Специфичный бонус (fire_damage_bonus)
+        specific_bonus = stats_atk.get(f"{damage_type}_damage_bonus", 0.0)
 
-        crit_chance = max(
-            0.0,
-            min(
-                CombatCalculator.CAP_PHYS_CRIT,
-                stats_atk.get(f"{prefix}_crit_chance", 0.0) - stats_def.get(f"anti_{prefix}_crit_chance", 0.0),
-            ),
-        )
-        if CombatCalculator._check_chance(crit_chance):
+        # 2. Общий бонус категории (magical_damage_bonus), если это не чистая магия/физика
+        general_bonus = 0.0
+        if damage_type not in ("physical", "magical"):
+            general_bonus = stats_atk.get(f"{cat_prefix}_damage_bonus", 0.0)
+
+        total_bonus_pct = specific_bonus + general_bonus
+        dmg = int(dmg * (1.0 + total_bonus_pct))
+
+        # --- В. Множитель Скилла (Skill Multiplier) ---
+        skill_mult = flags.get("damage_mult", 1.0)
+        if skill_mult != 1.0:
+            dmg = int(dmg * skill_mult)
+
+        # --- Г. Крит (Crit) ---
+        # 1. Шанс крита (fire_crit -> magical_crit)
+        crit_val = stats_atk.get(f"{damage_type}_crit_chance", 0.0)
+        if crit_val == 0.0:
+            crit_val = stats_atk.get(f"{cat_prefix}_crit_chance", 0.0)
+
+        # 2. Бонус крита от скилла
+        skill_crit = flags.get("bonus_crit", 0.0)
+
+        # 3. Анти-крит врага
+        anti_crit = stats_def.get("anti_crit_chance", 0.0)
+
+        # 4. Кап крита
+        crit_cap = stats_atk.get(f"{cat_prefix}_crit_cap", 0.75)
+
+        # Итоговый шанс
+        final_crit_chance = max(0.0, min(crit_cap, (crit_val + skill_crit) - anti_crit))
+
+        if CombatCalculator._check_chance(final_crit_chance):
             ctx["is_crit"] = True
-            crit_power = stats_atk.get(f"{prefix}_crit_power_float", 1.5)
+
+            # Сила крита (fire_power -> magical_power -> 1.5)
+            pow_key = f"{cat_prefix}_crit_power_float"
+            crit_power = stats_atk.get(pow_key, 1.5)
+
+            # Блок щитом срезает крит (обычно крит не проходит в блок, но тут просто урон)
             if not ctx["is_blocked"]:
                 dmg = int(dmg * crit_power)
-                log.trace(f"Шаг: Крит (Шанс: {crit_chance:.2f}) -> Успех! Урон x{crit_power} -> {dmg}")
 
+        # --- Д. Срез урона Блоком (Block Mitigation) ---
         if ctx["is_blocked"]:
-            block_power = min(1.0, stats_def.get("shield_block_power", 0.5))
+            block_power = stats_def.get("shield_block_power", 0.5)
+            # Капа на силу блока нет (или он 100%), но проверим на всякий
+            block_power = min(1.0, block_power)
+
             dmg = int(dmg * (1.0 - block_power))
-            log.trace(f"Шаг: Урон в блоке -> Снижение на {block_power * 100}% -> {dmg}")
 
         ctx["damage_raw"] = dmg
 
@@ -183,56 +257,98 @@ class CombatCalculator:
         dmg = ctx["damage_raw"]
         if dmg <= 0:
             ctx["damage_final"] = 0
-            log.trace("Шаг: Митигация -> Пропущен (урон <= 0)")
             return
 
-        res_stat = "magical_resistance" if damage_type == "magic" else "physical_resistance"
-        pen_stat = "magical_penetration" if damage_type == "magic" else "physical_penetration"
+        # 1. Резист (Resistance vs Penetration)
+        res_key = f"{damage_type}_resistance"
+        pen_key = f"{damage_type}_penetration"
 
-        resistance = stats_def.get(res_stat, 0.0)
-        penetration = stats_atk.get(pen_stat, 0.0)
-        net_resist = min(0.85, resistance - penetration)
-        dmg_after_res = int(dmg * (1.0 - net_resist))
-        log.trace(
-            f"Шаг: Митигация (Броня %) -> Урон {dmg} * (1 - ({resistance:.2f} - {penetration:.2f})) -> {dmg_after_res}"
-        )
-        dmg = dmg_after_res
+        resistance = stats_def.get(res_key, 0.0)
+        penetration = stats_atk.get(pen_key, 0.0)
 
-        flat_reduction = int(stats_def.get("damage_reduction_flat", 0))
-        dmg_after_flat = max(1, dmg - flat_reduction)
-        log.trace(f"Шаг: Митигация (Броня Flat) -> Урон {dmg} - {flat_reduction} -> {dmg_after_flat}")
+        # Фоллбэк на категорию (magical), если нет специфики
+        cat_prefix = "physical" if damage_type == "physical" else "magical"
 
-        ctx["damage_final"] = dmg_after_flat
+        if resistance == 0.0 and damage_type not in ("physical", "magical"):
+            resistance = stats_def.get(f"{cat_prefix}_resistance", 0.0)
+
+        if penetration == 0.0 and damage_type not in ("physical", "magical"):
+            penetration = stats_atk.get(f"{cat_prefix}_penetration", 0.0)
+
+        # Кап резиста
+        res_cap = stats_def.get("resistance_cap", 0.85)
+
+        # Эффективный резист
+        net_resist = max(0.0, min(res_cap, resistance - penetration))
+
+        dmg = int(dmg * (1.0 - net_resist))
+
+        # 2. Плоское снижение (Flat Reduction)
+        flat_red = int(stats_def.get("damage_reduction_flat", 0))
+        dmg = max(1, dmg - flat_red)
+
+        ctx["damage_final"] = dmg
 
     @staticmethod
     def _step_vampirism(stats_atk: dict, ctx: dict) -> None:
         vamp_power = stats_atk.get("vampiric_power", 0.0)
-        vamp_chance = stats_atk.get("vampiric_trigger_chance", 0.8)
+        vamp_chance = stats_atk.get("vampiric_trigger_chance", 0.0)
+
         if ctx["damage_final"] > 0 and vamp_power > 0 and CombatCalculator._check_chance(vamp_chance):
             lifesteal = int(ctx["damage_final"] * vamp_power)
             ctx["lifesteal_amount"] = lifesteal
-            log.trace(
-                f"Шаг: Вампиризм (Шанс: {vamp_chance:.2f}) -> Успех! "
-                f"Украдено {lifesteal} HP ({ctx['damage_final']} * {vamp_power:.2f})"
-            )
+
+    # --------------------------------------------------------------------------
+    # УТИЛИТЫ (Helpers)
+    # --------------------------------------------------------------------------
+
+    @staticmethod
+    def _finalize_log(ctx: dict, shield_dmg: int, hp_dmg: int, attack_zones: list, block_zones: list) -> dict:
+        visual_bar = CombatCalculator._generate_visual_bar(attack_zones, block_zones, ctx)
+        ctx["visual_bar"] = visual_bar
+        return CombatCalculator._pack_result(ctx, shield_dmg, hp_dmg)
+
+    @staticmethod
+    def _generate_visual_bar(attack_zones: list, block_zones: list, ctx: dict) -> str:
+        zones_order = ["head", "chest", "legs", "feet"]
+        symbols = []
+
+        # Если удар не состоялся (уворот/парирование), зоны не рисуем (или рисуем пустые)
+        if ctx.get("is_dodged") or ctx.get("is_parried"):
+            return ""  # Можно вернуть спец символ "💨"
+
+        for zone in zones_order:
+            is_attacked = zone in (attack_zones or [])
+            is_blocked = zone in (block_zones or [])
+
+            if is_attacked and is_blocked:
+                symbols.append("🛡")  # Удар в блок
+            elif is_attacked:
+                symbols.append("🟥")  # Попадание
+            elif is_blocked:
+                symbols.append("🟦")  # Блок (пустой)
+            else:
+                symbols.append("▫️")  # Пусто
+
+        return f"[{''.join(symbols)}]"
 
     @staticmethod
     def _distribute_damage(current_shield: int, damage: int) -> tuple[int, int]:
         if damage <= 0:
             return 0, 0
         if current_shield >= damage:
-            log.trace(f"Распределение урона: {damage} урона полностью поглощено щитом ({current_shield})")
             return damage, 0
         shield_dmg = current_shield
         hp_dmg = damage - current_shield
-        log.trace(
-            f"Распределение урона: Щит ({current_shield}) сломан! {shield_dmg} урона по щиту, {hp_dmg} урона по HP."
-        )
         return shield_dmg, hp_dmg
 
     @staticmethod
     def _check_chance(chance: float) -> bool:
-        return chance >= 1.0 or (chance > 0 and random.random() < chance)
+        if chance <= 0:
+            return False
+        if chance >= 1.0:
+            return True
+        return random.random() < chance
 
     @staticmethod
     def _pack_result(ctx: dict, shield_dmg: int, hp_dmg: int) -> dict:
@@ -247,9 +363,7 @@ class CombatCalculator:
             "is_counter": ctx.get("is_counter", False),
             "lifesteal": ctx["lifesteal_amount"],
             "visual_bar": ctx.get("visual_bar", ""),
-            # 🔥 FIX: Заменили 0 на {}, чтобы не ломать итерацию в сервисе
             "tokens_atk": ctx.get("tokens_gained_atk", {}),
             "tokens_def": ctx.get("tokens_gained_def", {}),
-            # Логи (из предыдущего фикса)
             "logs": ctx.get("logs", []),
         }
