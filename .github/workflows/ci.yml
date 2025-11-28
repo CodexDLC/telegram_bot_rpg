@@ -1,6 +1,7 @@
 name: CI Code Quality
 
 on:
+  # Эти события активируют ВЕСЬ Workflow:
   push:
     branches: [ "main", "develop", "devops" ]
   pull_request:
@@ -12,47 +13,44 @@ jobs:
   lint:
     name: ⚡ Ruff Linter
     runs-on: ubuntu-latest
+    # Условие: Не нужно, он будет запускаться по обоим событиям,
+    # но Ruff быстрый, поэтому оставляем его на push/pr.
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-          cache: "pip" # Авто-кэширование пакетов
-
+          cache: "pip"
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-
       - name: Run Ruff (Linter)
         run: ruff check .
-
       - name: Run Ruff (Formatter check)
-        # Проверяет, что код отформатирован (не меняет файлы, только ругается)
         run: ruff format --check .
 
   # --- ПОТОК 2: Типизация (Строгая проверка типов) ---
   type-check:
     name: 🛡️ Mypy Static Analysis
     runs-on: ubuntu-latest
+    # 🔥 УСЛОВИЕ: Запускаем ТОЛЬКО, если событие равно 'pull_request'.
+    # Это отключит Mypy при обычном 'push' в ветку разработки.
+    if: github.event_name == 'pull_request'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: "pip"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-
       - name: Run Mypy
         run: mypy .
 
@@ -60,7 +58,7 @@ jobs:
   # tests:
   #   name: 🧪 Pytest
   #   runs-on: ubuntu-latest
-  #   needs: [lint, type-check] # Запустится только если линтеры пройдут
+  #   needs: [lint, type-check]
+  #   if: github.event_name == 'pull_request' # ⬅️ Тоже только при PR
   #   steps:
-  #     ... (настройка окружения) ...
-  #     - run: pytest
+  #     ...
