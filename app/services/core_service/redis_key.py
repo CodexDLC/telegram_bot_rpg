@@ -94,3 +94,8 @@ class RedisKeys:
     def get_combat_meta_key(session_id: str) -> str:
         """Общая инфа: {start_time, type (pve/pvp), is_active}."""
         return f"combat:sess:{session_id}:meta"
+
+    @staticmethod
+    def get_combat_participants_key(session_id: str) -> str:
+        """Ключ для Set с ID всех участников боя."""
+        return f"combat:sess:{session_id}:participants"

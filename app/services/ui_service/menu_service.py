@@ -58,6 +58,11 @@ class MenuService:
 
             elif key in ("navigation", "inventory"):
                 callback_data = MeinMenuCallback(action=key, game_stage=self.gs, char_id=self.char_id).pack()
+
+            elif key == "arena_test":
+                # Используем тот же MeinMenuCallback, но с action='arena_start'
+                callback_data = MeinMenuCallback(action="arena_start", game_stage=self.gs, char_id=self.char_id).pack()
+
             else:
                 continue
 
