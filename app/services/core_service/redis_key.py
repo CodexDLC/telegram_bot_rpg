@@ -74,16 +74,22 @@ class RedisKeys:
 
     @staticmethod
     def get_combat_actor_key(session_id: str, char_id: int) -> str:
-        """Хранит JSON (CombatSessionContainerDTO)."""
         return f"combat:sess:{session_id}:actor:{char_id}"
 
     @staticmethod
-    def get_combat_pending_move_key(session_id: str, char_id: int) -> str:
+    def get_combat_pending_move_key(session_id: str, actor_id: int, target_id: int) -> str:
         """
-        Хранит JSON заявки игрока: {target_id, attack, block, timestamp}.
-        Удаляется после расчета.
+        🔥 ИЗМЕНЕНО: Теперь ключ зависит от ПАРЫ (Кто -> Кого).
+        Пример: combat:sess:123:pending:1001:2002
         """
-        return f"combat:sess:{session_id}:pending:{char_id}"
+        return f"combat:sess:{session_id}:pending:{actor_id}:{target_id}"
+
+    @staticmethod
+    def get_combat_pending_move_pattern(session_id: str, actor_id: int) -> str:
+        """
+        Паттерн для поиска ВСЕХ заявок этого игрока (ко всем врагам).
+        """
+        return f"combat:sess:{session_id}:pending:{actor_id}:*"
 
     @staticmethod
     def get_combat_log_key(session_id: str) -> str:

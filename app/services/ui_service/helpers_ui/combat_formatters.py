@@ -1,14 +1,13 @@
 # app/services/ui_service/helpers_ui/combat_formatters.py
-
 from loguru import logger as log
+
+from app.resources.schemas_dto.combat_source_dto import CombatSessionContainerDTO
 
 
 class CombatFormatter:
     """
     Статический класс для форматирования текста в бою.
-
-    Предоставляет методы для создания текстового представления лога боя
-    и панели управления (дашборда).
+    v2: Группировка по командам, маркер цели, инлайн-статусы, экран результатов.
     """
 
     @staticmethod
@@ -53,10 +52,16 @@ class CombatFormatter:
         return "\n".join(text_lines)
 
     @staticmethod
-    def format_dashboard(player_state: dict, enemies_status: list[dict], timer_text: str) -> str:
+    def format_dashboard(
+        player_state: dict,
+        target_id: int | None,  # ID текущей цели
+        enemies_list: list[dict],
+        allies_list: list[dict],
+        timer_text: str,
+    ) -> str:
         """
         Форматирует текст для панели управления боем (дашборда).
-        v3.0: Детальный вывод всех токенов с уникальными иконками.
+        v3.0: Детальный вывод всех токенов с уникальными иконками + разделение команд.
         """
         # --- Состояние игрока ---
         hp_cur = int(player_state.get("hp_current", 0))
@@ -76,43 +81,108 @@ class CombatFormatter:
         t_parry = tokens.get("parry", 0)
         t_counter = tokens.get("counter", 0)
 
+        # Заряды смены
+        charges = player_state.get("switch_charges", 0)
+
         # Формируем строку токенов (разбиваем на 2 строки для читаемости на телефоне)
         # Строка 1: Атака
         tokens_atk_str = f"🗡 <b>{t_hit}</b>  💥 <b>{t_crit}</b>"
         # Строка 2: Защита
         tokens_def_str = f"🛡 <b>{t_block}</b>  ⚔️ <b>{t_parry}</b>  ↩️ <b>{t_counter}</b>"
 
-        # --- Состояние врагов ---
-        enemies_text_lines = []
-        if not enemies_status:
-            enemies_text_lines.append("<i>Нет противников</i>")
-        else:
-            for i, enemy in enumerate(enemies_status, 1):
-                icon_map = {"thinking": "🔴", "ready": "🟢", "dead": "💀"}
-                status = enemy.get("status", "thinking")
-                icon = icon_map.get(status, "❓")
-
-                name = enemy.get("name", "Враг")
-                e_hp = enemy.get("hp_current", 0)
-                e_max = enemy.get("hp_max", 1)
-
-                hp_perc = int((e_hp / e_max) * 100) if e_max > 0 else 0
-                hp_text = f"[{hp_perc}% HP]" if e_hp > 0 else "[МЕРТВ]"
-
-                enemies_text_lines.append(f"{i}. {icon} <b>{name}</b> {hp_text}")
-
-        enemies_text = "\n".join(enemies_text_lines)
-
-        # --- Сборка финального текста ---
-        text = (
+        header = (
             f"👤 <b>Вы:</b> {hp_cur}/{hp_max} HP | {en_cur}/{en_max} EN\n"
             f"💎 <b>Токены:</b>\n"
             f"[ {tokens_atk_str} ]\n"
-            f"[ {tokens_def_str} ]\n\n"
-            f"🆚 <b>Противники:</b>\n"
-            f"{enemies_text}\n"
+            f"[ {tokens_def_str} ]\n"
+            f"🔄 <b>Тактика:</b> {charges} зарядов"
+        )
+
+        # 2. Секция Врагов
+        enemies_text = CombatFormatter._format_unit_list(enemies_list, target_id, is_enemy=True)
+
+        # 3. Секция Союзников
+        allies_text = ""
+        if allies_list:
+            allies_text = "\n\n<b>🔰 Союзники:</b>\n" + CombatFormatter._format_unit_list(
+                allies_list, None, is_enemy=False
+            )
+
+        # --- Сборка финального текста ---
+        text = (
+            f"{header}\n\n"
+            f"<b>🆚 Противники:</b>\n"
+            f"{enemies_text}"
+            f"{allies_text}\n\n"
             f"--------------------------\n"
             f"{timer_text}"
         )
-        log.debug("Дашборд отформатирован (Full Token View).")
+        log.debug("Дашборд отформатирован (Full Token View + Teams).")
         return text
+
+    @staticmethod
+    def _format_unit_list(units: list[dict], target_id: int | None, is_enemy: bool) -> str:
+        lines = []
+
+        for unit in units:
+            uid = unit["char_id"]
+            name = unit["name"]
+            hp_cur = unit["hp_current"]
+            hp_max = unit["hp_max"]
+
+            # Статус (Жив/Мертв)
+            if hp_cur <= 0:
+                status_icon = "💀"
+                hp_display = "[МЕРТВ]"
+            else:
+                # Статус готовности (pending move)
+                is_ready = unit.get("is_ready", False)
+                status_icon = "✅" if is_ready else "⏳"
+                hp_perc = int((hp_cur / hp_max) * 100) if hp_max > 0 else 0
+                hp_display = f"{hp_cur} HP ({hp_perc}%)"
+
+            # Маркер цели (Только для врагов)
+            target_marker = ""
+            if is_enemy and target_id == uid:
+                target_marker = "🎯 <b>ЦЕЛЬ</b> "
+                name = f"<u>{name}</u>"  # Подчеркиваем текущую цель
+
+            lines.append(f"{status_icon} {target_marker}<b>{name}</b>: {hp_display}")
+
+        if not lines:
+            return "<i>Никого нет...</i>"
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def format_results(player_dto: CombatSessionContainerDTO, winner_team: str, duration: int) -> str:
+        """
+        Форматирует экран завершения боя.
+        TODO: В будущем заменить на BattleResultService для разных режимов (Арена/Босс).
+        """
+        is_winner = player_dto.team == winner_team
+
+        if is_winner:
+            header = "🏆 <b>ПОБЕДА!</b>"
+            flavor = "<i>Враг повержен. Вы вытираете кровь с клинка...</i>"
+        else:
+            header = "💀 <b>ПОРАЖЕНИЕ...</b>"
+            flavor = "<i>Тьма сгущается перед глазами. Вы пали в бою.</i>"
+
+        # Достаем статистику
+        s = player_dto.state.stats if player_dto.state else None
+
+        stats_text = ""
+        if s:
+            stats_text = (
+                f"<b>📊 Ваша эффективность:</b>\n"
+                f"<code>"
+                f"⚔️ Урон:    {s.damage_dealt}\n"
+                f"🛡 Блок:    {s.blocks_success}\n"
+                f"🏃 Уворот:  {s.dodges_success}\n"
+                f"💔 Получено: {s.damage_taken}\n"
+                f"💥 Критов:   {s.crits_landed}"
+                f"</code>"
+            )
+
+        return f"{header}\n⏱ <i>Время боя: {duration} сек.</i>\n\n{flavor}\n\n{stats_text}"

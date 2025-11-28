@@ -108,53 +108,30 @@ class CombatManager:
         log.debug(f"Запрос состояния бойца {char_id} в сессии {session_id}")
         return await redis_client.get(key)
 
-    # --- PENDING MOVES (JSON String) ---
-    async def set_pending_move(self, session_id: str, char_id: int, move_data: str) -> None:
-        """
-        Сохраняет заявленный ход игрока.
-
-        Args:
-            session_id (str): Уникальный идентификатор сессии.
-            char_id (int): ID персонажа, сделавшего ход.
-            move_data (str): JSON-строка с данными о ходе.
-
-        Returns:
-            None
-        """
-        key = Rk.get_combat_pending_move_key(session_id, char_id)
+    async def set_pending_move(self, session_id: str, actor_id: int, target_id: int, move_data: str) -> None:
+        """Сохраняет ход для КОНКРЕТНОЙ пары."""
+        key = Rk.get_combat_pending_move_key(session_id, actor_id, target_id)
         await redis_client.set(key, move_data)
-        log.debug(f"Ход от {char_id} в сессии {session_id} зарегистрирован.")
+        log.debug(f"Ход {actor_id}->{target_id} в сессии {session_id} сохранен.")
 
-    async def get_pending_move(self, session_id: str, char_id: int) -> str | None:
-        """
-        Получает заявленный ход игрока.
-
-        Args:
-            session_id (str): Уникальный идентификатор сессии.
-            char_id (int): ID персонажа.
-
-        Returns:
-            str | None: JSON-строка с данными о ходе или None.
-        """
-        key = Rk.get_combat_pending_move_key(session_id, char_id)
-        log.debug(f"Запрос хода от {char_id} в сессии {session_id}")
+    async def get_pending_move(self, session_id: str, actor_id: int, target_id: int) -> str | None:
+        """Получает ход для КОНКРЕТНОЙ пары."""
+        key = Rk.get_combat_pending_move_key(session_id, actor_id, target_id)
         return await redis_client.get(key)
 
-    async def delete_pending_moves(self, session_id: str, *char_ids: int) -> None:
-        """
-        Удаляет заявленные ходы для указанных персонажей.
+    async def delete_pending_move(self, session_id: str, actor_id: int, target_id: int) -> None:
+        """Удаляет ход для КОНКРЕТНОЙ пары."""
+        key = Rk.get_combat_pending_move_key(session_id, actor_id, target_id)
+        await redis_client.delete(key)
 
-        Args:
-            session_id (str): Уникальный идентификатор сессии.
-            *char_ids (int): ID персонажей, чьи ходы нужно удалить.
-
-        Returns:
-            None
-        """
-        keys = [Rk.get_combat_pending_move_key(session_id, cid) for cid in char_ids]
+    async def delete_all_pending_moves_for_actor(self, session_id: str, actor_id: int) -> None:
+        """Удаляет ВСЕ заявки игрока (ко всем врагам)."""
+        pattern = Rk.get_combat_pending_move_pattern(session_id, actor_id)
+        # Используем scan_iter для безопасного поиска без блокировки Redis
+        keys = [key async for key in redis_client.scan_iter(match=pattern)]
         if keys:
             await redis_client.delete(*keys)
-            log.debug(f"Удалены ходы для {char_ids} в сессии {session_id}")
+            log.debug(f"Удалены все ходы игрока {actor_id} в сессии {session_id} ({len(keys)} шт).")
 
     # --- LOGS (List) ---
     async def push_combat_log(self, session_id: str, log_entry_json: str) -> None:
