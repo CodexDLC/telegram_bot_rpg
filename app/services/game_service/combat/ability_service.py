@@ -244,7 +244,10 @@ class AbilityService:
         elif action == "heal":
             value = params.get("value", 0)
             if value > 0:
-                state.hp_current += value
+                from app.services.game_service.combat.stats_calculator import StatsCalculator
+                aggregated_stats = StatsCalculator.aggregate_all(target.stats)
+                max_hp = int(aggregated_stats.get("hp_max", state.hp_current))
+                state.hp_current = min(max_hp, state.hp_current + value)
                 ctx["logs"].append(f"💚 Восстановлено <b>{value}</b> HP.")
 
         elif action == "apply_status":
