@@ -245,6 +245,7 @@ class AbilityService:
             value = params.get("value", 0)
             if value > 0:
                 from app.services.game_service.combat.stats_calculator import StatsCalculator
+
                 aggregated_stats = StatsCalculator.aggregate_all(target.stats)
                 max_hp = int(aggregated_stats.get("hp_max", state.hp_current))
                 state.hp_current = min(max_hp, state.hp_current + value)
