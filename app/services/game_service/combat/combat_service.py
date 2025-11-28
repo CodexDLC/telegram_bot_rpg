@@ -21,6 +21,13 @@ from app.services.game_service.combat.combat_log_builder import CombatLogBuilder
 from app.services.game_service.combat.stats_calculator import StatsCalculator
 from app.services.game_service.regen_service import RegenService
 
+VALID_BLOCK_PAIRS = [
+    ["head", "chest"],
+    ["chest", "legs"],
+    ["legs", "feet"],
+    ["feet", "head"],
+]
+
 
 class CombatService:
     """
@@ -141,13 +148,7 @@ class CombatService:
             log.debug(f"Боец {actor_id}: Авто-выбор атаки -> {attack_zones}")
 
         if not block_zones:
-            valid_block_pairs = [
-                ["head", "chest"],
-                ["chest", "legs"],
-                ["legs", "feet"],
-                ["feet", "head"],
-            ]
-            block_zones = random.choice(valid_block_pairs)
+            block_zones = random.choice(VALID_BLOCK_PAIRS)
             log.debug(f"Боец {actor_id}: Авто-выбор защиты (Пара) -> {block_zones}")
 
         move_data = {
@@ -221,6 +222,14 @@ class CombatService:
             block_zones=move_a["block"],
         )
 
+        # TODO: [NEXT SESSION] СТАТИСТИКА
+        # 1. Обновить статистику Actor A:
+        #    - total_damage_dealt += res_a_to_b['damage_total']
+        #    - total_damage_blocked += res_a_to_b['damage_blocked_by_enemy'] (если будем считать)
+        #    - hits_landed += 1 (если урон > 0)
+        # 2. То же самое для Actor B.
+        # Эти данные нужно хранить в fighter_state или отдельном поле stats внутри DTO.
+
         self._apply_hit_result(actor_b, res_a_to_b)
         self._apply_hit_result(actor_a, res_b_to_a)
 
@@ -236,8 +245,17 @@ class CombatService:
         await combat_manager.save_actor_json(self.session_id, id_b, actor_b.model_dump_json())
 
         await self._log_exchange(actor_a, res_a_to_b, actor_b, res_b_to_a)
+
+        # TODO: [NEXT SESSION] KILL FEED
+        # Если actor_b умер -> записать в статистику Actor A "kills += 1"
+
         await self._check_death_event(actor_a)
         await self._check_death_event(actor_b)
+
+        # TODO: [NEXT SESSION] CHECK WIN CONDITION
+        # Вызвать метод self._check_battle_end(session_id)
+        # Если одна из команд мертва -> Завершить бой.
+
         log.info(f"Обмен ударами между {id_a} и {id_b} завершен.")
 
     # =========================================================================
@@ -326,3 +344,13 @@ class CombatService:
         """Проверяет, умер ли боец, и логирует это событие."""
         if actor.state and actor.state.hp_current <= 0:
             log.info(f"Боец {actor.name} ({actor.char_id}) в сессии {self.session_id} погиб.")
+            # TODO: Отправить отдельное событие в лог "💀 Имя погибает!"
+
+    # TODO: [NEXT SESSION] NEW METHOD: _finish_battle
+    # async def _finish_battle(self, winner_team: str):
+    #     1. Собрать все логи из Redis (lrange).
+    #     2. Собрать итоговую статистику участников.
+    #     3. Создать запись в SQL таблице `combat_history` (JSON field).
+    #     4. Начислить опыт и лут победителям.
+    #     5. Очистить Redis (удалить ключи сессии).
+    #     6. Отправить финальное сообщение в UI (Победа/Поражение + Кнопка "Выйти").

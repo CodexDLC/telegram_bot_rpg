@@ -12,6 +12,8 @@ from app.services.game_service.stats_aggregation_service import (
 )
 from database.repositories import get_character_repo
 
+DUMMY_CHAR_ID = -1
+
 
 class ArenaService:
     def __init__(self, session: AsyncSession, char_id: int):
@@ -44,7 +46,7 @@ class ArenaService:
 
         log.info(f"Создаем Тень с HP={player_hp} и EN={player_en}")
 
-        dummy_id = -1
+        dummy_id = DUMMY_CHAR_ID
 
         session_id = await CombatService.create_battle([], is_pve=True)
         combat_service = CombatService(session_id)

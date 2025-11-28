@@ -18,6 +18,9 @@ class FighterStateDTO(BaseModel):
     tokens: dict[str, int] = Field(default_factory=dict)
     effects: dict[str, Any] = Field(default_factory=dict)
 
+    # TODO: [NEXT SESSION] Добавить поле статистики
+    # combat_stats: dict[str, int] = Field(default_factory=lambda: {"dmg_dealt": 0, "dmg_taken": 0, "blocks": 0})
+
 
 class StatSourceData(BaseModel):
     base: float = 0.0

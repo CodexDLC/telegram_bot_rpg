@@ -50,6 +50,10 @@ async def start_arena_combat(
     # но лучше обновить весь ключ через update_data
     await state.update_data({FSM_CONTEXT_KEY: session_context})
 
+    # TODO: [REFACTOR] Эта строка избыточна и может быть удалена.
+    #       `session_context` является ссылкой на вложенный словарь в `state_data`.
+    #       Изменение `session_context` (строкой выше) уже изменяет `state_data`.
+    #       Повторное присваивание не имеет эффекта.
     # Обновляем локальную переменную state_data для передачи в сервис
     state_data[FSM_CONTEXT_KEY] = session_context
 

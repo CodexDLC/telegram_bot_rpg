@@ -56,24 +56,31 @@ class CombatFormatter:
     def format_dashboard(player_state: dict, enemies_status: list[dict], timer_text: str) -> str:
         """
         Форматирует текст для панели управления боем (дашборда).
-
-        Args:
-            player_state (dict): Словарь с состоянием игрока (HP, Energy, токены).
-            enemies_status (list[dict]): Список словарей с состоянием врагов.
-            timer_text (str): Текст таймера или статуса хода.
-
-        Returns:
-            str: Отформатированный текст для сообщения с дашбордом.
+        v3.0: Детальный вывод всех токенов с уникальными иконками.
         """
         # --- Состояние игрока ---
         hp_cur = int(player_state.get("hp_current", 0))
-        hp_max = int(player_state.get("hp_max", 1))  # Избегаем деления на ноль
+        hp_max = int(player_state.get("hp_max", 1))
         en_cur = int(player_state.get("energy_current", 0))
         en_max = int(player_state.get("energy_max", 0))
 
+        # --- Токены (Разбираем словарь) ---
         tokens = player_state.get("tokens", {})
-        tok_atk = tokens.get("offense", 0)
-        tok_def = tokens.get("defense", 0)
+
+        # Атакующие
+        t_hit = tokens.get("hit", 0)
+        t_crit = tokens.get("crit", 0)
+
+        # Защитные
+        t_block = tokens.get("block", 0)
+        t_parry = tokens.get("parry", 0)
+        t_counter = tokens.get("counter", 0)
+
+        # Формируем строку токенов (разбиваем на 2 строки для читаемости на телефоне)
+        # Строка 1: Атака
+        tokens_atk_str = f"🗡 <b>{t_hit}</b>  💥 <b>{t_crit}</b>"
+        # Строка 2: Защита
+        tokens_def_str = f"🛡 <b>{t_block}</b>  ⚔️ <b>{t_parry}</b>  ↩️ <b>{t_counter}</b>"
 
         # --- Состояние врагов ---
         enemies_text_lines = []
@@ -87,21 +94,25 @@ class CombatFormatter:
 
                 name = enemy.get("name", "Враг")
                 e_hp = enemy.get("hp_current", 0)
-                e_max = enemy.get("hp_max", 1)  # Избегаем деления на ноль
-                hp_perc = int((e_hp / e_max) * 100) if e_max > 0 else 0
+                e_max = enemy.get("hp_max", 1)
 
-                enemies_text_lines.append(f"{i}. {icon} <b>{name}</b> [{hp_perc}% HP]")
+                hp_perc = int((e_hp / e_max) * 100) if e_max > 0 else 0
+                hp_text = f"[{hp_perc}% HP]" if e_hp > 0 else "[МЕРТВ]"
+
+                enemies_text_lines.append(f"{i}. {icon} <b>{name}</b> {hp_text}")
 
         enemies_text = "\n".join(enemies_text_lines)
 
         # --- Сборка финального текста ---
         text = (
             f"👤 <b>Вы:</b> {hp_cur}/{hp_max} HP | {en_cur}/{en_max} EN\n"
-            f"💎 <b>Тактика:</b> [🔴 {tok_atk}] [🔵 {tok_def}]\n\n"
+            f"💎 <b>Токены:</b>\n"
+            f"[ {tokens_atk_str} ]\n"
+            f"[ {tokens_def_str} ]\n\n"
             f"🆚 <b>Противники:</b>\n"
             f"{enemies_text}\n"
             f"--------------------------\n"
             f"{timer_text}"
         )
-        log.debug("Дашборд отформатирован.")
+        log.debug("Дашборд отформатирован (Full Token View).")
         return text

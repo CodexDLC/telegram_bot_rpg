@@ -105,18 +105,29 @@ class CombatAggregator:
         log.debug(f"Модификаторы от экипировки для char_id={char_id} применены.")
 
         # 3. Кулачный бой (UNARMED), если нет оружия
+        # 3. Кулачный бой (UNARMED)
         if not has_weapon:
-            # Формула: 1 + (Strength * 0.5)
-            # Берем силу из контейнера, которую мы только что положили в шаге 1
-            strength = container.stats.get("strength", StatSourceData()).base
-            unarmed_dmg = 1.0 + (strength * 0.5)
+            str_data = container.stats.get("strength")
+            strength_val = str_data.base if str_data else 0.0
 
-            # Добавляем как "equipment" (виртуальное оружие)
-            self._add_stat(container, "physical_damage_min", int(unarmed_dmg), "equipment")
-            self._add_stat(container, "physical_damage_max", int(unarmed_dmg + 2), "equipment")  # Разброс 1-3
-            log.debug(
-                f"Оружие не найдено, для char_id={char_id} рассчитан урон без оружия: {unarmed_dmg}-{unarmed_dmg + 2}"
-            )
+            # === НОВАЯ ФОРМУЛА ===
+            # Базовый разброс (даже для слабака с 0 силы)
+            base_min = 1
+            base_max = 3
+
+            # Бонус от Силы
+            # Макс: +1 за каждую 1 силу
+            # Мин: +1 за каждые 3 силы
+            added_max = strength_val * 1.0
+            added_min = strength_val // 3
+
+            final_min = int(base_min + added_min)
+            final_max = int(base_max + added_max)
+
+            self._add_stat(container, "physical_damage_min", float(final_min), "equipment")
+            self._add_stat(container, "physical_damage_max", float(final_max), "equipment")
+
+            log.debug(f"👊 Unarmed: Str={strength_val} -> Dmg {final_min}-{final_max}")
 
         log.debug(f"Сбор данных для char_id={char_id} завершен. Контейнер: {container.model_dump_json(indent=2)}")
         return container
