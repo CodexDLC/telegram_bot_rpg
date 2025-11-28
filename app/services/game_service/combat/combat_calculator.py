@@ -2,6 +2,8 @@
 import random
 from typing import Any
 
+from loguru import logger as log
+
 
 class CombatCalculator:
     """
@@ -35,14 +37,20 @@ class CombatCalculator:
             "tokens_gained_atk": {},
             "tokens_gained_def": {},
         }
+        log.debug(
+            f"Расчет удара: Тип={damage_type}, Щит цели={current_shield}, "
+            f"Зоны атаки={attack_zones}, Зоны блока={block_zones}"
+        )
 
         if CombatCalculator._step_parry(stats_def, damage_type, ctx):
             ctx["tokens_gained_def"]["parry"] = 1
+            log.debug("Результат: Парирование")
             return CombatCalculator._finalize_log(ctx, 0, 0, attack_zones, block_zones)
 
         if CombatCalculator._step_dodge(stats_atk, stats_def, damage_type, ctx):
             if ctx["is_counter"]:
                 ctx["tokens_gained_def"]["counter"] = 1
+            log.debug(f"Результат: Уклонение (Контратака: {ctx['is_counter']})")
             return CombatCalculator._finalize_log(ctx, 0, 0, attack_zones, block_zones)
 
         CombatCalculator._step_block(stats_def, attack_zones, block_zones, ctx)
@@ -59,6 +67,7 @@ class CombatCalculator:
             ctx["tokens_gained_atk"]["crit"] = 1
 
         dmg_shield, dmg_hp = CombatCalculator._distribute_damage(current_shield, ctx["damage_final"])
+        log.debug(f"Итог: Урон по щиту={dmg_shield}, Урон по HP={dmg_hp}, Крит={ctx['is_crit']}")
 
         return CombatCalculator._finalize_log(ctx, dmg_shield, dmg_hp, attack_zones, block_zones)
 
@@ -90,8 +99,10 @@ class CombatCalculator:
 
     @staticmethod
     def _step_parry(stats_def: dict, damage_type: str, ctx: dict) -> bool:
-        if damage_type == "phys" and CombatCalculator._check_chance(stats_def.get("parry_chance", 0.0)):
+        parry_chance = stats_def.get("parry_chance", 0.0)
+        if damage_type == "phys" and CombatCalculator._check_chance(parry_chance):
             ctx["is_parried"] = True
+            log.trace(f"Шаг: Парирование (Шанс: {parry_chance:.2f}) -> Успех")
             return True
         return False
 
@@ -107,8 +118,11 @@ class CombatCalculator:
             )
             if CombatCalculator._check_chance(dodge_chance):
                 ctx["is_dodged"] = True
-                if CombatCalculator._check_chance(stats_def.get("counter_attack_chance", 0.0)):
+                log.trace(f"Шаг: Уклонение (Шанс: {dodge_chance:.2f}) -> Успех")
+                counter_chance = stats_def.get("counter_attack_chance", 0.0)
+                if CombatCalculator._check_chance(counter_chance):
                     ctx["is_counter"] = True
+                    log.trace(f"Шаг: Контратака (Шанс: {counter_chance:.2f}) -> Успех")
                 return True
         return False
 
@@ -119,18 +133,30 @@ class CombatCalculator:
         if atk_set.intersection(blk_set):
             ctx["is_blocked"] = True
             ctx["block_type"] = "geo"
+            log.trace("Шаг: Блок -> Успех (Геометрический)")
             return
-        if CombatCalculator._check_chance(stats_def.get("shield_block_chance", 0.0)):
+        shield_block_chance = stats_def.get("shield_block_chance", 0.0)
+        if CombatCalculator._check_chance(shield_block_chance):
             ctx["is_blocked"] = True
             ctx["block_type"] = "passive"
+            log.trace(f"Шаг: Блок (Шанс: {shield_block_chance:.2f}) -> Успех (Пассивный)")
 
     @staticmethod
     def _step_roll_damage(stats_atk: dict, stats_def: dict, damage_type: str, ctx: dict) -> None:
+        # 1. Определяем правильный префикс (physical или magical)
+        # Если damage_type="phys", то prefix="physical". Это совпадает с ключами Агрегатора.
         prefix = "magical" if damage_type == "magic" else "physical"
-        dmg_prefix = "magic" if damage_type == "magic" else "phys"
-        d_min = int(stats_atk.get(f"{dmg_prefix}_damage_min", 1))
-        d_max = int(stats_atk.get(f"{dmg_prefix}_damage_max", 2))
+
+        # 2. Ищем ключи 'physical_damage_min' / 'physical_damage_max'
+        # Используем prefix, а не dmg_prefix
+        d_min = int(stats_atk.get(f"{prefix}_damage_min", 1))
+        d_max = int(stats_atk.get(f"{prefix}_damage_max", 2))
+
+        # 3. Роллим урон
         dmg = random.randint(d_min, max(d_min, d_max))
+
+        log.trace(f"Шаг: Ролл урона -> База: {dmg} (из [{d_min}-{d_max}])")
+
         crit_chance = max(
             0.0,
             min(
@@ -140,10 +166,16 @@ class CombatCalculator:
         )
         if CombatCalculator._check_chance(crit_chance):
             ctx["is_crit"] = True
+            crit_power = stats_atk.get(f"{prefix}_crit_power_float", 1.5)
             if not ctx["is_blocked"]:
-                dmg = int(dmg * stats_atk.get(f"{prefix}_crit_power_float", 1.5))
+                dmg = int(dmg * crit_power)
+                log.trace(f"Шаг: Крит (Шанс: {crit_chance:.2f}) -> Успех! Урон x{crit_power} -> {dmg}")
+
         if ctx["is_blocked"]:
-            dmg = int(dmg * (1.0 - min(1.0, stats_def.get("shield_block_power", 0.5))))
+            block_power = min(1.0, stats_def.get("shield_block_power", 0.5))
+            dmg = int(dmg * (1.0 - block_power))
+            log.trace(f"Шаг: Урон в блоке -> Снижение на {block_power * 100}% -> {dmg}")
+
         ctx["damage_raw"] = dmg
 
     @staticmethod
@@ -151,30 +183,52 @@ class CombatCalculator:
         dmg = ctx["damage_raw"]
         if dmg <= 0:
             ctx["damage_final"] = 0
+            log.trace("Шаг: Митигация -> Пропущен (урон <= 0)")
             return
+
         res_stat = "magical_resistance" if damage_type == "magic" else "physical_resistance"
         pen_stat = "magical_penetration" if damage_type == "magic" else "physical_penetration"
-        net_resist = min(0.85, stats_def.get(res_stat, 0.0) - stats_atk.get(pen_stat, 0.0))
-        dmg = int(dmg * (1.0 - net_resist))
-        dmg = max(1, dmg - int(stats_def.get("damage_reduction_flat", 0)))
-        ctx["damage_final"] = dmg
+
+        resistance = stats_def.get(res_stat, 0.0)
+        penetration = stats_atk.get(pen_stat, 0.0)
+        net_resist = min(0.85, resistance - penetration)
+        dmg_after_res = int(dmg * (1.0 - net_resist))
+        log.trace(
+            f"Шаг: Митигация (Броня %) -> Урон {dmg} * (1 - ({resistance:.2f} - {penetration:.2f})) -> {dmg_after_res}"
+        )
+        dmg = dmg_after_res
+
+        flat_reduction = int(stats_def.get("damage_reduction_flat", 0))
+        dmg_after_flat = max(1, dmg - flat_reduction)
+        log.trace(f"Шаг: Митигация (Броня Flat) -> Урон {dmg} - {flat_reduction} -> {dmg_after_flat}")
+
+        ctx["damage_final"] = dmg_after_flat
 
     @staticmethod
     def _step_vampirism(stats_atk: dict, ctx: dict) -> None:
-        if (
-            ctx["damage_final"] > 0
-            and stats_atk.get("vampiric_power", 0.0) > 0
-            and CombatCalculator._check_chance(stats_atk.get("vampiric_trigger_chance", 0.8))
-        ):
-            ctx["lifesteal_amount"] = int(ctx["damage_final"] * stats_atk.get("vampiric_power"))
+        vamp_power = stats_atk.get("vampiric_power", 0.0)
+        vamp_chance = stats_atk.get("vampiric_trigger_chance", 0.8)
+        if ctx["damage_final"] > 0 and vamp_power > 0 and CombatCalculator._check_chance(vamp_chance):
+            lifesteal = int(ctx["damage_final"] * vamp_power)
+            ctx["lifesteal_amount"] = lifesteal
+            log.trace(
+                f"Шаг: Вампиризм (Шанс: {vamp_chance:.2f}) -> Успех! "
+                f"Украдено {lifesteal} HP ({ctx['damage_final']} * {vamp_power:.2f})"
+            )
 
     @staticmethod
     def _distribute_damage(current_shield: int, damage: int) -> tuple[int, int]:
         if damage <= 0:
             return 0, 0
         if current_shield >= damage:
+            log.trace(f"Распределение урона: {damage} урона полностью поглощено щитом ({current_shield})")
             return damage, 0
-        return current_shield, damage - current_shield
+        shield_dmg = current_shield
+        hp_dmg = damage - current_shield
+        log.trace(
+            f"Распределение урона: Щит ({current_shield}) сломан! {shield_dmg} урона по щиту, {hp_dmg} урона по HP."
+        )
+        return shield_dmg, hp_dmg
 
     @staticmethod
     def _check_chance(chance: float) -> bool:
@@ -193,6 +247,9 @@ class CombatCalculator:
             "is_counter": ctx.get("is_counter", False),
             "lifesteal": ctx["lifesteal_amount"],
             "visual_bar": ctx.get("visual_bar", ""),
-            "tokens_atk": ctx.get("tokens_gained_atk", 0),
-            "tokens_def": ctx.get("tokens_gained_def", 0),
+            # 🔥 FIX: Заменили 0 на {}, чтобы не ломать итерацию в сервисе
+            "tokens_atk": ctx.get("tokens_gained_atk", {}),
+            "tokens_def": ctx.get("tokens_gained_def", {}),
+            # Логи (из предыдущего фикса)
+            "logs": ctx.get("logs", []),
         }

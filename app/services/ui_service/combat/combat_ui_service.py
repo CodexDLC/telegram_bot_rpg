@@ -145,6 +145,11 @@ class CombatUIService(BaseUIService):
         if actor.state and actor.state.hp_current <= 0:
             status = "dead"
 
+        # TODO: [BUG] Некорректный расчет максимального HP.
+        #       Используется только базовое значение, игнорируя бонусы от экипировки,
+        #       умений и других модификаторов.
+        #       Правильный подход: использовать StatsCalculator.aggregate_all()
+        #       для получения итогового значения.
         hp_max = 100
         hp_stat = actor.stats.get("hp_max")
         if isinstance(hp_stat, StatSourceData) and hp_stat.base > 0:
@@ -169,11 +174,19 @@ class CombatUIService(BaseUIService):
                 "tokens": {},
             }
 
+        # TODO: [BUG] Некорректный расчет максимального HP.
+        #       Используется только базовое значение, игнорируя бонусы от экипировки,
+        #       умений и других модификаторов.
+        #       Правильный подход: использовать StatsCalculator.aggregate_all()
+        #       для получения итогового значения.
         hp_max = 100
         hp_stat = player_dto.stats.get("hp_max")
         if isinstance(hp_stat, StatSourceData):
             hp_max = int(hp_stat.base)
 
+        # TODO: [BUG] Некорректный расчет максимальной Энергии.
+        #       Аналогично HP, используется только базовое значение.
+        #       Необходимо использовать StatsCalculator.aggregate_all().
         en_max = 100
         en_stat = player_dto.stats.get("energy_max")
         if isinstance(en_stat, StatSourceData):
