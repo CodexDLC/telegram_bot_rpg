@@ -5,7 +5,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
 
-from app.resources.keyboards.callback_data import NavigationCallback
+from app.resources.keyboards.callback_data import NavigationCallback, ServiceEntryCallback
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.services.core_service.manager.account_manager import account_manager
 from app.services.core_service.manager.world_manager import world_manager
@@ -137,10 +137,19 @@ class NavigationService(BaseUIService):
             for target_id, exit_data in exits_dict.items():
                 if isinstance(exit_data, dict):
                     button_text = exit_data.get("text_button", ">>>")
-                    kb.button(
-                        text=button_text,
-                        callback_data=NavigationCallback(action="move", target_id=target_id).pack(),
-                    )
+
+                    # 🔥 НОВАЯ ЛОГИКА: ПРОВЕРКА ПРЕФИКСА КЛЮЧА
+                    if target_id.startswith("svc_"):
+                        # Если это Сервисный Хаб, используем ServiceEntryCallback
+                        callback_data = ServiceEntryCallback(char_id=self.char_id, target_loc=target_id).pack()
+                        log.debug(f"Создан ServiceEntryCallback для {target_id}")
+
+                    else:
+                        # Иначе — обычная навигация
+                        callback_data = NavigationCallback(action="move", target_id=target_id).pack()
+                        log.debug(f"Создан NavigationCallback для {target_id}")
+
+                    kb.button(text=button_text, callback_data=callback_data)
         kb.adjust(1)
 
         if prev_loc_id and prev_loc_id != current_loc_id:

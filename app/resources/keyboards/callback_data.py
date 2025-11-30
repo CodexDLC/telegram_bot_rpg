@@ -48,3 +48,24 @@ class NavigationCallback(CallbackData, prefix="nav"):
 
     action: str
     target_id: str
+
+
+class ServiceEntryCallback(CallbackData, prefix="svc_entry"):
+    """
+    Callback для перехода из режима Навигации в Сервисный Контейнер (Арена, Таверна).
+    """
+
+    char_id: int
+    target_loc: str  # ID локации, в которую заходим ('svc_arena_main')
+
+
+class ArenaQueueCallback(CallbackData, prefix="arena"):
+    """
+    Callback для управления меню Арены и процессом подачи заявки/ожидания.
+    """
+
+    char_id: int
+    # action: 'menu_main', 'submit_1v1', 'view_queue', 'cancel_queue', 'exit_service'
+    action: str
+    match_type: str = "none"
+    match_id: str | None = None

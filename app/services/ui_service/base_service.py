@@ -3,6 +3,7 @@ from typing import Any
 
 from loguru import logger as log
 
+from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 
 
@@ -19,6 +20,7 @@ class BaseUIService:
         self.state_data = state_data
         session_context = self.state_data.get(FSM_CONTEXT_KEY, {})
         self.char_id = char_id or session_context.get("char_id")
+        self.actor_name = session_context.get("symbiote_name", DEFAULT_ACTOR_NAME)
         log.debug(f"Инициализирован BaseUIService для char_id={self.char_id}.")
 
     def get_message_content_data(self) -> tuple[int, int] | None:

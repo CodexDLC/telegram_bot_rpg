@@ -54,6 +54,15 @@ class AdminMode(StatesGroup):
     teleport = State()
 
 
+class ArenaState(StatesGroup):
+    """
+    Упрощенные состояния для Арены.
+    """
+
+    menu = State()  # Главное меню + Подменю (Навигация через Callback Data)
+    waiting = State()  # Изоляция (Игрок в очереди, ждет матча/таймаута)
+
+
 FSM_CONTEX_CHARACTER_STATUS = [
     CharacterLobby.start_logging,
     CharacterLobby.selection,
