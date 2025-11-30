@@ -4,7 +4,6 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.handlers.callback.game.arena import start_arena_combat
 from app.resources.fsm_states.states import InGame
 from app.resources.keyboards.callback_data import MeinMenuCallback
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
@@ -73,20 +72,6 @@ async def main_menu_dispatcher(
             # 2. Получаем текущую локацию из Redis (через сервис)
             nav_service = NavigationService(char_id=char_id, state_data=state_data)
             text, kb = await nav_service.reload_current_ui()
-
-            # === ВЕТКА 3: СТАРТ БОЯ (АРЕНА) ===
-        elif action == "arena_start":
-            # Просто вызываем функцию-логику
-            await start_arena_combat(
-                user_id=user_id,
-                char_id=char_id,
-                bot=bot,
-                state=state,
-                session=session,
-                message_menu=session_context.get("message_menu"),
-                message_content=session_context.get("message_content"),
-            )
-            return
 
         # === (ТУТ БУДУТ ДРУГИЕ ВЕТКИ) ===
         # else: ...
