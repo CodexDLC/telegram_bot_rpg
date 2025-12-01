@@ -1,7 +1,6 @@
 import asyncio
 import contextlib
 import random
-import time
 from collections.abc import Awaitable, Callable
 
 from aiogram import Bot
@@ -34,24 +33,6 @@ class UIAnimationService:
             await self.bot.edit_message_text(
                 chat_id=self.chat_id, message_id=self.message_id, text=text, reply_markup=kb, parse_mode="HTML"
             )
-
-    async def animate_polling(self, text: str, check_func: Callable[[], Awaitable[bool]], timeout: int = 60) -> bool:
-        """
-        Крутит анимацию, пока check_func() не вернет True или не истечет timeout.
-        """
-        start = time.time()
-        while (time.time() - start) < timeout:
-            # 1. Рисуем кадр (можно менять смайлики ⏳ -> ⌛ -> 🐢)
-            await self._render_frame(f"{text}\n⏱ {int(time.time() - start)} сек.")
-
-            # 2. Проверяем условие (БД/Redis)
-            if await check_func():
-                return True
-
-            # 3. Ждем перед следующим кадром
-            await asyncio.sleep(3)
-
-        return False
 
     # --- 1. ЗАМЕНА СТАРОГО ХЕЛПЕРА (Сюжетные вставки) ---
     async def animate_sequence(self, sequence: tuple[tuple[str, float], ...], final_kb=None) -> None:
@@ -165,3 +146,57 @@ class UIAnimationService:
         empty = max(0, empty)
 
         return "■" * filled + "□" * empty
+
+    async def animate_polling(
+        self,
+        base_text: str,
+        check_func: Callable[[], Awaitable[str | None]],
+        steps: int = 6,
+        step_delay: float = 5.0,
+        fixed_duration: bool = False,
+    ) -> str | None:
+        """
+        Универсальный цикл ожидания с анимацией.
+
+        Args:
+            base_text: Текст сообщения (например, "🔎 Поиск противника").
+            check_func: Асинхронная функция, возвращающая session_id (если бой найден) или None.
+            steps: Количество итераций (по умолчанию 6 шагов * 5 сек = 30 сек).
+            step_delay: Задержка между шагами.
+            fixed_duration: Если True, цикл не прервется раньше времени, даже если бой найден
+                            (бой начнется только в конце анимации).
+
+        Returns:
+            str: session_id (если найден) или None (если таймаут).
+        """
+
+        found_result = None
+
+        for i in range(1, steps + 1):
+            # 1. Рисуем прогресс
+            # Пример: [■■□□□□] 10/30 сек
+            prog_bar = "■" * i + "□" * (steps - i)
+            elapsed = int(i * step_delay)
+            total_time = int(steps * step_delay)
+
+            frame_text = f"{base_text}\n\n⏳ <code>[{prog_bar}] {elapsed}/{total_time} с.</code>"
+
+            # Обновляем UI (игнорируем ошибку "не изменилось")
+            await self._render_frame(frame_text)
+
+            # 2. Проверка (если еще не нашли)
+            if not found_result:
+                found_result = await check_func()
+
+            # 3. Логика выхода
+            if found_result and not fixed_duration:
+                # Если бой найден и нам не нужно ждать до конца -> выходим сразу
+                # Но даем маленькую паузу (1 сек), чтобы юзер увидел прогресс
+                await asyncio.sleep(1)
+                return found_result
+
+            # 4. Спим до следующего шага
+            await asyncio.sleep(step_delay)
+
+        # Если цикл закончился, возвращаем то, что нашли (или None)
+        return found_result
