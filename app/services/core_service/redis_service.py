@@ -143,6 +143,85 @@ class RedisService:
             log.exception(f"Ошибка Redis при проверке ключа '{key}': {e}")
             return False
 
+    # --- SORTED SETS (ZSET) ---
+
+    async def add_to_zset(self, key: str, mapping: dict[str, float]) -> int:
+        """
+        Добавляет элементы в Sorted Set.
+        :param mapping: Словарь {member: score}
+        :return: Количество добавленных элементов.
+        """
+        try:
+            # redis-py ожидает mapping={member: score}
+            count = await self.redis_client.zadd(key, mapping)  # type: ignore
+            log.debug(f"В ZSET '{key}' добавлено/обновлено {count} элементов.")
+            return int(count)
+        except RedisError as e:
+            log.exception(f"Ошибка Redis zadd для '{key}': {e}")
+            return 0
+
+    async def get_zset_score(self, key: str, member: str) -> float | None:
+        """Возвращает Score участника."""
+        try:
+            score = await self.redis_client.zscore(key, member)  # type: ignore
+            return float(score) if score is not None else None
+        except RedisError as e:
+            log.exception(f"Ошибка Redis zscore для '{key}': {e}")
+            return None
+
+    async def get_zset_range_by_score(self, key: str, min_score: float, max_score: float) -> list[str]:
+        """Возвращает список members в диапазоне очков."""
+        try:
+            # Возвращает список строк (members)
+            res = await self.redis_client.zrangebyscore(key, min_score, max_score)  # type: ignore
+            return res
+        except RedisError as e:
+            log.exception(f"Ошибка Redis zrangebyscore для '{key}': {e}")
+            return []
+
+    async def remove_from_zset(self, key: str, member: str) -> bool:
+        """Удаляет элемент из ZSET."""
+        try:
+            count = await self.redis_client.zrem(key, member)  # type: ignore
+            if count > 0:
+                log.debug(f"Элемент '{member}' удален из ZSET '{key}'.")
+                return True
+            return False
+        except RedisError as e:
+            log.exception(f"Ошибка Redis zrem для '{key}': {e}")
+            return False
+
+    # --- BASIC K/V (String) ---
+
+    async def set_value(self, key: str, value: str, ttl: int | None = None) -> None:
+        """
+        Устанавливает значение ключа (String).
+        :param ttl: Время жизни в секундах (опционально).
+        """
+        try:
+            # ex=ttl работает только если ttl передано
+            await self.redis_client.set(key, value, ex=ttl)  # type: ignore
+            log.debug(f"Установлен ключ '{key}' (TTL={ttl}).")
+        except RedisError as e:
+            log.exception(f"Ошибка Redis set для '{key}': {e}")
+
+    async def get_value(self, key: str) -> str | None:
+        """Получает значение ключа (String)."""
+        try:
+            val = await self.redis_client.get(key)  # type: ignore
+            return str(val) if val is not None else None
+        except RedisError as e:
+            log.exception(f"Ошибка Redis get для '{key}': {e}")
+            return None
+
+    async def delete_key(self, key: str) -> None:
+        """Универсальное удаление ключа."""
+        try:
+            await self.redis_client.delete(key)  # type: ignore
+            log.debug(f"Ключ '{key}' удален.")
+        except RedisError as e:
+            log.exception(f"Ошибка Redis delete для '{key}': {e}")
+
 
 # Глобальный экземпляр сервиса
 redis_service = RedisService(client=redis_client)

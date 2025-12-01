@@ -105,3 +105,28 @@ class RedisKeys:
     def get_combat_participants_key(session_id: str) -> str:
         """Ключ для Set с ID всех участников боя."""
         return f"combat:sess:{session_id}:participants"
+
+    @staticmethod
+    def get_arena_queue_key(mode: str) -> str:
+        """
+        Ключ для ZSET очереди.
+        Пример: "arena:queue:1v1:zset"
+        """
+        return f"arena:queue:{mode}:zset"
+
+    @staticmethod
+    def get_arena_request_key(char_id: int) -> str:
+        """
+        Ключ для ХЭША/Строки с мета-данными заявки (время старта, GS).
+        Пример: "arena:req:1001"
+        """
+        return f"arena:req:{char_id}"
+
+    @staticmethod
+    def get_player_status_key(char_id: int) -> str:
+        """
+        Статус игрока для межсервисного взаимодействия.
+        Пример: 'combat:session_id' или 'arena:queue'.
+        Ключ: "player:status:1001"
+        """
+        return f"player:status:{char_id}"

@@ -5,12 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
 from database.db_contract.i_inventory_repo import IInventoryRepo
+from database.db_contract.i_leaderboard_repo import ILeaderboardRepo
 from database.db_contract.i_skill_repo import ISkillProgressRepo, ISkillRateRepo
 from database.db_contract.i_symbiote_repo import ISymbioteRepo
 from database.db_contract.i_users_repo import IUserRepo
 from database.db_contract.i_wallet_repo import IWalletRepo
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM, CharacterStatsRepoORM
 from database.repositories.ORM.inventory_repo import InventoryRepo
+from database.repositories.ORM.leaderboard_repo import LeaderboardRepoORM
 from database.repositories.ORM.skill_repo import SkillProgressRepo, SkillRateRepo
 from database.repositories.ORM.symbiote_repo import SymbioteRepoORM
 from database.repositories.ORM.users_repo_orm import UsersRepoORM
@@ -84,3 +86,11 @@ def get_wallet_repo(session: AsyncSession) -> IWalletRepo:
     Возвращает репозиторий для работы с Кошельком.
     """
     return WalletRepoORM(session=session)
+
+
+def get_leaderboard_repo(session: AsyncSession) -> ILeaderboardRepo:
+    """
+    Возвращает репозиторий для работы с Лидербордом.
+    """
+
+    return LeaderboardRepoORM(session=session)
