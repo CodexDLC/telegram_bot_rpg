@@ -1,7 +1,7 @@
 # app/services/ui_service/arena_ui_service/arena_builder.py
 from typing import Any  # Необходимо добавить для совместимости BaseUIService
 
-from aiogram.types import InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,3 +56,47 @@ class ArenaUIBuilder(BaseUIService):
         kb.adjust(1)
 
         return kb.as_markup()
+
+    async def render_mode_menu(self, match_type: str) -> tuple[str, InlineKeyboardMarkup]:
+        """
+        Меню конкретного режима (например, 1v1).
+        """
+        # Текст (можно потом усложнить статистикой)
+        text = (
+            f"<b>{self.actor_name}:</b> Режим дуэли <b>[1x1]</b>.\n\n"
+            f"Здесь правят личные навыки и удача. Никакой помощи, только ты и враг.\n"
+            f"<i>Победа даст рейтинг и золото. Поражение ударит по гордости.</i>\n\n"
+            f"Готов к бою?"
+        )
+
+        kb = InlineKeyboardBuilder()
+
+        # Кнопка ПОИСК
+        cb_submit = ArenaQueueCallback(char_id=self.char_id, action="submit_queue_1x1", match_type=match_type).pack()
+        kb.button(text="⚔️ Найти противника", callback_data=cb_submit)
+
+        # Кнопка НАЗАД (в главное меню Арены)
+        # ВАЖНО: action="menu_main" вернет нас в handler из arena_main.py
+        cb_back = ArenaQueueCallback(char_id=self.char_id, action="menu_main").pack()
+        kb.row(InlineKeyboardButton(text="🔙 Назад в меню", callback_data=cb_back))
+
+        kb.adjust(1)
+        return text, kb.as_markup()
+
+    async def render_searching_screen(self, match_type: str) -> tuple[str, InlineKeyboardMarkup]:
+        """
+        Экран ожидания (Searching...).
+        """
+        text = (
+            f"<b>{self.actor_name}:</b> 🔎 Сканирование сигнатур...\n\n"
+            f"Поиск достойного соперника в режиме <b>{match_type}</b>.\n"
+            f"<i>Ожидайте соединения...</i>"
+        )
+
+        kb = InlineKeyboardBuilder()
+
+        # Кнопка ОТМЕНА
+        cb_cancel = ArenaQueueCallback(char_id=self.char_id, action="cancel_queue", match_type=match_type).pack()
+        kb.button(text="❌ Отмена", callback_data=cb_cancel)
+
+        return text, kb.as_markup()

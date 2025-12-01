@@ -5,6 +5,7 @@ from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.schemas_dto.item_dto import InventoryItemDTO, ItemType
+from app.services.game_service.matchmaking_service import MatchmakingService
 from app.services.game_service.stats_aggregation_service import StatsAggregationService
 from database.repositories import get_inventory_repo, get_wallet_repo
 from database.repositories.ORM.wallet_repo import ResourceTypeGroup
@@ -107,7 +108,14 @@ class InventoryService:
         await self._handle_slot_conflicts(item)
 
         if await self.inventory_repo.move_item(item_id, "equipped"):
+            # 🔥 ХУК: Обновляем GS, так как статы изменились
+            # Мы не ждем результат (fire and forget), чтобы UI не тормозил,
+            # но в рамках одного request лучше подождать (await).
+            mm_service = MatchmakingService(self.session)
+            await mm_service.refresh_gear_score(self.char_id)
+
             return True, f"Надето: {item.data.name}"
+
         return False, "Ошибка БД."
 
     async def unequip_item(self, item_id: int) -> tuple[bool, str]:
@@ -116,7 +124,12 @@ class InventoryService:
             return False, "Ошибка."
 
         if await self.inventory_repo.move_item(item_id, "inventory"):
+            # 🔥 ХУК
+            mm_service = MatchmakingService(self.session)
+            await mm_service.refresh_gear_score(self.char_id)
+
             return True, f"Снято: {item.data.name}"
+
         return False, "Ошибка БД."
 
     async def drop_item(self, item_id: int) -> bool:

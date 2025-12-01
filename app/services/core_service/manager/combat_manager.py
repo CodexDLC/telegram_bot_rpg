@@ -163,5 +163,18 @@ class CombatManager:
         log.debug(f"Запрос полного лога для сессии {session_id}")
         return await redis_client.lrange(key, 0, -1)
 
+    async def set_player_status(self, char_id: int, status: str, ttl: int = 300) -> None:
+        """Устанавливает статус игрока (например, ссылка на бой)."""
+        key = Rk.get_player_status_key(char_id)
+        await redis_service.set_value(key, status, ttl=ttl)
+
+    async def get_player_status(self, char_id: int) -> str | None:
+        key = Rk.get_player_status_key(char_id)
+        return await redis_service.get_value(key)
+
+    async def delete_player_status(self, char_id: int) -> None:
+        key = Rk.get_player_status_key(char_id)
+        await redis_service.delete_key(key)
+
 
 combat_manager = CombatManager()
