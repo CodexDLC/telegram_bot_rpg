@@ -222,6 +222,7 @@ class CombatService:
         AbilityService.execute_pre_calc(stats_b, flags_b, pipe_b)
 
         # Calculation
+        # Calculation
         res_a = CombatCalculator.calculate_hit(
             stats_a, stats_b, actor_b.state.energy_current, move_a["attack"], move_b["block"], flags=flags_a
         )
@@ -239,11 +240,15 @@ class CombatService:
             AbilityService.consume_resources(actor_b, sk_b)
 
         # XP & Stats
-        self._register_xp(actor_a, res_a, res_b)
-        self._register_xp(actor_b, res_b, res_a)
+        self._register_xp_events(actor_a, res_a, res_b)
+        self._register_xp_events(actor_b, res_b, res_a)
 
         self._apply_results(actor_b, res_a)
         self._apply_results(actor_a, res_b)
+
+        # 🔥 НОВЫЙ КОД: ПРИМЕНЕНИЕ ОТРАЖЕННОГО УРОНА
+        self._apply_thorns_damage(actor_a, res_b)  # Урон от блока B идет к А
+        self._apply_thorns_damage(actor_b, res_a)  # Урон от блока A идет к B
 
         self._apply_regen(actor_a, stats_a)
         self._apply_regen(actor_b, stats_b)
@@ -265,20 +270,15 @@ class CombatService:
 
     # --- Приватные методы ---
 
-    def _register_xp(self, actor: CombatSessionContainerDTO, out: dict, inc: dict):
-        outcome = "success"
-        if out["is_dodged"]:
-            outcome = "miss"
-        elif out["is_blocked"]:
-            outcome = "partial"
-        elif out["is_crit"]:
-            outcome = "crit"
-        CombatXPManager.register_action(actor, "sword", outcome)
+    def _apply_thorns_damage(self, actor: CombatSessionContainerDTO, res: dict):
+        """Применяет отраженный урон к актору."""
+        if not actor.state:
+            return
 
-        if inc["damage_total"] > 0:
-            CombatXPManager.register_action(actor, "medium", "success")
-        if inc["is_blocked"]:
-            CombatXPManager.register_action(actor, "shield", "success")
+        thorns_damage = res.get("thorns_damage", 0)
+        if thorns_damage > 0:
+            actor.state.hp_current = max(0, actor.state.hp_current - thorns_damage)
+            log.debug(f"ThornsApplied | char_id={actor.char_id} damage={thorns_damage}")
 
     def _apply_results(self, actor: CombatSessionContainerDTO, res: dict):
         if not actor.state:
@@ -373,6 +373,14 @@ class CombatService:
             await CombatLifecycleService.finish_battle(self.session_id, winner)
             return True
         return False
+
+    async def process_turn_updates(self) -> None:
+        """
+        Обрабатывает все необходимые обновления боя: ход AI и проверку Deadlines.
+        (Публичный метод-обёртка для вызова из Хэндлеров)
+        """
+        await self._process_ai_turns()
+        await self.check_deadlines()
 
     async def _get_actor(self, char_id: int) -> CombatSessionContainerDTO | None:
         data = await combat_manager.get_actor_json(self.session_id, char_id)

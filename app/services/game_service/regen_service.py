@@ -7,6 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.core_service.manager.account_manager import account_manager
 from app.services.game_service.stats_aggregation_service import StatsAggregationService
 
+# 🔥 НОВЫЕ КОНСТАНТЫ
+BASE_REGEN_TIME_SEC = 300.0  # Цель: полное восстановление за 5 минут (можно легко изменить)
+ENDURANCE_REGEN_BONUS = 0.1  # Бонусный множитель от Выносливости (по запросу)
+
 
 class RegenService:
     """
@@ -42,17 +46,32 @@ class RegenService:
         # 2. Получаем Максимумы и Скорость регена через Агрегатор
         total_data = await self.aggregator.get_character_total_stats(char_id)
         modifiers: dict[str, Any] = total_data.get("modifiers", {})
+        stats: dict[str, Any] = total_data.get("stats", {})
 
         # Хелпер для извлечения значений из структуры агрегатора
         def get_val(key: str, default: float = 0.0) -> float:
             return float(modifiers.get(key, {}).get("total", default))
 
-        hp_max = int(get_val("hp_max", 1.0))
-        hp_regen = get_val("hp_regen", 0.0)  # Единиц в секунду
-        energy_max = int(get_val("energy_max", 0.0))
-        energy_regen = get_val("energy_regen", 0.0)
+        # --- 3. Расчет HP Regen Rate (Новая формула) ---
+        hp_max = get_val("hp_max", 1.0)
 
-        # 3. Считаем Дельту
+        # 3.1. Базовый реген (Процентный, для восстановления Max HP за BASE_REGEN_TIME_SEC)
+        base_regen_rate = hp_max / BASE_REGEN_TIME_SEC
+
+        # 3.2. Бонусный реген (от Endurance - используем агрегированный стат)
+        # Нам нужно значение Endurance из 'stats' (базовые статы находятся там)
+        endurance_info = stats.get("endurance", {}).get("total", 0.0)
+        endurance_val = float(endurance_info)
+        bonus_regen_rate = endurance_val * ENDURANCE_REGEN_BONUS
+
+        # 3.3. Общая скорость регенерации HP
+        total_hp_regen = base_regen_rate + bonus_regen_rate
+
+        # --- 4. Расчет Energy Regen Rate (Старая формула) ---
+        energy_max = int(get_val("energy_max", 0.0))
+        energy_regen = get_val("energy_regen", 0.0)  # Берется из MODIFIER_RULES (зависит от Men)
+
+        # 5. Считаем Дельту
         now = time.time()
         time_delta = now - last_update
 
@@ -60,8 +79,8 @@ class RegenService:
         if time_delta < 0:
             time_delta = 0
 
-        # 4. Расчет восстановления
-        hp_restored = int(time_delta * hp_regen)
+        # 6. Расчет восстановления
+        hp_restored = int(time_delta * total_hp_regen)
         energy_restored = int(time_delta * energy_regen)
 
         new_hp = min(hp_max, current_hp + hp_restored)
@@ -73,12 +92,12 @@ class RegenService:
                 f"Regen[{char_id}]: {time_delta:.1f}s passed. HP {current_hp}->{new_hp}, EN {current_energy}->{new_energy}"
             )
 
-        # 5. Сохраняем актуальное состояние
+        # 7. Сохраняем актуальное состояние
         update_data: dict[str, Any] = {
-            "hp_current": new_hp,
+            "hp_current": int(new_hp),
             "energy_current": new_energy,
             "last_update": now,
         }
         await account_manager.update_account_fields(char_id, update_data)
 
-        return {"hp": new_hp, "energy": new_energy}
+        return {"hp": int(new_hp), "energy": new_energy}

@@ -54,6 +54,7 @@ async def navigation_move_handler(
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     char_id = session_context.get("char_id")
     message_content = session_context.get("message_content")
+    log.debug(f"MoveHandler | char_id={char_id}, message_content exists: {bool(message_content)}")
 
     if not char_id or not message_content:
         log.error(f"В FSM user {user_id} отсутствуют данные char_id или message_content.")
@@ -61,12 +62,15 @@ async def navigation_move_handler(
         return
 
     nav_service = NavigationService(char_id=char_id, state_data=state_data)
+    log.debug("MoveHandler | NavigationService_initialized")
 
     # Выполняем перемещение
     result = await nav_service.move_player(target_loc_id)
+    log.debug(f"MoveHandler | move_player_result: {result}")
 
     if not result:
         # Ошибка на уровне "вообще ничего не вернулось" (например, аккаунт не найден)
+        log.warning(f"MoveHandler | move_player вернул None для char_id={char_id}")
         with contextlib.suppress(TelegramAPIError):
             await call.answer("Действие недоступно.", show_alert=True)
         return
@@ -74,6 +78,7 @@ async def navigation_move_handler(
     total_travel_time, text, kb = result
     chat_id = message_content["chat_id"]
     message_id = message_content["message_id"]
+    log.debug(f"MoveHandler | travel_time={total_travel_time}, text_len={len(text)}, kb_exists={bool(kb)}")
 
     # --- ОБРАБОТКА ОШИБКИ ПЕРЕХОДА (Fail-safe) ---
     # Если клавиатуры нет (None), значит сервис сообщил об ошибке логики (локация удалена и т.д.)
@@ -98,6 +103,7 @@ async def navigation_move_handler(
 
         # 3. Восстанавливаем экран ТЕКУЩЕЙ (старой) локации
         # Игрок никуда не перешел, база данных не менялась.
+        log.debug(f"MoveHandler | Вызов reload_current_ui для char_id={char_id}")
         restore_text, restore_kb = await nav_service.reload_current_ui()
         if restore_text and restore_kb:
             try:
@@ -115,6 +121,7 @@ async def navigation_move_handler(
 
     # Если ошибок нет, запускаем таймер пути
     if total_travel_time > 2:
+        log.debug(f"MoveHandler | Запуск анимации на {total_travel_time} сек.")
         # 1. Превращаем словарь session_context обратно в DTO
         # (UIAnimationService ожидает объект, а не словарь)
         session_dto = SessionDataDTO(**session_context)
@@ -132,6 +139,7 @@ async def navigation_move_handler(
 
     # Финальное обновление UI (Показ новой локации)
     try:
+        log.debug(f"MoveHandler | Финальное обновление UI на локацию {target_loc_id}")
         await bot.edit_message_text(
             chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML"
         )

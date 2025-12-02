@@ -27,7 +27,7 @@ MODIFIER_RULES = {
     # 3. Ресурсы и Защита
     # ==========================================
     "hp_max": {"endurance": 15},
-    "hp_regen": {"endurance": 0.02},
+    # 🔥 УДАЛЕНО: hp_regen - Теперь рассчитывается в RegenService
     "physical_resistance": {"endurance": 0.01},
     "shock_resistance": {"endurance": 0.01},
     "energy_max": {"men": 10},

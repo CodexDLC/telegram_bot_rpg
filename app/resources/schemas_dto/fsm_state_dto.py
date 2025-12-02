@@ -10,3 +10,5 @@ class SessionDataDTO(BaseModel):
     char_id: int | None = None
     message_menu: dict[str, int] | None = None
     message_content: dict[str, int] | None = None
+    char_name: str | None = None
+    symbiote_name: str | None = None

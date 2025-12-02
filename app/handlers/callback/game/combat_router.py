@@ -129,14 +129,14 @@ async def combat_action_handler(
             await state.set_state(ArenaState.menu)
 
             # Инициализируем сервис арены (ID, Session, Data)
-            arena_ui = ArenaUIService(char_id, session, state_data)
+            arena_ui = ArenaUIService(char_id, state_data, session)
             content_text, content_kb = await arena_ui.view_main_menu()
 
             # Восстанавливаем верхнее меню (обычное игровое)
             msg_menu = session_context.get("message_menu")
             if msg_menu:
-                ms = MenuService(game_stage="in_game", state_data=state_data)
-                menu_text, menu_kb = ms.get_data_menu()
+                ms = MenuService(game_stage="in_game", state_data=state_data, session=session)
+                menu_text, menu_kb = await ms.get_data_menu()
                 with suppress(TelegramAPIError):
                     await call.bot.edit_message_text(
                         chat_id=msg_menu["chat_id"],
@@ -157,8 +157,8 @@ async def combat_action_handler(
             # Восстанавливаем верхнее меню
             msg_menu = session_context.get("message_menu")
             if msg_menu:
-                ms = MenuService(game_stage="in_game", state_data=state_data)
-                menu_text, menu_kb = ms.get_data_menu()
+                ms = MenuService(game_stage="in_game", state_data=state_data, session=session)
+                menu_text, menu_kb = await ms.get_data_menu()
                 with suppress(TelegramAPIError):
                     await call.bot.edit_message_text(
                         chat_id=msg_menu["chat_id"],

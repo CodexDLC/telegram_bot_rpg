@@ -22,18 +22,6 @@ class CombatCalculator:
     ) -> dict[str, Any]:
         """
         Рассчитывает результат одного удара.
-
-        Args:
-            stats_atk: Агрегированные статы атакующего.
-            stats_def: Агрегированные статы защищающегося.
-            current_shield: Текущее значение щита цели.
-            attack_zones: Зоны атаки.
-            block_zones: Зоны блока.
-            damage_type: Тип урона.
-            flags: Словарь правил из активного скилла.
-
-        Returns:
-            Словарь с результатом удара.
         """
         if flags is None:
             flags = {}
@@ -51,12 +39,13 @@ class CombatCalculator:
             "damage_raw": 0,
             "damage_final": 0,
             "lifesteal_amount": 0,
+            "thorns_damage": 0,
             "tokens_gained_atk": {},
             "tokens_gained_def": {},
         }
         log.trace(f"CalculateHitStart | damage_type={damage_type} flags={flags}")
 
-        # 1. PARRY
+        # 1. PARRY (Наивысший приоритет)
         can_parry = damage_type == "physical"
         if not flags.get("ignore_parry") and can_parry:
             parry_chance = min(stats_def.get("parry_chance", 0.0), stats_def.get("parry_cap", 0.5))
@@ -64,9 +53,12 @@ class CombatCalculator:
                 ctx["is_parried"] = True
                 ctx["tokens_gained_def"]["parry"] = 1
                 log.debug(f"HitResult | result=parry chance={parry_chance}")
+
+                ctx["thorns_damage"] = CombatCalculator._check_thorns(stats_def, damage_type, 1.0)
+
                 return CombatCalculator._finalize_log(ctx, 0, 0, attack_zones, block_zones)
 
-        # 2. DODGE
+        # 2. DODGE (Высокий приоритет)
         if not flags.get("ignore_dodge"):
             dodge_val = stats_def.get("dodge_chance", 0.0)
             anti_dodge = stats_atk.get("anti_dodge_chance", 0.0)
@@ -78,16 +70,45 @@ class CombatCalculator:
                     ctx["tokens_gained_def"]["counter"] = 1
                     log.debug("HitResult | sub_event=counter_attack")
                 log.debug(f"HitResult | result=dodge chance={final_dodge}")
+
+                ctx["thorns_damage"] = CombatCalculator._check_thorns(stats_def, damage_type, 1.0)
+
                 return CombatCalculator._finalize_log(ctx, 0, 0, attack_zones, block_zones)
 
-        # 3. BLOCK CHECK
+        # 3. ПАССИВНЫЙ БЛОК ЩИТОМ (Новый приоритет)
         if not flags.get("ignore_block"):
-            CombatCalculator._step_block(stats_def, attack_zones, block_zones, ctx)
+            shield_block_chance = min(
+                stats_def.get("shield_block_chance", 0.0), stats_def.get("shield_block_cap", 0.75)
+            )
+            if CombatCalculator._check_chance(shield_block_chance):
+                ctx["is_blocked"], ctx["block_type"] = True, "passive"
+                log.debug(f"HitResult | result=passive_shield_block chance={shield_block_chance}")
 
-        # 4. DAMAGE ROLL
+                ctx["thorns_damage"] = CombatCalculator._check_thorns(
+                    stats_def, damage_type, stats_def.get("shield_block_power", 0.0)
+                )
+
+                # Переходим к расчету урона с блокировкой
+                CombatCalculator._step_roll_damage(stats_atk, stats_def, damage_type, ctx, flags)
+
+                # Урон от пассивного блока: уменьшаем на block_power
+                block_power = min(1.0, stats_def.get("shield_block_power", 0.5))
+                ctx["damage_final"] = int(ctx["damage_raw"] * (1.0 - block_power))
+
+                dmg_shield, dmg_hp = CombatCalculator._distribute_damage(current_shield, ctx["damage_final"])
+                log.debug(f"DamageDistribution | total={ctx['damage_final']} shield_dmg={dmg_shield} hp_dmg={dmg_hp}")
+                return CombatCalculator._finalize_log(ctx, dmg_shield, dmg_hp, attack_zones, block_zones)
+
+        # 4. GEO-BLOCK CHECK (Если пассивный не сработал)
+        is_geo_block = CombatCalculator._check_geo_block(attack_zones, block_zones)
+        if is_geo_block:
+            ctx["is_blocked"], ctx["block_type"] = True, "geo"
+            log.trace("BlockStep | result=success type=geo")
+
+        # 5. DAMAGE ROLL (С geo-блоком или без)
         CombatCalculator._step_roll_damage(stats_atk, stats_def, damage_type, ctx, flags)
 
-        # 5. MITIGATION & FINAL CALC
+        # 6. MITIGATION & FINAL CALC (С geo-блоком)
         if ctx["is_blocked"] and ctx["block_type"] == "geo":
             if ctx["is_crit"]:
                 CombatCalculator._step_mitigation(stats_atk, stats_def, damage_type, ctx)
@@ -97,9 +118,10 @@ class CombatCalculator:
                 ctx["damage_final"] = 0
                 log.trace("GeoBlockNormal | damage_final=0")
         else:
+            # Применяем полную митигацию (сопротивление и флат)
             CombatCalculator._step_mitigation(stats_atk, stats_def, damage_type, ctx)
 
-        # 6. Vampirism
+        # 7. Vampirism
         CombatCalculator._step_vampirism(stats_atk, ctx)
 
         # Tokens
@@ -119,18 +141,28 @@ class CombatCalculator:
     # --------------------------------------------------------------------------
 
     @staticmethod
-    def _step_block(stats_def: dict, attack_zones: list, block_zones: list, ctx: dict) -> None:
+    def _check_geo_block(attack_zones: list, block_zones: list) -> bool:
+        """Проверяет только геометрический (позиционный) блок."""
         atk_set = set(attack_zones or [])
         blk_set = set(block_zones or [])
-        if atk_set.intersection(blk_set):
-            ctx["is_blocked"], ctx["block_type"] = True, "geo"
-            log.trace("BlockStep | result=success type=geo")
-            return
+        return bool(atk_set.intersection(blk_set))
 
-        block_chance = min(stats_def.get("shield_block_chance", 0.0), stats_def.get("shield_block_cap", 0.75))
-        if CombatCalculator._check_chance(block_chance):
-            ctx["is_blocked"], ctx["block_type"] = True, "passive"
-            log.trace(f"BlockStep | result=success type=passive chance={block_chance}")
+    @staticmethod
+    def _check_thorns(stats_def: dict, damage_type: str, block_mult: float) -> int:
+        """Рассчитывает урон шипами."""
+        thorns_reflect_pct = stats_def.get("thorns_damage_reflect", 0.0)
+
+        if thorns_reflect_pct <= 0:
+            return 0
+
+        hp_max = stats_def.get("hp_max", 100)
+        base_reflect_damage = hp_max * 0.1
+
+        thorns_damage = int(base_reflect_damage * thorns_reflect_pct * block_mult)
+
+        if thorns_damage > 0:
+            log.debug(f"ThornsDamageCalculated | damage={thorns_damage} reflect_pct={thorns_reflect_pct}")
+        return thorns_damage
 
     @staticmethod
     def _step_roll_damage(stats_atk: dict, stats_def: dict, damage_type: str, ctx: dict, flags: dict) -> None:
@@ -178,11 +210,6 @@ class CombatCalculator:
             dmg = int(dmg * crit_power)
             log.trace(f"RollDamageCrit | power={crit_power} after_crit={dmg}")
 
-        if ctx["is_blocked"] and ctx["block_type"] == "passive":
-            block_power = min(1.0, stats_def.get("shield_block_power", 0.5))
-            dmg = int(dmg * (1.0 - block_power))
-            log.trace(f"RollDamagePassiveBlock | power={block_power} after_block={dmg}")
-
         ctx["damage_raw"] = dmg
 
     @staticmethod
@@ -224,6 +251,10 @@ class CombatCalculator:
     @staticmethod
     def _finalize_log(ctx: dict, shield_dmg: int, hp_dmg: int, attack_zones: list, block_zones: list) -> dict:
         ctx["visual_bar"] = CombatCalculator._generate_visual_bar(attack_zones, block_zones, ctx)
+
+        if ctx.get("thorns_damage", 0) > 0:
+            ctx["logs"].append(f"🥀 Нанесен урон шипами: <b>{ctx['thorns_damage']}</b>!")
+
         return CombatCalculator._pack_result(ctx, shield_dmg, hp_dmg)
 
     @staticmethod
@@ -286,10 +317,12 @@ class CombatCalculator:
             "hp_dmg": hp_dmg,
             "is_crit": ctx["is_crit"],
             "is_blocked": ctx["is_blocked"],
+            "block_type": ctx.get("block_type"),
             "is_dodged": ctx.get("is_dodged", False),
             "is_parried": ctx.get("is_parried", False),
             "is_counter": ctx.get("is_counter", False),
             "lifesteal": ctx["lifesteal_amount"],
+            "thorns_damage": ctx.get("thorns_damage", 0),
             "visual_bar": ctx.get("visual_bar", ""),
             "tokens_atk": ctx.get("tokens_gained_atk", {}),
             "tokens_def": ctx.get("tokens_gained_def", {}),

@@ -22,7 +22,7 @@ class ArenaUIService(BaseUIService):
     2. Views: Рендер интерфейсов (Текст + Кнопки).
     """
 
-    def __init__(self, char_id: int, session: AsyncSession, state_data: dict):
+    def __init__(self, char_id: int, state_data: dict, session: AsyncSession):
         """
         Args:
             char_id: ID персонажа.
@@ -101,18 +101,20 @@ class ArenaUIService(BaseUIService):
 
     async def view_main_menu(self) -> tuple[str, InlineKeyboardMarkup]:
         """
-        Рендерит главный экран Арены.
-
-        Returns:
-            Кортеж (текст, клавиатура).
+        Рендерит главный экран Арены (Уровень 0).
         """
         log.debug(f"ViewMainMenu | char_id={self.char_id}")
         text = f"<b>{self.actor_name}:</b> Вы вошли в Ангар Арены.\n\nВыберите тип матча или покиньте полигон."
         kb = InlineKeyboardBuilder()
+
+        # 1. Схватка (1x1) - Переходит прямо к поиску 1x1
         cb_1v1 = ArenaQueueCallback(char_id=self.char_id, action="match_menu", match_type="1v1").pack()
-        kb.button(text="⚔️ 1 на 1 (Хаос)", callback_data=cb_1v1)
+        kb.button(text="⚔️ Арена: Схватка (1x1)", callback_data=cb_1v1)
+
+        # 2. Командные Бои - Переходит в подменю Group
         cb_group = ArenaQueueCallback(char_id=self.char_id, action="match_menu", match_type="group").pack()
-        kb.button(text="👥 Групповой Бой (WIP)", callback_data=cb_group)
+        kb.button(text="👥 Арена: Командные бои", callback_data=cb_group)
+
         cb_exit = ArenaQueueCallback(char_id=self.char_id, action="exit_service").pack()
         kb.button(text="🚪 Выйти с Полигона", callback_data=cb_exit)
         kb.adjust(1)
@@ -121,30 +123,58 @@ class ArenaUIService(BaseUIService):
     async def view_mode_menu(self, match_type: str) -> tuple[str, InlineKeyboardMarkup]:
         """
         Рендерит подменю выбранного режима.
-
-        Args:
-            match_type: Тип матча ("1v1", "group").
-
-        Returns:
-            Кортеж (текст, клавиатура).
         """
         log.debug(f"ViewModeMenu | char_id={self.char_id} match_type={match_type}")
-        # TODO: В будущем вынести тексты в ресурсы
-        text = (
-            f"<b>{self.actor_name}:</b> Режим дуэли <b>[1x1]</b>.\n\n"
-            f"Здесь правят личные навыки и удача. Никакой помощи, только ты и враг.\n"
-            f"<i>Победа даст рейтинг и золото. Поражение ударит по гордости.</i>\n\n"
-            f"Готов к бою?"
-        )
 
-        kb = InlineKeyboardBuilder()
-        action = "submit_queue_1x1" if match_type == "1v1" else "submit_queue_group"
-        cb_submit = ArenaQueueCallback(char_id=self.char_id, action=action, match_type=match_type).pack()
-        kb.button(text="⚔️ Найти противника", callback_data=cb_submit)
-        cb_back = ArenaQueueCallback(char_id=self.char_id, action="menu_main").pack()
-        kb.row(InlineKeyboardButton(text="🔙 Назад в меню", callback_data=cb_back))
-        kb.adjust(1)
-        return text, kb.as_markup()
+        # --- 1x1 СХВАТКА ---
+        if match_type == "1v1":
+            text = (
+                f"<b>{self.actor_name}:</b> Режим дуэли <b>[1x1]</b>.\n\n"
+                f"Здесь правят личные навыки и удача. Никакой помощи, только ты и враг.\n"
+                f"<i>Победа даст рейтинг и золото. Поражение ударит по гордости.</i>\n\n"
+                f"Готов к бою?"
+            )
+            kb = InlineKeyboardBuilder()
+            cb_submit = ArenaQueueCallback(
+                char_id=self.char_id, action="submit_queue_1x1", match_type=match_type
+            ).pack()
+            kb.button(text="⚔️ Найти противника", callback_data=cb_submit)
+            cb_back = ArenaQueueCallback(char_id=self.char_id, action="menu_main").pack()
+            kb.row(InlineKeyboardButton(text="🔙 Назад в меню", callback_data=cb_back))
+            kb.adjust(1)
+            return text, kb.as_markup()
+
+        # 🔥 КОМАНДНЫЕ БОИ (НОВЫЙ ПОДРАЗДЕЛ) ---
+        elif match_type == "group":
+            text = (
+                f"<b>{self.actor_name}:</b> Раздел <b>[Командные бои]</b>.\n\n"
+                f"Выберите формат командного взаимодействия:\n\n"
+                f"👥 **Хаотический Бой:** Создайте лобби (например, 3x3 или 5x5) и позвольте другим игрокам присоединиться. Система автоматически сбалансирует команды по GS.\n"
+                f"🛡️ **Групповой Бой:** Встаньте в очередь готовым отрядом (WIP)."
+            )
+
+            kb = InlineKeyboardBuilder()
+
+            # 1. Хаотический бой (Leads to Lobby Creation UI)
+            # Используем action="match_menu_chaotic" для нового подменю выбора размера группы (3x3, 5x5)
+            cb_chaotic = ArenaQueueCallback(
+                char_id=self.char_id, action="match_menu_chaotic", match_type="chaotic"
+            ).pack()
+
+            kb.button(text="👥 Хаотический Бой", callback_data=cb_chaotic)
+
+            # 2. Групповой бой (WIP)
+            cb_fixed = ArenaQueueCallback(
+                char_id=self.char_id, action="match_menu_fixed", match_type="fixed_group"
+            ).pack()
+            kb.button(text="🛡️ Групповой Бой", callback_data=cb_fixed)
+
+            cb_back = ArenaQueueCallback(char_id=self.char_id, action="menu_main").pack()
+            kb.row(InlineKeyboardButton(text="🔙 Назад в меню", callback_data=cb_back))
+            kb.adjust(1)
+            return text, kb.as_markup()
+
+        return "Неизвестный режим.", InlineKeyboardBuilder().as_markup()
 
     async def view_searching_screen(self, match_type: str, gs: int | None = None) -> tuple[str, InlineKeyboardMarkup]:
         """

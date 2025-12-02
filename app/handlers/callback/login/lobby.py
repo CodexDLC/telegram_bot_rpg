@@ -110,6 +110,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, 
             message_menu=message_menu,
             bot=bot,
             char_id=char_id,
+            session=session,
         )
 
 
@@ -150,5 +151,11 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
 
     # Передаем управление основному обработчику создания персонажа.
     await start_creation_handler(
-        call=call, state=state, bot=bot, user_id=user_id, char_id=char_id, message_menu=message_menu
+        call=call,
+        state=state,
+        bot=bot,
+        user_id=user_id,
+        char_id=char_id,
+        message_menu=message_menu,
+        session=session,
     )

@@ -38,16 +38,7 @@ class CombatLogBuilder:
         parts = [f"{visual}"]
 
         # 1. Тип события (Hit, Crit, Block, Dodge...)
-        phrase_key = "hit"
-        if result.get("is_dodged"):
-            phrase_key = "dodge"
-        elif result.get("is_parried"):
-            phrase_key = "parry"
-        elif result.get("is_blocked") and result.get("damage_total", 0) == 0:
-            # Полный блок (урон 0)
-            phrase_key = "block_full"
-        elif result.get("is_crit"):
-            phrase_key = "crit"
+        phrase_key = CombatLogBuilder._get_phrase_key(result)
 
         # 2. Выбираем фразу и форматируем
         templates = COMBAT_PHRASES.get(phrase_key, COMBAT_PHRASES["hit"])

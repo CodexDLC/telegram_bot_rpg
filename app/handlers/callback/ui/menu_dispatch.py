@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import InGame
 from app.resources.keyboards.callback_data import MeinMenuCallback
+from app.services.game_service.game_sync_service import GameSyncService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.inventory.inventory_ui_service import InventoryUIService
@@ -32,6 +33,10 @@ async def main_menu_dispatcher(
     action = callback_data.action
 
     log.info(f"Меню-диспетчер: User {user_id} выбрал action='{action}'")
+
+    sync_service = GameSyncService(session)
+    await sync_service.synchronize_player_state(char_id)
+    log.debug(f"State synchronized via GameSyncService for char_id={char_id}")
 
     # 1. Базовая проверка сессии
     state_data = await state.get_data()
@@ -70,7 +75,7 @@ async def main_menu_dispatcher(
             await state.set_state(InGame.navigation)
 
             # 2. Получаем текущую локацию из Redis (через сервис)
-            nav_service = NavigationService(char_id=char_id, state_data=state_data)
+            nav_service = NavigationService(char_id=char_id, state_data=state_data, session=session)
             text, kb = await nav_service.reload_current_ui()
 
         # === (ТУТ БУДУТ ДРУГИЕ ВЕТКИ) ===

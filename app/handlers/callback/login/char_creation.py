@@ -9,25 +9,33 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.resources.fsm_states.states import CharacterCreation, StartTutorial
+from app.resources.fsm_states.states import CharacterCreation, InGame
 from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb
 from app.resources.schemas_dto.character_dto import CharacterOnboardingUpdateDTO
 from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
+from app.services.core_service.manager.account_manager import account_manager
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.helpers_module.game_validator import validate_character_name
 from app.services.ui_service.helpers_ui.ui_animation_service import UIAnimationService
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.menu_service import MenuService
+from app.services.ui_service.navigation_service import DEFAULT_SPAWN_POINT
 from app.services.ui_service.new_character.onboarding_service import OnboardingService
 
 router = Router(name="character_creation_fsm")
 
 
 async def start_creation_handler(
-    call: CallbackQuery, state: FSMContext, bot: Bot, user_id: int, char_id: int, message_menu: dict[str, Any]
+    call: CallbackQuery,
+    state: FSMContext,
+    bot: Bot,
+    user_id: int,
+    char_id: int,
+    message_menu: dict[str, Any],
+    session: AsyncSession,
 ) -> None:
     """
     Инициирует процесс создания нового персонажа.
@@ -57,8 +65,8 @@ async def start_creation_handler(
     await state.update_data({FSM_CONTEXT_KEY: session_context})
 
     # Инициализируем сервис меню для получения нужного текста и клавиатуры.
-    ms = MenuService(game_stage="creation", state_data=await state.get_data())
-    text, kb = ms.get_data_menu()
+    ms = MenuService(game_stage="creation", state_data=await state.get_data(), session=session)
+    text, kb = await ms.get_data_menu()
     log.debug("Данные для меню получены от MenuService.")
 
     await await_min_delay(start_time, min_delay=0.3)
@@ -316,17 +324,21 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: 
         await Err.generic_error(call=call)
         return
 
-    await state.set_state(StartTutorial.start)
-    log.info(f"FSM для user_id={user_id} переведен в состояние 'StartTutorial.start'.")
+    await state.set_state(InGame.navigation)
+    log.info(f"FSM для user_id={user_id} переведен в состояние 'InGame.navigation'.")
 
     name_str: str = cast(str, name)
     safe_gender = cast(Any, gender_db)
 
-    char_update_dto = CharacterOnboardingUpdateDTO(name=name_str, gender=safe_gender, game_stage="tutorial_stats")
+    char_update_dto = CharacterOnboardingUpdateDTO(name=name_str, gender=safe_gender, game_stage="in_game")
     create_service = OnboardingService(user_id=user_id, char_id=char_id)
 
     await create_service.update_character_db(session=session, char_update_dto=char_update_dto)
     log.info(f"Данные персонажа {char_id} (имя, пол, стадия) обновлены в БД.")
+
+    # 🔥 FIX: Устанавливаем начальную локацию в Redis
+    await account_manager.update_account_fields(char_id, {"location_id": DEFAULT_SPAWN_POINT})
+    log.info(f"Установлена начальная локация '{DEFAULT_SPAWN_POINT}' для char_id={char_id} в Redis.")
 
     message_menu = session_context.get("message_menu")
     message_content = session_context.get("message_content")

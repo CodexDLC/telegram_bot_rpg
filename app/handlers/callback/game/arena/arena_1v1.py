@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.resources.fsm_states.states import ArenaState, InGame
 from app.resources.keyboards.callback_data import ArenaQueueCallback
 from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
+from app.services.game_service.combat.combat_service import CombatService
 
 # 🔥 ТЕПЕРЬ ТОЛЬКО UI ИМПОРТЫ
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
@@ -59,7 +60,7 @@ async def arena_submit_queue_handler(
 
     # 1. Init UI
     state_data = await state.get_data()
-    ui = ArenaUIService(char_id, state_data=state_data, session=session)
+    ui = ArenaUIService(char_id, state_data, session)
 
     # 2. Action (Logic is hidden)
     gs = await ui.action_join_queue(mode)
@@ -109,15 +110,14 @@ async def arena_submit_queue_handler(
     if await state.get_state() != ArenaState.waiting:
         return  # Отмена
 
-    if not session_id:
-        log.info("Тайм-аут 1v1. Бой с тенью.")
-        session_id = await ui.action_create_shadow_battle(mode)
-
     if session_id:
-        # Save Session
         session_context["combat_session_id"] = session_id
         await state.update_data({FSM_CONTEXT_KEY: session_context})
         state_data[FSM_CONTEXT_KEY] = session_context
+
+        combat_service = CombatService(str(session_id))
+        await combat_service.process_turn_updates()
+        log.info(f"AI initial move successfully triggered for session {session_id}.")
 
         # Render Combat
         combat_ui = CombatUIService(user_id, char_id, session_id, state_data)

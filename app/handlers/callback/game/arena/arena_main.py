@@ -41,8 +41,7 @@ async def arena_render_main_menu_handler(
     state_data = await state.get_data()
 
     # 1. Init UI
-    # 🔥 ИСПРАВЛЕНО: Порядок (ID, Session, Data)
-    ui = ArenaUIService(char_id, session, state_data)
+    ui = ArenaUIService(char_id, state_data, session)
 
     # 2. View
     text, kb = await ui.view_main_menu()
@@ -137,8 +136,7 @@ async def arena_universal_cancel_handler(
     # 1. Init UI
     state_data = await state.get_data()
 
-    # 🔥 ИСПРАВЛЕНО: Порядок (ID, Session, Data)
-    ui = ArenaUIService(char_id, session, state_data)
+    ui = ArenaUIService(char_id, state_data, session)
 
     # 2. Action (Cancel)
     await ui.action_cancel_queue(mode)

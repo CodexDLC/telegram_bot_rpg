@@ -14,7 +14,9 @@ from app.resources.fsm_states.states import InGame, StartTutorial
 from app.resources.keyboards.callback_data import LobbySelectionCallback
 from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
 from app.resources.texts.buttons_callback import GameStage
+from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.services.core_service.manager.account_manager import account_manager
+from app.services.game_service.game_sync_service import GameSyncService
 from app.services.game_service.login_service import LoginService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import (
@@ -29,6 +31,7 @@ from app.services.ui_service.tutorial.tutorial_service import TutorialServiceSta
 from app.services.ui_service.tutorial.tutorial_service_skill import (
     TutorialServiceSkills,
 )
+from database.repositories import get_character_repo, get_symbiote_repo
 
 router = Router(name="login_handler_router")
 
@@ -36,6 +39,22 @@ router = Router(name="login_handler_router")
 # ==============================================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (Private Logic Helpers)
 # ==============================================================================
+
+
+async def _fetch_character_display_data(session: AsyncSession, char_id: int) -> tuple[str, str]:
+    """Извлекает имя персонажа и имя Симбиота из БД."""
+    char_repo = get_character_repo(session)
+    sym_repo = get_symbiote_repo(session)
+
+    # Получаем имя персонажа
+    character = await char_repo.get_character(char_id)
+    char_name = character.name if character else "Прошедший"
+
+    # Получаем имя Симбиота
+    symbiote = await sym_repo.get_symbiote(char_id)
+    sym_name = symbiote.symbiote_name if symbiote else DEFAULT_ACTOR_NAME
+
+    return char_name, sym_name
 
 
 async def _handle_tutorial_stats(char_id: int, state: FSMContext, bot: Bot, message_content: dict) -> None:
@@ -184,6 +203,7 @@ async def _handle_in_game_login(
     state_name: str,
     loc_id: str,
     call: CallbackQuery,
+    session: AsyncSession,  # <--- ❗ ДОБАВЛЕНО: Теперь функция принимает сессию
 ) -> None:
     """
     Обрабатывает вход в игру, отображая навигационный интерфейс и меню.
@@ -203,11 +223,16 @@ async def _handle_in_game_login(
         None
     """
     log.debug(f"Вход в игру для user_id={user_id}, char_id={char_id}. Локация: {loc_id}")
+
+    sync_service = GameSyncService(session)
+    await sync_service.synchronize_player_state(char_id)
+    log.debug(f"State synchronized after login for char_id={char_id}")
+
     nav_service = NavigationService(char_id=char_id, state_data=state_data)
     nav_text, nav_kb = await nav_service.get_navigation_ui(state_name, loc_id)
 
-    menu_service = MenuService(game_stage="in_game", state_data=state_data)
-    menu_text, menu_kb = menu_service.get_data_menu()
+    menu_service = MenuService(game_stage="in_game", state_data=state_data, session=session)
+    menu_text, menu_kb = await menu_service.get_data_menu()
 
     msg_menu = session_context.get("message_menu")
     msg_content = session_context.get("message_content")
@@ -300,6 +325,12 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
         await Err.generic_error(call)
         return
 
+    char_name, symbiote_name = await _fetch_character_display_data(session, char_id)
+    session_context["char_name"] = char_name
+    session_context["symbiote_name"] = symbiote_name
+    await state.update_data({FSM_CONTEXT_KEY: session_context})
+    log.debug(f"Имена сохранены в FSM: char_name='{char_name}', symbiote_name='{symbiote_name}'")
+
     if isinstance(login_result, str):
         game_stage = login_result
         log.debug(f"Редирект на game_stage='{game_stage}' для user_id={user_id}")
@@ -349,4 +380,5 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
                 state_name,
                 loc_id,
                 call,
+                session,
             )
