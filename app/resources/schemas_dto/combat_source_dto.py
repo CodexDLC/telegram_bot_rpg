@@ -42,6 +42,8 @@ class FighterStateDTO(BaseModel):
     # 🔥 НОВОЕ: Статистика внутри состояния
     stats: BattleStatsDTO = Field(default_factory=BattleStatsDTO)
 
+    xp_buffer: dict[str, int] = Field(default_factory=dict)
+
 
 class StatSourceData(BaseModel):
     base: float = 0.0
