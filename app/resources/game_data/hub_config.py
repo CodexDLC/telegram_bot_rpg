@@ -2,7 +2,7 @@
 from typing import Any, TypedDict
 
 from app.resources.fsm_states.states import ArenaState
-from app.services.ui_service.arena_ui_service.arena_builder import ArenaUIBuilder
+from app.services.ui_service.arena_ui_service.arena_ui_service import ArenaUIService
 
 
 # --- Типизация для словаря (для чистоты) ---
@@ -23,7 +23,7 @@ HUB_CONFIGS: dict[str, HubConfig] = {
         "title": "Ангар Арены",
         "intro_text": "Добро пожаловать в Ангар Арены. Здесь вы можете подать заявку на бой.",
         "fsm_state": ArenaState.menu,
-        "ui_builder_class": ArenaUIBuilder,
-        "render_method_name": "render_menu",
+        "ui_builder_class": ArenaUIService,
+        "render_method_name": "view_main_menu",
     }
 }

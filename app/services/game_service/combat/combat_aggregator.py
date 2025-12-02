@@ -52,17 +52,16 @@ class CombatAggregator:
         base_stats = await self.stats_repo.get_stats(char_id)
         if base_stats:
             # Заполняем базу
-            for field in base_stats.model_fields:
-                val = getattr(base_stats, field)
+            for field, val in base_stats.model_dump().items():
                 if isinstance(val, (int, float)):
                     self._add_stat(container, field, float(val), "base")
 
             # Считаем производные (HP, Crit и т.д.)
             derived = ModifiersCalculatorService.calculate_all_modifiers_for_stats(base_stats)
-            for field in derived.model_fields:
-                val = getattr(derived, field)
+            for field, val in derived.model_dump().items():
                 if isinstance(val, (int, float)):
                     self._add_stat(container, field, float(val), "base")
+
             log.debug(f"Базовые и производные статы для char_id={char_id} собраны.")
 
         # 2. Экипировка

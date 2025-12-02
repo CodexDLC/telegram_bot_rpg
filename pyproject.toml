@@ -110,9 +110,11 @@ show_error_codes = true
 # Где искать тесты
 testpaths = ["tests"]
 
+pythonpath = "."
 # Настройки для асинхронных тестов (плагин pytest-asyncio)
 # auto позволяет не вешать декоратор @pytest.mark.asyncio на каждый тест
 asyncio_mode = "auto"
 
 # Показывать подробный вывод
 addopts = "-v"
+

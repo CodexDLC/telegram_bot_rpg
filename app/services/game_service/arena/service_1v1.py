@@ -1,12 +1,11 @@
-# app/services/game_service/arena/service_1v1.py
+import asyncio
 import time
 
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Импортируем менеджеры
 from app.services.core_service.manager.arena_manager import arena_manager
-from app.services.core_service.manager.combat_manager import combat_manager  # Для проверки статуса
+from app.services.core_service.manager.combat_manager import combat_manager
 from app.services.game_service.combat.combat_service import CombatService
 from app.services.game_service.matchmaking_service import MatchmakingService
 from database.repositories import get_character_repo
@@ -17,68 +16,87 @@ class Arena1v1Service:
         self.session = session
         self.char_id = char_id
         self.mm_service = MatchmakingService(session)
-        self.mode = "1v1"  # Константа для этого сервиса
+        self.mode = "1v1"
 
     async def join_queue(self) -> int:
-        # 1. Чистим статус через Менеджер (Абстракция соблюдена)
+        """Вход в очередь."""
+        # 1. Очистка старых статусов
         await combat_manager.delete_player_status(self.char_id)
 
-        # 2. Считаем GS
+        # 2. Актуализация Gear Score
         gs = await self.mm_service.get_cached_gs(self.char_id)
 
-        # 3. Сохраняем в ZSET
+        # 3. Добавление в очередь (Redis ZSET)
         await arena_manager.add_to_queue(self.mode, self.char_id, float(gs))
 
-        # 4. Сохраняем мету
+        # 4. Создание метаданных заявки
         meta = {"start_time": time.time(), "gs": gs}
         await arena_manager.create_request(self.char_id, meta)
 
         log.info(f"Char {self.char_id} (GS: {gs}) встал в очередь {self.mode}.")
         return gs
 
+    async def wait_for_match(self, poll_steps: int = 6, poll_delay: float = 5.0) -> str | None:
+        """
+        Поллинг (ожидание) матча.
+        Заменяет собой логику, которая валялась в хэндлере.
+        """
+        for i in range(1, poll_steps + 1):
+            # 1. Пробуем найти матч (или проверить, не нашли ли нас)
+            session_id = await self.check_and_match(attempt=i)
+
+            if session_id:
+                return session_id
+
+            # 2. Если не нашли — спим
+            # (Можно добавить колбэк для обновления прогресс-бара UI, но пока просто спим)
+            await asyncio.sleep(poll_delay)
+
+        return None
+
     async def check_and_match(self, attempt: int = 1) -> str | None:
-        # 1. ПАССИВНАЯ ПРОВЕРКА
-        # Тут нам нужен метод проверки статуса. Если его нет в менеджерах,
-        # то пока оставим прямой доступ или вынесем.
+        """Попытка найти соперника или проверить статус."""
+
+        # 1. Проверяем, не забрали ли нас уже в бой (Пассивная проверка)
         active_session = await self._check_active_battle()
         if active_session:
             return active_session
 
-        # 2. Получаем свои данные через ArenaManager
+        # 2. Проверяем, в очереди ли мы еще
         my_req = await arena_manager.get_request(self.char_id)
         if not my_req:
-            return None  # Вылетел из очереди
+            return None  # Вылетел или отменил
 
         my_gs = my_req["gs"]
 
-        # 3. Диапазон
-        range_pct = min(0.15, 0.02 * ((attempt + 1) // 2))
+        # 3. Расширяем диапазон поиска с каждой попыткой
+        range_pct = min(0.30, 0.05 * attempt)  # Увеличил шаг для динамики
         min_score = my_gs * (1.0 - range_pct)
         max_score = my_gs * (1.0 + range_pct)
 
-        # 4. Поиск через ArenaManager
+        # 4. Ищем кандидатов
         candidates = await arena_manager.get_candidates(self.mode, min_score, max_score)
 
         opponent_id = None
         for c_id_str in candidates:
-            if int(c_id_str) != self.char_id:
-                opponent_id = int(c_id_str)
+            c_id = int(c_id_str)
+            if c_id != self.char_id:
+                opponent_id = c_id
                 break
 
         if not opponent_id:
             return None
 
-            # 5. Атомарный захват (через ArenaManager)
-        # Пытаемся удалить соперника
+        # 5. Атомарный захват (Optimistic Lock)
+        # Пытаемся удалить соперника из очереди. Если вернуло True — он наш.
         is_removed = await arena_manager.remove_from_queue(self.mode, opponent_id)
-
         if not is_removed:
-            return None  # Не успели
+            return None  # Кто-то успел раньше
 
         # Удаляем себя
         await arena_manager.remove_from_queue(self.mode, self.char_id)
 
-        # Чистим заявки
+        # Чистим метаданные заявок
         await arena_manager.delete_request(self.char_id)
         await arena_manager.delete_request(opponent_id)
 
@@ -87,62 +105,66 @@ class Arena1v1Service:
         return session_id
 
     async def cancel_queue(self):
-        """Выход через менеджер."""
+        """Отмена поиска."""
         await arena_manager.remove_from_queue(self.mode, self.char_id)
         await arena_manager.delete_request(self.char_id)
 
-    async def _check_active_battle(self) -> str | None:
-        # Читаем статус через Менеджер
-        val = await combat_manager.get_player_status(self.char_id)
-        return val.split(":")[1] if val and val.startswith("combat:") else None
-
-    async def _set_player_status(self, char_id: int, session_id: str):
-        # Пишем статус через Менеджер
-        await combat_manager.set_player_status(char_id, f"combat:{session_id}", ttl=300)
-
-    async def _create_pvp_battle(self, opponent_id: int) -> str:
-        # 1. Достаем красивые имена (Косметика)
-        me = await get_character_repo(self.session).get_character(self.char_id)
-        enemy = await get_character_repo(self.session).get_character(opponent_id)
-
-        # 2. Создаем "комнату" (Сессию)
-        session_id = await CombatService.create_battle([], is_pve=False)
-        cs = CombatService(session_id)
-
-        # 3. Загружаем в комнату "куклы" бойцов (Heavy Load logic внутри)
-        await cs.add_participant(self.session, self.char_id, "blue", me.name)
-        await cs.add_participant(self.session, opponent_id, "red", enemy.name)
-
-        # 4. Раздаем карты (инициализация)
-        await cs.initialize_battle_state()
-
-        # 5. Вешаем таблички "Занято" (см. ниже)
-        await self._set_player_status(self.char_id, session_id)
-        await self._set_player_status(opponent_id, session_id)
-
-        return session_id
-
     async def create_shadow_battle(self) -> str:
-        """Создает бой с Тенью (при тайм-ауте)."""
-        await self.cancel_queue()  # Чистим очередь через менеджер
+        """Создание боя с тенью (PVE fallback)."""
+        # Сначала убеждаемся, что мы ушли из очереди
+        await self.cancel_queue()
 
         char_repo = get_character_repo(self.session)
         me = await char_repo.get_character(self.char_id)
         name_me = me.name if me else "Unknown"
 
-        # Создаем бой (is_pve=True)
+        # Создаем бой PVE
         session_id = await CombatService.create_battle([], is_pve=True)
         cs = CombatService(session_id)
 
+        # Добавляем игрока
         await cs.add_participant(self.session, self.char_id, "blue", name_me)
 
-        # Создаем Тень (слабая копия)
-        # В будущем сюда можно передать (me.stats * 0.8)
+        # Добавляем Тень (заглушка статов, в будущем брать % от игрока)
         await cs.add_dummy_participant(-1, 100, 50, "👥 Тень")
 
         await cs.initialize_battle_state()
 
-        # Ставим статус ТОЛЬКО СЕБЕ (Тени статус в Redis не нужен)
+        # Ставим статус боя
         await self._set_player_status(self.char_id, session_id)
+
+        return session_id
+
+    # --- Private Helpers ---
+
+    async def _check_active_battle(self) -> str | None:
+        val = await combat_manager.get_player_status(self.char_id)
+        if val and val.startswith("combat:"):
+            return val.split(":")[1]
+        return None
+
+    async def _set_player_status(self, char_id: int, session_id: str):
+        await combat_manager.set_player_status(char_id, f"combat:{session_id}", ttl=300)
+
+    async def _create_pvp_battle(self, opponent_id: int) -> str:
+        repo = get_character_repo(self.session)
+        me = await repo.get_character(self.char_id)
+        enemy = await repo.get_character(opponent_id)
+
+        name_me = me.name if me else f"Player {self.char_id}"
+        name_enemy = enemy.name if enemy else f"Player {opponent_id}"
+
+        # Создаем PVP бой
+        session_id = await CombatService.create_battle([], is_pve=False)
+        cs = CombatService(session_id)
+
+        await cs.add_participant(self.session, self.char_id, "blue", name_me)
+        await cs.add_participant(self.session, opponent_id, "red", name_enemy)
+
+        await cs.initialize_battle_state()
+
+        # Ставим статусы обоим
+        await self._set_player_status(self.char_id, session_id)
+        await self._set_player_status(opponent_id, session_id)
 
         return session_id
