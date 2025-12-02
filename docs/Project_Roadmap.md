@@ -86,6 +86,14 @@
 
 ---
 
+## Phase 6.5: Стабильность и Безопасность (Pre-Release)
+*Статус: [ ] Запланировано*
+- [ ] **Rate Limiting (Anti-Spam):**
+    - [ ] Внедрение `ThrottlingMiddleware` (aiogram) для ограничения частоты запросов.
+    - [ ] Настройка лимитов для команд `/start` и боевых кнопок (чтобы не спамили кликами).
+- [ ] **Docker Containers:** Подготовка `Dockerfile` и `docker-compose.yml`.
+- 
+
 ## Phase 7: Релиз Альфа (Infrastructure)
 *Статус: [ ] Запланировано*
 - [ ] **Миграции:** Подключение `Alembic`.

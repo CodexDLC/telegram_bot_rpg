@@ -1,3 +1,4 @@
+# app/services/ui_service/helpers_ui/ui_animation_service.py
 import asyncio
 import contextlib
 import random
@@ -125,8 +126,6 @@ class UIAnimationService:
     def _generate_progress_bar(self, total_time: float, remaining: int, max_len: int = 10) -> str:
         """
         Генерирует строку прогресс-бара.
-        Если total_time < max_len, длина бара равна времени (в секундах).
-        Если total_time > max_len, бар масштабируется до max_len.
         """
         # Базовый расчет (без масштабирования)
         raw_filled = int(total_time) - remaining
@@ -150,7 +149,7 @@ class UIAnimationService:
     async def animate_polling(
         self,
         base_text: str,
-        check_func: Callable[[], Awaitable[str | None]],
+        check_func: Callable[[int], Awaitable[str | None]],  # 🔥 ИСПРАВЛЕНО: Принимает int (номер шага)
         steps: int = 6,
         step_delay: float = 5.0,
         fixed_duration: bool = False,
@@ -160,11 +159,10 @@ class UIAnimationService:
 
         Args:
             base_text: Текст сообщения (например, "🔎 Поиск противника").
-            check_func: Асинхронная функция, возвращающая session_id (если бой найден) или None.
-            steps: Количество итераций (по умолчанию 6 шагов * 5 сек = 30 сек).
+            check_func: Асинхронная функция, принимающая номер попытки (int) и возвращающая session_id или None.
+            steps: Количество итераций.
             step_delay: Задержка между шагами.
-            fixed_duration: Если True, цикл не прервется раньше времени, даже если бой найден
-                            (бой начнется только в конце анимации).
+            fixed_duration: Если True, цикл не прервется раньше времени.
 
         Returns:
             str: session_id (если найден) или None (если таймаут).
@@ -174,24 +172,22 @@ class UIAnimationService:
 
         for i in range(1, steps + 1):
             # 1. Рисуем прогресс
-            # Пример: [■■□□□□] 10/30 сек
             prog_bar = "■" * i + "□" * (steps - i)
             elapsed = int(i * step_delay)
             total_time = int(steps * step_delay)
 
             frame_text = f"{base_text}\n\n⏳ <code>[{prog_bar}] {elapsed}/{total_time} с.</code>"
 
-            # Обновляем UI (игнорируем ошибку "не изменилось")
+            # Обновляем UI
             await self._render_frame(frame_text)
 
             # 2. Проверка (если еще не нашли)
             if not found_result:
-                found_result = await check_func()
+                # 🔥 ИСПРАВЛЕНО: Передаем номер попытки 'i'
+                found_result = await check_func(i)
 
             # 3. Логика выхода
             if found_result and not fixed_duration:
-                # Если бой найден и нам не нужно ждать до конца -> выходим сразу
-                # Но даем маленькую паузу (1 сек), чтобы юзер увидел прогресс
                 await asyncio.sleep(1)
                 return found_result
 

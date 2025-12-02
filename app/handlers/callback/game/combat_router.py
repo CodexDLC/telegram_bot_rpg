@@ -8,19 +8,28 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.resources.fsm_states.states import InGame
+# --- Импорты состояний ---
+from app.resources.fsm_states.states import ArenaState, InGame
+
+# --- Импорты клавиатур ---
 from app.resources.keyboards.combat_callback import (
     CombatActionCallback,
     CombatLogCallback,
     CombatZoneCallback,
 )
+
+# --- Импорты сервисов ---
 from app.services.core_service.manager.combat_manager import combat_manager
 from app.services.game_service.combat.combat_service import CombatService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
+from app.services.ui_service.arena_ui_service.arena_ui_service import ArenaUIService
 from app.services.ui_service.combat.combat_ui_service import CombatUIService
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
+from app.services.ui_service.menu_service import MenuService
+from app.services.ui_service.navigation_service import NavigationService
 
 router = Router(name="combat_router")
 
@@ -29,17 +38,6 @@ router = Router(name="combat_router")
 async def combat_zone_toggle_handler(call: CallbackQuery, callback_data: CombatZoneCallback, state: FSMContext) -> None:
     """
     Обрабатывает нажатия на зоны атаки/защиты в бою.
-
-    Переключает выбранные зоны в состоянии FSM и обновляет
-    сообщение с панелью управления боем.
-
-    Args:
-        call (CallbackQuery): Входящий колбэк.
-        callback_data (CombatZoneCallback): Данные колбэка с информацией о зоне.
-        state (FSMContext): Контекст FSM.
-
-    Returns:
-        None
     """
     if not call.from_user or not isinstance(call.message, Message):
         log.warning("Колбэк без `from_user` или `message` в 'combat_zone_toggle_handler'.")
@@ -87,17 +85,11 @@ async def combat_zone_toggle_handler(call: CallbackQuery, callback_data: CombatZ
 
 
 @router.callback_query(InGame.combat, CombatActionCallback.filter())
-async def combat_action_handler(call: CallbackQuery, callback_data: CombatActionCallback, state: FSMContext) -> None:
+async def combat_action_handler(
+    call: CallbackQuery, callback_data: CombatActionCallback, state: FSMContext, session: AsyncSession
+) -> None:
     """
-    Обрабатывает действия в бою (например, подтверждение хода).
-
-    Args:
-        call (CallbackQuery): Входящий колбэк.
-        callback_data (CombatActionCallback): Данные колбэка с действием.
-        state (FSMContext): Контекст FSM.
-
-    Returns:
-        None
+    Обрабатывает действия в бою (подтверждение хода, выход, меню).
     """
     start_time = time.monotonic()
     if not call.from_user or not call.message or not call.bot:
@@ -119,7 +111,79 @@ async def combat_action_handler(call: CallbackQuery, callback_data: CombatAction
         await Err.generic_error(call)
         return
 
-    if action == "submit":
+    # === ОБРАБОТКА ДЕЙСТВИЙ ===
+
+    if action == "leave":
+        # 🔥 УМНЫЙ ВЫХОД: Смотрим, где начался бой
+        meta = await combat_manager.get_session_meta(str(session_id))
+        mode = meta.get("mode", "world") if meta else "world"
+
+        log.info(f"User {user_id} покидает бой. Режим возврата: {mode}")
+
+        # Текст и клавиатура для нижнего сообщения (контента)
+        content_text = None
+        content_kb = None
+
+        # 1. Логика для АРЕНЫ
+        if mode == "arena":
+            await state.set_state(ArenaState.menu)
+
+            # Инициализируем сервис арены (ID, Session, Data)
+            arena_ui = ArenaUIService(char_id, session, state_data)
+            content_text, content_kb = await arena_ui.view_main_menu()
+
+            # Восстанавливаем верхнее меню (обычное игровое)
+            msg_menu = session_context.get("message_menu")
+            if msg_menu:
+                ms = MenuService(game_stage="in_game", state_data=state_data)
+                menu_text, menu_kb = ms.get_data_menu()
+                with suppress(TelegramAPIError):
+                    await call.bot.edit_message_text(
+                        chat_id=msg_menu["chat_id"],
+                        message_id=msg_menu["message_id"],
+                        text=menu_text,
+                        reply_markup=menu_kb,
+                        parse_mode="HTML",
+                    )
+
+        # 2. Логика для ОТКРЫТОГО МИРА (и по умолчанию)
+        else:
+            await state.set_state(InGame.navigation)
+
+            # Инициализируем сервис навигации
+            nav_service = NavigationService(char_id, state_data)
+            content_text, content_kb = await nav_service.reload_current_ui()
+
+            # Восстанавливаем верхнее меню
+            msg_menu = session_context.get("message_menu")
+            if msg_menu:
+                ms = MenuService(game_stage="in_game", state_data=state_data)
+                menu_text, menu_kb = ms.get_data_menu()
+                with suppress(TelegramAPIError):
+                    await call.bot.edit_message_text(
+                        chat_id=msg_menu["chat_id"],
+                        message_id=msg_menu["message_id"],
+                        text=menu_text,
+                        reply_markup=menu_kb,
+                        parse_mode="HTML",
+                    )
+
+        # 3. Обновляем нижнее сообщение (контент)
+        msg_content = session_context.get("message_content")
+        if msg_content and content_text:
+            with suppress(TelegramAPIError):
+                await call.bot.edit_message_text(
+                    chat_id=msg_content["chat_id"],
+                    message_id=msg_content["message_id"],
+                    text=content_text,
+                    reply_markup=content_kb,
+                    parse_mode="HTML",
+                )
+
+        await call.answer()
+        return
+
+    elif action == "submit":
         await call.answer("Ход принят!")
 
         selection: dict[str, list[str]] = state_data.get("combat_selection", {})
@@ -184,6 +248,7 @@ async def combat_action_handler(call: CallbackQuery, callback_data: CombatAction
 
         await await_min_delay(start_time, min_delay=1.5)
 
+        # Повторный рендер дашборда (может быть уже результат боя)
         text, kb = await ui_service.render_dashboard(current_selection={})
         if isinstance(msg_content, dict):
             with suppress(TelegramAPIError):
@@ -199,19 +264,36 @@ async def combat_action_handler(call: CallbackQuery, callback_data: CombatAction
         log.debug(f"User {user_id} нажал на меню действий в бою (WIP).")
         await call.answer("Меню действий (WIP)")
 
+    elif action == "switch_target":
+        # Реализация смены цели (WIP)
+        combat_service = CombatService(str(session_id))
+        # Пока просто берем следующего (нужен UI выбора)
+        # success, msg = await combat_service.switch_target(char_id, ...)
+        await call.answer("Смена цели (WIP)", show_alert=True)
+
+    elif action == "refresh":
+        # Обновление (для наблюдателя или лога)
+        ui_service = CombatUIService(user_id, char_id, str(session_id), state_data)
+
+        text, kb = await ui_service.render_dashboard(current_selection={})
+
+        msg_content = session_context.get("message_content")
+        if msg_content:
+            with suppress(TelegramAPIError):
+                await call.bot.edit_message_text(
+                    chat_id=msg_content["chat_id"],
+                    message_id=msg_content["message_id"],
+                    text=text,
+                    reply_markup=kb,
+                    parse_mode="HTML",
+                )
+        await call.answer("Обновлено")
+
 
 @router.callback_query(InGame.combat, CombatLogCallback.filter())
 async def combat_log_pagination(call: CallbackQuery, callback_data: CombatLogCallback, state: FSMContext) -> None:
     """
     Обрабатывает пагинацию в логе боя.
-
-    Args:
-        call (CallbackQuery): Входящий колбэк.
-        callback_data (CombatLogCallback): Данные колбэка с номером страницы.
-        state (FSMContext): Контекст FSM.
-
-    Returns:
-        None
     """
     if not call.from_user or not isinstance(call.message, Message):
         log.warning("Колбэк без `from_user` или `message` в 'combat_log_pagination'.")

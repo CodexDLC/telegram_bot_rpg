@@ -30,7 +30,7 @@ async def arena_1v1_menu_handler(
 
     # 1. Init UI (Facade)
     state_data = await state.get_data()
-    ui = ArenaUIService(callback_data.char_id, state_data, session)
+    ui = ArenaUIService(char_id=callback_data.char_id, state_data=state_data, session=session)
 
     # 2. View
     text, kb = await ui.view_mode_menu(callback_data.match_type)
@@ -59,7 +59,7 @@ async def arena_submit_queue_handler(
 
     # 1. Init UI
     state_data = await state.get_data()
-    ui = ArenaUIService(char_id, state_data, session)
+    ui = ArenaUIService(char_id, state_data=state_data, session=session)
 
     # 2. Action (Logic is hidden)
     gs = await ui.action_join_queue(mode)
