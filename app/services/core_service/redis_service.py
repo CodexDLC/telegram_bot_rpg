@@ -1,4 +1,3 @@
-# app/services/core_service/redis_service.py
 import json
 from typing import Any
 
@@ -11,247 +10,504 @@ from app.core.redis_client import redis_client
 
 class RedisService:
     """
-    Сервис для взаимодействия с Redis, предоставляющий удобные методы
-    для работы с различными структурами данных (хеши, множества, списки).
+    Сервис для взаимодействия с Redis, предоставляющий асинхронные методы
+    для работы с различными структурами данных Redis (хеши, множества, списки, ZSET, строки).
+
+    Инкапсулирует логику обработки ошибок Redis и сериализации/десериализации JSON.
     """
 
     def __init__(self, client: Redis):
-        self.redis_client = client
-        log.debug(f"Инициализирован {self.__class__.__name__} с клиентом: {client}")
+        """
+        Инициализирует RedisService с заданным асинхронным клиентом Redis.
 
-    # --- HASHES (Хэши) ---
+        Args:
+            client: Экземпляр асинхронного клиента Redis.
+        """
+        self.redis_client = client
+        log.debug(f"RedisService | status=initialized client={client}")
 
     async def set_hash_json(self, key: str, field: str, data: dict[str, Any]) -> None:
-        """Сериализует словарь в JSON и сохраняет его в поле хеша."""
+        """
+        Сериализует словарь в JSON-строку и сохраняет её в указанное поле хеша Redis.
+
+        Args:
+            key: Ключ хеша Redis.
+            field: Поле внутри хеша.
+            data: Словарь для сериализации и сохранения.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+            TypeError: Если `data` не может быть сериализован в JSON.
+        """
         try:
             data_json = json.dumps(data)
             await self.redis_client.hset(key, field, data_json)  # type: ignore
-            log.debug(f"Установлено значение для key='{key}', field='{field}'.")
-        except TypeError as e:
-            log.error(f"Ошибка сериализации JSON для key='{key}', field='{field}': {e}")
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при выполнении hset для key='{key}': {e}")
+            log.debug(f"RedisHash | action=set_json status=success key='{key}' field='{field}'")
+        except TypeError:
+            log.error(
+                f"RedisHash | action=set_json status=failed reason='JSON serialization error' key='{key}' field='{field}'",
+                exc_info=True,
+            )
+        except RedisError:
+            log.exception(f"RedisHash | action=set_json status=failed reason='Redis error' key='{key}' field='{field}'")
 
     async def set_hash_fields(self, key: str, data: dict[str, Any]) -> None:
-        """Устанавливает НЕСКОЛЬКО полей в хеше за один вызов."""
+        """
+        Устанавливает несколько полей и их значений в хеше Redis за один вызов.
+
+        Args:
+            key: Ключ хеша Redis.
+            data: Словарь, где ключи — это поля, а значения — значения полей.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             await self.redis_client.hset(key, mapping=data)  # type: ignore
-            log.debug(f"Установлены поля {list(data.keys())} для key='{key}'.")
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при выполнении hset (mapping) для key='{key}': {e}")
+            log.debug(f"RedisHash | action=set_fields status=success key='{key}' fields={list(data.keys())}")
+        except RedisError:
+            log.exception(f"RedisHash | action=set_fields status=failed reason='Redis error' key='{key}'")
 
     async def get_hash_json(self, key: str, field: str) -> dict[str, Any] | None:
-        """Получает JSON-строку из поля хеша и десериализует ее в словарь."""
+        """
+        Получает JSON-строку из поля хеша Redis и десериализует её в словарь.
+
+        Args:
+            key: Ключ хеша Redis.
+            field: Поле внутри хеша.
+
+        Returns:
+            Десериализованный словарь, если найден и успешно десериализован, иначе None.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+            json.JSONDecodeError: Если содержимое поля не является валидным JSON.
+        """
         try:
             data_json = await self.redis_client.hget(key, field)  # type: ignore
             if data_json:
-                log.debug(f"Найдено значение для key='{key}', field='{field}'.")
+                log.debug(f"RedisHash | action=get_json status=found key='{key}' field='{field}'")
                 return json.loads(data_json)
-            log.debug(f"Значение для key='{key}', field='{field}' не найдено.")
+            log.debug(f"RedisHash | action=get_json status=not_found key='{key}' field='{field}'")
             return None
-        except json.JSONDecodeError as e:
-            log.error(f"Ошибка десериализации JSON для key='{key}', field='{field}': {e}")
+        except json.JSONDecodeError:
+            log.error(
+                f"RedisHash | action=get_json status=failed reason='JSON deserialization error' key='{key}' field='{field}'",
+                exc_info=True,
+            )
             return None
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при выполнении hget для key='{key}': {e}")
+        except RedisError:
+            log.exception(f"RedisHash | action=get_json status=failed reason='Redis error' key='{key}' field='{field}'")
             return None
 
     async def get_hash_field(self, key: str, field: str) -> str | None:
-        """Получает одно поле из хеша."""
+        """
+        Получает строковое значение одного поля из хеша Redis.
+
+        Args:
+            key: Ключ хеша Redis.
+            field: Поле внутри хеша.
+
+        Returns:
+            Строковое значение поля, если найдено, иначе None.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             value = await self.redis_client.hget(key, field)  # type: ignore
             if value:
-                log.debug(f"Получено значение для key='{key}', field='{field}'.")
+                log.debug(f"RedisHash | action=get_field status=found key='{key}' field='{field}'")
                 return value
-            log.debug(f"Значение для key='{key}', field='{field}' не найдено.")
+            log.debug(f"RedisHash | action=get_field status=not_found key='{key}' field='{field}'")
             return None
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при выполнении hget для key='{key}': {e}")
+        except RedisError:
+            log.exception(
+                f"RedisHash | action=get_field status=failed reason='Redis error' key='{key}' field='{field}'"
+            )
             return None
 
-    async def get_all_hash(self, key: str) -> dict[str, Any] | None:
-        """Получает все поля и значения из хеша."""
+    async def get_all_hash(self, key: str) -> dict[str, str] | None:
+        """
+        Получает все поля и их строковые значения из хеша Redis.
+
+        Args:
+            key: Ключ хеша Redis.
+
+        Returns:
+            Словарь со всеми полями и значениями хеша, если хеш существует и не пуст, иначе None.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             data_dict = await self.redis_client.hgetall(key)  # type: ignore
             if data_dict:
-                log.debug(f"Получены все поля для key='{key}'.")
+                log.debug(f"RedisHash | action=get_all status=found key='{key}' fields_count={len(data_dict)}")
                 return data_dict
-            log.debug(f"Хеш по ключу '{key}' не найден или пуст.")
+            log.debug(f"RedisHash | action=get_all status=not_found key='{key}'")
             return None
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при выполнении hgetall для key='{key}': {e}")
+        except RedisError:
+            log.exception(f"RedisHash | action=get_all status=failed reason='Redis error' key='{key}'")
             return None
 
-    async def delete_hash_json(self, key: str) -> None:
-        """Удаляет весь хеш по ключу."""
+    async def delete_hash_key(self, key: str) -> None:
+        """
+        Удаляет весь хеш по указанному ключу Redis.
+
+        Args:
+            key: Ключ хеша Redis для удаления.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             await self.redis_client.delete(key)  # type: ignore
-            log.debug(f"Хеш по ключу '{key}' удален.")
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при удалении key='{key}': {e}")
+            log.debug(f"RedisHash | action=delete_key status=success key='{key}'")
+        except RedisError:
+            log.exception(f"RedisHash | action=delete_key status=failed reason='Redis error' key='{key}'")
 
     async def delete_hash_field(self, key: str, field: str) -> None:
-        """Удаляет одно поле из хеша."""
+        """
+        Удаляет одно поле из хеша Redis.
+
+        Args:
+            key: Ключ хеша Redis.
+            field: Поле для удаления из хеша.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             await self.redis_client.hdel(key, field)  # type: ignore
-            log.debug(f"Поле '{field}' удалено из хеша '{key}'.")
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при удалении поля '{field}' из key='{key}': {e}")
-
-    # --- SETS (Множества) ---
+            log.debug(f"RedisHash | action=delete_field status=success key='{key}' field='{field}'")
+        except RedisError:
+            log.exception(
+                f"RedisHash | action=delete_field status=failed reason='Redis error' key='{key}' field='{field}'"
+            )
 
     async def add_to_set(self, key: str, value: str | int) -> None:
-        """Добавляет значение в множество."""
+        """
+        Добавляет строковое или целочисленное значение в множество Redis.
+
+        Args:
+            key: Ключ множества Redis.
+            value: Значение для добавления.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             await self.redis_client.sadd(key, str(value))  # type: ignore
-            log.debug(f"Значение '{value}' добавлено в множество '{key}'.")
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при добавлении в множество '{key}': {e}")
+            log.debug(f"RedisSet | action=add status=success key='{key}' value='{value}'")
+        except RedisError:
+            log.exception(f"RedisSet | action=add status=failed reason='Redis error' key='{key}' value='{value}'")
 
     async def get_to_set(self, key: str) -> set[str]:
-        """Возвращает все элементы множества."""
+        """
+        Возвращает все элементы множества Redis.
+
+        Args:
+            key: Ключ множества Redis.
+
+        Returns:
+            Множество строковых элементов. Возвращает пустое множество в случае ошибки.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             members = await self.redis_client.smembers(key)  # type: ignore
-            log.debug(f"Получено {len(members)} элементов из множества '{key}'.")
+            log.debug(f"RedisSet | action=get_all status=success key='{key}' members_count={len(members)}")
             return members
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при получении множества '{key}': {e}")
+        except RedisError:
+            log.exception(f"RedisSet | action=get_all status=failed reason='Redis error' key='{key}'")
             return set()
 
     async def is_set_member(self, key: str, value: str | int) -> bool:
-        """Проверяет, является ли значение элементом множества."""
+        """
+        Проверяет, является ли указанное значение элементом множества Redis.
+
+        Args:
+            key: Ключ множества Redis.
+            value: Значение для проверки.
+
+        Returns:
+            True, если значение является элементом множества, иначе False.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             is_member = await self.redis_client.sismember(key, str(value))  # type: ignore
-            log.debug(f"Проверка принадлежности '{value}' к множеству '{key}': {is_member}.")
+            log.debug(
+                f"RedisSet | action=is_member status=checked key='{key}' value='{value}' result={bool(is_member)}"
+            )
             return bool(is_member)
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при проверке множества '{key}': {e}")
+        except RedisError:
+            log.exception(f"RedisSet | action=is_member status=failed reason='Redis error' key='{key}' value='{value}'")
             return False
 
     async def remove_from_set(self, key: str, value: str | int) -> None:
-        """Удаляет значение из множества."""
+        """
+        Удаляет указанное значение из множества Redis.
+
+        Args:
+            key: Ключ множества Redis.
+            value: Значение для удаления.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             await self.redis_client.srem(key, str(value))  # type: ignore
-            log.debug(f"Значение '{value}' удалено из множества '{key}'.")
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при удалении из множества '{key}': {e}")
+            log.debug(f"RedisSet | action=remove status=success key='{key}' value='{value}'")
+        except RedisError:
+            log.exception(f"RedisSet | action=remove status=failed reason='Redis error' key='{key}' value='{value}'")
 
     async def key_exists(self, key: str) -> bool:
-        """Проверяет существование ключа."""
+        """
+        Проверяет существование ключа в Redis.
+
+        Args:
+            key: Ключ для проверки.
+
+        Returns:
+            True, если ключ существует, иначе False.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             exists = await self.redis_client.exists(key)  # type: ignore
-            log.debug(f"Проверка существования ключа '{key}': {exists}.")
+            log.debug(f"RedisKey | action=exists status=checked key='{key}' result={bool(exists)}")
             return bool(exists)
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при проверке ключа '{key}': {e}")
+        except RedisError:
+            log.exception(f"RedisKey | action=exists status=failed reason='Redis error' key='{key}'")
             return False
 
-    # --- SORTED SETS (ZSET) ---
-
     async def add_to_zset(self, key: str, mapping: dict[str, float]) -> int:
-        """Добавляет элементы в Sorted Set."""
+        """
+        Добавляет или обновляет элементы в отсортированном множестве (ZSET) Redis.
+
+        Args:
+            key: Ключ ZSET Redis.
+            mapping: Словарь, где ключи — это члены ZSET, а значения — их очки (scores).
+
+        Returns:
+            Количество добавленных или обновленных элементов. Возвращает 0 в случае ошибки.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             count = await self.redis_client.zadd(key, mapping)  # type: ignore
-            log.debug(f"В ZSET '{key}' добавлено/обновлено {count} элементов.")
+            log.debug(f"RedisZSet | action=add status=success key='{key}' count={count}")
             return int(count)
-        except RedisError as e:
-            log.exception(f"Ошибка Redis zadd для '{key}': {e}")
+        except RedisError:
+            log.exception(f"RedisZSet | action=add status=failed reason='Redis error' key='{key}'")
             return 0
 
     async def get_zset_score(self, key: str, member: str) -> float | None:
-        """Возвращает Score участника."""
+        """
+        Возвращает очки (score) указанного члена отсортированного множества Redis.
+
+        Args:
+            key: Ключ ZSET Redis.
+            member: Член ZSET, очки которого нужно получить.
+
+        Returns:
+            Очки члена в виде float, если член существует, иначе None.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             score = await self.redis_client.zscore(key, member)  # type: ignore
+            log.debug(f"RedisZSet | action=get_score status=success key='{key}' member='{member}' score={score}")
             return float(score) if score is not None else None
-        except RedisError as e:
-            log.exception(f"Ошибка Redis zscore для '{key}': {e}")
+        except RedisError:
+            log.exception(
+                f"RedisZSet | action=get_score status=failed reason='Redis error' key='{key}' member='{member}'"
+            )
             return None
 
     async def get_zset_range_by_score(self, key: str, min_score: float, max_score: float) -> list[str]:
-        """Возвращает список members в диапазоне очков."""
+        """
+        Возвращает список членов отсортированного множества Redis, чьи очки находятся в заданном диапазоне.
+
+        Args:
+            key: Ключ ZSET Redis.
+            min_score: Минимальное значение очков (включительно).
+            max_score: Максимальное значение очков (включительно).
+
+        Returns:
+            Список строковых членов ZSET. Возвращает пустой список в случае ошибки.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             res = await self.redis_client.zrangebyscore(key, min_score, max_score)  # type: ignore
+            log.debug(
+                f"RedisZSet | action=get_range_by_score status=success key='{key}' min={min_score} max={max_score} count={len(res)}"
+            )
             return res
-        except RedisError as e:
-            log.exception(f"Ошибка Redis zrangebyscore для '{key}': {e}")
+        except RedisError:
+            log.exception(f"RedisZSet | action=get_range_by_score status=failed reason='Redis error' key='{key}'")
             return []
 
     async def remove_from_zset(self, key: str, member: str) -> bool:
-        """Удаляет элемент из ZSET."""
+        """
+        Удаляет указанный член из отсортированного множества Redis.
+
+        Args:
+            key: Ключ ZSET Redis.
+            member: Член для удаления.
+
+        Returns:
+            True, если член был удален, иначе False.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             count = await self.redis_client.zrem(key, member)  # type: ignore
             if count > 0:
-                log.debug(f"Элемент '{member}' удален из ZSET '{key}'.")
+                log.debug(f"RedisZSet | action=remove status=success key='{key}' member='{member}'")
                 return True
+            log.debug(f"RedisZSet | action=remove status=not_found key='{key}' member='{member}'")
             return False
-        except RedisError as e:
-            log.exception(f"Ошибка Redis zrem для '{key}': {e}")
+        except RedisError:
+            log.exception(f"RedisZSet | action=remove status=failed reason='Redis error' key='{key}' member='{member}'")
             return False
-
-    # --- BASIC K/V (String) ---
 
     async def set_value(self, key: str, value: str, ttl: int | None = None) -> None:
-        """Устанавливает значение ключа (String)."""
+        """
+        Устанавливает строковое значение для ключа Redis с опциональным временем жизни (TTL).
+
+        Args:
+            key: Ключ Redis.
+            value: Строковое значение.
+            ttl: Время жизни ключа в секундах. Если None, ключ не имеет TTL.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             await self.redis_client.set(key, value, ex=ttl)  # type: ignore
-            log.debug(f"Установлен ключ '{key}' (TTL={ttl}).")
-        except RedisError as e:
-            log.exception(f"Ошибка Redis set для '{key}': {e}")
+            log.debug(f"RedisString | action=set status=success key='{key}' ttl={ttl}")
+        except RedisError:
+            log.exception(f"RedisString | action=set status=failed reason='Redis error' key='{key}'")
 
     async def get_value(self, key: str) -> str | None:
-        """Получает значение ключа (String)."""
+        """
+        Получает строковое значение по ключу Redis.
+
+        Args:
+            key: Ключ Redis.
+
+        Returns:
+            Строковое значение, если ключ существует, иначе None.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             val = await self.redis_client.get(key)  # type: ignore
-            return str(val) if val is not None else None
-        except RedisError as e:
-            log.exception(f"Ошибка Redis get для '{key}': {e}")
+            if val is not None:
+                log.debug(f"RedisString | action=get status=found key='{key}'")
+                return str(val)
+            log.debug(f"RedisString | action=get status=not_found key='{key}'")
+            return None
+        except RedisError:
+            log.exception(f"RedisString | action=get status=failed reason='Redis error' key='{key}'")
             return None
 
     async def delete_key(self, key: str) -> None:
-        """Универсальное удаление ключа."""
+        """
+        Удаляет ключ любого типа из Redis.
+
+        Args:
+            key: Ключ Redis для удаления.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             await self.redis_client.delete(key)  # type: ignore
-            log.debug(f"Ключ '{key}' удален.")
-        except RedisError as e:
-            log.exception(f"Ошибка Redis delete для '{key}': {e}")
-
-    # --- 🔥 НОВЫЕ МЕТОДЫ (LISTS & SCAN) ---
+            log.debug(f"RedisKey | action=delete status=success key='{key}'")
+        except RedisError:
+            log.exception(f"RedisKey | action=delete status=failed reason='Redis error' key='{key}'")
 
     async def push_to_list(self, key: str, value: str) -> None:
-        """Добавляет элемент в конец списка (RPUSH)."""
+        """
+        Добавляет элемент в конец списка Redis (RPUSH).
+
+        Args:
+            key: Ключ списка Redis.
+            value: Строковое значение для добавления.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             await self.redis_client.rpush(key, value)  # type: ignore
-            log.debug(f"В список '{key}' добавлено значение.")
-        except RedisError as e:
-            log.exception(f"Ошибка Redis rpush для '{key}': {e}")
+            log.debug(f"RedisList | action=push status=success key='{key}'")
+        except RedisError:
+            log.exception(f"RedisList | action=push status=failed reason='Redis error' key='{key}'")
 
     async def get_list_range(self, key: str, start: int = 0, end: int = -1) -> list[str]:
-        """Возвращает диапазон элементов списка (LRANGE)."""
+        """
+        Возвращает диапазон элементов из списка Redis.
+
+        Args:
+            key: Ключ списка Redis.
+            start: Начальный индекс диапазона (включительно).
+            end: Конечный индекс диапазона (включительно, -1 для последнего элемента).
+
+        Returns:
+            Список строковых элементов. Возвращает пустой список в случае ошибки.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
         try:
             result = await self.redis_client.lrange(key, start, end)  # type: ignore
-            log.debug(f"Из списка '{key}' получено {len(result)} элементов.")
+            log.debug(
+                f"RedisList | action=get_range status=success key='{key}' start={start} end={end} count={len(result)}"
+            )
             return result
-        except RedisError as e:
-            log.exception(f"Ошибка Redis lrange для '{key}': {e}")
+        except RedisError:
+            log.exception(f"RedisList | action=get_range status=failed reason='Redis error' key='{key}'")
             return []
 
     async def delete_by_pattern(self, pattern: str) -> int:
         """
-        Удаляет ключи по паттерну (SCAN + DELETE).
-        Безопасно для performance (использует итератор).
+        Удаляет ключи из Redis, соответствующие заданному паттерну.
+        Использует `SCAN` для безопасного удаления большого количества ключей.
+
+        Args:
+            pattern: Паттерн для поиска ключей (например, "prefix:*").
+
+        Returns:
+            Количество удаленных ключей. Возвращает 0 в случае ошибки.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
         """
         deleted_count = 0
         try:
-            # scan_iter возвращает асинхронный итератор
             keys_to_delete = [k async for k in self.redis_client.scan_iter(match=pattern)]
             if keys_to_delete:
                 deleted_count = await self.redis_client.delete(*keys_to_delete)  # type: ignore
-            log.debug(f"Удалено {deleted_count} ключей по паттерну '{pattern}'.")
+            log.debug(
+                f"RedisKey | action=delete_by_pattern status=success pattern='{pattern}' deleted_count={deleted_count}"
+            )
             return int(deleted_count)
-        except RedisError as e:
-            log.exception(f"Ошибка Redis при удалении по паттерну '{pattern}': {e}")
+        except RedisError:
+            log.exception(f"RedisKey | action=delete_by_pattern status=failed reason='Redis error' pattern='{pattern}'")
             return 0
 
 
-# Глобальный экземпляр сервиса
 redis_service = RedisService(client=redis_client)

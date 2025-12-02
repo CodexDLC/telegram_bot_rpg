@@ -1,4 +1,3 @@
-# app/handlers/callback/ui/inventory/inventory_resource.py
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
@@ -19,45 +18,40 @@ router = Router(name="inventory_resource_router")
     InventoryCallback.filter((F.section == "resource") & (F.level == 1)),
 )
 async def inventory_resource_list_handler(
-    call: CallbackQuery,
-    callback_data: InventoryCallback,
-    state: FSMContext,
-    session: AsyncSession,
-    bot: Bot,
+    call: CallbackQuery, callback_data: InventoryCallback, state: FSMContext, session: AsyncSession, bot: Bot
 ) -> None:
-    """
-    Уровень 1: Список Ресурсов.
-    """
-    # 1. Security Check
-    if call.from_user.id != callback_data.user_id:
+    """Обрабатывает список ресурсов, фильтры и пагинацию."""
+    user_id = call.from_user.id
+    if user_id != callback_data.user_id:
+        log.warning(
+            f"InventoryResource | status=access_denied user_id={user_id} callback_user_id={callback_data.user_id}"
+        )
         await Err.access_denied(call)
         return
 
-    # 2. Инициализация
     state_data = await state.get_data()
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
-    user_id = session_context.get("user_id") or call.from_user.id
     char_id = session_context.get("char_id")
 
     if not char_id:
-        log.error(f"char_id not found in FSM for user {call.from_user.id}")
+        log.error(f"InventoryResource | status=failed reason='char_id not found in FSM' user_id={user_id}")
         await Err.char_id_not_found_in_fsm(call)
         return
 
     service = InventoryUIService(char_id=char_id, user_id=user_id, session=session, state_data=state_data)
-
-    # 3. Получение данных (Section = resource)
     text, kb = await service.render_item_list(
         section="resource", category=callback_data.category, page=callback_data.page
     )
 
-    # 4. Рендер
     message_data = service.get_message_content_data()
     if not message_data:
+        log.error(f"InventoryResource | status=failed reason='message_content not found' user_id={user_id}")
         await Err.generic_error(call)
         return
 
     chat_id, message_id = message_data
-
     await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML")
     await call.answer()
+    log.info(
+        f"InventoryResource | event=list_rendered user_id={user_id} char_id={char_id} category='{callback_data.category}' page={callback_data.page}"
+    )

@@ -1,21 +1,27 @@
-# app/resources/assets/game_presets.py (новое название)
+"""
+Модуль содержит предопределенные настройки (пресеты) для различных режимов
+работы с моделью Gemini.
+
+Каждый пресет включает системные инструкции, параметры генерации
+(температура, максимальное количество токенов) и алиас модели,
+оптимизированные для конкретной задачи (например, генерация подземелий,
+описание предметов, диалоги NPC).
+"""
+
 from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-# Наши новые "игровые" режимы
 ChatMode = Literal["dungeon_generator", "item_description", "npc_dialogue"]
 
 
 class ModePreset(TypedDict):
-    # Одно, главное поле для инструкции
     system_instruction: str
     temperature: float
     max_tokens: int
     model_alias: str
 
 
-# Мы просто объединяем "developer" и "system" в одно поле
 MODE_PRESETS: dict[ChatMode, ModePreset] = {
     "dungeon_generator": {
         "system_instruction": """Ты — ассистент-сценарист для текстовой RPG. Твоя задача — генерировать локации (подземелья) в строгом формате JSON.

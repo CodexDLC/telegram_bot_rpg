@@ -1,35 +1,34 @@
-# app/services/gemini_service/gemini_service_build.py
 from collections.abc import Callable
 from typing import Any
 
-from google.generativeai import types
+from google.genai import types
 from loguru import logger as log
 
 from app.resources.llm_data.json_sheme import DUNGEON_JSON_SCHEMA_PROMPT
 from app.resources.llm_data.mode_preset import ChatMode, ModePreset
 
-# Определяем тип для содержимого, которое может быть строкой или списком.
 GeminiContents = str | list[types.ContentDict]
-# Определяем тип для функции-сборщика.
 GeminiBuilder = Callable[..., tuple[GeminiContents, str]]
 
 
 def build_simple_gemini(preset: ModePreset, user_text: str, **kw: Any) -> tuple[GeminiContents, str]:
     """
-    Универсальный сборщик для простых текстовых задач.
+    Универсальный сборщик промптов для простых текстовых задач Gemini.
 
-    Формирует промпт, используя `system_instruction` из пресета и
-    `user_text` в качестве основного содержимого.
+    Формирует промпт, используя `system_instruction` из пресета и `user_text`
+    в качестве основного содержимого.
 
     Args:
-        preset (ModePreset): Пресет с настройками для модели.
-        user_text (str): Основной текст для промпта (например, тема диалога).
+        preset: Пресет с настройками для модели, содержащий `system_instruction`.
+        user_text: Основной текст для промпта (например, тема диалога).
         **kw: Дополнительные параметры (не используются в этом сборщике).
 
     Returns:
-        Tuple[GeminiContents, str]: Кортеж из содержимого и системной инструкции.
+        Кортеж, содержащий:
+        - contents: Содержимое промпта (строка).
+        - system_instruction: Системная инструкция для модели.
     """
-    log.debug(f"Используется 'build_simple_gemini' для режима '{preset.get('name', 'unknown')}'.")
+    log.debug(f"GeminiBuilder | type=simple mode='{preset.get('name', 'unknown')}'")
     system_instruction = preset["system_instruction"]
     contents = user_text
     return contents, system_instruction
@@ -41,31 +40,30 @@ def build_dungeon_gemini(
     **kw: Any,
 ) -> tuple[GeminiContents, str]:
     """
-    Специализированный сборщик для генерации подземелий.
+    Специализированный сборщик промптов для генерации подземелий с Gemini.
 
     Формирует сложный промпт, комбинируя базовую инструкцию из пресета,
     тему подземелья из `**kw` и требования к JSON-схеме.
 
     Args:
-        preset (ModePreset): Пресет для генерации подземелий.
-        user_text (str): Игнорируется.
-        **kw: Должен содержать `theme_prompt_from_db` (строка с темой).
+        preset: Пресет для генерации подземелий, содержащий `system_instruction`.
+        user_text: Игнорируется в этом сборщике.
+        **kw: Дополнительные параметры, должен содержать `theme_prompt_from_db`
+              (строка с темой подземелья).
 
     Returns:
-        Tuple[GeminiContents, str]: Кортеж из пустого содержимого и
-                                    финальной системной инструкции.
+        Кортеж, содержащий:
+        - contents: Содержимое промпта (пустая строка, так как вся информация в system_instruction).
+        - system_instruction: Финальная системная инструкция для модели.
     """
-    log.debug("Используется 'build_dungeon_gemini'.")
+    log.debug("GeminiBuilder | type=dungeon_generator")
     theme_prompt_from_db = kw.get("theme_prompt_from_db")
     if not theme_prompt_from_db:
-        log.warning(
-            "'theme_prompt_from_db' не предоставлен для 'build_dungeon_gemini'. Результат может быть непредсказуемым."
-        )
+        log.warning("GeminiBuilder | status=warning reason='theme_prompt_from_db not provided'")
         theme_prompt_from_db = "Случайная тема на усмотрение ИИ."
 
     base_instruction = preset["system_instruction"]
 
-    # Собираем финальную инструкцию из нескольких частей.
     final_instruction = f"""
 {base_instruction}
 
@@ -75,17 +73,13 @@ def build_dungeon_gemini(
 ТРЕБОВАНИЯ К ФОРМАТУ:
 {DUNGEON_JSON_SCHEMA_PROMPT}
 """
-    # Для таких задач, где вся информация в system prompt, user_text может быть пустым.
     contents = ""
-    log.debug(f"Сформирована инструкция для 'build_dungeon_gemini' с темой: '{theme_prompt_from_db[:50]}...'")
+    log.debug(f"GeminiBuilder | instruction_formed theme='{theme_prompt_from_db[:50]}...'")
     return contents, final_instruction
 
 
-# Словарь, который сопоставляет режимы чата с их функциями-сборщиками.
-# Это позволяет гибко добавлять новые режимы и их логику сборки промптов.
 BUILDERS_GEMINI: dict[ChatMode, GeminiBuilder] = {
     "dungeon_generator": build_dungeon_gemini,
     "item_description": build_simple_gemini,
-    # "npc_dialogue": build_npc_dialogue, # Пример для будущего расширения
 }
-log.debug(f"Зарегистрировано {len(BUILDERS_GEMINI)} сборщиков Gemini.")
+log.debug(f"GeminiBuilder | status=registered count={len(BUILDERS_GEMINI)}")

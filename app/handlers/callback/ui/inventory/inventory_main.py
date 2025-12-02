@@ -1,4 +1,3 @@
-# app/handlers/callback/ui/inventory/inventory_main.py
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
@@ -19,38 +18,35 @@ router = Router(name="inventory_main_router")
     InventoryCallback.filter(F.level == 0),
 )
 async def inventory_main_handler(
-    call: CallbackQuery,
-    callback_data: InventoryCallback,  # Aiogram сам распарсил колбэк
-    state: FSMContext,
-    session: AsyncSession,
-    bot: Bot,
+    call: CallbackQuery, callback_data: InventoryCallback, state: FSMContext, session: AsyncSession, bot: Bot
 ) -> None:
-    #  1. SECURITY CHECK
-    # Сравниваем ID того, кто нажал (from_user.id)
-    # с ID владельца кнопки (callback_data.user_id)
-    if call.from_user.id != callback_data.user_id:
-        log.warning(f"Попытка поденный данных user_id = {callback_data.user_id}")
+    """Обрабатывает главное меню инвентаря."""
+    user_id = call.from_user.id
+    # char_id_from_callback = callback_data.char_id # Удалено: неиспользуемая переменная
+
+    if user_id != callback_data.user_id:
+        log.warning(f"Inventory | status=access_denied user_id={user_id} callback_user_id={callback_data.user_id}")
         await Err.access_denied(call)
         return
 
     state_data = await state.get_data()
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
-    user_id = session_context.get("user_id") or call.from_user.id
-    char_id = session_context.get("char_id")
-    if not char_id:
-        log.error(f"char_id not found in FSM for user {call.from_user.id}")
+    char_id_from_fsm = session_context.get("char_id")
+
+    if not char_id_from_fsm:
+        log.error(f"Inventory | status=failed reason='char_id not found in FSM' user_id={user_id}")
         await Err.char_id_not_found_in_fsm(call)
         return
 
-    service = InventoryUIService(char_id=char_id, session=session, state_data=state_data, user_id=user_id)
-
+    service = InventoryUIService(char_id=char_id_from_fsm, session=session, state_data=state_data, user_id=user_id)
     text, kb = await service.render_main_menu()
 
     message_data = service.get_message_content_data()
     if not message_data:
+        log.error(f"Inventory | status=failed reason='message_content not found' user_id={user_id}")
         await Err.generic_error(call)
         return
 
     chat_id, message_id = message_data
-
     await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML")
+    log.info(f"Inventory | event=main_menu_rendered user_id={user_id} char_id={char_id_from_fsm}")

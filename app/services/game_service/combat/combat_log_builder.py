@@ -1,4 +1,3 @@
-# app/services/game_service/combat/combat_log_builder.py
 import random
 from typing import Any
 
@@ -7,12 +6,23 @@ from app.resources.texts.combat_flavor import COMBAT_PHRASES
 
 class CombatLogBuilder:
     """
-    Собирает человеко-читаемую строку лога для фронтенда на основе результата удара.
+    Сервис для формирования человеко-читаемых записей лога боя.
+
+    На основе результатов удара генерирует текстовые сообщения для фронтенда,
+    включая визуальные индикаторы, фразы и дополнительную информацию.
     """
 
     @staticmethod
     def _get_phrase_key(result: dict[str, Any]) -> str:
-        """Определяет ключ основной фразы на основе результата боя."""
+        """
+        Определяет ключ для выбора основной фразы лога на основе результата удара.
+
+        Args:
+            result: Словарь с результатами расчета удара.
+
+        Returns:
+            Строка-ключ для словаря `COMBAT_PHRASES`.
+        """
         if result.get("is_dodged"):
             return "dodge"
         if result.get("is_parried"):
@@ -27,20 +37,27 @@ class CombatLogBuilder:
     def build_log_entry(
         attacker_name: str,
         defender_name: str,
-        result: dict,
+        result: dict[str, Any],
         defender_hp: int,
         defender_energy: int,
     ) -> str:
         """
-        Строит одну строку лога для конкретного удара.
+        Строит одну человеко-читаемую запись лога для конкретного удара.
+
+        Args:
+            attacker_name: Имя атакующего актора.
+            defender_name: Имя защищающегося актора.
+            result: Словарь с результатами расчета удара.
+            defender_hp: Текущее HP защищающегося актора после удара.
+            defender_energy: Текущая Energy защищающегося актора после удара.
+
+        Returns:
+            Форматированная строка лога боя.
         """
         visual = result.get("visual_bar", "")
         parts = [f"{visual}"]
 
-        # 1. Тип события (Hit, Crit, Block, Dodge...)
         phrase_key = CombatLogBuilder._get_phrase_key(result)
-
-        # 2. Выбираем фразу и форматируем
         templates = COMBAT_PHRASES.get(phrase_key, COMBAT_PHRASES["hit"])
         template = random.choice(templates)
 
@@ -51,15 +68,12 @@ class CombatLogBuilder:
 
         parts.append(text)
 
-        # 3. Доп. инфо (щит пробит)
         if result.get("shield_dmg", 0) > 0 and result.get("hp_dmg", 0) > 0:
             parts.append(random.choice(COMBAT_PHRASES["shield_break"]).format(defender=defender_name))
 
-        # 4. Вампиризм
         if result.get("lifesteal", 0) > 0:
             parts.append(f"💚 <b>{attacker_name}</b> восстановил {result['lifesteal']} HP.")
 
-        # 5. Внешние логи (от абилок, ядов и т.д.)
         if result.get("logs"):
             parts.extend(result["logs"])
 

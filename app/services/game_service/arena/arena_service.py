@@ -1,54 +1,88 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Импортируем под-сервисы
 from app.services.game_service.arena.service_1v1 import Arena1v1Service
 
 
 class ArenaService:
     """
-    ФАСАД (Main Entry Point) для всех механик Арены.
-    Изолирует хэндлеры от конкретных реализаций (1v1, Group, Tournament).
+    Фасад для всех механик Арены.
+
+    Изолирует хэндлеры от конкретных реализаций режимов арены (1v1, Group, Tournament),
+    предоставляя единый интерфейс для взаимодействия.
     """
 
     def __init__(self, session: AsyncSession, char_id: int):
+        """
+        Инициализирует ArenaService.
+
+        Args:
+            session: Асинхронная сессия базы данных.
+            char_id: Уникальный идентификатор персонажа.
+        """
         self.session = session
         self.char_id = char_id
-
-        # Подключаем "рабочих лошадок"
-        # Делаем их приватными (_), чтобы хэндлер не лез в них напрямую
         self._service_1v1 = Arena1v1Service(session, char_id)
 
     async def join_queue(self, mode: str) -> int | None:
         """
-        Вход в очередь. Возвращает GS или None.
+        Добавляет персонажа в очередь на арену для указанного режима.
+
+        Args:
+            mode: Режим арены (например, "1v1", "group").
+
+        Returns:
+            Gear Score персонажа, если успешно добавлен в очередь, иначе None.
         """
         if mode == "1v1":
             return await self._service_1v1.join_queue()
-
-        # elif mode == "group": ...
-
+        # TODO: Добавить обработку других режимов арены (например, "group").
         return None
 
     async def check_match(self, mode: str, attempt: int) -> str | None:
         """
-        Проверка статуса поиска (для поллинга).
-        Возвращает session_id, если бой найден.
+        Проверяет статус поиска матча для указанного режима.
+
+        Используется для поллинга в UI.
+
+        Args:
+            mode: Режим арены.
+            attempt: Номер текущей попытки проверки.
+
+        Returns:
+            Идентификатор боевой сессии, если матч найден, иначе None.
         """
         if mode == "1v1":
             return await self._service_1v1.check_and_match(attempt)
+        # TODO: Добавить обработку других режимов арены.
         return None
 
     async def create_shadow_battle(self, mode: str) -> str:
         """
-        Принудительное создание боя с Тенью (при таймауте).
+        Принудительно создает бой с "Тенью" (AI-противником) при таймауте поиска матча.
+
+        Args:
+            mode: Режим арены.
+
+        Returns:
+            Идентификатор созданной боевой сессии.
         """
         if mode == "1v1":
             return await self._service_1v1.create_shadow_battle()
+        # TODO: Добавить обработку других режимов арены.
         return ""
 
     async def cancel_queue(self, mode: str) -> bool:
-        """Отмена поиска."""
+        """
+        Отменяет поиск матча для указанного режима арены.
+
+        Args:
+            mode: Режим арены.
+
+        Returns:
+            True, если поиск успешно отменен, иначе False.
+        """
         if mode == "1v1":
             await self._service_1v1.cancel_queue()
             return True
+        # TODO: Добавить обработку других режимов арены.
         return False

@@ -1,4 +1,3 @@
-# app/services/game_service/login_service.py
 from typing import Any
 
 from loguru import logger as log
@@ -12,95 +11,114 @@ from database.repositories import get_character_repo
 
 class LoginService:
     """
-    Сервис-Оркестратор для входа персонажа в игровой мир.
-    ВЫПОЛНЯЕТ бизнес-логику, ВОЗВРАЩАЕТ ДАННЫЕ.
-    НЕ отвечает за UI или логику перемещения.
+    Сервис-оркестратор для обработки входа персонажа в игровой мир.
+
+    Отвечает за проверку стадии игры персонажа в базе данных,
+    загрузку или создание сессии персонажа в Redis.
     """
 
     def __init__(self, char_id: int, state_data: dict[str, Any]):
+        """
+        Инициализирует LoginService.
+
+        Args:
+            char_id: Уникальный идентификатор персонажа.
+            state_data: Текущие данные FSM-состояния.
+        """
         self.char_id = char_id
         self.state_data = state_data
-        log.debug(f"Инициализирован LoginService для char_id={self.char_id}")
-
-    # --- ПУБЛИЧНЫЙ МЕТОД (для Хэндлера) ---
+        log.debug(f"LoginService | status=initialized char_id={self.char_id}")
 
     async def handle_login(self, session: AsyncSession) -> tuple[str, str] | str | None:
         """
-        Главный метод входа. Проверяет SQL и загружает/создает сессию Redis.
+        Основной метод для обработки процесса входа персонажа.
+
+        Проверяет стадию игры персонажа в SQL, затем загружает или создает
+        его сессию в Redis.
 
         Args:
-            session (AsyncSession): Сессия базы данных.
+            session: Асинхронная сессия базы данных.
 
         Returns:
-            tuple[str, str] | None: (state, location_id) или None в случае
-                                    ошибки (например, не пройден туториал).
+            Кортеж `(state, location_id)` если вход успешен и персонаж находится
+            в игровом мире.
+            Строка `game_stage` если персонаж находится на стадии туториала или создания.
+            None в случае критической ошибки.
         """
-
-        # 1. Проверяем SQL (холодное хранилище)
         game_stage = await self._check_sql_game_stage(session)
         if game_stage != GameStage.IN_GAME:
-            log.warning(f"Попытка логина char_id={self.char_id} не из 'in_game' (stage: {game_stage})")
+            log.info(f"LoginService | event=redirect_to_stage char_id={self.char_id} stage='{game_stage}'")
             return game_stage
 
-        # 2. Загружаем/создаем сессию в Redis (горячее хранилище)
-        (state, loc_id) = await self._load_or_create_redis_session()
+        state, loc_id = await self._load_or_create_redis_session()
 
-        # 3. ВСЕ. Просто возвращаем данные.
-        log.info(f"Логин char_id={self.char_id} успешен. Состояние: {state}:{loc_id}")
+        log.info(f"LoginService | status=success char_id={self.char_id} state='{state}' location='{loc_id}'")
         return state, loc_id
 
     async def _check_sql_game_stage(self, session: AsyncSession) -> str | None:
         """
-        Проверяет game_stage персонажа в SQL базе.
+        Проверяет текущую стадию игры (`game_stage`) персонажа в SQL базе данных.
 
         Args:
-            session (AsyncSession): Сессия базы данных.
+            session: Асинхронная сессия базы данных.
+
+        Returns:
+            Строка, представляющая `game_stage` персонажа, или None, если персонаж не найден.
         """
         try:
             char_repo = get_character_repo(session)
             character_dto = await char_repo.get_character(self.char_id)
             if character_dto:
                 return character_dto.game_stage
+            log.warning(f"LoginService | status=failed reason='Character not found in DB' char_id={self.char_id}")
             return None
-        except SQLAlchemyError as e:
-            log.exception(f"Ошибка SQL при проверке game_stage для char_id={self.char_id}: {e}")
+        except SQLAlchemyError:
+            log.exception(
+                f"LoginService | status=failed reason='SQLAlchemy error during game_stage check' char_id={self.char_id}"
+            )
             return None
 
     async def _load_or_create_redis_session(self) -> tuple[str, str]:
-        """Загружает или создает 'ac:char_id' в Redis."""
+        """
+        Загружает существующую сессию персонажа из Redis или создает новую, если она отсутствует.
 
+        Returns:
+            Кортеж `(state, location_id)`, представляющий текущее состояние и локацию персонажа.
+        """
         if await account_manager.account_exists(self.char_id):
-            # Вход существующего игрока
             data = await account_manager.get_account_data(self.char_id)
             if data:
                 state = data.get("state", "world")
                 loc_id = data.get("location_id", "portal_plats")
 
-                # --- Временная миграция для исправления неверного ID локации ---
+                # Временная миграция для исправления неверного ID локации
                 if loc_id == "town_hall_in":
                     log.warning(
-                        f"Обнаружен устаревший location_id 'town_hall_in' для char_id={self.char_id}. "
-                        f"Автоматическая миграция на 'town_hall_interior'."
+                        f"LoginService | event=location_migration char_id={self.char_id} old='town_hall_in' new='town_hall_interior'"
                     )
                     loc_id = "town_hall_interior"
                     await account_manager.update_account_fields(self.char_id, {"location_id": loc_id})
-                # --- Конец миграции ---
 
-                log.debug(f"Загружена сессия Redis для char_id={self.char_id} (state={state})")
+                log.debug(
+                    f"LoginService | event=redis_session_loaded char_id={self.char_id} state='{state}' location='{loc_id}'"
+                )
                 return state, loc_id
             else:
-                # На случай, если аккаунт удалился между `exists` и `get`
                 log.warning(
-                    f"Аккаунт char_id={self.char_id} не найден в Redis, хотя `exists` вернул True. Создаем новый."
+                    f"LoginService | status=failed reason='Account data empty despite existence' char_id={self.char_id}"
                 )
                 return await self._create_redis_session()
         else:
-            # Первый вход игрока
+            log.info(f"LoginService | event=redis_session_not_found action=create_new char_id={self.char_id}")
             return await self._create_redis_session()
 
     async def _create_redis_session(self) -> tuple[str, str]:
-        """Создает новую сессию в Redis."""
-        log.info(f"Первый вход для char_id={self.char_id}. Создание сессии Redis...")
+        """
+        Создает новую сессию персонажа в Redis с начальными данными.
+
+        Returns:
+            Кортеж `(state, location_id)` новой сессии.
+        """
         start_loc_id = "portal_plats"
         initial_data = {
             "state": "world",
@@ -109,4 +127,7 @@ class LoginService:
             "prev_location_id": start_loc_id,
         }
         await account_manager.create_account(self.char_id, initial_data)
+        log.info(
+            f"LoginService | event=redis_session_created char_id={self.char_id} state='world' location='{start_loc_id}'"
+        )
         return "world", start_loc_id

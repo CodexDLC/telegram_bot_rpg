@@ -8,8 +8,7 @@ from loguru import logger as log
 from app.filters.is_admin import IsAdmin
 from app.resources.fsm_states.states import AdminMode
 
-# Создаем роутер и сразу вешаем на него фильтр админа
-# Теперь все хэндлеры в этом роутере доступны ТОЛЬКО админам
+# Все хэндлеры в этом роутере доступны только администраторам.
 router = Router(name="admin_router")
 router.message.filter(IsAdmin())
 router.callback_query.filter(IsAdmin())
@@ -17,9 +16,9 @@ router.callback_query.filter(IsAdmin())
 
 @router.message(Command("admin"))
 async def admin_start_handler(m: Message, state: FSMContext):
-    """Точка входа в админку."""
-    if m.from_user:
-        log.info(f"Admin {m.from_user.id} accessed admin panel.")
+    """Точка входа в панель администратора."""
+    user_id = m.from_user.id if m.from_user else "N/A"
+    log.info(f"AdminPanel | status=accessed user_id={user_id}")
 
     await state.clear()
     await state.set_state(AdminMode.menu)
@@ -32,20 +31,20 @@ async def admin_start_handler(m: Message, state: FSMContext):
 
 @router.callback_query(AdminMode.menu, F.data == "admin:close")
 async def admin_close_handler(call: CallbackQuery, state: FSMContext):
-    """Выход из админки."""
+    """Обрабатывает выход из панели администратора."""
+    user_id = call.from_user.id
+    log.info(f"AdminPanel | status=closed user_id={user_id}")
     await state.clear()
     if isinstance(call.message, Message):
         await call.message.delete()
     await call.answer("Режим админа деактивирован.")
 
 
-# --- Вспомогательные методы ---
-
-
 def _get_admin_kb():
+    """Возвращает клавиатуру с кнопками админ-панели."""
     kb = InlineKeyboardBuilder()
 
-    # Пока сделаем кнопки-заглушки (мы реализуем логику в следующем шаге)
+    # TODO: Реализовать логику для кнопок-заглушек.
     kb.button(text="📦 Выдать Предмет", callback_data="admin:item")
     kb.button(text="💰 Насыпать Ресурсов", callback_data="admin:resource")
     kb.button(text="🌀 Телепорт", callback_data="admin:teleport")

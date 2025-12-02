@@ -1,4 +1,3 @@
-# app/handlers/callback/login/login_handler.py
 import asyncio
 from typing import Any
 
@@ -19,58 +18,32 @@ from app.services.core_service.manager.account_manager import account_manager
 from app.services.game_service.game_sync_service import GameSyncService
 from app.services.game_service.login_service import LoginService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
-from app.services.helpers_module.dto_helper import (
-    FSM_CONTEXT_KEY,
-    fsm_clean_core_state,
-)
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY, fsm_clean_core_state
 from app.services.ui_service.combat.combat_ui_service import CombatUIService
 from app.services.ui_service.helpers_ui.ui_animation_service import UIAnimationService
 from app.services.ui_service.menu_service import MenuService
 from app.services.ui_service.navigation_service import NavigationService
 from app.services.ui_service.tutorial.tutorial_service import TutorialServiceStats
-from app.services.ui_service.tutorial.tutorial_service_skill import (
-    TutorialServiceSkills,
-)
+from app.services.ui_service.tutorial.tutorial_service_skill import TutorialServiceSkills
 from database.repositories import get_character_repo, get_symbiote_repo
 
 router = Router(name="login_handler_router")
-
-
-# ==============================================================================
-# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (Private Logic Helpers)
-# ==============================================================================
 
 
 async def _fetch_character_display_data(session: AsyncSession, char_id: int) -> tuple[str, str]:
     """Извлекает имя персонажа и имя Симбиота из БД."""
     char_repo = get_character_repo(session)
     sym_repo = get_symbiote_repo(session)
-
-    # Получаем имя персонажа
     character = await char_repo.get_character(char_id)
     char_name = character.name if character else "Прошедший"
-
-    # Получаем имя Симбиота
     symbiote = await sym_repo.get_symbiote(char_id)
     sym_name = symbiote.symbiote_name if symbiote else DEFAULT_ACTOR_NAME
-
     return char_name, sym_name
 
 
 async def _handle_tutorial_stats(char_id: int, state: FSMContext, bot: Bot, message_content: dict) -> None:
-    """
-    Переводит пользователя в туториал по распределению статов.
-
-    Args:
-        char_id (int): ID персонажа.
-        state (FSMContext): Контекст FSM.
-        bot (Bot): Экземпляр бота.
-        message_content (dict): Данные о сообщении для редактирования.
-
-    Returns:
-        None
-    """
-    log.debug(f"Переход к туториалу по статам для char_id={char_id}")
+    """Переводит пользователя в туториал по распределению статов."""
+    log.debug(f"Redirect | stage=tutorial_stats char_id={char_id}")
     tut_stats_service = TutorialServiceStats(char_id=char_id)
     text, kb = tut_stats_service.get_restart_stats()
 
@@ -84,23 +57,12 @@ async def _handle_tutorial_stats(char_id: int, state: FSMContext, bot: Bot, mess
 
     await state.set_state(StartTutorial.start)
     await state.update_data(bonus_dict={}, event_pool=None, sim_text_count=0)
-    log.debug("Состояние FSM обновлено на StartTutorial.start")
+    log.info(f"FSM | state=StartTutorial.start char_id={char_id}")
 
 
 async def _handle_tutorial_skills(char_id: int, state: FSMContext, bot: Bot, message_content: dict) -> None:
-    """
-    Переводит пользователя в туториал по выбору умений.
-
-    Args:
-        char_id (int): ID персонажа.
-        state (FSMContext): Контекст FSM.
-        bot (Bot): Экземпляр бота.
-        message_content (dict): Данные о сообщении для редактирования.
-
-    Returns:
-        None
-    """
-    log.debug(f"Переход к туториалу по скиллам для char_id={char_id}")
+    """Переводит пользователя в туториал по выбору умений."""
+    log.debug(f"Redirect | stage=tutorial_skills char_id={char_id}")
     skill_choices_list: list[str] = []
     tut_skill_service = TutorialServiceSkills(skills_db=skill_choices_list)
     text_skill, kb_skill = tut_skill_service.get_start_data()
@@ -113,12 +75,11 @@ async def _handle_tutorial_skills(char_id: int, state: FSMContext, bot: Bot, mes
             reply_markup=kb_skill,
             parse_mode="HTML",
         )
-
         await state.set_state(StartTutorial.in_skills_progres)
         await state.update_data(skill_choices_list=skill_choices_list)
-        log.debug("Состояние FSM обновлено на StartTutorial.in_skills_progres")
+        log.info(f"FSM | state=StartTutorial.in_skills_progres char_id={char_id}")
     else:
-        log.error(f"Не удалось получить данные старта скиллов для char_id={char_id}")
+        log.error(f"Redirect | status=failed reason='Failed to get skill data' char_id={char_id}")
 
 
 async def _handle_combat_restore(
@@ -130,38 +91,23 @@ async def _handle_combat_restore(
     session_context: dict,
     call: CallbackQuery,
 ) -> None:
-    """
-    Восстанавливает и отображает интерфейс боя для пользователя.
-
-    Args:
-        user_id (int): ID пользователя.
-        char_id (int): ID персонажа.
-        state (FSMContext): Контекст FSM.
-        bot (Bot): Экземпляр бота.
-        state_data (dict): Данные состояния FSM.
-        session_context (dict): Контекст сессии из FSM.
-        call (CallbackQuery): Входящий колбэк.
-
-    Returns:
-        None
-    """
-    log.debug(f"Восстановление сессии боя для user_id={user_id}, char_id={char_id}")
+    """Восстанавливает и отображает интерфейс боя."""
+    log.debug(f"SessionRestore | type=combat user_id={user_id} char_id={char_id}")
     ac_data = await account_manager.get_account_data(char_id)
     if not ac_data:
-        log.warning(f"Не найдены данные аккаунта для char_id={char_id}")
+        log.warning(f"SessionRestore | status=failed reason='Account data not found' char_id={char_id}")
         await Err.generic_error(call)
         return
 
     combat_session_id = ac_data.get("combat_session_id")
-
     if not combat_session_id:
-        log.warning(f"Не найден combat_session_id для char_id={char_id} при попытке восстановления боя.")
+        log.warning(f"SessionRestore | status=failed reason='combat_session_id not found' char_id={char_id}")
         await Err.generic_error(call)
         return
 
     session_context["combat_session_id"] = combat_session_id
     await state.update_data({FSM_CONTEXT_KEY: session_context})
-    log.debug(f"combat_session_id={combat_session_id} сохранен в FSM.")
+    log.debug(f"FSM | data_updated key=combat_session_id value={combat_session_id} char_id={char_id}")
 
     combat_ui = CombatUIService(user_id, char_id, str(combat_session_id), state_data)
     log_text, log_kb = await combat_ui.render_combat_log(page=0)
@@ -178,7 +124,6 @@ async def _handle_combat_restore(
             reply_markup=log_kb,
             parse_mode="HTML",
         )
-
     if isinstance(msg_content, dict):
         await bot.edit_message_text(
             chat_id=msg_content["chat_id"],
@@ -190,7 +135,7 @@ async def _handle_combat_restore(
 
     await fsm_clean_core_state(state=state, event_source=call)
     await state.set_state(InGame.combat)
-    log.debug("Состояние FSM установлено в InGame.combat")
+    log.info(f"FSM | state=InGame.combat char_id={char_id}")
 
 
 async def _handle_in_game_login(
@@ -203,30 +148,14 @@ async def _handle_in_game_login(
     state_name: str,
     loc_id: str,
     call: CallbackQuery,
-    session: AsyncSession,  # <--- ❗ ДОБАВЛЕНО: Теперь функция принимает сессию
+    session: AsyncSession,
 ) -> None:
-    """
-    Обрабатывает вход в игру, отображая навигационный интерфейс и меню.
-
-    Args:
-        user_id (int): ID пользователя.
-        char_id (int): ID персонажа.
-        state (FSMContext): Контекст FSM.
-        bot (Bot): Экземпляр бота.
-        state_data (dict): Данные состояния FSM.
-        session_context (dict): Контекст сессии из FSM.
-        state_name (str): Название состояния для навигации.
-        loc_id (str): ID локации.
-        call (CallbackQuery): Входящий колбэк.
-
-    Returns:
-        None
-    """
-    log.debug(f"Вход в игру для user_id={user_id}, char_id={char_id}. Локация: {loc_id}")
+    """Обрабатывает вход в игру, отображая навигационный интерфейс и меню."""
+    log.debug(f"Login | event=in_game user_id={user_id} char_id={char_id} location_id={loc_id}")
 
     sync_service = GameSyncService(session)
     await sync_service.synchronize_player_state(char_id)
-    log.debug(f"State synchronized after login for char_id={char_id}")
+    log.debug(f"StateSync | status=success char_id={char_id}")
 
     nav_service = NavigationService(char_id=char_id, state_data=state_data)
     nav_text, nav_kb = await nav_service.get_navigation_ui(state_name, loc_id)
@@ -238,7 +167,7 @@ async def _handle_in_game_login(
     msg_content = session_context.get("message_content")
 
     if not isinstance(msg_menu, dict) or not isinstance(msg_content, dict):
-        log.warning(f"Не найдены 'message_menu' или 'message_content' в FSM для user_id={user_id}")
+        log.warning(f"Login | status=failed reason='message_menu or message_content not found' user_id={user_id}")
         await Err.generic_error(call)
         return
 
@@ -249,7 +178,6 @@ async def _handle_in_game_login(
         reply_markup=menu_kb,
         parse_mode="HTML",
     )
-
     await bot.edit_message_text(
         chat_id=msg_content["chat_id"],
         message_id=msg_content["message_id"],
@@ -260,30 +188,13 @@ async def _handle_in_game_login(
 
     await fsm_clean_core_state(state=state, event_source=call)
     await state.set_state(InGame.navigation)
-    log.debug("Состояние FSM установлено в InGame.navigation")
-
-
-# ==============================================================================
-# MAIN LOGIN HANDLER
-# ==============================================================================
+    log.info(f"FSM | state=InGame.navigation char_id={char_id}")
 
 
 @router.callback_query(LobbySelectionCallback.filter(F.action == "login"))
 async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
-    """
-    Обрабатывает нажатие кнопки "Вход в игру", запуская процесс логина.
-
-    Args:
-        call (CallbackQuery): Входящий колбэк.
-        state (FSMContext): Контекст FSM.
-        bot (Bot): Экземпляр бота.
-        session (AsyncSession): Сессия базы данных.
-
-    Returns:
-        None
-    """
+    """Обрабатывает вход в игру, определяет игровой этап и направляет пользователя."""
     if not call.from_user:
-        log.warning("Колбэк без `from_user` в 'start_logging_handler'.")
         return
 
     user_id = call.from_user.id
@@ -291,14 +202,14 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     char_id = session_context.get("char_id")
 
-    log.info(f"Хэндлер 'start_logging_handler' [lobby:login] вызван user_id={user_id}, char_id={char_id}")
+    log.info(f"Login | event=start user_id={user_id} char_id={char_id}")
 
     message_content = session_context.get("message_content")
     message_menu = session_context.get("message_menu")
 
     if not isinstance(char_id, int) or not isinstance(message_content, dict):
         log.warning(
-            f"User {user_id} в 'start_logging_handler' имеет невалидные данные в FSM: char_id={char_id}, message_content={type(message_content)}. Отправка ошибки."
+            f"Login | status=failed reason='Invalid FSM data' user_id={user_id} char_id={char_id} content_type={type(message_content)}"
         )
         await Err.generic_error(call)
         return
@@ -312,16 +223,18 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     async def run_logic() -> Any:
         return await login_service.handle_login(session=session)
 
-    log.debug(f"Запуск анимации и логики входа для user_id={user_id}")
+    log.debug(f"Login | action=gather_animation_and_logic user_id={user_id}")
     results = await asyncio.gather(
         anim_service.animate_loading(duration=2.0, text="📡 <b>Установка нейро-связи...</b>"),
         run_logic(),
     )
     login_result = results[1]
-    log.debug(f"Результат логина для user_id={user_id}: {login_result}")
+    log.debug(f"Login | result='{login_result}' user_id={user_id}")
 
     if not isinstance(login_result, (str, tuple)):
-        log.warning(f"Некорректный результат от LoginService для user_id={user_id}: {login_result}")
+        log.error(
+            f"Login | status=failed reason='Invalid result from LoginService' result='{login_result}' user_id={user_id}"
+        )
         await Err.generic_error(call)
         return
 
@@ -329,11 +242,11 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
     session_context["char_name"] = char_name
     session_context["symbiote_name"] = symbiote_name
     await state.update_data({FSM_CONTEXT_KEY: session_context})
-    log.debug(f"Имена сохранены в FSM: char_name='{char_name}', symbiote_name='{symbiote_name}'")
+    log.debug(f"FSM | data_updated keys='char_name, symbiote_name' char_id={char_id}")
 
     if isinstance(login_result, str):
         game_stage = login_result
-        log.debug(f"Редирект на game_stage='{game_stage}' для user_id={user_id}")
+        log.info(f"Redirect | game_stage='{game_stage}' char_id={char_id}")
         await fsm_clean_core_state(state=state, event_source=call)
 
         if isinstance(message_menu, dict):
@@ -348,7 +261,7 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
                     parse_mode="HTML",
                 )
             except TelegramAPIError as e:
-                log.debug(f"Не удалось обновить меню для user_id={user_id}: {e}")
+                log.warning(f"Redirect | action=update_menu status=failed char_id={char_id} error='{e}'")
 
         if game_stage == GameStage.TUTORIAL_STATS:
             await _handle_tutorial_stats(char_id, state, bot, message_content)
@@ -360,25 +273,16 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
         elif game_stage == "combat":
             await _handle_combat_restore(user_id, char_id, state, bot, state_data, session_context, call)
         else:
-            log.warning(f"Неизвестный game_stage='{game_stage}' для user_id={user_id}")
+            log.error(f"Redirect | status=failed reason='Unknown game_stage' stage='{game_stage}' char_id={char_id}")
             await Err.generic_error(call)
 
     elif isinstance(login_result, tuple):
         state_name, loc_id = login_result
-        log.debug(f"Успешный вход для user_id={user_id}. State: {state_name}, Loc: {loc_id}")
+        log.info(f"Login | status=success state='{state_name}' loc_id='{loc_id}' char_id={char_id}")
 
         if state_name == "combat":
             await _handle_combat_restore(user_id, char_id, state, bot, state_data, session_context, call)
         else:
             await _handle_in_game_login(
-                user_id,
-                char_id,
-                state,
-                bot,
-                state_data,
-                session_context,
-                state_name,
-                loc_id,
-                call,
-                session,
+                user_id, char_id, state, bot, state_data, session_context, state_name, loc_id, call, session
             )

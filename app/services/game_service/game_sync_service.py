@@ -1,101 +1,115 @@
-# app/services/game_service/game_sync_service.py
-
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# 🔥 НОВЫЕ ИМПОРТЫ для доступа к данным
 from app.services.core_service.manager.account_manager import account_manager
-
-# Импорт сервисов, которые будут оркестрироваться
 from app.services.game_service.regen_service import RegenService
 from app.services.game_service.stats_aggregation_service import StatsAggregationService
 
 
 class GameSyncService:
     """
-    Глобальный сервис-оркестратор для "ленивых" (JIT) и фоновых механик.
+    Глобальный сервис-оркестратор для "ленивых" (Just-In-Time) и фоновых игровых механик.
 
-    Инкапсулирует вызовы всех сервисов, требующих синхронизации
-    (регенерация, таймеры, AFK-прогресс), и предоставляет единую
-    точку входа для хэндлеров.
+    Инкапсулирует вызовы всех сервисов, требующих синхронизации состояния персонажа,
+    таких как регенерация, таймеры и AFK-прогресс. Предоставляет единую точку входа
+    для обновления игрового состояния.
     """
 
     def __init__(self, session: AsyncSession):
         """
-        Инициализируется с сессией БД.
+        Инициализирует GameSyncService.
+
+        Args:
+            session: Асинхронная сессия базы данных.
         """
         self.session = session
-        log.debug("GameSyncService initialized.")
+        log.debug("GameSyncService | status=initialized")
 
     async def synchronize_player_state(self, char_id: int) -> None:
         """
-        Главный публичный метод. Вызывает все необходимые обновления
-        для игрового состояния персонажа (в основном, регенерацию).
+        Выполняет полную синхронизацию игрового состояния персонажа.
+
+        Включает в себя применение регенерации HP/Energy.
+
+        Args:
+            char_id: Уникальный идентификатор персонажа.
         """
         if not char_id:
-            log.warning("SynchronizePlayerState skipped: char_id is None.")
+            log.warning("GameSync | status=skipped reason='char_id is None'")
             return
 
-        log.info(f"GameSync: Starting full state synchronization for char_id={char_id}.")
+        log.info(f"GameSync | event=start_sync char_id={char_id}")
 
-        # 1. Lazy Regeneration (HP, Energy)
         regen_service = RegenService(self.session)
         await regen_service.synchronize_state(char_id)
-        log.debug("GameSync: HP/Energy synchronized.")
+        log.debug(f"GameSync | component=regen_service status=synchronized char_id={char_id}")
 
-        log.info(f"GameSync: State synchronization finished for char_id={char_id}.")
-
-    # =========================================================================
-    # 🔥 НОВЫЕ МЕТОДЫ: ДОСТУП К АКТУАЛЬНЫМ VITAL STATS
-    # =========================================================================
+        log.info(f"GameSync | event=end_sync char_id={char_id}")
 
     async def get_current_vitals(self, char_id: int) -> tuple[int, int]:
         """
-        Возвращает текущие HP и Energy из кэша (Redis).
-        (Считается, что перед вызовом уже была синхронизация/реген).
+        Возвращает текущие значения HP и Energy персонажа из кэша (Redis).
+
+        Предполагается, что перед вызовом этого метода уже была выполнена
+        синхронизация состояния персонажа.
+
+        Args:
+            char_id: Уникальный идентификатор персонажа.
+
+        Returns:
+            Кортеж `(current_hp, current_energy)` с текущими значениями.
         """
         data = await account_manager.get_account_data(char_id)
-        # ❗ ВАЖНО: Приводим к int, так как в кэше они могут храниться как str
         hp_cur = int(data.get("hp_current", 0)) if data else 0
         en_cur = int(data.get("energy_current", 0)) if data else 0
-        log.debug(f"GameSync: Current vitals retrieved for {char_id}: HP={hp_cur}, EN={en_cur}")
+        log.debug(f"GameSync | action=get_current_vitals char_id={char_id} hp={hp_cur} energy={en_cur}")
         return hp_cur, en_cur
 
     async def get_max_vitals(self, char_id: int) -> tuple[int, int]:
         """
-        Возвращает максимальные HP и Energy (Max Vitals), рассчитанные из статов.
+        Возвращает максимальные значения HP и Energy персонажа, рассчитанные на основе его статов.
+
+        Args:
+            char_id: Уникальный идентификатор персонажа.
+
+        Returns:
+            Кортеж `(max_hp, max_energy)` с максимальными значениями.
         """
         aggregator = StatsAggregationService(self.session)
         total_data = await aggregator.get_character_total_stats(char_id)
         modifiers: dict[str, Any] = total_data.get("modifiers", {})
 
-        # ❗ Извлекаем итоговые Max Vitals из агрегированных модификаторов
         hp_max = int(modifiers.get("hp_max", {}).get("total", 100))
         energy_max = int(modifiers.get("energy_max", {}).get("total", 100))
 
-        log.debug(f"GameSync: Max vitals retrieved for {char_id}: HP={hp_max}, EN={energy_max}")
+        log.debug(f"GameSync | action=get_max_vitals char_id={char_id} hp_max={hp_max} energy_max={energy_max}")
         return hp_max, energy_max
 
     async def get_quick_heal_check_func(self, char_id: int) -> Callable[[int], Awaitable[str | None]]:
         """
-        Возвращает функцию-замыкание для Polling-анимации быстрого лечения.
+        Возвращает функцию-замыкание для использования в Polling-анимации быстрого лечения.
+
+        Эта функция будет вызываться аниматором для проверки состояния регенерации
+        и определения, достигнуто ли полное восстановление.
+
+        Args:
+            char_id: Уникальный идентификатор персонажа.
+
+        Returns:
+            Асинхронная функция, которая принимает номер попытки и возвращает
+            "Full", если HP и Energy полностью восстановлены, иначе None.
         """
         regen_service = RegenService(self.session)
-
-        # 1. Получаем Max Vitals для условия завершения
         hp_max, energy_max = await self.get_max_vitals(char_id)
 
         async def quick_recovery_tick(attempt: int) -> str | None:
-            # 2. Вызываем JIT реген. Он сам обновит last_update и применит реген.
             updated_vitals = await regen_service.synchronize_state(char_id)
-
-            # 3. Проверка на полное восстановление
             if updated_vitals["hp"] >= hp_max and updated_vitals["energy"] >= energy_max:
+                log.info(f"GameSync | event=quick_heal_complete char_id={char_id}")
                 return "Full"
-
-            return None  # Продолжаем
+            return None
 
         return quick_recovery_tick

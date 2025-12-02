@@ -1,4 +1,3 @@
-# app/services/game_service/skill/calculator_service.py
 from loguru import logger as log
 
 from app.resources.game_data.skill_library import BASE_MAX_XP, SKILL_RECIPES, TITLE_THRESHOLDS_PERCENT
@@ -7,77 +6,65 @@ from app.resources.schemas_dto.skill import SkillDisplayDTO, SkillProgressDTO
 
 class SkillCalculatorService:
     """
-    Сервис для вычислений, связанных с прогрессом навыков.
+    Сервис для выполнения "чистых" вычислений, связанных с прогрессом навыков.
 
-    Этот сервис является "чистым" - он не взаимодействует с базой данных
-    или внешними системами. Его единственная задача - принимать DTO с
-    прогрессом навыка и, на основе правил из "Библиотеки" (`skill_library`),
-    рассчитывать производные данные для отображения (звание, процент и т.д.).
+    Не взаимодействует с базой данных или внешними системами. Его задача —
+    принимать DTO с прогрессом навыка и, на основе правил из `SKILL_RECIPES`,
+    рассчитывать производные данные для отображения (звание, процент прогресса и т.д.).
     """
 
     @staticmethod
     def get_skill_display_info(progress_dto: SkillProgressDTO) -> SkillDisplayDTO:
         """
-        Рассчитывает "на лету" данные для отображения прогресса навыка.
+        Рассчитывает данные для отображения прогресса навыка "на лету".
 
-        На основе общего опыта (`total_xp`) и правил из библиотеки вычисляет:
+        На основе общего опыта (`total_xp`) и правил из библиотеки навыков вычисляет:
         - Эффективный максимальный опыт (с учетом множителя).
         - Процент прогресса до эффективного максимума.
         - Звание, соответствующее текущему проценту.
 
         Args:
-            progress_dto (SkillProgressDTO): DTO с данными о прогрессе навыка
-                                             (skill_key, total_xp).
+            progress_dto: DTO с данными о прогрессе навыка (`skill_key`, `total_xp`).
 
         Returns:
-            SkillDisplayDTO: DTO с рассчитанными данными для отображения.
+            DTO `SkillDisplayDTO` с рассчитанными данными для отображения.
         """
         skill_key = progress_dto.skill_key
         total_xp = progress_dto.total_xp
-        log.debug(f"Расчет display info для навыка '{skill_key}' с total_xp={total_xp}.")
+        log.debug(f"SkillCalculator | event=calculate_display_info skill='{skill_key}' total_xp={total_xp}")
 
-        # Шаг 1: Получение множителя опыта из библиотеки.
         skill_info = SKILL_RECIPES.get(skill_key)
         multiplier = 1.0
         if skill_info and isinstance(skill_info, dict) and "xp_multiplier" in skill_info:
             xp_multiplier = skill_info["xp_multiplier"]
-            # FIX: Заменено (int, float) на int | float согласно правилу Ruff UP038
-            if isinstance(xp_multiplier, int | float):
+            if isinstance(xp_multiplier, (int, float)):
                 multiplier = float(xp_multiplier)
             else:
                 log.warning(
-                    f"Неверный тип 'xp_multiplier' для '{skill_key}' в SKILL_RECIPES. "
-                    f"Ожидался int или float, получен {type(xp_multiplier)}. Используется множитель 1.0."
+                    f"SkillCalculator | reason='Invalid xp_multiplier type' skill='{skill_key}' type='{type(xp_multiplier)}' using_default=1.0"
                 )
         else:
-            log.warning(f"Не найден 'xp_multiplier' для '{skill_key}' в SKILL_RECIPES. Используется множитель 1.0.")
+            log.warning(f"SkillCalculator | reason='xp_multiplier not found' skill='{skill_key}' using_default=1.0")
 
-        log.debug(f"  - Множитель опыта (multiplier): {multiplier}")
-
-        # Шаг 2: Расчет эффективного максимального опыта.
         effective_max_xp = int(BASE_MAX_XP * multiplier)
-        log.debug(f"  - Эффективный максимум XP (effective_max_xp): {effective_max_xp}")
+        log.debug(f"SkillCalculator | effective_max_xp={effective_max_xp} skill='{skill_key}'")
 
-        # Шаг 3: Расчет процента прогресса.
         if effective_max_xp <= 0:
-            # Защита от деления на ноль или отрицательного значения.
             percentage = 100.0 if total_xp > 0 else 0.0
-            log.warning(f"  - effective_max_xp равен {effective_max_xp}. Процент установлен в {percentage}%.")
+            log.warning(
+                f"SkillCalculator | reason='Effective max XP is zero or less' skill='{skill_key}' percentage={percentage}"
+            )
         else:
-            # Процент не может быть больше 100.
             percentage = min((total_xp / effective_max_xp) * 100, 100.0)
-        log.debug(f"  - Процент прогресса (percentage): {percentage:.2f}%")
+        log.debug(f"SkillCalculator | percentage={percentage:.2f}% skill='{skill_key}'")
 
-        # Шаг 4: Определение звания на основе процента.
-        current_title = "Новичок"  # Звание по умолчанию
-        # Идем по отсортированным порогам (90, 70, 40...)
+        current_title = "Новичок"
         for percent_threshold, title in sorted(TITLE_THRESHOLDS_PERCENT.items(), reverse=True):
             if percentage >= percent_threshold:
                 current_title = title
                 break
-        log.debug(f"  - Присвоенное звание (title): '{current_title}'")
+        log.debug(f"SkillCalculator | title='{current_title}' skill='{skill_key}'")
 
-        # Формируем и возвращаем DTO для отображения.
         display_dto = SkillDisplayDTO(
             skill_key=skill_key,
             title=current_title,
@@ -85,5 +72,5 @@ class SkillCalculatorService:
             total_xp=total_xp,
             effective_max_xp=effective_max_xp,
         )
-        log.debug(f"Сформирован SkillDisplayDTO: {display_dto.model_dump_json()}")
+        log.debug(f"SkillCalculator | display_dto_created skill='{skill_key}'")
         return display_dto
