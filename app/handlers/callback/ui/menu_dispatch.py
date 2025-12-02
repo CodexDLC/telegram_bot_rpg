@@ -75,7 +75,7 @@ async def main_menu_dispatcher(
             await state.set_state(InGame.navigation)
 
             # 2. Получаем текущую локацию из Redis (через сервис)
-            nav_service = NavigationService(char_id=char_id, state_data=state_data, session=session)
+            nav_service = NavigationService(char_id=char_id, state_data=state_data)
             text, kb = await nav_service.reload_current_ui()
 
         # === (ТУТ БУДУТ ДРУГИЕ ВЕТКИ) ===

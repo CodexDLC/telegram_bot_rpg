@@ -338,8 +338,8 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
 
         if isinstance(message_menu, dict):
             try:
-                ms = MenuService(game_stage=game_stage, state_data=await state.get_data())
-                menu_text, menu_kb = ms.get_data_menu()
+                ms = MenuService(game_stage=game_stage, state_data=await state.get_data(), session=session)
+                menu_text, menu_kb = await ms.get_data_menu()
                 await bot.edit_message_text(
                     chat_id=message_menu["chat_id"],
                     message_id=message_menu["message_id"],
@@ -356,7 +356,7 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
             await _handle_tutorial_skills(char_id, state, bot, message_content)
         elif game_stage == GameStage.CREATION:
             if isinstance(message_menu, dict):
-                await start_creation_handler(call, state, bot, user_id, char_id, message_menu)
+                await start_creation_handler(call, state, bot, user_id, char_id, message_menu, session)
         elif game_stage == "combat":
             await _handle_combat_restore(user_id, char_id, state, bot, state_data, session_context, call)
         else:
