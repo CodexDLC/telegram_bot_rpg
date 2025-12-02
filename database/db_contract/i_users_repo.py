@@ -1,4 +1,3 @@
-# database/db_contract/i_users_repo.py
 from abc import ABC, abstractmethod
 
 from app.resources.schemas_dto.user_dto import UserDTO, UserUpsertDTO
@@ -9,7 +8,7 @@ class IUserRepo(ABC):
     Абстрактный базовый класс (интерфейс) для репозитория пользователей.
 
     Определяет контракт, которому должны следовать все конкретные реализации
-    репозиториев пользователей, независимо от используемой базы данных (SQLite, PostgreSQL и т.д.).
+    репозиториев пользователей, независимо от используемой базы данных.
     """
 
     @abstractmethod
@@ -23,42 +22,34 @@ class IUserRepo(ABC):
         создается новая запись.
 
         Args:
-            user_data (UserUpsertDTO): DTO с данными для создания или обновления.
-
-        Returns:
-            None
+            user_data: DTO с данными для создания или обновления пользователя.
         """
         pass
 
     @abstractmethod
-    async def get_user(self, telegram_id: int, **kwargs) -> UserDTO | None:
+    async def get_user(self, telegram_id: int) -> UserDTO | None:
         """
         Находит и возвращает одного пользователя по его `telegram_id`.
 
         Args:
-            telegram_id (int): Уникальный идентификатор пользователя в Telegram.
-            **kwargs: Дополнительные параметры для гибкости реализации.
+            telegram_id: Уникальный идентификатор пользователя в Telegram.
 
         Returns:
-            Optional[UserDTO]: DTO с полными данными пользователя, если он найден,
-                               в противном случае - None.
+            DTO `UserDTO` с полными данными пользователя, если он найден,
+            в противном случае - None.
         """
         pass
 
     @abstractmethod
-    async def get_users(self, **kwargs) -> list[UserDTO]:
+    async def get_users(self) -> list[UserDTO]:
         """
         Возвращает список всех пользователей в системе.
 
         Этот метод может использоваться для административных задач,
         рассылок или отладки.
 
-        Args:
-            **kwargs: Дополнительные параметры для гибкости реализации (например,
-                      для пагинации или фильтрации).
-
         Returns:
-            List[UserDTO]: Список DTO всех пользователей. Если пользователей нет,
-                           возвращает пустой список.
+            Список DTO `UserDTO` всех пользователей.
+            Если пользователей нет, возвращает пустой список.
         """
         pass

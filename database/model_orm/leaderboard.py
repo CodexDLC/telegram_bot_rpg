@@ -1,4 +1,3 @@
-# database/model_orm/leaderboard.py
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -14,25 +13,34 @@ if TYPE_CHECKING:
 
 class Leaderboard(Base, TimestampMixin):
     """
-    Таблица для хранения агрегированной статистики и рейтингов.
-    Используется для матчмейкинга (поиск по GS) и веб-лидербордов.
+    ORM-модель для таблицы `leaderboards`.
+
+    Хранит агрегированную статистику персонажей для матчмейкинга
+    и отображения в рейтинговых таблицах.
     """
 
     __tablename__ = "leaderboards"
 
     character_id: Mapped[int] = mapped_column(
-        ForeignKey("characters.character_id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("characters.character_id", ondelete="CASCADE"),
+        primary_key=True,
+        comment="Идентификатор персонажа (первичный и внешний ключ).",
     )
 
-    # 🔥 Тот самый Gear Score (с индексом для поиска)
-    gear_score: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    gear_score: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        index=True,
+        comment="Общий показатель силы персонажа (Gear Score), используется для матчмейкинга.",
+    )
+    total_xp: Mapped[int] = mapped_column(
+        BigInteger, default=0, index=True, comment="Общее количество накопленного опыта персонажем."
+    )
+    pvp_rating: Mapped[int] = mapped_column(
+        Integer, default=1000, index=True, comment="Рейтинг PvP персонажа (например, ELO/MMR)."
+    )
 
-    # Задел на будущее (Твои идеи про опыт и ранги)
-    total_xp: Mapped[int] = mapped_column(BigInteger, default=0, index=True)
-    pvp_rating: Mapped[int] = mapped_column(Integer, default=1000, index=True)  # ELO / MMR
-
-    # Связь (чтобы ORM знала)
-    character: Mapped[Character] = relationship(backref="leaderboard")
+    character: Mapped[Character] = relationship(backref="leaderboard", comment="Обратная связь с моделью Character.")
 
     def __repr__(self) -> str:
         return f"<Leaderboard(char_id={self.character_id}, gs={self.gear_score})>"

@@ -1,5 +1,3 @@
-# database/repositories/ORM/users_repo_orm.py
-
 from loguru import logger as log
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -14,10 +12,8 @@ class UsersRepoORM(IUserRepo):
     """
     ORM-реализация репозитория для управления пользователями.
 
-    Этот класс использует SQLAlchemy ORM для взаимодействия с базой данных.
-
-    Attributes:
-        session (AsyncSession): Асинхронная сессия SQLAlchemy.
+    Этот класс использует SQLAlchemy ORM для взаимодействия с базой данных,
+    предоставляя методы для создания, обновления и получения данных пользователей.
     """
 
     def __init__(self, session: AsyncSession):
@@ -25,10 +21,10 @@ class UsersRepoORM(IUserRepo):
         Инициализирует репозиторий с сессией SQLAlchemy.
 
         Args:
-            session (AsyncSession): Экземпляр асинхронной сессии.
+            session: Экземпляр асинхронной сессии.
         """
         self.session = session
-        log.debug(f"Инициализирован {self.__class__.__name__} с сессией: {session}")
+        log.debug(f"UsersRepoORM | status=initialized session={session}")
 
     async def upsert_user(self, user_data: UserUpsertDTO) -> None:
         """
@@ -38,41 +34,36 @@ class UsersRepoORM(IUserRepo):
         нужно ли выполнить INSERT или UPDATE на основе первичного ключа.
 
         Args:
-            user_data (UserUpsertDTO): DTO с данными для создания/обновления.
-
-        Returns:
-            None
+            user_data: DTO с данными для создания или обновления пользователя.
 
         Raises:
             SQLAlchemyError: В случае ошибки взаимодействия с базой данных.
         """
         user_data_dict = user_data.model_dump()
-        # noinspection PyArgumentList
         orm_user = User(**user_data_dict)
-        log.debug(f"Выполнение 'merge' для User с telegram_id={orm_user.telegram_id}")
+        log.debug(f"UsersRepoORM | action=upsert_user telegram_id={orm_user.telegram_id}")
 
         try:
             await self.session.merge(orm_user)
-            log.debug(f"Пользователь с telegram_id={orm_user.telegram_id} был успешно создан или обновлен.")
-        except SQLAlchemyError as e:
-            log.exception(f"Ошибка SQLAlchemy при выполнении 'upsert_user' для telegram_id={orm_user.telegram_id}: {e}")
+            log.info(f"UsersRepoORM | action=upsert_user status=success telegram_id={orm_user.telegram_id}")
+        except SQLAlchemyError:
+            log.exception(f"UsersRepoORM | action=upsert_user status=failed telegram_id={orm_user.telegram_id}")
             raise
 
-    async def get_user(self, telegram_id: int, **kwargs) -> UserDTO | None:
+    async def get_user(self, telegram_id: int) -> UserDTO | None:
         """
         Находит и возвращает одного пользователя по его `telegram_id` с помощью ORM.
 
         Args:
-            telegram_id (int): Уникальный идентификатор пользователя в Telegram.
-            **kwargs: Дополнительные параметры (не используются).
+            telegram_id: Уникальный идентификатор пользователя в Telegram.
 
         Returns:
-            Optional[UserDTO]: DTO пользователя, если найден, иначе None.
+            DTO `UserDTO` пользователя, если найден, иначе None.
 
         Raises:
             SQLAlchemyError: В случае ошибки взаимодействия с базой данных.
         """
-        log.debug(f"Запрос на получение пользователя по telegram_id={telegram_id}")
+        log.debug(f"UsersRepoORM | action=get_user telegram_id={telegram_id}")
         stmt = select(User).where(User.telegram_id == telegram_id)
 
         try:
@@ -80,42 +71,38 @@ class UsersRepoORM(IUserRepo):
             orm_user: User | None = result.scalar_one_or_none()
 
             if orm_user:
-                log.debug(f"Пользователь с telegram_id={telegram_id} найден.")
+                log.debug(f"UsersRepoORM | action=get_user status=found telegram_id={telegram_id}")
                 return UserDTO.model_validate(orm_user)
             else:
-                log.debug(f"Пользователь с telegram_id={telegram_id} не найден.")
+                log.debug(f"UsersRepoORM | action=get_user status=not_found telegram_id={telegram_id}")
                 return None
-        except SQLAlchemyError as e:
-            log.exception(f"Ошибка SQLAlchemy при выполнении 'get_user' для telegram_id={telegram_id}: {e}")
+        except SQLAlchemyError:
+            log.exception(f"UsersRepoORM | action=get_user status=failed telegram_id={telegram_id}")
             raise
 
-    async def get_users(self, **kwargs) -> list[UserDTO]:
+    async def get_users(self) -> list[UserDTO]:
         """
         Возвращает список всех пользователей с помощью ORM.
 
-        Args:
-            **kwargs: Дополнительные параметры (не используются).
-
         Returns:
-            List[UserDTO]: Список DTO всех пользователей.
+            Список DTO `UserDTO` всех пользователей.
 
         Raises:
             SQLAlchemyError: В случае ошибки взаимодействия с базой данных.
         """
-        log.debug("Запрос на получение списка всех пользователей.")
+        log.debug("UsersRepoORM | action=get_users")
         stmt = select(User)
 
         try:
             result = await self.session.execute(stmt)
-            # .scalars() извлекает первый столбец (в данном случае, объекты User)
             orm_users_list = result.scalars().all()
 
             if orm_users_list:
-                log.debug(f"Найдено {len(orm_users_list)} пользователей.")
+                log.debug(f"UsersRepoORM | action=get_users status=found count={len(orm_users_list)}")
                 return [UserDTO.model_validate(orm_user) for orm_user in orm_users_list]
             else:
-                log.debug("Пользователи в базе данных не найдены.")
+                log.debug("UsersRepoORM | action=get_users status=not_found")
                 return []
-        except SQLAlchemyError as e:
-            log.exception(f"Ошибка SQLAlchemy при выполнении 'get_users': {e}")
+        except SQLAlchemyError:
+            log.exception("UsersRepoORM | action=get_users status=failed")
             raise

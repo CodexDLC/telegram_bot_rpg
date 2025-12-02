@@ -1,4 +1,3 @@
-# database/db_contract/i_characters_repo.py
 from abc import ABC, abstractmethod
 
 from app.resources.schemas_dto.character_dto import (
@@ -14,7 +13,8 @@ class ICharactersRepo(ABC):
     """
     Абстрактный базовый класс (интерфейс) для репозитория персонажей.
 
-    Определяет контракт для управления основными данными персонажей.
+    Определяет контракт для управления основными данными персонажей,
+    включая создание, обновление, получение и удаление.
     """
 
     @abstractmethod
@@ -26,10 +26,10 @@ class ICharactersRepo(ABC):
         основные данные (имя, пол) еще не известны.
 
         Args:
-            character_data (CharacterShellCreateDTO): DTO с `user_id`.
+            character_data: DTO с `user_id` для создания оболочки.
 
         Returns:
-            int: Уникальный ID (`character_id`) созданной записи.
+            Уникальный ID (`character_id`) созданной записи.
         """
         pass
 
@@ -44,42 +44,36 @@ class ICharactersRepo(ABC):
         для ранее созданной "оболочки".
 
         Args:
-            character_id (int): ID персонажа для обновления.
-            character_data (CharacterOnboardingUpdateDTO): DTO с данными
-                                                         (name, gender, game_stage).
-
-        Returns:
-            None
+            character_id: Идентификатор персонажа для обновления.
+            character_data: DTO с данными (name, gender, game_stage).
         """
         pass
 
     @abstractmethod
-    async def get_character(self, character_id: int, **kwargs) -> CharacterReadDTO | None:
+    async def get_character(self, character_id: int) -> CharacterReadDTO | None:
         """
         Находит и возвращает одного персонажа по его `character_id`.
 
         Args:
-            character_id (int): Уникальный идентификатор персонажа.
-            **kwargs: Дополнительные параметры для гибкости реализации.
+            character_id: Уникальный идентификатор персонажа.
 
         Returns:
-            Optional[CharacterReadDTO]: DTO с данными персонажа, если он найден,
-                                        иначе - None.
+            DTO `CharacterReadDTO` с данными персонажа, если он найден,
+            иначе - None.
         """
         pass
 
     @abstractmethod
-    async def get_characters(self, user_id: int, **kwargs) -> list[CharacterReadDTO]:
+    async def get_characters(self, user_id: int) -> list[CharacterReadDTO]:
         """
         Возвращает список всех персонажей, принадлежащих одному пользователю.
 
         Args:
-            user_id (int): ID пользователя, чьих персонажей нужно найти.
-            **kwargs: Дополнительные параметры для гибкости реализации.
+            user_id: Идентификатор пользователя, чьих персонажей нужно найти.
 
         Returns:
-            List[CharacterReadDTO]: Список DTO персонажей. Если персонажей нет,
-                                    возвращает пустой список.
+            Список DTO `CharacterReadDTO` персонажей.
+            Если персонажей нет, возвращает пустой список.
         """
         pass
 
@@ -89,10 +83,7 @@ class ICharactersRepo(ABC):
         Удаляет персонажа и все связанные с ним данные.
 
         Args:
-            character_id (int): ID персонажа для удаления.
-
-        Returns:
-            None
+            character_id: Идентификатор персонажа для удаления.
         """
         pass
 
@@ -102,11 +93,8 @@ class ICharactersRepo(ABC):
         Обновляет поле `game_stage` у конкретного персонажа.
 
         Args:
-            character_id (int): ID персонажа для обновления.
-            character_game_stage (str): Новое значение игровой стадии.
-
-        Returns:
-            None
+            character_id: Идентификатор персонажа для обновления.
+            character_game_stage: Новое значение игровой стадии.
         """
         pass
 
@@ -114,20 +102,22 @@ class ICharactersRepo(ABC):
 class ICharacterStatsRepo(ABC):
     """
     Абстрактный базовый класс (интерфейс) для репозитория характеристик персонажа.
+
+    Определяет контракт для получения, обновления и модификации
+    характеристик персонажа.
     """
 
     @abstractmethod
-    async def get_stats(self, character_id: int, **kwargs) -> CharacterStatsReadDTO | None:
+    async def get_stats(self, character_id: int) -> CharacterStatsReadDTO | None:
         """
         Возвращает характеристики (статы) персонажа.
 
         Args:
-            character_id (int): ID персонажа, чьи характеристики нужны.
-            **kwargs: Дополнительные параметры.
+            character_id: Идентификатор персонажа, чьи характеристики нужны.
 
         Returns:
-            Optional[CharacterStatsReadDTO]: DTO с характеристиками, если они найдены,
-                                             иначе - None.
+            DTO `CharacterStatsReadDTO` с характеристиками, если они найдены,
+            иначе - None.
         """
         pass
 
@@ -137,12 +127,8 @@ class ICharacterStatsRepo(ABC):
         Полностью перезаписывает все характеристики персонажа.
 
         Args:
-            character_id (int): ID персонажа для обновления.
-            stats_data (CharacterStatsUpdateDTO): DTO с полным набором новых
-                                                  характеристик.
-
-        Returns:
-            None
+            character_id: Идентификатор персонажа для обновления.
+            stats_data: DTO с полным набором новых характеристик.
         """
         pass
 
@@ -155,14 +141,12 @@ class ICharacterStatsRepo(ABC):
         характеристики и возвращать их новое полное состояние.
 
         Args:
-            character_id (int): ID персонажа.
-            stats_to_add (Dict[str, int]): Словарь, где ключ - название
-                                          характеристики, а значение - число
-                                          для добавления (может быть отрицательным).
+            character_id: Идентификатор персонажа.
+            stats_to_add: Словарь, где ключ - название характеристики,
+                          а значение - число для добавления (может быть отрицательным).
 
         Returns:
-            Optional[CharacterStatsReadDTO]: DTO с обновленными характеристиками
-                                             персонажа или None, если персонаж
-                                             не найден.
+            DTO `CharacterStatsReadDTO` с обновленными характеристиками
+            персонажа или None, если персонаж не найден.
         """
         pass
