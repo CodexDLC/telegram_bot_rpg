@@ -268,23 +268,25 @@ class CombatUIService(BaseUIService):
 
         # 1. Сетка Зон
         rows = [
-            ("head", "🗡 Голова", "head_chest", "🛡 Голова + Грудь"),
-            ("chest", "🗡 Грудь", "chest_legs", "🛡 Грудь + Живот"),
-            ("legs", "🗡 Живот", "legs_feet", "🛡 Живот + Ноги"),
-            ("feet", "🗡 Ноги", "feet_head", "🛡 Ноги + Голова"),
+            ("head", "🗡 Голова", "head_chest", "🛡 Гол+Груд"),
+            ("chest", "🗡 Грудь", "chest_belly", "🛡 Груд+Жив"),
+            ("belly", "🗡 Живот", "belly_legs", "🛡 Жив+Ноги"),
+            ("legs", "🗡 Ноги", "legs_feet", "🛡 Ноги+Ступ"),
+            ("feet", "🗡 Ступни", "feet_head", "🛡 Ступ+Гол"),  # Та самая "Раскорячка"
         ]
 
-        for atk_id, atk_name, def_id, def_name in rows:
+        for _i, (atk_id, atk_name, def_id, def_name) in enumerate(rows):
+            # Атака
             txt_atk = f"✅ {atk_name}" if atk_id in sel_atk else atk_name
-            txt_def = f"✅ {def_name}" if def_id in sel_def else def_name
-
             cb_atk = CombatZoneCallback(layer="atk", zone_id=atk_id).pack()
-            cb_def = CombatZoneCallback(layer="def", zone_id=def_id).pack()
+            btn_atk = InlineKeyboardButton(text=txt_atk, callback_data=cb_atk)
 
-            kb.row(
-                InlineKeyboardButton(text=txt_atk, callback_data=cb_atk),
-                InlineKeyboardButton(text=txt_def, callback_data=cb_def),
-            )
+            # Защита (теперь всегда есть кнопка)
+            txt_def = f"✅ {def_name}" if def_id in sel_def else def_name
+            cb_def = CombatZoneCallback(layer="def", zone_id=def_id).pack()
+            btn_def = InlineKeyboardButton(text=txt_def, callback_data=cb_def)
+
+            kb.row(btn_atk, btn_def)
 
         # 2. Меню Абилок/Предметов
         cb_skills = CombatActionCallback(action="menu").pack()

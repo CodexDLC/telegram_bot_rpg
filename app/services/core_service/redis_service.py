@@ -12,12 +12,14 @@ from app.core.redis_client import redis_client
 class RedisService:
     """
     Сервис для взаимодействия с Redis, предоставляющий удобные методы
-    для работы с различными структурами данных (хеши, множества).
+    для работы с различными структурами данных (хеши, множества, списки).
     """
 
     def __init__(self, client: Redis):
         self.redis_client = client
         log.debug(f"Инициализирован {self.__class__.__name__} с клиентом: {client}")
+
+    # --- HASHES (Хэши) ---
 
     async def set_hash_json(self, key: str, field: str, data: dict[str, Any]) -> None:
         """Сериализует словарь в JSON и сохраняет его в поле хеша."""
@@ -43,7 +45,6 @@ class RedisService:
         try:
             data_json = await self.redis_client.hget(key, field)  # type: ignore
             if data_json:
-                # data_json уже str, json.loads отлично это переварит
                 log.debug(f"Найдено значение для key='{key}', field='{field}'.")
                 return json.loads(data_json)
             log.debug(f"Значение для key='{key}', field='{field}' не найдено.")
@@ -97,6 +98,8 @@ class RedisService:
         except RedisError as e:
             log.exception(f"Ошибка Redis при удалении поля '{field}' из key='{key}': {e}")
 
+    # --- SETS (Множества) ---
+
     async def add_to_set(self, key: str, value: str | int) -> None:
         """Добавляет значение в множество."""
         try:
@@ -146,13 +149,8 @@ class RedisService:
     # --- SORTED SETS (ZSET) ---
 
     async def add_to_zset(self, key: str, mapping: dict[str, float]) -> int:
-        """
-        Добавляет элементы в Sorted Set.
-        :param mapping: Словарь {member: score}
-        :return: Количество добавленных элементов.
-        """
+        """Добавляет элементы в Sorted Set."""
         try:
-            # redis-py ожидает mapping={member: score}
             count = await self.redis_client.zadd(key, mapping)  # type: ignore
             log.debug(f"В ZSET '{key}' добавлено/обновлено {count} элементов.")
             return int(count)
@@ -172,7 +170,6 @@ class RedisService:
     async def get_zset_range_by_score(self, key: str, min_score: float, max_score: float) -> list[str]:
         """Возвращает список members в диапазоне очков."""
         try:
-            # Возвращает список строк (members)
             res = await self.redis_client.zrangebyscore(key, min_score, max_score)  # type: ignore
             return res
         except RedisError as e:
@@ -194,12 +191,8 @@ class RedisService:
     # --- BASIC K/V (String) ---
 
     async def set_value(self, key: str, value: str, ttl: int | None = None) -> None:
-        """
-        Устанавливает значение ключа (String).
-        :param ttl: Время жизни в секундах (опционально).
-        """
+        """Устанавливает значение ключа (String)."""
         try:
-            # ex=ttl работает только если ttl передано
             await self.redis_client.set(key, value, ex=ttl)  # type: ignore
             log.debug(f"Установлен ключ '{key}' (TTL={ttl}).")
         except RedisError as e:
@@ -221,6 +214,43 @@ class RedisService:
             log.debug(f"Ключ '{key}' удален.")
         except RedisError as e:
             log.exception(f"Ошибка Redis delete для '{key}': {e}")
+
+    # --- 🔥 НОВЫЕ МЕТОДЫ (LISTS & SCAN) ---
+
+    async def push_to_list(self, key: str, value: str) -> None:
+        """Добавляет элемент в конец списка (RPUSH)."""
+        try:
+            await self.redis_client.rpush(key, value)  # type: ignore
+            log.debug(f"В список '{key}' добавлено значение.")
+        except RedisError as e:
+            log.exception(f"Ошибка Redis rpush для '{key}': {e}")
+
+    async def get_list_range(self, key: str, start: int = 0, end: int = -1) -> list[str]:
+        """Возвращает диапазон элементов списка (LRANGE)."""
+        try:
+            result = await self.redis_client.lrange(key, start, end)  # type: ignore
+            log.debug(f"Из списка '{key}' получено {len(result)} элементов.")
+            return result
+        except RedisError as e:
+            log.exception(f"Ошибка Redis lrange для '{key}': {e}")
+            return []
+
+    async def delete_by_pattern(self, pattern: str) -> int:
+        """
+        Удаляет ключи по паттерну (SCAN + DELETE).
+        Безопасно для performance (использует итератор).
+        """
+        deleted_count = 0
+        try:
+            # scan_iter возвращает асинхронный итератор
+            keys_to_delete = [k async for k in self.redis_client.scan_iter(match=pattern)]
+            if keys_to_delete:
+                deleted_count = await self.redis_client.delete(*keys_to_delete)  # type: ignore
+            log.debug(f"Удалено {deleted_count} ключей по паттерну '{pattern}'.")
+            return int(deleted_count)
+        except RedisError as e:
+            log.exception(f"Ошибка Redis при удалении по паттерну '{pattern}': {e}")
+            return 0
 
 
 # Глобальный экземпляр сервиса

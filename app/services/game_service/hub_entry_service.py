@@ -55,7 +55,7 @@ class HubEntryService(BaseUIService):  # Наследуем от BaseUIService �
                 return "Ошибка конфигурации: отсутствует билдер UI.", None, new_fsm_state
 
             # 2. Создаем экземпляр билдера
-            ui_builder = builder_class(self.char_id, self.session, self.state_data)
+            ui_builder = builder_class(char_id=self.char_id, session=self.session, state_data=self.state_data)
 
             # 3. Динамически получаем ссылку на метод
             render_method = getattr(ui_builder, method_name, None)

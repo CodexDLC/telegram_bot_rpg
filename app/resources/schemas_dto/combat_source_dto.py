@@ -3,6 +3,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.resources.schemas_dto.item_dto import InventoryItemDTO
+
 
 class BattleStatsDTO(BaseModel):
     """
@@ -61,6 +63,8 @@ class CombatSessionContainerDTO(BaseModel):
 
     active_abilities: list[str] = Field(default_factory=list)
     persistent_pipeline: list[str] = Field(default_factory=list)
+
+    equipped_items: list[InventoryItemDTO] = Field(default_factory=list)
 
     state: FighterStateDTO | None = None
     stats: dict[str, StatSourceData] = Field(default_factory=dict)

@@ -2,7 +2,7 @@
 
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,8 +28,12 @@ async def arena_render_main_menu_handler(
     callback_data: ArenaQueueCallback,
     state: FSMContext,
     session: AsyncSession,
-    bot: Bot,  # bot добавлен в аргументы, хотя тут не юзается, для единообразия
+    bot: Bot,
 ) -> None:
+    """
+    Показывает главное меню Арены (выбор режима: 1v1, Group).
+    Срабатывает при входе или нажатии "Назад" из подменю.
+    """
     if not call.from_user:
         return
 
@@ -37,7 +41,8 @@ async def arena_render_main_menu_handler(
     state_data = await state.get_data()
 
     # 1. Init UI
-    ui = ArenaUIService(char_id, state_data, session)
+    # 🔥 ИСПРАВЛЕНО: Порядок (ID, Session, Data)
+    ui = ArenaUIService(char_id, session, state_data)
 
     # 2. View
     text, kb = await ui.view_main_menu()
@@ -47,7 +52,6 @@ async def arena_render_main_menu_handler(
     message_content = session_context.get("message_content")
 
     if message_content and text and kb:
-        # 🔥 ИСПОЛЬЗУЕМ BOT + ID ИЗ FSM (БЕЗОПАСНО)
         chat_id = message_content["chat_id"]
         message_id = message_content["message_id"]
 
@@ -60,7 +64,6 @@ async def arena_render_main_menu_handler(
         )
         await call.answer()
     else:
-        # Если ID потерялись — это ошибка стейта
         await Err.message_content_not_found_in_fsm(call)
 
 
@@ -118,8 +121,6 @@ async def arena_exit_service_handler(
 # =================================================================
 # 3. ОТМЕНА (Выход из очереди)
 # =================================================================
-
-
 @router.callback_query(ArenaState.waiting, ArenaQueueCallback.filter(F.action == "cancel_queue"))
 async def arena_universal_cancel_handler(
     call: CallbackQuery,
@@ -135,7 +136,9 @@ async def arena_universal_cancel_handler(
 
     # 1. Init UI
     state_data = await state.get_data()
-    ui = ArenaUIService(char_id, state_data, session)
+
+    # 🔥 ИСПРАВЛЕНО: Порядок (ID, Session, Data)
+    ui = ArenaUIService(char_id, session, state_data)
 
     # 2. Action (Cancel)
     await ui.action_cancel_queue(mode)
@@ -146,8 +149,8 @@ async def arena_universal_cancel_handler(
     # 4. View (Back to Mode Menu)
     text, kb = await ui.view_mode_menu(mode)
 
-    if text and kb:
-        await call.message.edit_text(text=text, reply_markup=kb, parse_mode="HTML")  # type: ignore
+    if text and kb and isinstance(call.message, Message):
+        await call.message.edit_text(text=text, reply_markup=kb, parse_mode="HTML")
         await call.answer("Поиск отменен.")
     else:
         await Err.generic_error(call)

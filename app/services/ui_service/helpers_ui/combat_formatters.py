@@ -158,7 +158,6 @@ class CombatFormatter:
     def format_results(player_dto: CombatSessionContainerDTO, winner_team: str, duration: int) -> str:
         """
         Форматирует экран завершения боя.
-        TODO: В будущем заменить на BattleResultService для разных режимов (Арена/Босс).
         """
         is_winner = player_dto.team == winner_team
 
@@ -172,6 +171,11 @@ class CombatFormatter:
         # Достаем статистику
         s = player_dto.state.stats if player_dto.state else None
 
+        # 🔥 СЧИТАЕМ ОБЩИЙ ОПЫТ
+        total_xp = 0
+        if player_dto.state and player_dto.state.xp_buffer:
+            total_xp = sum(player_dto.state.xp_buffer.values())
+
         stats_text = ""
         if s:
             stats_text = (
@@ -182,7 +186,8 @@ class CombatFormatter:
                 f"🏃 Уворот:  {s.dodges_success}\n"
                 f"💔 Получено: {s.damage_taken}\n"
                 f"💥 Критов:   {s.crits_landed}"
-                f"</code>"
+                f"</code>\n\n"
+                f"📈 <b>Получено опыта:</b> +{total_xp} XP"
             )
 
         return f"{header}\n⏱ <i>Время боя: {duration} сек.</i>\n\n{flavor}\n\n{stats_text}"
