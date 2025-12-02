@@ -1,4 +1,11 @@
-# app/resources/game_data/abilities/physical.py
+"""
+Модуль содержит определения физических способностей.
+
+Каждая способность описывается структурой `AbilityData`, включающей
+название, описание, стоимость ресурсов, правила применения и пайплайн
+эффектов.
+"""
+
 from app.resources.game_data.ability_data_struct import AbilityData
 
 PHYSICAL_ABILITIES: dict[str, AbilityData] = {
@@ -12,16 +19,6 @@ PHYSICAL_ABILITIES: dict[str, AbilityData] = {
             "ignore_block": True,
             "damage_mult": 1.2,
         },
-        "pipeline": [
-            # Основной урон идет через базовую атаку с флагами rules.
-            # Можно добавить эффект кровотечения при крите:
-            # {
-            #     "phase": "post_calc",
-            #     "trigger": "on_crit",
-            #     "action": "apply_status",
-            #     "target": "enemy",
-            #     "params": {"status_id": "bleed", "duration": 2, "power": 3}
-            # }
-        ],
+        "pipeline": [],
     },
 }

@@ -1,4 +1,3 @@
-# app/handlers/callback/game/arena/arena_tournament.py
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from loguru import logger as log
@@ -6,8 +5,12 @@ from loguru import logger as log
 router = Router(name="arena_tournament_router")
 
 
-# --- ЗАГЛУШКА ---
-@router.callback_query(F.data == "ignore_tournament_handler")
+# TODO: Реализовать логику для турниров на арене.
+@router.callback_query(F.data == "arena_tournament_placeholder")
 async def tournament_handler_placeholder(call: CallbackQuery) -> None:
-    log.debug(f"Вызван placeholder для турниров. User {call.from_user.id}.")
-    await call.answer("Турниры (WIP)", show_alert=True)
+    """Заглушка для обработки турниров."""
+    if not call.from_user:
+        return
+    user_id = call.from_user.id
+    log.info(f"Arena | event=placeholder_triggered user_id={user_id} type=tournament")
+    await call.answer("Турниры (в разработке)", show_alert=True)

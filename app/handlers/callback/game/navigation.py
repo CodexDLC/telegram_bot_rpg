@@ -1,4 +1,3 @@
-# app/handlers/callback/game/navigation.py
 import asyncio
 import contextlib
 import time
@@ -34,9 +33,7 @@ TRAVEL_FLAVOR_TEXTS = [
 async def navigation_move_handler(
     call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: NavigationCallback, session: AsyncSession
 ) -> None:
-    """
-    Обрабатывает перемещение игрока с таймером и обработкой ошибок.
-    """
+    """Обрабатывает перемещение игрока между локациями."""
     if not call.from_user:
         return
 
@@ -44,9 +41,8 @@ async def navigation_move_handler(
     user_id = call.from_user.id
     target_loc_id = callback_data.target_id
 
-    log.info(f"User {user_id} инициировал переход в локацию '{target_loc_id}'.")
+    log.info(f"Navigation | event=move_start user_id={user_id} target_loc='{target_loc_id}'")
 
-    # Отвечаем на callback сразу
     with contextlib.suppress(TelegramAPIError):
         await call.answer()
 
@@ -56,17 +52,16 @@ async def navigation_move_handler(
     message_content = session_context.get("message_content")
 
     if not char_id or not message_content:
-        log.error(f"В FSM user {user_id} отсутствуют данные char_id или message_content.")
+        log.error(f"Navigation | status=failed reason='char_id or message_content missing' user_id={user_id}")
         await Err.generic_error(call)
         return
 
     nav_service = NavigationService(char_id=char_id, state_data=state_data)
-
-    # Выполняем перемещение
     result = await nav_service.move_player(target_loc_id)
+    log.debug(f"Navigation | move_player_result='{result}' char_id={char_id}")
 
     if not result:
-        # Ошибка на уровне "вообще ничего не вернулось" (например, аккаунт не найден)
+        log.warning(f"Navigation | status=failed reason='move_player returned None' char_id={char_id}")
         with contextlib.suppress(TelegramAPIError):
             await call.answer("Действие недоступно.", show_alert=True)
         return
@@ -75,29 +70,18 @@ async def navigation_move_handler(
     chat_id = message_content["chat_id"]
     message_id = message_content["message_id"]
 
-    # --- ОБРАБОТКА ОШИБКИ ПЕРЕХОДА (Fail-safe) ---
-    # Если клавиатуры нет (None), значит сервис сообщил об ошибке логики (локация удалена и т.д.)
     if kb is None:
-        log.warning(f"User {user_id}: Ошибка навигации (локация не найдена). Откат.")
-
-        # 1. Показываем текст ошибки (без кнопок)
+        log.warning(f"Navigation | status=failed reason='Navigation logic error' user_id={user_id}")
         try:
-            await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=text,  # Текст ошибки из сервиса
-                parse_mode="HTML",
-            )
+            await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, parse_mode="HTML")
         except TelegramBadRequest as e:
-            log.warning(f"Не удалось показать ошибку (сообщение не изменилось): {e}")
+            log.warning(f"UIRender | component=nav_error status=not_modified user_id={user_id} error='{e}'")
         except TelegramAPIError as e:
-            log.error(f"Не удалось показать ошибку: {e}")
+            log.error(f"UIRender | component=nav_error status=failed user_id={user_id} error='{e}'")
 
-        # 2. Ждем 2 секунды, чтобы игрок прочитал
         await asyncio.sleep(2)
 
-        # 3. Восстанавливаем экран ТЕКУЩЕЙ (старой) локации
-        # Игрок никуда не перешел, база данных не менялась.
+        log.debug(f"Navigation | action=reload_ui char_id={char_id}")
         restore_text, restore_kb = await nav_service.reload_current_ui()
         if restore_text and restore_kb:
             try:
@@ -109,33 +93,21 @@ async def navigation_move_handler(
                     parse_mode="HTML",
                 )
             except TelegramAPIError as e:
-                log.error(f"Не удалось восстановить UI после ошибки: {e}")
+                log.error(f"UIRender | component=nav_restore status=failed user_id={user_id} error='{e}'")
         return
-        # ---------------------------------------------
 
-    # Если ошибок нет, запускаем таймер пути
     if total_travel_time > 2:
-        # 1. Превращаем словарь session_context обратно в DTO
-        # (UIAnimationService ожидает объект, а не словарь)
+        log.debug(f"Navigation | animation=start duration={total_travel_time}s char_id={char_id}")
         session_dto = SessionDataDTO(**session_context)
-
-        # 2. Инициализируем сервис анимации
         anim_service = UIAnimationService(bot=bot, message_data=session_dto)
-
-        # 3. Запускаем анимацию навигации
-        # (TRAVEL_FLAVOR_TEXTS берем из этого же файла, он определен выше)
         await anim_service.animate_navigation(duration=total_travel_time, flavor_texts=TRAVEL_FLAVOR_TEXTS)
-
     else:
-        # Короткая задержка для быстрых переходов
         await await_min_delay(start_time, min_delay=total_travel_time or 0.3)
 
-    # Финальное обновление UI (Показ новой локации)
     try:
         await bot.edit_message_text(
             chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML"
         )
-        log.info(f"User {user_id} успешно перешел в '{target_loc_id}'.")
-
+        log.info(f"Navigation | event=move_end status=success user_id={user_id} target_loc='{target_loc_id}'")
     except TelegramAPIError as e:
-        log.error(f"Ошибка при обновлении сообщения локации: {e}")
+        log.error(f"UIRender | component=navigation status=failed user_id={user_id} error='{e}'")

@@ -29,7 +29,7 @@ class BaseUIService:
         """
         session_context = self.state_data.get(FSM_CONTEXT_KEY, {})
         message_content: dict[str, Any] | None = session_context.get("message_content")
-        if not isinstance(message_content, dict):  # <--- Проверка, что это словарь
+        if not isinstance(message_content, dict):
             log.warning(f"В FSM state для char_id={self.char_id} отсутствует 'message_content'.")
             return None
 

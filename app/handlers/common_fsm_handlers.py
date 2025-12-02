@@ -11,21 +11,14 @@ router = Router(name="common_fsm_router")
 @router.message(F.text, *GARBAGE_TEXT_STATES)
 async def delete_garbage_text(m: Message):
     """
-    Удаляет нежелательные текстовые сообщения в определенных состояниях FSM.
-
-    Этот обработчик отлавливает любые текстовые сообщения, которые пользователь
-    может отправить, когда бот ожидает нажатие на inline-кнопку (а не ввод
-    текста). Это предотвращает "засорение" чата и возможные неверные
-    срабатывания других обработчиков.
-
-    Args:
-        m (Message): Входящее "мусорное" сообщение от пользователя.
-
-    Returns:
-        None
+    Удаляет нежелательные текстовые сообщения в состояниях,
+    где ожидается нажатие на inline-кнопку.
     """
+    user_id = m.from_user.id if m.from_user else "N/A"
     try:
-        # Просто удаляем сообщение, чтобы оно не мешало.
         await m.delete()
+        # Исправление: Проверяем m.text перед использованием среза
+        text_preview = m.text[:20] if m.text else ""
+        log.debug(f"GarbageMessage | status=deleted user_id={user_id} text='{text_preview}'")
     except TelegramAPIError as e:
-        log.warning(f"Не удалось удалить 'мусорное' сообщение: {e}")
+        log.warning(f"GarbageMessage | status=delete_failed user_id={user_id} error='{e}'")

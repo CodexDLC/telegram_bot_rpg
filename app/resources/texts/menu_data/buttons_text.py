@@ -1,4 +1,9 @@
-# app/resources/texts/menu_data/buttons_text.py
+"""
+Модуль содержит текстовые константы для кнопок меню и их раскладок.
+
+Определяет, какие кнопки должны отображаться в главном меню в зависимости
+от текущего этапа игры (`game_stage`), а также тексты для этих кнопок.
+"""
 
 
 class ButtonsTextData:
@@ -6,13 +11,21 @@ class ButtonsTextData:
         "creation": ["logout"],
         "tutorial_stats": ["status", "logout"],
         "tutorial_skill": ["status", "navigation", "logout"],
-        "in_game": ["status", "inventory", "navigation", "logout"],
+        "in_game": ["status", "inventory", "navigation", "quick_heal", "logout"],
+    }
+
+    MENU_LAYOUTS_MAIN = {
+        "creation": [],
+        "tutorial_stats": ["status"],
+        "tutorial_skill": ["status", "navigation"],
+        "in_game": ["status", "inventory", "navigation", "quick_heal"],
     }
 
     BUTTONS_MENU_FULL = {
         "status": "ℹ️ Статус",
         "inventory": "📦 Инвентарь",
         "navigation": "🗺️ Навигация",
+        "quick_heal": "➕ Быстрое лечение",
         "logout": "[🔙 Выйти из мира ]",
         "arena_test": "⚔️ Тренировка (Тест)",
     }

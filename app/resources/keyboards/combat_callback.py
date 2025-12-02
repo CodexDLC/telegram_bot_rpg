@@ -1,12 +1,20 @@
-# app/resources/keyboards/combat_callback.py
+"""
+Модуль содержит определения CallbackData для взаимодействия в боевых сценах.
+
+Определяет структуры данных для кнопок выбора зон атаки/защиты,
+основных боевых действий и пагинации лога боя.
+"""
+
 from aiogram.filters.callback_data import CallbackData
 
 
 class CombatZoneCallback(CallbackData, prefix="c_zone"):
     """
-    Кнопки сетки (Атака / Защита).
-    layer: 'atk' (Атака) или 'def' (Защита)
-    zone_id: 'head', 'chest', 'legs', 'feet' и т.д.
+    Callback для кнопок выбора зон атаки/защиты.
+
+    Attributes:
+        layer: Слой действия ('atk' для атаки, 'def' для защиты).
+        zone_id: Идентификатор зоны (например, 'head', 'chest', 'legs').
     """
 
     layer: str
@@ -15,8 +23,10 @@ class CombatZoneCallback(CallbackData, prefix="c_zone"):
 
 class CombatActionCallback(CallbackData, prefix="c_act"):
     """
-    Кнопки действий (Меню, Подтверждение, Побег, Пояс).
-    action: 'submit', 'menu', 'belt', 'spells', 'flee'
+    Callback для основных боевых действий.
+
+    Attributes:
+        action: Действие (например, 'submit' для подтверждения хода, 'menu' для открытия меню).
     """
 
     action: str
@@ -24,8 +34,10 @@ class CombatActionCallback(CallbackData, prefix="c_act"):
 
 class CombatLogCallback(CallbackData, prefix="c_log"):
     """
-    Пагинация лога.
-    page: Номер страницы
+    Callback для пагинации лога боя.
+
+    Attributes:
+        page: Номер страницы лога для отображения.
     """
 
     page: int

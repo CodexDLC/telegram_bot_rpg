@@ -1,4 +1,3 @@
-# app/handlers/callback/tutorial/tutorial_skill.py
 import asyncio
 from typing import Any
 
@@ -22,23 +21,12 @@ router = Router(name="tutorial_skill_router")
 
 @router.callback_query(StartTutorial.confirmation, F.data == "tut_quest:start_skill_phase")
 async def start_skill_phase_handler(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    """
-    Обрабатывает начало фазы выбора навыков в туториале.
-
-    Этот хэндлер запускается, когда пользователь нажимает кнопку,
-    соответствующую началу выбора навыков. Он инициализирует
-    сервис туториала и отображает первый шаг квеста.
-
-    Args:
-        call: Объект CallbackQuery, инициировавший вызов.
-        state: Контекст состояния FSM для управления состоянием пользователя.
-        bot: Экземпляр бота для взаимодействия с API Telegram.
-    """
+    """Начинает фазу выбора навыков в туториале."""
     if not call.from_user:
-        log.warning("Handler 'start_skill_phase_handler' received update without 'from_user'.")
         return
 
-    log.debug(f"User {call.from_user.id} started skill phase.")
+    user_id = call.from_user.id
+    log.info(f"TutorialSkill | event=start_phase user_id={user_id}")
     await call.answer()
 
     state_data = await state.get_data()
@@ -46,7 +34,7 @@ async def start_skill_phase_handler(call: CallbackQuery, state: FSMContext, bot:
     message_content: dict[str, Any] | None = session_context.get("message_content")
 
     if not message_content or "chat_id" not in message_content or "message_id" not in message_content:
-        log.error(f"User {call.from_user.id}: 'message_content' not found or incomplete in FSM state.")
+        log.error(f"TutorialSkill | status=failed reason='message_content not found' user_id={user_id}")
         await Err.message_content_not_found_in_fsm(call=call)
         return
 
@@ -81,45 +69,27 @@ async def start_skill_phase_handler(call: CallbackQuery, state: FSMContext, bot:
     )
 
     await state.set_state(StartTutorial.in_skills_progres)
-    log.debug(f"User {call.from_user.id} moved to state StartTutorial.in_skills_progres.")
+    log.info(f"FSM | state=StartTutorial.in_skills_progres user_id={user_id}")
 
 
 @router.callback_query(StartTutorial.in_skills_progres, TutorialQuestCallback.filter())
 async def in_skills_progres_handler(
-    call: CallbackQuery,
-    state: FSMContext,
-    callback_data: TutorialQuestCallback,
-    bot: Bot,
+    call: CallbackQuery, state: FSMContext, callback_data: TutorialQuestCallback, bot: Bot
 ) -> None:
-    """
-    Обрабатывает шаги пользователя в процессе выбора навыков.
-
-    Этот хэндлер вызывается на каждом шаге квеста выбора навыков.
-    Он использует TutorialServiceSkills для получения следующего шага,
-    обновляет сообщение и сохраняет выбор пользователя.
-
-    Args:
-        call: Объект CallbackQuery от пользователя.
-        state: Контекст состояния FSM.
-        callback_data: Распарсенные данные из callback-кнопки.
-        bot: Экземпляр бота.
-    """
+    """Обрабатывает шаги пользователя в процессе выбора навыков."""
     if not call.from_user:
-        log.warning("Handler 'in_skills_progres_handler' received update without 'from_user'.")
         return
 
+    user_id = call.from_user.id
+    log.info(f"TutorialSkill | event=step user_id={user_id} data='{callback_data.model_dump_json()}'")
     await call.answer()
-    log.debug(
-        f"User {call.from_user.id} in skill progress. "
-        f"Callback data: phase='{callback_data.phase}', branch='{callback_data.branch}', value='{callback_data.value}'"
-    )
 
     state_data = await state.get_data()
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     message_content: dict[str, Any] | None = session_context.get("message_content")
 
     if not message_content or "chat_id" not in message_content or "message_id" not in message_content:
-        log.error(f"User {call.from_user.id}: 'message_content' not found or incomplete in FSM state.")
+        log.error(f"TutorialSkill | status=failed reason='message_content not found' user_id={user_id}")
         await Err.message_content_not_found_in_fsm(call=call)
         return
 
@@ -137,10 +107,10 @@ async def in_skills_progres_handler(
 
             updated_skills = tut_service.get_skills_db()
             await state.update_data(skill_choices_list=updated_skills)
-            log.debug(f"User {call.from_user.id} updated skills: {updated_skills}")
+            log.debug(f"FSM | data_updated key=skill_choices_list user_id={user_id} skills='{updated_skills}'")
             return text, kb
         except ValueError as e:
-            log.error(f"User {call.from_user.id}: Error getting next tutorial step. Details: {e}")
+            log.error(f"TutorialSkill | status=failed reason='{e}' user_id={user_id}", exc_info=True)
             await call.answer("Произошла ошибка при обработке вашего выбора. Попробуйте снова.", show_alert=True)
             return None, None
 
@@ -165,43 +135,27 @@ async def in_skills_progres_handler(
         if all(isinstance(item, tuple) and len(item) == 2 for item in text):
             await anim_service.animate_sequence(sequence=tuple(text), final_kb=kb)
         else:
-            log.error(f"User {call.from_user.id}: Invalid format for message animation sequence. Data: {text}")
-            await Err.message_content_not_found_in_fsm(call=call)
+            log.error(f"TutorialSkill | status=failed reason='Invalid animation sequence format' user_id={user_id}")
+            await Err.generic_error(call=call)
             return
     else:
-        log.error(f"User {call.from_user.id}: Received unexpected data type from service: {type(text)}")
-        await Err.message_content_not_found_in_fsm(call=call)
+        log.error(
+            f"TutorialSkill | status=failed reason='Unexpected data type from service' type='{type(text)}' user_id={user_id}"
+        )
+        await Err.generic_error(call=call)
         return
 
     if callback_data.phase == "finale":
         await state.set_state(StartTutorial.skill_confirm)
-        log.debug(f"User {call.from_user.id} moved to state StartTutorial.skill_confirm.")
+        log.info(f"FSM | state=StartTutorial.skill_confirm user_id={user_id}")
 
 
-@router.callback_query(
-    StartTutorial.skill_confirm,
-    TutorialQuestCallback.filter(F.phase == "p_end"),
-)
+@router.callback_query(StartTutorial.skill_confirm, TutorialQuestCallback.filter(F.phase == "p_end"))
 async def skill_confirm_handler(
-    call: CallbackQuery,
-    state: FSMContext,
-    callback_data: TutorialQuestCallback,
-    bot: Bot,
-    session: AsyncSession,
+    call: CallbackQuery, state: FSMContext, callback_data: TutorialQuestCallback, bot: Bot, session: AsyncSession
 ) -> None:
-    """
-    Обрабатывает финальный выбор в туториале по навыкам (выбор профессии/лута).
-
-    Этот хэндлер:
-    1. Сохраняет финальный выбор.
-    2. Вызывает сервис для "финализации" навыков (разблокировка в БД,
-       смена game_stage).
-    3. Обновляет UI на финальное сообщение "пробуждения".
-    4. Очищает FSM от данных туториала.
-    5. Переводит игрока в состояние лобби.
-    """
+    """Обрабатывает финальный выбор в туториале по навыкам."""
     if not call.from_user or not call.message:
-        log.warning("Handler 'skill_confirm_handler' received update without 'from_user' or 'message'.")
         return
 
     await call.answer()
@@ -214,17 +168,17 @@ async def skill_confirm_handler(
     skill_choices_list: list[str] = state_data.get("skill_choices_list", [])
     message_content: dict[str, Any] | None = session_context.get("message_content")
 
-    log.info(f"Хэндлер 'skill_confirm_handler' [p_end:{final_choice}] вызван user_id={user_id}, char_id={char_id}")
+    log.info(f"TutorialSkill | event=confirm user_id={user_id} char_id={char_id} choice='{final_choice}'")
 
     if not char_id or not message_content:
-        log.error(f"User {user_id}: 'char_id' или 'message_content' не найдены в FSM для skill_confirm_handler.")
+        log.error(f"TutorialSkill | status=failed reason='char_id or message_content not found' user_id={user_id}")
         await Err.generic_error(call=call)
         return
 
     if final_choice:
         skill_choices_list.append(final_choice)
 
-    log.debug(f"Финальный список выбора навыков для char_id={char_id}: {skill_choices_list}")
+    log.debug(f"TutorialSkill | final_choices='{skill_choices_list}' char_id={char_id}")
 
     session_dto = SessionDataDTO(**session_context)
     anim_service = UIAnimationService(bot=bot, message_data=session_dto)
@@ -233,10 +187,10 @@ async def skill_confirm_handler(
     async def run_logic():
         try:
             await tut_service.finalize_skill_selection(session=session, char_id=char_id)
-            log.info(f"DB-операции для char_id={char_id} (навыки, game_stage) успешно завершены.")
+            log.info(f"DBUpdate | entity=skill_selection status=success char_id={char_id}")
             return tut_service.get_awakening_data(char_id=char_id, final_choice_key=final_choice)
-        except SQLAlchemyError as e:
-            log.exception(f"Критический сбой при финализации туториала для user_id={user_id}: {e}")
+        except SQLAlchemyError:
+            log.exception(f"DBUpdate | entity=skill_selection status=failed char_id={char_id}")
             await Err.generic_error(call=call)
             return None, None
 
@@ -256,10 +210,10 @@ async def skill_confirm_handler(
         parse_mode="html",
         reply_markup=kb,
     )
-    log.debug(f"UI для user_id={user_id} обновлено на 'awakening_data'.")
+    log.debug(f"UIRender | component=awakening_message status=rendered user_id={user_id}")
 
     await fsm_clean_core_state(state=state, event_source=call)
-    log.debug(f"FSM state для user_id={user_id} очищен.")
+    log.debug(f"FSM | action=cleanup reason=tutorial_finished user_id={user_id}")
 
     await state.set_state(CharacterLobby.selection)
-    log.info(f"User {user_id} завершил туториал. FSM переведен в CharacterLobby.selection.")
+    log.info(f"FSM | state=CharacterLobby.selection reason=tutorial_finished user_id={user_id}")

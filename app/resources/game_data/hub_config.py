@@ -1,23 +1,26 @@
-# app/resources/game_data/hub_config.py
+"""
+Модуль содержит конфигурацию для различных сервисных хабов в игре.
+
+Определяет, какие UI-билдеры и FSM-состояния должны быть активированы
+при входе в конкретный хаб (например, Арену).
+"""
+
 from typing import Any, TypedDict
 
 from app.resources.fsm_states.states import ArenaState
 from app.services.ui_service.arena_ui_service.arena_ui_service import ArenaUIService
 
 
-# --- Типизация для словаря (для чистоты) ---
 class HubConfig(TypedDict):
     """Словарь конфигурации для Сервисного Хаба."""
 
     title: str
     intro_text: str
-    fsm_state: Any  # FSM-состояние, в которое перейдет игрок (например, InGame.arena_menu)
-    ui_builder_class: type[Any]  # Ссылка на класс-билдер UI (например, ArenaMenuBuilder)
+    fsm_state: Any
+    ui_builder_class: type[Any]
     render_method_name: str
 
 
-# --- ГЛАВНЫЙ СЛОВАРЬ КОНФИГУРАЦИИ ---
-# Ключом является target_loc из ServiceEntryCallback (например, 'svc_arena_main')
 HUB_CONFIGS: dict[str, HubConfig] = {
     "svc_arena_main": {
         "title": "Ангар Арены",

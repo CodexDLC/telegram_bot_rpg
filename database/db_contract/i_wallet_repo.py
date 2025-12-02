@@ -3,40 +3,84 @@ from typing import Literal
 
 from database.model_orm.inventory import ResourceWallet
 
-# Типы групп (дублируем или импортируем из конфига, чтобы контракт знал о типах)
 ResourceTypeGroup = Literal["currency", "ores", "leathers", "fabrics", "organics", "parts"]
 
 
 class IWalletRepo(ABC):
     """
-    Интерфейс для работы с Кошельком Ресурсов (ResourceWallet).
+    Интерфейс для работы с Кошельком Ресурсов (`ResourceWallet`).
+
+    Определяет контракт для управления ресурсами персонажа,
+    включая создание кошелька, получение количества ресурсов,
+    а также добавление и удаление ресурсов.
     """
 
     @abstractmethod
     async def ensure_wallet_exists(self, char_id: int) -> None:
-        """Создает кошелек для персонажа, если он еще не создан."""
+        """
+        Создает кошелек для персонажа, если он еще не существует.
+
+        Args:
+            char_id: Идентификатор персонажа.
+        """
         pass
 
     @abstractmethod
     async def get_wallet(self, char_id: int) -> ResourceWallet:
-        """Возвращает полный объект кошелька."""
+        """
+        Возвращает полный объект кошелька для указанного персонажа.
+
+        Args:
+            char_id: Идентификатор персонажа.
+
+        Returns:
+            Объект `ResourceWallet`.
+        """
         pass
 
     @abstractmethod
     async def get_resource_amount(self, char_id: int, group: ResourceTypeGroup, key: str) -> int:
-        """Возвращает количество конкретного ресурса."""
+        """
+        Возвращает количество конкретного ресурса из кошелька персонажа.
+
+        Args:
+            char_id: Идентификатор персонажа.
+            group: Группа ресурсов (например, "currency", "ores").
+            key: Ключ ресурса (например, "dust", "iron_ore").
+
+        Returns:
+            Количество ресурса.
+        """
         pass
 
     @abstractmethod
     async def add_resource(self, char_id: int, group: ResourceTypeGroup, key: str, amount: int) -> int:
         """
-        Добавляет ресурс. Возвращает новое итоговое количество.
+        Добавляет указанное количество ресурса в кошелек персонажа.
+
+        Args:
+            char_id: Идентификатор персонажа.
+            group: Группа ресурсов.
+            key: Ключ ресурса.
+            amount: Количество для добавления.
+
+        Returns:
+            Новое итоговое количество ресурса.
         """
         pass
 
     @abstractmethod
     async def remove_resource(self, char_id: int, group: ResourceTypeGroup, key: str, amount: int) -> bool:
         """
-        Списывает ресурс. Возвращает False, если ресурсов недостаточно.
+        Списывает указанное количество ресурса из кошелька персонажа.
+
+        Args:
+            char_id: Идентификатор персонажа.
+            group: Группа ресурсов.
+            key: Ключ ресурса.
+            amount: Количество для списания.
+
+        Returns:
+            True, если ресурс успешно списан, иначе False (например, если ресурсов недостаточно).
         """
         pass

@@ -1,4 +1,3 @@
-# app/middlewares/db_session_middleware.py
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -10,7 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 class DbSessionMiddleware(BaseMiddleware):
     """
-    Middleware для внедрения сессии базы данных в хэндлеры.
+    Middleware для внедрения сессии SQLAlchemy в обработчики событий.
     """
 
     def __init__(self, session_pool: async_sessionmaker):
@@ -23,19 +22,26 @@ class DbSessionMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         """
-        Этот метод вызывается при КАЖДОМ событии (сообщение, кнопка).
+        Создает сессию для каждого события, передает ее в хэндлер и закрывает.
         """
+        event_id = event.update_id if hasattr(event, "update_id") else "N/A"
+
+        # Исправление: безопасное получение user_id
+        user_id = "N/A"
+        event_from_user = data.get("event_from_user")
+        if event_from_user and hasattr(event_from_user, "id"):
+            user_id = event_from_user.id
+
+        log_context = f"event_id={event_id} user_id={user_id}"
+
         async with self.session_pool() as session:
             data["session"] = session
             try:
                 result = await handler(event, data)
-                # Если хэндлер отработал без ошибок, коммитим изменения
                 await session.commit()
-                log.trace("Сессия успешно закрыта с коммитом.")
+                log.trace(f"DbSession | status=committed {log_context}")
                 return result
-            except Exception as e:
-                # В случае любой ошибки откатываем изменения
-                log.exception(f"Произошла ошибка в хэндлере, откатываем сессию. Ошибка: {e}")
+            except Exception:
+                log.error(f"DbSession | status=rollback {log_context}", exc_info=True)
                 await session.rollback()
-                # Пробрасываем ошибку дальше, чтобы ее могли обработать другие слои
                 raise

@@ -1,4 +1,11 @@
-# app/resources/game_data/abilities/fire.py
+"""
+Модуль содержит определения способностей, связанных со стихией огня.
+
+Каждая способность описывается структурой `AbilityData`, включающей
+название, описание, стоимость ресурсов, правила применения и пайплайн
+эффектов.
+"""
+
 from app.resources.game_data.ability_data_struct import AbilityData
 
 FIRE_ABILITIES: dict[str, AbilityData] = {
@@ -10,10 +17,9 @@ FIRE_ABILITIES: dict[str, AbilityData] = {
         "cost_hp": 0,
         "rules": {
             "ignore_parry": True,
-            "override_damage_type": "fire",  # Превращает удар в Огонь
+            "override_damage_type": "fire",
         },
         "pipeline": [
-            # Эффект: Поджог при попадании
             {
                 "phase": "post_calc",
                 "trigger": "on_hit",

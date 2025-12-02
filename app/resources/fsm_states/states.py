@@ -1,11 +1,16 @@
-# app/resources/fsm_states/states.py
+"""
+Модуль содержит определения состояний FSM (Finite State Machine) для бота.
+
+Каждый класс `StatesGroup` инкапсулирует набор состояний,
+соответствующих определенному этапу взаимодействия пользователя с ботом
+(например, создание персонажа, прохождение туториала, игровой процесс).
+"""
+
 from aiogram.fsm.state import State, StatesGroup
 
 
 class CharacterCreation(StatesGroup):
-    """
-    Состояния для "квеста" создания персонажа.
-    """
+    """Состояния для "квеста" создания персонажа."""
 
     choosing_gender = State()
     choosing_name = State()
@@ -13,9 +18,7 @@ class CharacterCreation(StatesGroup):
 
 
 class StartTutorial(StatesGroup):
-    """
-    Состояния для "квеста" старта туториала.
-    """
+    """Состояния для "квеста" старта туториала."""
 
     start = State()
     in_progress = State()
@@ -25,12 +28,16 @@ class StartTutorial(StatesGroup):
 
 
 class CharacterLobby(StatesGroup):
+    """Состояния для лобби персонажей."""
+
     selection = State()
     start_logging = State()
     confirm_delete = State()
 
 
 class BugReport(StatesGroup):
+    """Состояния для процесса отправки баг-репорта."""
+
     choosing_type = State()
     awaiting_report_text = State()
 
@@ -44,23 +51,19 @@ class InGame(StatesGroup):
 
 
 class AdminMode(StatesGroup):
-    """Состояния для админ-панели"""
+    """Состояния для админ-панели."""
 
     menu = State()
-
-    # Состояния для инструментов
     item_creation = State()
     resource_add = State()
     teleport = State()
 
 
 class ArenaState(StatesGroup):
-    """
-    Упрощенные состояния для Арены.
-    """
+    """Состояния для Арены."""
 
-    menu = State()  # Главное меню + Подменю (Навигация через Callback Data)
-    waiting = State()  # Изоляция (Игрок в очереди, ждет матча/таймаута)
+    menu = State()
+    waiting = State()
 
 
 FSM_CONTEX_CHARACTER_STATUS = [

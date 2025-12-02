@@ -1,4 +1,11 @@
-# app/resources/game_data/abilities/poison.py
+"""
+Модуль содержит определения способностей, связанных с ядом.
+
+Каждая способность описывается структурой `AbilityData`, включающей
+название, описание, стоимость ресурсов, правила применения и пайплайн
+эффектов.
+"""
+
 from app.resources.game_data.ability_data_struct import AbilityData
 
 POISON_ABILITIES: dict[str, AbilityData] = {

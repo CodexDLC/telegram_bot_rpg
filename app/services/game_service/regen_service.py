@@ -7,78 +7,93 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.core_service.manager.account_manager import account_manager
 from app.services.game_service.stats_aggregation_service import StatsAggregationService
 
+BASE_REGEN_TIME_SEC = 300.0
+ENDURANCE_REGEN_BONUS = 0.1
+
 
 class RegenService:
     """
     Сервис "Ленивого восстановления" (Lazy Regeneration).
-    Вычисляет изменение HP/Energy на основе прошедшего времени.
+
+    Вычисляет восстановление HP и Energy персонажа на основе прошедшего времени
+    с момента последнего обновления.
     """
 
     def __init__(self, session: AsyncSession):
+        """
+        Инициализирует RegenService.
+
+        Args:
+            session: Асинхронная сессия базы данных.
+        """
         self.session = session
-        # Используем агрегатор, чтобы знать МАКСИМАЛЬНЫЕ значения и СКОРОСТЬ регена
         self.aggregator = StatsAggregationService(session)
+        log.debug("RegenService | status=initialized")
 
     async def synchronize_state(self, char_id: int) -> dict[str, int]:
         """
-        Главный метод.
-        1. Читает старое состояние из Redis.
-        2. Считает дельту времени.
-        3. Начисляет реген.
-        4. Сохраняет новое состояние обратно.
-        Возвращает актуальные {hp, energy}.
+        Синхронизирует состояние HP и Energy персонажа, применяя регенерацию.
+
+        1. Получает текущие данные персонажа из Redis.
+        2. Вычисляет прошедшее время с последнего обновления.
+        3. Рассчитывает количество восстановленных HP и Energy.
+        4. Обновляет данные персонажа в Redis.
+
+        Args:
+            char_id: Уникальный идентификатор персонажа.
+
+        Returns:
+            Словарь с актуальными значениями "hp" и "energy" после регенерации.
         """
-        # 1. Получаем текущие данные из Redis
         ac_data = await account_manager.get_account_data(char_id)
         if not ac_data:
-            # Если данных нет вообще (первый вход), вернем нули
+            log.warning(f"RegenService | status=skipped reason='Account data not found' char_id={char_id}")
             return {"hp": 0, "energy": 0}
 
-        # Безопасное извлечение с явным приведением типов
         last_update = float(ac_data.get("last_update", time.time()))
         current_hp = int(ac_data.get("hp_current", 0))
         current_energy = int(ac_data.get("energy_current", 0))
 
-        # 2. Получаем Максимумы и Скорость регена через Агрегатор
         total_data = await self.aggregator.get_character_total_stats(char_id)
         modifiers: dict[str, Any] = total_data.get("modifiers", {})
+        stats: dict[str, Any] = total_data.get("stats", {})
 
-        # Хелпер для извлечения значений из структуры агрегатора
         def get_val(key: str, default: float = 0.0) -> float:
             return float(modifiers.get(key, {}).get("total", default))
 
-        hp_max = int(get_val("hp_max", 1.0))
-        hp_regen = get_val("hp_regen", 0.0)  # Единиц в секунду
+        hp_max = get_val("hp_max", 1.0)
+        base_regen_rate = hp_max / BASE_REGEN_TIME_SEC
+        endurance_info = stats.get("endurance", {}).get("total", 0.0)
+        endurance_val = float(endurance_info)
+        bonus_regen_rate = endurance_val * ENDURANCE_REGEN_BONUS
+        total_hp_regen = base_regen_rate + bonus_regen_rate
+
         energy_max = int(get_val("energy_max", 0.0))
         energy_regen = get_val("energy_regen", 0.0)
 
-        # 3. Считаем Дельту
         now = time.time()
         time_delta = now - last_update
-
-        # Защита от "путешественников во времени"
         if time_delta < 0:
             time_delta = 0
 
-        # 4. Расчет восстановления
-        hp_restored = int(time_delta * hp_regen)
+        hp_restored = int(time_delta * total_hp_regen)
         energy_restored = int(time_delta * energy_regen)
 
         new_hp = min(hp_max, current_hp + hp_restored)
         new_energy = min(energy_max, current_energy + energy_restored)
 
-        # Логируем только значимые изменения
         if new_hp != current_hp or new_energy != current_energy:
             log.debug(
-                f"Regen[{char_id}]: {time_delta:.1f}s passed. HP {current_hp}->{new_hp}, EN {current_energy}->{new_energy}"
+                f"RegenService | char_id={char_id} time_delta={time_delta:.1f}s "
+                f"hp_old={current_hp} hp_new={new_hp} "
+                f"energy_old={current_energy} energy_new={new_energy}"
             )
 
-        # 5. Сохраняем актуальное состояние
         update_data: dict[str, Any] = {
-            "hp_current": new_hp,
+            "hp_current": int(new_hp),
             "energy_current": new_energy,
             "last_update": now,
         }
         await account_manager.update_account_fields(char_id, update_data)
 
-        return {"hp": new_hp, "energy": new_energy}
+        return {"hp": int(new_hp), "energy": new_energy}

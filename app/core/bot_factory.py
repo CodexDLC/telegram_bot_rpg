@@ -1,6 +1,4 @@
 from aiogram import Bot, Dispatcher
-
-# 1. ДОБАВИТЬ ЭТОТ ИМПОРТ
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
 from loguru import logger as log
@@ -14,60 +12,44 @@ from database.session import async_session_factory
 
 async def build_app() -> tuple[Bot, Dispatcher]:
     """
-    Асинхронно создает и конфигурирует экземпляры Bot и Dispatcher.
+    Создает и конфигурирует экземпляры Bot и Dispatcher.
 
-    Эта асинхронная фабрика инкапсулирует логику создания ключевых
-    объектов aiogram и проверяет подключения к внешним сервисам (Redis).
-
-    1.  Создает экземпляр `Bot`.
-    2.  Подключается к Redis и создает `RedisStorage` для FSM.
-    3.  Проверяет соединение с Redis.
-    4.  Создает `Dispatcher` с настроенным хранилищем.
-
-    Args:
-        None
+    Фабрика инкапсулирует логику создания объектов aiogram, проверяет
+    подключение к Redis и настраивает middlewares.
 
     Returns:
-        Tuple[Bot, Dispatcher]: Кортеж с готовыми к работе экземплярами
-                                `Bot` и `Dispatcher`.
+        Кортеж с готовыми к работе экземплярами `Bot` и `Dispatcher`.
 
     Raises:
-        RuntimeError: Если не удалось подключиться к Redis.
+        RuntimeError: Если не удалось подключиться к Redis или отсутствует BOT_TOKEN.
     """
-    log.info("Начало создания экземпляров Bot и Dispatcher...")
+    log.info("AppBuild | status=started")
 
     if not BOT_TOKEN:
-        log.critical("BOT_TOKEN не найден. Невозможно создать бота.")
+        log.critical("AppBuild | status=failed reason='BOT_TOKEN not found'")
         raise RuntimeError("BOT_TOKEN не найден.")
 
-    # --- Создание бота ---
-    # 2. ИЗМЕНИТЬ ЭТУ СТРОКУ
-    # БЫЛО: bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
+    log.debug("AppBuild | component=Bot status=created")
 
-    log.debug("Экземпляр Bot создан.")
-
-    log.debug("Попытка подключения к Redis (проверка .ping())")
+    log.debug("RedisCheck | status=started")
     try:
-        # Вот здесь 'await' сработает, потому что мы внутри async def!
         if not await redis_client.ping():
-            raise RedisConnectionError
-        log.info("Соединение с Redis успешно установлено.")
+            raise RedisConnectionError("Redis ping failed")
+        log.info("RedisCheck | status=success")
 
     except RedisConnectionError as e:
-        log.critical(f"Не удалось подключиться к Redis: {e}")
+        log.critical(f"RedisCheck | status=failed error='{e}' url='{REDIS_URL}'", exc_info=True)
         raise RuntimeError(f"Критическая ошибка: не удалось подключиться к Redis по адресу {REDIS_URL}") from e
 
-    # RedisStorage будет использоваться для машины состояний (FSM).
     storage = RedisStorage(redis=redis_client)
-    log.debug("Хранилище состояний RedisStorage создано.")
+    log.debug("AppBuild | component=RedisStorage status=created")
 
-    # --- Создание диспетчера ---
     dp = Dispatcher(storage=storage)
-    log.debug("Экземпляр Dispatcher создан с RedisStorage.")
+    log.debug("AppBuild | component=Dispatcher status=created")
 
     dp.update.middleware(DbSessionMiddleware(session_pool=async_session_factory))
-    log.info("DbSessionMiddleware зарегистрирован (Dependency Injection для БД готово).")
+    log.info("AppBuild | component=DbSessionMiddleware status=registered")
 
-    log.info("Экземпляры Bot и Dispatcher успешно созданы и настроены.")
+    log.info("AppBuild | status=finished")
     return bot, dp

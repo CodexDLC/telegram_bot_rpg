@@ -1,6 +1,10 @@
-# Ключ: DUNGEON_JSON_SCHEMA_PROMPT
-# (из json_sheme.py)
-# app/resources/llm_data/json_sheme.py
+"""
+Модуль содержит JSON-схему и требования к формату для генерации подземелий
+с помощью модели Gemini.
+
+Определяет структуру и правила для генерируемых данных,
+обеспечивая их консистентность и соответствие игровым механикам.
+"""
 
 DUNGEON_JSON_SCHEMA_PROMPT = """
 FORMAT REQUIREMENTS:

@@ -1,34 +1,38 @@
-# app/services/game_service/combat/combat_turn_manager.py
 import json
 import random
 import time
+from typing import Any
 
 from loguru import logger as log
 
 from app.resources.schemas_dto.combat_source_dto import CombatSessionContainerDTO
 from app.services.core_service.manager.combat_manager import combat_manager
 
-# Константы
 TURN_TIMEOUT = 60
 VALID_BLOCK_PAIRS = [
     ["head", "chest"],
     ["chest", "belly"],
     ["belly", "legs"],
     ["legs", "feet"],
-    ["feet", "head"],  # "Раскорячка" / Акробат / Сальто
+    ["feet", "head"],
 ]
 
 
 class CombatTurnManager:
-    """Отвечает за регистрацию ходов, таймеры и валидацию очереди."""
+    """
+    Сервис для управления очередностью ходов, регистрацией запросов на ход
+    и отслеживанием таймеров в боевой сессии.
+    """
 
     def __init__(self, session_id: str):
         """
+        Инициализирует CombatTurnManager.
+
         Args:
-            session_id: Идентификатор сессии боя.
+            session_id: Уникальный идентификатор боевой сессии.
         """
         self.session_id = session_id
-        log.debug(f"CombatTurnManagerInit | session_id={self.session_id}")
+        log.debug(f"CombatTurnManager | status=initialized session_id='{session_id}'")
 
     async def register_move_request(
         self,
@@ -37,28 +41,35 @@ class CombatTurnManager:
         attack_zones: list[str] | None,
         block_zones: list[str] | None,
         ability_key: str | None,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """
-        Регистрирует ход. Если есть встречный ход — возвращает его данные.
+        Регистрирует запрос на ход актора.
+
+        Если находится встречный ход от цели, возвращает данные обоих ходов
+        для обработки обмена. Автоматически заполняет зоны атаки/блока
+        для AI или при просрочке.
 
         Args:
-            actor_id: ID атакующего.
-            target_id: ID цели.
-            attack_zones: Зоны атаки.
-            block_zones: Зоны блока.
-            ability_key: Ключ способности.
+            actor_id: Идентификатор актора, совершающего ход.
+            target_id: Идентификатор цели хода.
+            attack_zones: Список зон, по которым актор атакует.
+            block_zones: Список зон, которые актор блокирует.
+            ability_key: Ключ способности, используемой актором.
 
         Returns:
-            Словарь с данными обоих ходов или None.
+            Словарь, содержащий `my_move` и `enemy_move` (данные ходов обоих акторов),
+            если найдена пара ходов. Иначе None.
         """
-        log.info(f"RegisterMoveRequest | actor_id={actor_id} target_id={target_id} session_id={self.session_id}")
-        # Авто-заполнение (если манекен или тайм-аут)
+        log.info(
+            f"CombatTurnManager | event=register_move_request actor_id={actor_id} target_id={target_id} session_id='{self.session_id}'"
+        )
+
         if not attack_zones:
-            attack_zones = [random.choice(["head", "chest", "legs", "feet"])]
-            log.trace(f"AutoFill | type=attack_zones actor_id={actor_id}")
+            attack_zones = [random.choice(["head", "chest", "belly", "legs", "feet"])]
+            log.trace(f"CombatTurnManager | action=autofill_attack_zones actor_id={actor_id}")
         if not block_zones:
             block_zones = random.choice(VALID_BLOCK_PAIRS)
-            log.trace(f"AutoFill | type=block_zones actor_id={actor_id}")
+            log.trace(f"CombatTurnManager | action=autofill_block_zones actor_id={actor_id}")
 
         deadline = int(time.time() + TURN_TIMEOUT)
         move_data = {
@@ -70,46 +81,53 @@ class CombatTurnManager:
             "deadline": deadline,
         }
 
-        # 1. Сохраняем "Я атакую Его"
         move_json = json.dumps(move_data)
         await combat_manager.set_pending_move(self.session_id, actor_id, target_id, move_json)
-        log.debug(f"PendingMoveSet | actor_id={actor_id} target_id={target_id} session_id={self.session_id}")
+        log.debug(
+            f"CombatTurnManager | event=pending_move_set actor_id={actor_id} target_id={target_id} session_id='{self.session_id}'"
+        )
 
-        # 2. Проверяем "Он атакует Меня?"
         counter_move_json = await combat_manager.get_pending_move(self.session_id, target_id, actor_id)
 
         if counter_move_json:
-            log.info(f"MovePairFound | actor_a={actor_id} actor_b={target_id} session_id={self.session_id}")
-            # Есть пара! Можно считать раунд.
+            log.info(
+                f"CombatTurnManager | event=move_pair_found actor_a={actor_id} actor_b={target_id} session_id='{self.session_id}'"
+            )
             await combat_manager.delete_pending_move(self.session_id, actor_id, target_id)
             await combat_manager.delete_pending_move(self.session_id, target_id, actor_id)
-            log.debug(f"PendingMovesCleaned | pair={actor_id},{target_id} session_id={self.session_id}")
+            log.debug(
+                f"CombatTurnManager | action=pending_moves_cleaned pair={actor_id},{target_id} session_id='{self.session_id}'"
+            )
 
             try:
                 return {"my_move": move_data, "enemy_move": json.loads(counter_move_json)}
             except json.JSONDecodeError:
                 log.exception(
-                    f"CounterMoveParseFail | actor_id={target_id} target_id={actor_id} session_id={self.session_id}",
-                    exc_info=True,
+                    f"CombatTurnManager | status=failed reason='Counter move JSON decode error' actor_id={target_id} target_id={actor_id} session_id='{self.session_id}'"
                 )
                 return None
 
-        log.debug(f"NoCounterMove | actor_id={actor_id} target_id={target_id} session_id={self.session_id}")
+        log.debug(
+            f"CombatTurnManager | event=no_counter_move actor_id={actor_id} target_id={target_id} session_id='{self.session_id}'"
+        )
         return None
 
     async def check_expired_deadlines(self, actors_map: dict[int, CombatSessionContainerDTO]) -> list[tuple[int, int]]:
         """
-        Проверяет просроченные ходы.
+        Проверяет все ожидающие ходы на предмет истечения таймера.
 
         Args:
-            actors_map: Словарь с DTO участников.
+            actors_map: Словарь, где ключ — ID актора, а значение — его DTO.
 
         Returns:
-            Список пар (кто_просрочил, на_кого_нападал).
+            Список кортежей `(lazy_actor_id, opponent_id)` для всех просроченных ходов.
+            `lazy_actor_id` — это актор, который не сделал ход вовремя.
         """
         expired_pairs: list[tuple[int, int]] = []
         now = time.time()
-        log.trace(f"CheckExpiredDeadlines | session_id={self.session_id} actors_count={len(actors_map)}")
+        log.trace(
+            f"CombatTurnManager | event=check_deadlines session_id='{self.session_id}' actors_count={len(actors_map)}"
+        )
 
         for actor_id, actor_dto in actors_map.items():
             if not actor_dto or not actor_dto.state or not actor_dto.state.targets:
@@ -122,15 +140,13 @@ class CombatTurnManager:
                 try:
                     data = json.loads(pending_json)
                     if 0 < data.get("deadline", 0) < now:
-                        # Тот, КТО НЕ СХОДИЛ (target), должен получить принудительный ход
                         expired_pairs.append((target_id, actor_id))
                         log.warning(
-                            f"DeadlineExpiredFound | lazy_actor={target_id} waiting_actor={actor_id} session_id={self.session_id}"
+                            f"CombatTurnManager | event=deadline_expired lazy_actor={target_id} waiting_actor={actor_id} session_id='{self.session_id}'"
                         )
                 except json.JSONDecodeError:
-                    log.error(
-                        f"DeadlineCheckParseFail | actor_id={actor_id} target_id={target_id} session_id={self.session_id}",
-                        exc_info=True,
+                    log.exception(
+                        f"CombatTurnManager | status=failed reason='Pending move JSON decode error' actor_id={actor_id} target_id={target_id} session_id='{self.session_id}'"
                     )
 
         return expired_pairs

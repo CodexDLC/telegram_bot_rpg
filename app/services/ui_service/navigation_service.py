@@ -36,6 +36,7 @@ class NavigationService(BaseUIService):
         """
         Главный метод получения UI.
         """
+        log.debug(f"get_navigation_ui | state={state}, loc_id={loc_id}")
         if state == "world":
             await world_manager.add_player_to_location(loc_id, self.char_id)
 
@@ -43,6 +44,7 @@ class NavigationService(BaseUIService):
 
             # Если данные не найдены — возвращаем None, чтобы запустить Unstuck
             if not nav_data:
+                log.warning(f"get_navigation_ui | Локация не найдена: loc_id={loc_id}")
                 return (
                     f"<b>{self.actor_name}:</b> Ошибка реальности. Локация '{loc_id}' рассыпалась.",
                     None,
@@ -50,6 +52,7 @@ class NavigationService(BaseUIService):
 
             account_data = await account_manager.get_account_data(self.char_id)
             prev_loc_id = account_data.get("prev_location_id") if account_data else None
+            log.debug(f"get_navigation_ui | prev_loc_id={prev_loc_id}")
 
             text = await self._format_location_text(nav_data)
             kb = self._get_world_location_kb(nav_data.get("exits", {}), loc_id, prev_loc_id)
@@ -60,6 +63,7 @@ class NavigationService(BaseUIService):
             return f"<b>{self.actor_name}:</b> (Заглушка) Вы в подземелье.", None
 
         else:
+            log.error(f"get_navigation_ui | Неизвестный state: {state}")
             return f"<b>{self.actor_name}:</b> Критическая ошибка координат.", None
 
     async def reload_current_ui(self) -> tuple[str, InlineKeyboardMarkup | None]:
@@ -67,12 +71,15 @@ class NavigationService(BaseUIService):
         Перезагружает UI. Включает механику 'Unstuck' (Аварийный телепорт).
         Если текущая локация сломана, переносит игрока на спавн.
         """
+        log.debug(f"reload_current_ui | char_id={self.char_id}")
         data = await account_manager.get_account_data(self.char_id)
         if not data:
+            log.error(f"reload_current_ui | Не удалось получить данные аккаунта для char_id={self.char_id}")
             return "Ошибка аккаунта", None
 
         current_state = data.get("state", "world")
         current_loc_id = data.get("location_id", DEFAULT_SPAWN_POINT)
+        log.debug(f"reload_current_ui | current_state={current_state}, current_loc_id={current_loc_id}")
 
         # 1. Пробуем загрузить текущую локацию
         text, kb = await self.get_navigation_ui(current_state, current_loc_id)
@@ -97,6 +104,7 @@ class NavigationService(BaseUIService):
                     "prev_location_id": target_safe_zone,  # Сбрасываем историю
                 },
             )
+            log.info(f"reload_current_ui | Unstuck | char_id={self.char_id} перемещен в {target_safe_zone}")
 
             # В. Получаем UI спавна
             text, kb = await self.get_navigation_ui("world", target_safe_zone)
@@ -164,28 +172,34 @@ class NavigationService(BaseUIService):
     # --- 3. Логика Действий (Move) ---
 
     async def move_player(self, target_loc_id: str) -> tuple[float, str, InlineKeyboardMarkup | None] | None:
+        log.debug(f"move_player | char_id={self.char_id}, target_loc_id={target_loc_id}")
         current_data = await account_manager.get_account_data(self.char_id)
         if not current_data:
+            log.error(f"move_player | Не удалось получить данные аккаунта для char_id={self.char_id}")
             return None
 
         current_state = current_data.get("state", "world")
         current_loc_id = current_data.get("location_id")
+        log.debug(f"move_player | current_state={current_state}, current_loc_id={current_loc_id}")
 
         if current_state == "world" and isinstance(current_loc_id, str):
             # Проверка существования целевой локации
             target_exists = await game_world_service.get_location_for_navigation(target_loc_id)
             if not target_exists:
+                log.warning(f"move_player | Целевая локация не найдена: target_loc_id={target_loc_id}")
                 error_text = f"<b>{self.actor_name}:</b> Ошибка. Путь '{target_loc_id}' нестабилен или разрушен."
                 return 0.0, error_text, None
 
             travel_time = 0.0
             current_loc_data = await game_world_service.get_location_for_navigation(current_loc_id)
+            log.debug(f"move_player | current_loc_data exists: {bool(current_loc_data)}")
 
             if current_loc_data:
                 exits = current_loc_data.get("exits", {})
                 target_exit = exits.get(target_loc_id)
                 if target_exit and isinstance(target_exit, dict):
                     travel_time = float(target_exit.get("time_duration", 0))
+                log.debug(f"move_player | travel_time={travel_time}")
 
             await world_manager.remove_player_from_location(current_loc_id, self.char_id)
 
@@ -196,8 +210,10 @@ class NavigationService(BaseUIService):
                     "prev_location_id": current_loc_id,
                 },
             )
+            log.info(f"move_player | char_id={self.char_id} перемещен в {target_loc_id}")
 
             new_text, new_kb = await self.get_navigation_ui("world", target_loc_id)
             return travel_time, new_text, new_kb
 
+        log.warning(f"move_player | Некорректное состояние для перемещения: current_state={current_state}")
         return None
