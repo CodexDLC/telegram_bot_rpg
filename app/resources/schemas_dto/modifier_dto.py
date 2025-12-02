@@ -98,6 +98,8 @@ class CharacterModifiersSaveDto(BaseModel):
     dodge_chance: float = 0.0  # Уворот
     dodge_cap: float = 0.75  # 🔥 Кап Уворота
 
+    debuff_avoidance: float = 0.0
+
     parry_chance: float = 0.0  # Парирование
     parry_cap: float = 0.50  # 🔥 Кап Парирования
 

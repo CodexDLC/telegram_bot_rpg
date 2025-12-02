@@ -13,7 +13,7 @@ from app.resources.keyboards.callback_data import ArenaQueueCallback
 # --- Services & Helpers ---
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
-from app.services.ui_service.arena_ui_service.arena_builder import ArenaUIBuilder
+from app.services.ui_service.arena_ui_service.arena_ui_service import ArenaUIService
 from app.services.ui_service.navigation_service import NavigationService
 
 router = Router(name="arena_main_router")
@@ -27,47 +27,40 @@ async def arena_render_main_menu_handler(
     call: CallbackQuery,
     callback_data: ArenaQueueCallback,
     state: FSMContext,
-    bot: Bot,
     session: AsyncSession,
+    bot: Bot,  # bot добавлен в аргументы, хотя тут не юзается, для единообразия
 ) -> None:
-    """
-    Рендерит Главное Меню Арены.
-    Используется при входе (через HubEntry) или при нажатии "Назад" из подменю.
-    """
     if not call.from_user:
         return
 
-    # 1. Инициализация данных
-    user_id = call.from_user.id
     char_id = callback_data.char_id
     state_data = await state.get_data()
 
-    log.debug(f"User {user_id} запрашивает Главное Меню Арены.")
+    # 1. Init UI
+    ui = ArenaUIService(char_id, state_data, session)
 
-    # 2. Вызов UI Builder
-    try:
-        # Создаем билдер, который умеет рисовать интерфейс Арены
-        ui_builder = ArenaUIBuilder(char_id, state_data, session)
-        text, kb = await ui_builder.render_menu()
-    except RuntimeError as e:
-        log.error(f"Ошибка в ArenaUIBuilder: {e}")
-        await Err.generic_error(call)
-        return
+    # 2. View
+    text, kb = await ui.view_main_menu()
 
-    # 3. Обновление сообщения
+    # 3. Update Message
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     message_content = session_context.get("message_content")
 
     if message_content and text and kb:
+        # 🔥 ИСПОЛЬЗУЕМ BOT + ID ИЗ FSM (БЕЗОПАСНО)
+        chat_id = message_content["chat_id"]
+        message_id = message_content["message_id"]
+
         await bot.edit_message_text(
-            chat_id=message_content["chat_id"],
-            message_id=message_content["message_id"],
+            chat_id=chat_id,
+            message_id=message_id,
             text=text,
-            parse_mode="html",
             reply_markup=kb,
+            parse_mode="HTML",
         )
         await call.answer()
     else:
+        # Если ID потерялись — это ошибка стейта
         await Err.message_content_not_found_in_fsm(call)
 
 
@@ -119,4 +112,42 @@ async def arena_exit_service_handler(
         )
     else:
         log.error(f"Не удалось обновить UI Навигации для user {user_id}.")
+        await Err.generic_error(call)
+
+
+# =================================================================
+# 3. ОТМЕНА (Выход из очереди)
+# =================================================================
+
+
+@router.callback_query(ArenaState.waiting, ArenaQueueCallback.filter(F.action == "cancel_queue"))
+async def arena_universal_cancel_handler(
+    call: CallbackQuery,
+    callback_data: ArenaQueueCallback,
+    state: FSMContext,
+    session: AsyncSession,
+) -> None:
+    if not call.from_user:
+        return
+
+    char_id = callback_data.char_id
+    mode = callback_data.match_type
+
+    # 1. Init UI
+    state_data = await state.get_data()
+    ui = ArenaUIService(char_id, state_data, session)
+
+    # 2. Action (Cancel)
+    await ui.action_cancel_queue(mode)
+
+    # 3. State Change
+    await state.set_state(ArenaState.menu)
+
+    # 4. View (Back to Mode Menu)
+    text, kb = await ui.view_mode_menu(mode)
+
+    if text and kb:
+        await call.message.edit_text(text=text, reply_markup=kb, parse_mode="HTML")  # type: ignore
+        await call.answer("Поиск отменен.")
+    else:
         await Err.generic_error(call)

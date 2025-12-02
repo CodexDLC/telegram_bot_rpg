@@ -3,6 +3,7 @@ import json
 import random
 import time
 import uuid
+from datetime import date
 from typing import Any
 
 from loguru import logger as log
@@ -14,6 +15,7 @@ from app.resources.schemas_dto.combat_source_dto import (
     StatSourceData,
 )
 from app.services.core_service.manager.combat_manager import combat_manager
+from app.services.game_service.analytics.analytics_service import analytics_service
 from app.services.game_service.combat.ability_service import AbilityService
 from app.services.game_service.combat.combat_aggregator import CombatAggregator
 from app.services.game_service.combat.combat_ai_service import CombatAIService
@@ -444,26 +446,85 @@ class CombatService:
 
     async def _finish_battle(self, winner_team: str) -> None:
         """
-        Финализация боя.
+        Финализация боя:
+        1. Обновление мета-данных в Redis.
+        2. Сбор статистики для аналитики и CSV.
+        3. Запись логов в консоль.
         """
         log.info(f"🏆 БОЙ {self.session_id} ЗАВЕРШЕН. Победитель: {winner_team}")
 
-        meta = {"active": 0, "winner": winner_team, "end_time": int(time.time())}
-        await combat_manager.create_session_meta(self.session_id, meta)
+        end_time = int(time.time())
 
-        # TODO: [LOOT & XP SERVICE]
-        # 1. Раздать опыт победителям
-        # 2. Сгенерировать лут
-        # 3. Отправить сообщение "Бой окончен"
-        # 4. Очистить Redis (через TTL или явно)
+        # 1. Получаем мета-данные (для длительности)
+        meta = await combat_manager.get_session_meta(self.session_id)
+        start_time = end_time
+        if meta:
+            start_time = int(meta.get("start_time", end_time))
+        duration = max(0, end_time - start_time)
 
-        # Пока просто логируем
-        participants = await combat_manager.get_session_participants(self.session_id)
-        for pid in participants:
-            actor = await self._get_actor(int(pid))
-            if actor and actor.state:
-                s = actor.state.stats
-                log.info(f"📊 Stats {actor.name}: Dmg {s.damage_dealt}, Taken {s.damage_taken}, Blk {s.blocks_success}")
+        # 2. Закрываем бой в Redis
+        new_meta = {"active": 0, "winner": winner_team, "end_time": end_time}
+        await combat_manager.create_session_meta(self.session_id, new_meta)
+
+        # 3. Собираем данные (ОДИН цикл для всего)
+        participants_ids = await combat_manager.get_session_participants(self.session_id)
+
+        # Заготовка для CSV
+        stats_payload: dict[str, Any] = {
+            "timestamp": end_time,
+            "date_iso": date.today().isoformat(),
+            "session_id": self.session_id,
+            "winner_team": winner_team,
+            "duration_sec": duration,
+            "total_rounds": 0,
+        }
+
+        p_counter = 1
+
+        for pid_str in participants_ids:
+            pid = int(pid_str)
+            actor = await self._get_actor(pid)
+
+            if not actor or not actor.state:
+                continue
+
+            # А. Логируем в консоль (красиво)
+            s = actor.state.stats
+            log.info(
+                f"📊 Stats {actor.name}: Dmg {s.damage_dealt}, Taken {s.damage_taken}, Blk {s.blocks_success}, HP {actor.state.hp_current}"
+            )
+
+            # Б. Обновляем макс. раунды (если этот боец прожил дольше всех)
+            if actor.state.exchange_count > int(stats_payload["total_rounds"]):
+                stats_payload["total_rounds"] = actor.state.exchange_count
+
+            # В. Заполняем CSV-пейлоад (для первых двух бойцов p1/p2)
+            if p_counter <= 2:
+                prefix = f"p{p_counter}"
+                stats_payload.update(
+                    {
+                        f"{prefix}_id": actor.char_id,
+                        f"{prefix}_name": actor.name,
+                        f"{prefix}_team": actor.team,
+                        f"{prefix}_hp_left": actor.state.hp_current,
+                        f"{prefix}_energy_left": actor.state.energy_current,
+                        f"{prefix}_dmg_dealt": s.damage_dealt,
+                        f"{prefix}_dmg_taken": s.damage_taken,
+                        f"{prefix}_healing": s.healing_done,
+                        f"{prefix}_blocks": s.blocks_success,
+                        f"{prefix}_dodges": s.dodges_success,
+                        f"{prefix}_crits": s.crits_landed,
+                    }
+                )
+                p_counter += 1
+
+        # 4. Отправляем в аналитику (Fire and Forget)
+        # Импортируем asyncio, если вдруг его не было в файле (он вроде был)
+        import asyncio
+
+        asyncio.create_task(analytics_service.log_combat_result(stats_payload))
+
+        # TODO: [XP & REWARDS] - Начисление опыта и лута будет добавлено здесь позже
 
     # =========================================================================
     # 3. ЯДРО: РАСЧЕТ ОБМЕНА УДАРАМИ
