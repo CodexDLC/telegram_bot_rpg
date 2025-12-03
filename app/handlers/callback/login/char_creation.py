@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.resources.fsm_states.states import CharacterCreation, InGame
+from app.resources.fsm_states.states import CharacterCreation, StartTutorial
 from app.resources.keyboards.inline_kb.loggin_und_new_character import confirm_kb
 from app.resources.schemas_dto.character_dto import CharacterOnboardingUpdateDTO
 from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
@@ -236,11 +236,11 @@ async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: 
         await Err.generic_error(call=call)
         return
 
-    await state.set_state(InGame.navigation)
-    log.info(f"FSM | state=InGame.navigation user_id={user_id}")
+    await state.set_state(StartTutorial.start)
+    log.info(f"FSM | state=StartTutorial.start user_id={user_id}")
 
     char_update_dto = CharacterOnboardingUpdateDTO(
-        name=cast(str, name), gender=cast(Any, gender_db), game_stage="in_game"
+        name=cast(str, name), gender=cast(Any, gender_db), game_stage="tutorial_stats"
     )
     create_service = OnboardingService(user_id=user_id, char_id=char_id)
 
