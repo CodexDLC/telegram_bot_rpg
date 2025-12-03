@@ -12,7 +12,7 @@ from app.handlers.callback.login.char_creation import start_creation_handler
 from app.resources.fsm_states.states import CharacterLobby
 from app.resources.keyboards.callback_data import LobbySelectionCallback
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
-from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
+from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY, fsm_store
 from app.services.ui_service.command_service import CommandService
 from app.services.ui_service.helpers_ui.ui_tools import await_min_delay
 from app.services.ui_service.lobby_service import LobbyService
@@ -70,6 +70,7 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, 
         # 3. Сохраняем
         await state.update_data({FSM_CONTEXT_KEY: new_context})
 
+        await state.update_data(characters=await fsm_store(character_list))
         log.info(f"FSM | state=CharacterLobby.selection user_id={user_id}")
 
         text, kb = lobby_service.get_data_lobby_start(character_list)
