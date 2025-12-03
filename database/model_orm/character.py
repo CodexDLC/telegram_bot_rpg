@@ -41,38 +41,38 @@ class Character(Base, TimestampMixin):
         comment="Текущий этап игры или состояние персонажа (например, 'creation', 'tutorial', 'in_game').",
     )
 
-    user: Mapped[User] = relationship(
-        back_populates="characters", comment="Обратная связь с моделью User (владелец персонажа)."
-    )
+    user: Mapped[User] = relationship(back_populates="characters")
     stats: Mapped[CharacterStats] = relationship(
+        "CharacterStats",  # Изменено на строковый литерал
         back_populates="character",
         cascade="all, delete-orphan",
-        comment="Характеристики персонажа (связь один-к-одному).",
     )
     skill_rate: Mapped[list[CharacterSkillRate]] = relationship(
+        "CharacterSkillRate",  # Изменено на строковый литерал
         back_populates="character",
         cascade="all, delete-orphan",
-        comment="Ставки опыта навыков персонажа (связь один-ко-многим).",
     )
     skill_progress: Mapped[list[CharacterSkillProgress]] = relationship(
+        "CharacterSkillProgress",  # Изменено на строковый литерал
         back_populates="character",
         cascade="all, delete-orphan",
-        comment="Прогресс навыков персонажа (связь один-ко-многим).",
     )
     symbiote: Mapped[CharacterSymbiote] = relationship(
+        "CharacterSymbiote",  # Изменено на строковый литерал
         back_populates="character",
         cascade="all, delete-orphan",
         uselist=False,
-        comment="Симбиот персонажа (связь один-к-одному).",
     )
     inventory: Mapped[list[InventoryItem]] = relationship(
-        back_populates="character", cascade="all, delete-orphan", comment="Инвентарь персонажа (связь один-ко-многим)."
+        "InventoryItem",  # Изменено на строковый литерал
+        back_populates="character",
+        cascade="all, delete-orphan",
     )
     wallet: Mapped[ResourceWallet] = relationship(
+        "ResourceWallet",  # Изменено на строковый литерал
         back_populates="character",
         cascade="all, delete-orphan",
         uselist=False,
-        comment="Кошелек ресурсов персонажа (связь один-к-одному).",
     )
 
     def __repr__(self) -> str:
@@ -131,7 +131,7 @@ class CharacterStats(Base, TimestampMixin):
         Integer, default=4, nullable=False, comment="Удача: влияет на шанс крита, шанс найти лут, успех крафта."
     )
 
-    character: Mapped[Character] = relationship(back_populates="stats", comment="Обратная связь с моделью Character.")
+    character: Mapped[Character] = relationship("Character", back_populates="stats")  # Изменено на строковый литерал
 
     def __repr__(self) -> str:
         return f"<CharacterStats(character_id={self.character_id})>"

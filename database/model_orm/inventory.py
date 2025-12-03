@@ -52,9 +52,7 @@ class InventoryItem(Base):
         comment="JSON-поле, содержащее детальные данные предмета (название, описание, статы, бонусы).",
     )
 
-    character: Mapped[Character] = relationship(
-        back_populates="inventory", comment="Обратная связь с моделью Character."
-    )
+    character: Mapped[Character] = relationship(back_populates="inventory")
 
     def __repr__(self):
         return f"<Item {self.id} ({self.rarity} {self.subtype})>"
@@ -87,9 +85,7 @@ class ResourceWallet(Base):
     )
     parts: Mapped[dict] = mapped_column(JSON, default=dict, comment="Словарь для хранения компонентов и эссенций.")
 
-    character: Mapped[Character] = relationship(
-        "Character", back_populates="wallet", comment="Обратная связь с моделью Character."
-    )
+    character: Mapped[Character] = relationship("Character", back_populates="wallet")
 
     def __repr__(self):
         return f"<Wallet char_id={self.character_id}>"

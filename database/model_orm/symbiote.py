@@ -41,9 +41,7 @@ class CharacterSymbiote(Base, TimestampMixin):
         Integer, default=1, nullable=False, comment="Ранг Дара (фактический 'уровень' Симбиота)."
     )
 
-    character: Mapped[Character] = relationship(
-        back_populates="symbiote", comment="Обратная связь с моделью Character."
-    )
+    character: Mapped[Character] = relationship(back_populates="symbiote")
 
     def __repr__(self) -> str:
         return (

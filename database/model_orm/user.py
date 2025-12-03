@@ -41,7 +41,6 @@ class User(Base, TimestampMixin):
     characters: Mapped[list[Character]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
-        comment="Список персонажей, созданных этим пользователем (связь один-ко-многим).",
     )
 
     def __repr__(self) -> str:
