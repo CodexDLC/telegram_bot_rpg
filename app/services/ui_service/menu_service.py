@@ -13,19 +13,15 @@ from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.base_service import BaseUIService
 
 
-# 🔥 НАСЛЕДУЕМСЯ ОТ BASE_UI_SERVICE
 class MenuService(BaseUIService):
     """
     Сервис для создания динамических верхних меню.
     """
 
-    # 🔥 УБРАЛИ char_id/actor_name из __init__ — они идут через BaseUIService.
-    # Добавили session для получения актуальных HP/EN.
     def __init__(self, game_stage: str, state_data: dict, session: AsyncSession, account_manager: AccountManager):
         """
         Инициализирует сервис меню.
         """
-        # 🔥 ВЫЗОВ БАЗОВОГО КЛАССА: Устанавливает self.char_id, self.actor_name и self.state_data
         super().__init__(state_data=state_data)
 
         self.data = ButtonsTextData
@@ -33,7 +29,6 @@ class MenuService(BaseUIService):
         self.session = session
         self.account_manager = account_manager
 
-        # 🔥 ПОЛУЧЕНИЕ КЭШИРОВАННОГО char_name ИЗ state_data
         session_context = self.state_data.get(FSM_CONTEXT_KEY, {})
         self.char_name = session_context.get("char_name", f"Персонаж {self.char_id}")
 
@@ -94,7 +89,7 @@ class MenuService(BaseUIService):
 
     def _create_menu_kb(self) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()
-        # 🔥 ИСПОЛЬЗУЕМ НОВЫЙ СЛОВАРЬ ДЛЯ КНОПОК БЕЗ LOGOUT
+        # 🔥 ИСПОЛЬЗУЕМ СЛОВАРЬ БЕЗ LOGOUT
         menu_layouts = self.data.MENU_LAYOUTS_MAIN
         buttons_full_data = self.data.BUTTONS_MENU_FULL
 
@@ -111,30 +106,30 @@ class MenuService(BaseUIService):
             if len(display_text) > 3 and not any(c in display_text for c in ["[", "]", "⚔️"]):
                 display_text = display_text[0]
 
-            # (Логика callback'ов остается прежней)
+            # (Логика callback'ов)
             if key == "status":
                 callback_data = StatusNavCallback(key="bio", char_id=self.char_id).pack()
 
-            elif key == "quick_heal" or key in ("navigation", "inventory"):
+            # 🔥 ЧИСТКА: Объединение navigation, inventory и refresh_menu
+            elif key in ("navigation", "inventory", "refresh_menu"):
                 callback_data = MeinMenuCallback(action=key, game_stage=self.gs, char_id=self.char_id).pack()
 
-            elif key == "arena_test":
-                callback_data = MeinMenuCallback(action="arena_start", game_stage=self.gs, char_id=self.char_id).pack()
+            # 🔥 УДАЛЕН arena_test
 
             else:
+                log.warning(f"MenuService | skip_button reason='unknown_key' key='{key}'")
                 continue
 
             kb.button(text=display_text, callback_data=callback_data)
 
         # Выравнивание основных кнопок (например, 2x2)
         if self.gs == "in_game":
-            kb.adjust(4)  # 4 кнопки в ряд
+            # Учитывая, что сейчас 4 кнопки, это должно быть adjust(4)
+            kb.adjust(4)
         elif self.gs == "tutorial_skill":
-            kb.adjust(2)  # 2 кнопки в ряд
-        # ❗ Внимание: для creation/tutorial_stats не нужны adjust, так как там 0 или 1 кнопка
+            kb.adjust(2)
 
-        # 2. 🔥 ДОБАВЛЕНИЕ КНОПКИ "ВЫЙТИ" НА НОВЫЙ РЯД
-        # Проверяем, нужна ли кнопка logout для текущей стадии (она нужна всегда, кроме FSM login)
+        # 2. 🔥 ДОБАВЛЕНИЕ КНОПКИ "ВЫЙТИ" НА НОВЫЙ РЯД (через MENU_LAYOUTS)
         if "logout" in self.data.MENU_LAYOUTS.get(self.gs, []):
             logout_text = buttons_full_data.get("logout", "Выйти")
             logout_callback = LobbySelectionCallback(action="logout").pack()
@@ -144,3 +139,30 @@ class MenuService(BaseUIService):
 
         log.debug(f"Клавиатура меню для game_stage='{self.gs}' успешно создана.")
         return kb.as_markup()
+
+    async def run_full_refresh_action(self) -> tuple[str, InlineKeyboardMarkup]:
+        """
+        Выполняет логику принудительного обновления:
+        1. Принудительно запускает Time Delta регенерацию, обновляя HP/EN в Redis.
+        2. Генерирует финальное сообщение.
+        """
+        log.info(f"FullRefresh | performing instant sync char_id={self.char_id}")
+        sync_service = GameSyncService(self.session, self.account_manager)
+
+        # 1. Запускаем синхронизацию (это уже бизнес-логика: реген, таймеры и т.д.)
+        await sync_service.synchronize_player_state(self.char_id)
+
+        # 2. Получаем финальный вид меню с НОВЫМИ цифрами (запускает _format_menu_text)
+        text, kb = await self.get_data_menu()
+
+        # 3. Добавляем финальный "вкусный" текст, который объясняет, что произошло
+        hp_cur, en_cur = await sync_service.get_current_vitals(self.char_id)
+        hp_max, en_max = await sync_service.get_max_vitals(self.char_id)
+
+        if (hp_cur >= hp_max) and (en_cur >= en_max):
+            text += "\n✅ <i>Силы полностью восстановлены.</i>"
+        else:
+            # Теперь это просто подтверждение, что данные обновились
+            text += "\n🔄 <i>Данные обновлены. Текущий реген применен.</i>"
+
+        return text, kb

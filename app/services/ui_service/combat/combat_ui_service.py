@@ -320,3 +320,20 @@ class CombatUIService(BaseUIService):
         if raw:
             return CombatSessionContainerDTO.model_validate_json(raw)
         return None
+
+    async def render_waiting_screen(self) -> tuple[str, InlineKeyboardMarkup]:
+        """
+        Рендерит экран ожидания хода противника.
+        """
+        text = (
+            f"<b>{self.actor_name}:</b> Ход принят.\n\n"
+            f"⏳ <i>Синхронизация с нейро-интерфейсом противника...</i>\n"
+            f"Ожидаем ответного действия."
+        )
+
+        kb = InlineKeyboardBuilder()
+        # Кнопка ручного обновления (если поллинг закончится)
+        cb_refresh = CombatActionCallback(action="refresh").pack()
+        kb.row(InlineKeyboardButton(text="🔄 Проверить статус", callback_data=cb_refresh))
+
+        return text, kb.as_markup()

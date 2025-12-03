@@ -1,4 +1,5 @@
 from aiogram import Bot, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger as log
@@ -13,6 +14,7 @@ from app.services.game_service.game_world_service import GameWorldService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.inventory.inventory_ui_service import InventoryUIService
+from app.services.ui_service.menu_service import MenuService
 from app.services.ui_service.navigation_service import NavigationService
 
 router = Router(name="ui_menu_dispatch")
@@ -36,7 +38,11 @@ async def main_menu_dispatcher(
     if not call.from_user:
         return
 
-    await call.answer()
+    # Не отвечаем сразу на call.answer() для quick_heal, чтобы не сбивать анимацию "часиков",
+    # или отвечаем, но потом редактируем сообщение.
+    # Для остальных - отвечаем сразу.
+    if callback_data.action != "quick_heal":
+        await call.answer()
 
     user_id = call.from_user.id
     char_id = callback_data.char_id
@@ -44,20 +50,55 @@ async def main_menu_dispatcher(
 
     log.info(f"MenuDispatch | event=action user_id={user_id} char_id={char_id} action='{action}'")
 
+    # 1. Синхронизация состояния (Реген)
     sync_service = GameSyncService(session, account_manager)
     await sync_service.synchronize_player_state(char_id)
-    log.debug(f"StateSync | status=success char_id={char_id}")
 
     state_data = await state.get_data()
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
 
     if session_context.get("char_id") != char_id:
-        log.warning(
-            f"MenuDispatch | status=failed reason='char_id mismatch' user_id={user_id} expected={char_id} actual={session_context.get('char_id')}"
-        )
+        log.warning(f"MenuDispatch | reason='char_id mismatch' user_id={user_id}")
         await Err.generic_error(call)
         return
 
+    # ==========================================
+    # 🔄 ОБНОВЛЕНИЕ МЕНЮ (Бывшее quick_heal)
+    # ==========================================
+
+    if action == "refresh_menu":  # <--- ИЗМЕНЕНО: Новое имя действия
+        menu_msg = session_context.get("message_menu")
+        if not menu_msg:
+            await Err.message_content_not_found_in_fsm(call)
+            return
+
+        await call.answer("🔄 Обновление данных...")
+
+        # 1. Выполняем "мгновенную" логику
+        menu_service = MenuService(
+            game_stage="in_game", state_data=state_data, session=session, account_manager=account_manager
+        )
+
+        # Получаем результат сразу (Time Delta + актуальные данные)
+        final_text, final_kb = await menu_service.run_full_refresh_action()  # <--- Используем существующий метод
+
+        # 2. Обновляем сообщение меню
+        try:
+            await bot.edit_message_text(
+                chat_id=menu_msg["chat_id"],
+                message_id=menu_msg["message_id"],
+                text=final_text,
+                reply_markup=final_kb,
+                parse_mode="HTML",
+            )
+        except TelegramAPIError as e:
+            # Логгируем, если сообщение не удалось обновить (например, слишком старое или удалено)
+            log.warning(f"RefreshMenu | status=edit_failed error='{e}'")
+
+        return
+
+    # --- ОСТАЛЬНЫЕ КНОПКИ (Инвентарь, Навигация) ---
+    # Для них нужно сообщение КОНТЕНТА (нижнее)
     content_msg = session_context.get("message_content")
     if not content_msg:
         log.error(f"MenuDispatch | status=failed reason='message_content not found' user_id={user_id}")
@@ -72,7 +113,6 @@ async def main_menu_dispatcher(
 
         if action == "inventory":
             await state.set_state(InGame.inventory)
-            log.info(f"FSM | state=InGame.inventory user_id={user_id}")
             service = InventoryUIService(
                 char_id=char_id,
                 session=session,
@@ -84,7 +124,6 @@ async def main_menu_dispatcher(
 
         elif action == "navigation":
             await state.set_state(InGame.navigation)
-            log.info(f"FSM | state=InGame.navigation user_id={user_id}")
             nav_service = NavigationService(
                 char_id=char_id,
                 state_data=state_data,
@@ -94,17 +133,15 @@ async def main_menu_dispatcher(
             )
             text, kb = await nav_service.reload_current_ui()
 
+        # --- (Тут можно добавить еще условия) ---
+
         if text and kb:
             await bot.edit_message_text(
                 chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML"
             )
-            log.debug(f"UIRender | component=main_menu status=success user_id={user_id} action='{action}'")
         else:
-            log.warning(f"MenuDispatch | status=failed reason='UI data empty' user_id={user_id} action='{action}'")
-            await call.answer("Раздел недоступен или пуст.", show_alert=True)
+            await call.answer("Раздел недоступен.", show_alert=True)
 
-    except RuntimeError:
-        log.exception(
-            f"MenuDispatch | status=failed reason='RuntimeError in dispatcher' user_id={user_id} action='{action}'"
-        )
+    except (TelegramAPIError, ValueError) as e:  # Заменено на более конкретные исключения
+        log.exception(f"MenuDispatch | status=failed action='{action}' error='{e}'")
         await Err.generic_error(call)
