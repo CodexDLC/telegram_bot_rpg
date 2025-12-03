@@ -5,7 +5,7 @@ from loguru import logger as log
 from redis.asyncio import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-from app.core.config import BOT_TOKEN, REDIS_URL
+from app.core.config import BOT_TOKEN
 from app.middlewares.db_session_middleware import DbSessionMiddleware
 from database.session import async_session_factory
 
@@ -37,13 +37,15 @@ async def build_app(redis_client: Redis) -> tuple[Bot, Dispatcher]:
 
     log.debug("RedisCheck | status=started")
     try:
-        if not await redis_client.ping():
+        # Явное ожидание, чтобы mypy был доволен
+        pong = await redis_client.ping()
+        if not pong:
             raise RedisConnectionError("Redis ping failed")
         log.info("RedisCheck | status=success")
 
     except RedisConnectionError as e:
-        log.critical(f"RedisCheck | status=failed error='{e}' url='{REDIS_URL}'", exc_info=True)
-        raise RuntimeError(f"Критическая ошибка: не удалось подключиться к Redis по адресу {REDIS_URL}") from e
+        log.critical(f"RedisCheck | status=failed error='{e}'", exc_info=True)
+        raise RuntimeError("Критическая ошибка: не удалось подключиться к Redis.") from e
 
     storage = RedisStorage(redis=redis_client)
     log.debug("AppBuild | component=RedisStorage status=created")

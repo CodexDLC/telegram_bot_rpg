@@ -66,11 +66,19 @@ class ArenaState(StatesGroup):
     waiting = State()
 
 
+# ЛЕЧИЛКА: Расширенный список состояний, в которых разрешена работа меню Статуса (2 и 3 уровни вложенности)
 FSM_CONTEX_CHARACTER_STATUS = [
+    # Лобби
     CharacterLobby.start_logging,
     CharacterLobby.selection,
     CharacterLobby.confirm_delete,
+    # Основной игровой цикл
     InGame.navigation,
+    InGame.inventory,  # <-- Добавлено: чтобы работало из инвентаря
+    InGame.combat,  # <-- Добавлено: если нужно чекать статы в бою
+    # Арена
+    ArenaState.menu,  # <-- Добавлено: чтобы работало в ангаре арены
+    ArenaState.waiting,  # <-- Добавлено: чтобы работало в очереди
 ]
 
 GARBAGE_TEXT_STATES = [
