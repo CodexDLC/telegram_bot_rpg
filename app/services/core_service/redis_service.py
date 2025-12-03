@@ -5,8 +5,6 @@ from loguru import logger as log
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from app.core.redis_client import redis_client
-
 
 class RedisService:
     """
@@ -508,6 +506,3 @@ class RedisService:
         except RedisError:
             log.exception(f"RedisKey | action=delete_by_pattern status=failed reason='Redis error' pattern='{pattern}'")
             return 0
-
-
-redis_service = RedisService(client=redis_client)

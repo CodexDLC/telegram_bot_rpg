@@ -8,6 +8,9 @@ from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.keyboards.callback_data import ArenaQueueCallback
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.arena_manager import ArenaManager
+from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.game_service.arena.arena_service import ArenaService
 from app.services.ui_service.base_service import BaseUIService
 
@@ -22,16 +25,27 @@ class ArenaUIService(BaseUIService):
     2. Views: Рендер интерфейсов (Текст + Кнопки).
     """
 
-    def __init__(self, char_id: int, state_data: dict, session: AsyncSession):
+    def __init__(
+        self,
+        char_id: int,
+        state_data: dict,
+        session: AsyncSession,
+        account_manager: AccountManager,
+        arena_manager: ArenaManager,
+        combat_manager: CombatManager,
+    ):
         """
         Args:
             char_id: ID персонажа.
             session: Сессия SQLAlchemy.
             state_data: Данные состояния FSM.
+            account_manager: Менеджер аккаунтов.
+            arena_manager: Менеджер арены.
+            combat_manager: Менеджер боя.
         """
         super().__init__(state_data=state_data, char_id=char_id)
         self.session = session
-        self._logic = ArenaService(session, char_id)
+        self._logic = ArenaService(session, char_id, account_manager, arena_manager, combat_manager)
         log.debug(f"ArenaUIServiceInit | char_id={char_id}")
 
     # =========================================================================

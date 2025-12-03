@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.resources.keyboards.callback_data import LobbySelectionCallback, MeinMenuCallback
 from app.resources.keyboards.status_callback import StatusNavCallback
 from app.resources.texts.menu_data.buttons_text import ButtonsTextData
+from app.services.core_service.manager.account_manager import AccountManager
 from app.services.game_service.game_sync_service import GameSyncService
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.base_service import BaseUIService
@@ -20,7 +21,7 @@ class MenuService(BaseUIService):
 
     # 🔥 УБРАЛИ char_id/actor_name из __init__ — они идут через BaseUIService.
     # Добавили session для получения актуальных HP/EN.
-    def __init__(self, game_stage: str, state_data: dict, session: AsyncSession):
+    def __init__(self, game_stage: str, state_data: dict, session: AsyncSession, account_manager: AccountManager):
         """
         Инициализирует сервис меню.
         """
@@ -30,6 +31,7 @@ class MenuService(BaseUIService):
         self.data = ButtonsTextData
         self.gs = game_stage
         self.session = session
+        self.account_manager = account_manager
 
         # 🔥 ПОЛУЧЕНИЕ КЭШИРОВАННОГО char_name ИЗ state_data
         session_context = self.state_data.get(FSM_CONTEXT_KEY, {})
@@ -53,7 +55,7 @@ class MenuService(BaseUIService):
         base_text = self.data.TEXT_MENU
 
         if self.char_id and self.gs == "in_game":
-            sync_service = GameSyncService(self.session)
+            sync_service = GameSyncService(self.session, self.account_manager)
             await sync_service.synchronize_player_state(self.char_id)
 
             hp_cur, en_cur = await sync_service.get_current_vitals(self.char_id)

@@ -6,6 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import ArenaState, InGame
 from app.resources.keyboards.callback_data import ArenaQueueCallback
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.arena_manager import ArenaManager
+from app.services.core_service.manager.combat_manager import CombatManager
+from app.services.core_service.manager.world_manager import WorldManager
+from app.services.game_service.game_world_service import GameWorldService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.arena_ui_service.arena_ui_service import ArenaUIService
@@ -16,7 +21,14 @@ router = Router(name="arena_main_router")
 
 @router.callback_query(ArenaState.menu, ArenaQueueCallback.filter(F.action == "menu_main"))
 async def arena_render_main_menu_handler(
-    call: CallbackQuery, callback_data: ArenaQueueCallback, state: FSMContext, session: AsyncSession, bot: Bot
+    call: CallbackQuery,
+    callback_data: ArenaQueueCallback,
+    state: FSMContext,
+    session: AsyncSession,
+    bot: Bot,
+    account_manager: AccountManager,
+    arena_manager: ArenaManager,
+    combat_manager: CombatManager,
 ) -> None:
     """Отображает главное меню Арены."""
     if not call.from_user:
@@ -27,7 +39,7 @@ async def arena_render_main_menu_handler(
     log.info(f"Arena | event=view_main_menu user_id={user_id} char_id={char_id}")
 
     state_data = await state.get_data()
-    ui = ArenaUIService(char_id, state_data, session)
+    ui = ArenaUIService(char_id, state_data, session, account_manager, arena_manager, combat_manager)
     text, kb = await ui.view_main_menu()
 
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
@@ -49,7 +61,13 @@ async def arena_render_main_menu_handler(
 
 @router.callback_query(ArenaState.menu, ArenaQueueCallback.filter(F.action == "exit_service"))
 async def arena_exit_service_handler(
-    call: CallbackQuery, callback_data: ArenaQueueCallback, state: FSMContext, bot: Bot
+    call: CallbackQuery,
+    callback_data: ArenaQueueCallback,
+    state: FSMContext,
+    bot: Bot,
+    account_manager: AccountManager,
+    world_manager: WorldManager,
+    game_world_service: GameWorldService,
 ) -> None:
     """Обрабатывает выход из Арены и возврат в мир."""
     if not call.from_user:
@@ -64,7 +82,13 @@ async def arena_exit_service_handler(
     log.info(f"FSM | state=InGame.navigation user_id={user_id}")
 
     state_data = await state.get_data()
-    nav_service = NavigationService(char_id=char_id, state_data=state_data)
+    nav_service = NavigationService(
+        char_id=char_id,
+        state_data=state_data,
+        account_manager=account_manager,
+        world_manager=world_manager,
+        game_world_service=game_world_service,
+    )
     text, kb = await nav_service.reload_current_ui()
 
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
@@ -85,7 +109,13 @@ async def arena_exit_service_handler(
 
 @router.callback_query(ArenaState.waiting, ArenaQueueCallback.filter(F.action == "cancel_queue"))
 async def arena_universal_cancel_handler(
-    call: CallbackQuery, callback_data: ArenaQueueCallback, state: FSMContext, session: AsyncSession
+    call: CallbackQuery,
+    callback_data: ArenaQueueCallback,
+    state: FSMContext,
+    session: AsyncSession,
+    account_manager: AccountManager,
+    arena_manager: ArenaManager,
+    combat_manager: CombatManager,
 ) -> None:
     """Обрабатывает отмену поиска матча на Арене."""
     if not call.from_user:
@@ -97,7 +127,7 @@ async def arena_universal_cancel_handler(
     log.info(f"Arena | event=cancel_queue user_id={user_id} char_id={char_id} mode='{mode}'")
 
     state_data = await state.get_data()
-    ui = ArenaUIService(char_id, state_data, session)
+    ui = ArenaUIService(char_id, state_data, session, account_manager, arena_manager, combat_manager)
     await ui.action_cancel_queue(mode)
     await state.set_state(ArenaState.menu)
     log.info(f"FSM | state=ArenaState.menu user_id={user_id}")

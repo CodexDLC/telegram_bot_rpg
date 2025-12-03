@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import InGame
 from app.resources.keyboards.inventory_callback import InventoryCallback
+from app.services.core_service.manager.account_manager import AccountManager
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.inventory.inventory_ui_service import InventoryUIService
@@ -19,7 +20,12 @@ router = Router(name="inventory_details_router")
     InventoryCallback.filter(F.level == 2),
 )
 async def inventory_item_actions_handler(
-    call: CallbackQuery, callback_data: InventoryCallback, state: FSMContext, session: AsyncSession, bot: Bot
+    call: CallbackQuery,
+    callback_data: InventoryCallback,
+    state: FSMContext,
+    session: AsyncSession,
+    bot: Bot,
+    account_manager: AccountManager,
 ) -> None:
     """Обрабатывает действия с предметами в инвентаре (просмотр, надеть, снять, выбросить)."""
     user_id = call.from_user.id
@@ -37,7 +43,9 @@ async def inventory_item_actions_handler(
         await Err.char_id_not_found_in_fsm(call)
         return
 
-    service = InventoryUIService(char_id=char_id, user_id=user_id, session=session, state_data=state_data)
+    service = InventoryUIService(
+        char_id=char_id, user_id=user_id, session=session, state_data=state_data, account_manager=account_manager
+    )
     item_id = callback_data.item_id
     action = callback_data.action
 

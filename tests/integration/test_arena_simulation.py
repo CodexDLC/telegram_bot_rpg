@@ -6,11 +6,12 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.core_service.manager.arena_manager import arena_manager
-from app.services.core_service.manager.combat_manager import combat_manager
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.arena_manager import ArenaManager
+from app.services.core_service.manager.combat_manager import CombatManager
 
 # Импортируем "боевые" части приложения
-from app.services.game_service.arena.arena_service import ArenaService
+from app.services.game_service.arena.service_1v1 import Arena1v1Service
 
 # 🔥 ИМПОРТИРУЕМ LIFECYCLE ДЛЯ ПРИНУДИТЕЛЬНОГО ЗАВЕРШЕНИЯ
 from app.services.game_service.combat.combat_lifecycle_service import CombatLifecycleService
@@ -22,7 +23,7 @@ logger.add("logs/test_battle_report.log", level="INFO", rotation="1 MB", format=
 
 
 @pytest.mark.asyncio
-async def test_full_arena_cycle(get_async_session):
+async def test_full_arena_cycle(get_async_session, app_container):
     session: AsyncSession
     async with get_async_session() as session:
         # 1. SETUP
@@ -30,6 +31,10 @@ async def test_full_arena_cycle(get_async_session):
         char_b_id = await _create_test_char(session, 77702, "Gladiator_B")
 
         logger.info(f"🏁 СТАРТ ТЕСТА. Бойцы: {char_a_id} vs {char_b_id}")
+
+        arena_manager: ArenaManager = app_container.arena_manager
+        combat_manager: CombatManager = app_container.combat_manager
+        account_manager: AccountManager = app_container.account_manager
 
         # Clean up
         await arena_manager.remove_from_queue("1v1", char_a_id)
@@ -43,21 +48,21 @@ async def test_full_arena_cycle(get_async_session):
         await session.commit()
 
         # 2. MATCHMAKING
-        service_a = ArenaService(session, char_id=char_a_id)
-        service_b = ArenaService(session, char_id=char_b_id)
+        service_a = Arena1v1Service(session, char_a_id, arena_manager, combat_manager, account_manager)
+        service_b = Arena1v1Service(session, char_b_id, arena_manager, combat_manager, account_manager)
 
-        await service_a.join_queue("1v1")
-        await service_b.join_queue("1v1")
+        await service_a.join_queue()
+        await service_b.join_queue()
 
-        session_id = await service_a.check_match("1v1", attempt=1)
+        session_id = await service_a.check_and_match(attempt=1)
         if not session_id:
-            session_id = await service_b.check_match("1v1", attempt=5)
+            session_id = await service_b.check_and_match(attempt=5)
 
         assert session_id is not None, "❌ Матч не найден."
         logger.info(f"🎉 БОЙ НАЧАЛСЯ! Session: {session_id}")
 
         # 3. COMBAT LOOP
-        combat = CombatService(session_id)
+        combat = CombatService(session_id, combat_manager, account_manager)
         round_counter = 0
 
         logger.info("\n⚔️ --- ХРОНИКА БОЯ --- ⚔️")
@@ -106,7 +111,8 @@ async def test_full_arena_cycle(get_async_session):
             if round_counter > 50:
                 logger.error("❌ Лимит раундов.")
                 # 🔥 ИСПРАВЛЕНО: Принудительно завершаем бой, если дошли до лимита
-                await CombatLifecycleService.finish_battle(session_id, "draw_by_limit")
+                lifecycle_service = CombatLifecycleService(combat_manager, account_manager)
+                await lifecycle_service.finish_battle(session_id, "draw_by_limit")
                 break
 
         # 4. FINAL CHECK

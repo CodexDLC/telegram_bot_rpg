@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.resources.fsm_states.states import InGame
 from app.resources.keyboards.callback_data import ServiceEntryCallback
 from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.arena_manager import ArenaManager
+from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.game_service.hub_entry_service import HubEntryService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
@@ -21,7 +24,14 @@ router = Router(name="hub_entry_router")
 
 @router.callback_query(InGame.navigation, ServiceEntryCallback.filter())
 async def service_hub_entry_handler(
-    call: CallbackQuery, callback_data: ServiceEntryCallback, state: FSMContext, bot: Bot, session: AsyncSession
+    call: CallbackQuery,
+    callback_data: ServiceEntryCallback,
+    state: FSMContext,
+    bot: Bot,
+    session: AsyncSession,
+    account_manager: AccountManager,
+    arena_manager: ArenaManager,
+    combat_manager: CombatManager,
 ) -> None:
     """Обрабатывает вход в любой сервисный хаб (Арена, Таверна и т.д.)."""
     if not call.from_user:
@@ -45,7 +55,15 @@ async def service_hub_entry_handler(
     anim_service = UIAnimationService(bot=bot, message_data=session_dto)
 
     async def run_logic():
-        hub_service = HubEntryService(char_id=char_id, target_loc=target_loc, state_data=state_data, session=session)
+        hub_service = HubEntryService(
+            char_id=char_id,
+            target_loc=target_loc,
+            state_data=state_data,
+            session=session,
+            account_manager=account_manager,
+            arena_manager=arena_manager,
+            combat_manager=combat_manager,
+        )
         text, kb, new_fsm_state = await hub_service.render_hub_menu()
         await state.set_state(new_fsm_state)
         log.info(f"FSM | state={new_fsm_state} user_id={user_id} char_id={char_id}")

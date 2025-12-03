@@ -14,8 +14,11 @@ from app.resources.keyboards.callback_data import LobbySelectionCallback
 from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
 from app.resources.texts.buttons_callback import GameStage
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
-from app.services.core_service.manager.account_manager import account_manager
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.combat_manager import CombatManager
+from app.services.core_service.manager.world_manager import WorldManager
 from app.services.game_service.game_sync_service import GameSyncService
+from app.services.game_service.game_world_service import GameWorldService
 from app.services.game_service.login_service import LoginService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY, fsm_clean_core_state
@@ -90,6 +93,8 @@ async def _handle_combat_restore(
     state_data: dict,
     session_context: dict,
     call: CallbackQuery,
+    account_manager: AccountManager,
+    combat_manager: CombatManager,
 ) -> None:
     """Восстанавливает и отображает интерфейс боя."""
     log.debug(f"SessionRestore | type=combat user_id={user_id} char_id={char_id}")
@@ -109,7 +114,7 @@ async def _handle_combat_restore(
     await state.update_data({FSM_CONTEXT_KEY: session_context})
     log.debug(f"FSM | data_updated key=combat_session_id value={combat_session_id} char_id={char_id}")
 
-    combat_ui = CombatUIService(user_id, char_id, str(combat_session_id), state_data)
+    combat_ui = CombatUIService(user_id, char_id, str(combat_session_id), state_data, combat_manager, account_manager)
     log_text, log_kb = await combat_ui.render_combat_log(page=0)
     dash_text, dash_kb = await combat_ui.render_dashboard(current_selection={})
 
@@ -149,18 +154,29 @@ async def _handle_in_game_login(
     loc_id: str,
     call: CallbackQuery,
     session: AsyncSession,
+    account_manager: AccountManager,
+    world_manager: WorldManager,
+    game_world_service: GameWorldService,
 ) -> None:
     """Обрабатывает вход в игру, отображая навигационный интерфейс и меню."""
     log.debug(f"Login | event=in_game user_id={user_id} char_id={char_id} location_id={loc_id}")
 
-    sync_service = GameSyncService(session)
+    sync_service = GameSyncService(session, account_manager)
     await sync_service.synchronize_player_state(char_id)
     log.debug(f"StateSync | status=success char_id={char_id}")
 
-    nav_service = NavigationService(char_id=char_id, state_data=state_data)
+    nav_service = NavigationService(
+        char_id=char_id,
+        state_data=state_data,
+        account_manager=account_manager,
+        world_manager=world_manager,
+        game_world_service=game_world_service,
+    )
     nav_text, nav_kb = await nav_service.get_navigation_ui(state_name, loc_id)
 
-    menu_service = MenuService(game_stage="in_game", state_data=state_data, session=session)
+    menu_service = MenuService(
+        game_stage="in_game", state_data=state_data, session=session, account_manager=account_manager
+    )
     menu_text, menu_kb = await menu_service.get_data_menu()
 
     msg_menu = session_context.get("message_menu")
@@ -192,7 +208,16 @@ async def _handle_in_game_login(
 
 
 @router.callback_query(LobbySelectionCallback.filter(F.action == "login"))
-async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
+async def start_logging_handler(
+    call: CallbackQuery,
+    state: FSMContext,
+    bot: Bot,
+    session: AsyncSession,
+    account_manager: AccountManager,
+    world_manager: WorldManager,
+    game_world_service: GameWorldService,
+    combat_manager: CombatManager,
+) -> None:
     """Обрабатывает вход в игру, определяет игровой этап и направляет пользователя."""
     if not call.from_user:
         return
@@ -218,7 +243,7 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
 
     session_dto = SessionDataDTO(**session_context)
     anim_service = UIAnimationService(bot=bot, message_data=session_dto)
-    login_service = LoginService(char_id=char_id, state_data=state_data)
+    login_service = LoginService(char_id=char_id, state_data=state_data, account_manager=account_manager)
 
     async def run_logic() -> Any:
         return await login_service.handle_login(session=session)
@@ -251,7 +276,12 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
 
         if isinstance(message_menu, dict):
             try:
-                ms = MenuService(game_stage=game_stage, state_data=await state.get_data(), session=session)
+                ms = MenuService(
+                    game_stage=game_stage,
+                    state_data=await state.get_data(),
+                    session=session,
+                    account_manager=account_manager,
+                )
                 menu_text, menu_kb = await ms.get_data_menu()
                 await bot.edit_message_text(
                     chat_id=message_menu["chat_id"],
@@ -269,9 +299,11 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
             await _handle_tutorial_skills(char_id, state, bot, message_content)
         elif game_stage == GameStage.CREATION:
             if isinstance(message_menu, dict):
-                await start_creation_handler(call, state, bot, user_id, char_id, message_menu, session)
+                await start_creation_handler(call, state, bot, user_id, char_id, message_menu, session, account_manager)
         elif game_stage == "combat":
-            await _handle_combat_restore(user_id, char_id, state, bot, state_data, session_context, call)
+            await _handle_combat_restore(
+                user_id, char_id, state, bot, state_data, session_context, call, account_manager, combat_manager
+            )
         else:
             log.error(f"Redirect | status=failed reason='Unknown game_stage' stage='{game_stage}' char_id={char_id}")
             await Err.generic_error(call)
@@ -281,8 +313,22 @@ async def start_logging_handler(call: CallbackQuery, state: FSMContext, bot: Bot
         log.info(f"Login | status=success state='{state_name}' loc_id='{loc_id}' char_id={char_id}")
 
         if state_name == "combat":
-            await _handle_combat_restore(user_id, char_id, state, bot, state_data, session_context, call)
+            await _handle_combat_restore(
+                user_id, char_id, state, bot, state_data, session_context, call, account_manager, combat_manager
+            )
         else:
             await _handle_in_game_login(
-                user_id, char_id, state, bot, state_data, session_context, state_name, loc_id, call, session
+                user_id,
+                char_id,
+                state,
+                bot,
+                state_data,
+                session_context,
+                state_name,
+                loc_id,
+                call,
+                session,
+                account_manager,
+                world_manager,
+                game_world_service,
             )

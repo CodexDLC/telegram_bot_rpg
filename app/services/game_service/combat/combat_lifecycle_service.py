@@ -13,8 +13,8 @@ from app.resources.schemas_dto.combat_source_dto import (
     FighterStateDTO,
     StatSourceData,
 )
-from app.services.core_service.manager.account_manager import account_manager
-from app.services.core_service.manager.combat_manager import combat_manager
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.game_service.analytics.analytics_service import analytics_service
 from app.services.game_service.combat.combat_aggregator import CombatAggregator
 from app.services.game_service.combat.stats_calculator import StatsCalculator
@@ -39,8 +39,11 @@ class CombatLifecycleService:
     включая распределение опыта и сохранение состояния персонажей.
     """
 
-    @staticmethod
-    async def create_battle(is_pve: bool = True, mode: str = "world") -> str:
+    def __init__(self, combat_manager: CombatManager, account_manager: AccountManager):
+        self.combat_manager = combat_manager
+        self.account_manager = account_manager
+
+    async def create_battle(self, is_pve: bool = True, mode: str = "world") -> str:
         """
         Создает новую боевую сессию.
 
@@ -59,13 +62,12 @@ class CombatLifecycleService:
             "active": 1,
             "mode": mode,
         }
-        await combat_manager.create_session_meta(session_id, meta_data)
+        await self.combat_manager.create_session_meta(session_id, meta_data)
         log.info(f"CombatLifecycle | event=battle_created session_id='{session_id}' is_pve={is_pve} mode='{mode}'")
         return session_id
 
-    @staticmethod
     async def add_participant(
-        session: AsyncSession, session_id: str, char_id: int, team: str, name: str, is_ai: bool = False
+        self, session: AsyncSession, session_id: str, char_id: int, team: str, name: str, is_ai: bool = False
     ) -> None:
         """
         Добавляет реального игрока или полноценного NPC в боевую сессию.
@@ -100,12 +102,11 @@ class CombatLifecycleService:
             xp_buffer={},
         )
 
-        await combat_manager.add_participant_id(session_id, char_id)
-        await combat_manager.save_actor_json(session_id, char_id, container.model_dump_json())
+        await self.combat_manager.add_participant_id(session_id, char_id)
+        await self.combat_manager.save_actor_json(session_id, char_id, container.model_dump_json())
         log.debug(f"CombatLifecycle | event=participant_added session_id='{session_id}' char_id={char_id}")
 
-    @staticmethod
-    async def add_dummy_participant(session_id: str, char_id: int, hp: int, energy: int, name: str) -> None:
+    async def add_dummy_participant(self, session_id: str, char_id: int, hp: int, energy: int, name: str) -> None:
         """
         Добавляет "манекен" или "тень" в боевую сессию с заданными параметрами.
 
@@ -129,12 +130,11 @@ class CombatLifecycleService:
         container.stats["energy_max"] = StatSourceData(base=float(energy))
         container.stats["hp_regen"] = StatSourceData(base=0.0)
 
-        await combat_manager.add_participant_id(session_id, char_id)
-        await combat_manager.save_actor_json(session_id, char_id, container.model_dump_json())
+        await self.combat_manager.add_participant_id(session_id, char_id)
+        await self.combat_manager.save_actor_json(session_id, char_id, container.model_dump_json())
         log.debug(f"CombatLifecycle | event=dummy_participant_added session_id='{session_id}' char_id={char_id}")
 
-    @staticmethod
-    async def initialize_battle_state(session_id: str) -> None:
+    async def initialize_battle_state(self, session_id: str) -> None:
         """
         Выполняет финальную настройку состояния боя перед его началом.
 
@@ -144,13 +144,13 @@ class CombatLifecycleService:
             session_id: Идентификатор боевой сессии.
         """
         log.info(f"CombatLifecycle | event=initialize_battle_state session_id='{session_id}'")
-        participants = await combat_manager.get_session_participants(session_id)
+        participants = await self.combat_manager.get_session_participants(session_id)
         actors_cache: dict[int, CombatSessionContainerDTO] = {}
 
         for pid_str in participants:
             pid = int(pid_str)
             try:
-                data = await combat_manager.get_actor_json(session_id, pid)
+                data = await self.combat_manager.get_actor_json(session_id, pid)
                 if data:
                     actors_cache[pid] = CombatSessionContainerDTO.model_validate_json(data)
             except (json.JSONDecodeError, ValueError):
@@ -179,7 +179,7 @@ class CombatLifecycleService:
             actor.state.switch_charges = final_charges
             actor.state.max_switch_charges = cap
 
-            await combat_manager.save_actor_json(session_id, pid, actor.model_dump_json())
+            await self.combat_manager.save_actor_json(session_id, pid, actor.model_dump_json())
             log.debug(
                 f"CombatLifecycle | event=actor_state_initialized session_id='{session_id}' actor_id={pid} targets={enemies} charges={final_charges}"
             )
@@ -188,8 +188,7 @@ class CombatLifecycleService:
             f"CombatLifecycle | status=battle_state_initialized session_id='{session_id}' participants_count={len(participants)}"
         )
 
-    @staticmethod
-    async def finish_battle(session_id: str, winner_team: str) -> None:
+    async def finish_battle(self, session_id: str, winner_team: str) -> None:
         """
         Завершает боевую сессию, фиксирует результат, распределяет опыт и сохраняет
         актуальное состояние HP/Energy персонажей.
@@ -200,14 +199,14 @@ class CombatLifecycleService:
         """
         log.info(f"CombatLifecycle | event=finish_battle session_id='{session_id}' winner_team='{winner_team}'")
         end_time = int(time.time())
-        meta = await combat_manager.get_session_meta(session_id)
+        meta = await self.combat_manager.get_session_meta(session_id)
         start_time = int(meta.get("start_time", end_time)) if meta else end_time
         duration = max(0, end_time - start_time)
 
         new_meta = {"active": 0, "winner": winner_team, "end_time": end_time}
-        await combat_manager.create_session_meta(session_id, new_meta)
+        await self.combat_manager.create_session_meta(session_id, new_meta)
 
-        participants_ids = await combat_manager.get_session_participants(session_id)
+        participants_ids = await self.combat_manager.get_session_participants(session_id)
         stats_payload: dict[str, Any] = {
             "timestamp": end_time,
             "date_iso": date.today().isoformat(),
@@ -229,7 +228,7 @@ class CombatLifecycleService:
             for pid_str in participants_ids:
                 pid = int(pid_str)
                 try:
-                    data = await combat_manager.get_actor_json(session_id, pid)
+                    data = await self.combat_manager.get_actor_json(session_id, pid)
                     if not data:
                         log.warning(
                             f"CombatLifecycle | reason='Actor data not found for XP/HP save' session_id='{session_id}' pid={pid}"
@@ -272,7 +271,7 @@ class CombatLifecycleService:
                         await skill_service.apply_combat_xp_batch(pid, actor.state.xp_buffer)
 
                     if pid > 0:
-                        await account_manager.update_account_fields(
+                        await self.account_manager.update_account_fields(
                             pid,
                             {
                                 "hp_current": actor.state.hp_current,

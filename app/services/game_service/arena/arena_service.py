@@ -1,5 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.arena_manager import ArenaManager
+from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.game_service.arena.service_1v1 import Arena1v1Service
 
 
@@ -11,17 +14,27 @@ class ArenaService:
     предоставляя единый интерфейс для взаимодействия.
     """
 
-    def __init__(self, session: AsyncSession, char_id: int):
+    def __init__(
+        self,
+        session: AsyncSession,
+        char_id: int,
+        account_manager: AccountManager,
+        arena_manager: ArenaManager,
+        combat_manager: CombatManager,
+    ):
         """
         Инициализирует ArenaService.
 
         Args:
             session: Асинхронная сессия базы данных.
             char_id: Уникальный идентификатор персонажа.
+            account_manager: Менеджер аккаунтов.
+            arena_manager: Менеджер арены.
+            combat_manager: Менеджер боя.
         """
         self.session = session
         self.char_id = char_id
-        self._service_1v1 = Arena1v1Service(session, char_id)
+        self._service_1v1 = Arena1v1Service(session, char_id, arena_manager, combat_manager, account_manager)
 
     async def join_queue(self, mode: str) -> int | None:
         """

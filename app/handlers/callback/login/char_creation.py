@@ -14,7 +14,7 @@ from app.resources.schemas_dto.character_dto import CharacterOnboardingUpdateDTO
 from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
 from app.resources.texts.game_messages.lobby_messages import LobbyMessages
 from app.resources.texts.game_messages.tutorial_messages import TutorialMessages
-from app.services.core_service.manager.account_manager import account_manager
+from app.services.core_service.manager.account_manager import AccountManager
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.helpers_module.game_validator import validate_character_name
@@ -35,6 +35,7 @@ async def start_creation_handler(
     char_id: int,
     message_menu: dict[str, Any],
     session: AsyncSession,
+    account_manager: AccountManager,
 ) -> None:
     """
     Инициирует FSM создания нового персонажа.
@@ -43,9 +44,23 @@ async def start_creation_handler(
     await call.answer()
     start_time = time.monotonic()
 
-    await state.update_data({FSM_CONTEXT_KEY: {"user_id": user_id, "char_id": char_id}})
+    # --- FIX START: Сохраняем контекст, а не перезаписываем его ---
+    current_state_data = await state.get_data()
+    session_context = current_state_data.get(FSM_CONTEXT_KEY, {})
 
-    ms = MenuService(game_stage="creation", state_data=await state.get_data(), session=session)
+    session_context.update(
+        {"user_id": user_id, "char_id": char_id, "message_menu": message_menu}
+    )  # Явно сохраняем переданное меню
+
+    await state.update_data({FSM_CONTEXT_KEY: session_context})
+    # --- FIX END ---
+
+    ms = MenuService(
+        game_stage="creation",
+        state_data=await state.get_data(),
+        session=session,
+        account_manager=account_manager,
+    )
     text, kb = await ms.get_data_menu()
     log.debug(f"CharCreation | component=menu_data status=generated user_id={user_id}")
 
@@ -211,7 +226,9 @@ async def choosing_name_handler(m: Message, state: FSMContext, bot: Bot) -> None
 
 
 @router.callback_query(CharacterCreation.confirm, F.data == "confirm")
-async def confirm_creation_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
+async def confirm_creation_handler(
+    call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession, account_manager: AccountManager
+) -> None:
     """
     Финальное подтверждение создания персонажа.
     Сохраняет данные в БД и запускает туториал.

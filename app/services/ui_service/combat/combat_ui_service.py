@@ -17,7 +17,8 @@ from app.resources.schemas_dto.combat_source_dto import (
     CombatSessionContainerDTO,
     StatSourceData,
 )
-from app.services.core_service.manager.combat_manager import combat_manager
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.game_service.combat.stats_calculator import StatsCalculator
 from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.helpers_ui.combat_formatters import CombatFormatter
@@ -29,10 +30,20 @@ class CombatUIService(BaseUIService):
     Отвечает за Лог Боя и Панель Управления (Dashboard).
     """
 
-    def __init__(self, user_id: int, char_id: int, session_id: str, state_data: dict[str, Any]):
+    def __init__(
+        self,
+        user_id: int,
+        char_id: int,
+        session_id: str,
+        state_data: dict[str, Any],
+        combat_manager: CombatManager,
+        account_manager: AccountManager,
+    ):
         super().__init__(state_data=state_data, char_id=char_id)
         self.user_id = user_id
         self.session_id = session_id
+        self.combat_manager = combat_manager
+        self.account_manager = account_manager
         self.fmt = CombatFormatter
         self.LOG_PAGE_SIZE = 5
         log.debug(f"CombatUIService init: user={user_id}, char={char_id}, sess={session_id}")
@@ -45,7 +56,7 @@ class CombatUIService(BaseUIService):
         """
         Рендерит лог боя с пагинацией и кнопкой обновления.
         """
-        all_logs_json = await combat_manager.get_combat_log_list(self.session_id)
+        all_logs_json = await self.combat_manager.get_combat_log_list(self.session_id)
         all_logs = []
         for log_json in all_logs_json:
             with suppress(json.JSONDecodeError):
@@ -86,7 +97,7 @@ class CombatUIService(BaseUIService):
         3. Иначе -> Активный режим боя.
         """
         # 1. ПРОВЕРКА СТАТУСА БОЯ (META)
-        meta = await combat_manager.get_session_meta(self.session_id)
+        meta = await self.combat_manager.get_session_meta(self.session_id)
         if meta and int(meta.get("active", 1)) == 0:
             return await self._render_results(meta)
 
@@ -189,7 +200,7 @@ class CombatUIService(BaseUIService):
         """
         Собирает данные о всех участниках, разделяя их на 'Меня', 'Врагов' и 'Союзников'.
         """
-        participant_ids = await combat_manager.get_session_participants(self.session_id)
+        participant_ids = await self.combat_manager.get_session_participants(self.session_id)
 
         player_dto = None
         enemies_data = []
@@ -201,7 +212,7 @@ class CombatUIService(BaseUIService):
         # 1. Загружаем всех
         for pid_str in participant_ids:
             pid = int(pid_str)
-            raw = await combat_manager.get_actor_json(self.session_id, pid)
+            raw = await self.combat_manager.get_actor_json(self.session_id, pid)
             if raw:
                 dto = CombatSessionContainerDTO.model_validate_json(raw)
                 all_actors.append(dto)
@@ -214,7 +225,7 @@ class CombatUIService(BaseUIService):
         for actor in all_actors:
             # Определяем статус готовности (pending move)
             # Определяем, сделал ли этот участник ход против нас
-            pending_move = await combat_manager.get_pending_move(self.session_id, actor.char_id, self.char_id)
+            pending_move = await self.combat_manager.get_pending_move(self.session_id, actor.char_id, self.char_id)
             is_ready = bool(pending_move)
 
             hp_max = 100
@@ -305,7 +316,7 @@ class CombatUIService(BaseUIService):
 
     async def _get_my_actor_dto(self) -> CombatSessionContainerDTO | None:
         """Хелпер для быстрой загрузки себя из Redis."""
-        raw = await combat_manager.get_actor_json(self.session_id, self.char_id)
+        raw = await self.combat_manager.get_actor_json(self.session_id, self.char_id)
         if raw:
             return CombatSessionContainerDTO.model_validate_json(raw)
         return None

@@ -4,6 +4,7 @@ from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.schemas_dto.item_dto import InventoryItemDTO, ItemType
+from app.services.core_service.manager.account_manager import AccountManager
 from app.services.game_service.matchmaking_service import MatchmakingService
 from app.services.game_service.stats_aggregation_service import StatsAggregationService
 from database.repositories import get_inventory_repo, get_wallet_repo
@@ -20,18 +21,21 @@ class InventoryService:
     (получение, экипировка, снятие, выбрасывание) и проверки вместимости инвентаря.
     """
 
-    def __init__(self, session: AsyncSession, char_id: int):
+    def __init__(self, session: AsyncSession, char_id: int, account_manager: AccountManager):
         """
         Инициализирует InventoryService.
 
         Args:
             session: Асинхронная сессия базы данных.
             char_id: Уникальный идентификатор персонажа.
+            account_manager: Менеджер аккаунтов.
         """
         self.session = session
         self.char_id = char_id
+        self.account_manager = account_manager
         self.inventory_repo = get_inventory_repo(session)
         self.wallet_repo = get_wallet_repo(session)
+        self.mm_service = MatchmakingService(session, self.account_manager)
         log.debug(f"InventoryService | status=initialized char_id={char_id}")
 
     async def add_resource(self, subtype: str, amount: int) -> int:
@@ -185,8 +189,7 @@ class InventoryService:
         await self._handle_slot_conflicts(item)
 
         if await self.inventory_repo.move_item(item_id, "equipped"):
-            mm_service = MatchmakingService(self.session)
-            await mm_service.refresh_gear_score(self.char_id)
+            await self.mm_service.refresh_gear_score(self.char_id)
             log.info(
                 f"InventoryService | action=equip_item status=success char_id={self.char_id} item_id={item_id} name='{item.data.name}'"
             )
@@ -218,8 +221,7 @@ class InventoryService:
             return False, "Ошибка."
 
         if await self.inventory_repo.move_item(item_id, "inventory"):
-            mm_service = MatchmakingService(self.session)
-            await mm_service.refresh_gear_score(self.char_id)
+            await self.mm_service.refresh_gear_score(self.char_id)
             log.info(
                 f"InventoryService | action=unequip_item status=success char_id={self.char_id} item_id={item_id} name='{item.data.name}'"
             )

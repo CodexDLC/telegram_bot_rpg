@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.keyboards.inventory_callback import InventoryCallback
 from app.resources.schemas_dto.item_dto import InventoryItemDTO, ItemType
+from app.services.core_service.manager.account_manager import AccountManager
 from app.services.game_service.inventory.inventory_service import InventoryService
 from app.services.ui_service.base_service import BaseUIService
 from app.services.ui_service.helpers_ui.inventory_formatters import InventoryFormatter
@@ -24,12 +25,21 @@ class InventoryUIService(BaseUIService):
     Сервис для формирования UI инвентаря.
     """
 
-    def __init__(self, char_id: int, user_id: int, session: AsyncSession, state_data: dict[str, Any]):
+    def __init__(
+        self,
+        char_id: int,
+        user_id: int,
+        session: AsyncSession,
+        state_data: dict[str, Any],
+        account_manager: AccountManager,
+    ):
         super().__init__(char_id=char_id, state_data=state_data)
         # user_id передается напрямую для генерации кнопок (security)
         self.user_id = user_id
         self.session = session
-        self.inventory_service = InventoryService(session=self.session, char_id=self.char_id)
+        self.inventory_service = InventoryService(
+            session=self.session, char_id=self.char_id, account_manager=account_manager
+        )
         self.InvF = InventoryFormatter
 
         # Размер страницы (сетка 3x3 = 9 предметов)

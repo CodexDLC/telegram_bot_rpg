@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.handlers.callback.login.char_creation import start_creation_handler
 from app.resources.fsm_states.states import CharacterLobby
 from app.resources.keyboards.callback_data import LobbySelectionCallback
+from app.services.core_service.manager.account_manager import AccountManager
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY, fsm_store
 from app.services.ui_service.command_service import CommandService
@@ -21,7 +22,9 @@ router = Router(name="login_lobby_router")
 
 
 @router.callback_query(F.data == "start_adventure")
-async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
+async def start_login_handler(
+    call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession, account_manager: AccountManager
+) -> None:
     """
     Обрабатывает кнопку "Начать приключение".
     Отображает лобби выбора персонажа или запускает процесс создания нового.
@@ -102,11 +105,14 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, 
             bot=bot,
             char_id=char_id,
             session=session,
+            account_manager=account_manager,
         )
 
 
 @router.callback_query(CharacterLobby.selection, LobbySelectionCallback.filter(F.action == "create"))
-async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
+async def create_character_handler(
+    call: CallbackQuery, state: FSMContext, bot: Bot, session: AsyncSession, account_manager: AccountManager
+) -> None:
     """
     Обрабатывает кнопку "Создать нового персонажа" из лобби.
     """
@@ -139,4 +145,5 @@ async def create_character_handler(call: CallbackQuery, state: FSMContext, bot: 
         char_id=char_id,
         message_menu=message_menu,
         session=session,
+        account_manager=account_manager,
     )

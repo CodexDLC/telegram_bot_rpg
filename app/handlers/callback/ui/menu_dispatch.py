@@ -6,7 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import InGame
 from app.resources.keyboards.callback_data import MeinMenuCallback
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.world_manager import WorldManager
 from app.services.game_service.game_sync_service import GameSyncService
+from app.services.game_service.game_world_service import GameWorldService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.inventory.inventory_ui_service import InventoryUIService
@@ -17,7 +20,14 @@ router = Router(name="ui_menu_dispatch")
 
 @router.callback_query(MeinMenuCallback.filter())
 async def main_menu_dispatcher(
-    call: CallbackQuery, callback_data: MeinMenuCallback, state: FSMContext, bot: Bot, session: AsyncSession
+    call: CallbackQuery,
+    callback_data: MeinMenuCallback,
+    state: FSMContext,
+    bot: Bot,
+    session: AsyncSession,
+    account_manager: AccountManager,
+    world_manager: WorldManager,
+    game_world_service: GameWorldService,
 ) -> None:
     """
     Единая точка входа из Главного Меню.
@@ -34,7 +44,7 @@ async def main_menu_dispatcher(
 
     log.info(f"MenuDispatch | event=action user_id={user_id} char_id={char_id} action='{action}'")
 
-    sync_service = GameSyncService(session)
+    sync_service = GameSyncService(session, account_manager)
     await sync_service.synchronize_player_state(char_id)
     log.debug(f"StateSync | status=success char_id={char_id}")
 
@@ -63,13 +73,25 @@ async def main_menu_dispatcher(
         if action == "inventory":
             await state.set_state(InGame.inventory)
             log.info(f"FSM | state=InGame.inventory user_id={user_id}")
-            service = InventoryUIService(char_id=char_id, session=session, user_id=user_id, state_data=state_data)
+            service = InventoryUIService(
+                char_id=char_id,
+                session=session,
+                user_id=user_id,
+                state_data=state_data,
+                account_manager=account_manager,
+            )
             text, kb = await service.render_main_menu()
 
         elif action == "navigation":
             await state.set_state(InGame.navigation)
             log.info(f"FSM | state=InGame.navigation user_id={user_id}")
-            nav_service = NavigationService(char_id=char_id, state_data=state_data)
+            nav_service = NavigationService(
+                char_id=char_id,
+                state_data=state_data,
+                account_manager=account_manager,
+                world_manager=world_manager,
+                game_world_service=game_world_service,
+            )
             text, kb = await nav_service.reload_current_ui()
 
         if text and kb:
