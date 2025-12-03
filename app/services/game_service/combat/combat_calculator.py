@@ -109,17 +109,16 @@ class CombatCalculator:
             log.trace("CombatCalculator | block_type=geo")
 
         CombatCalculator._step_roll_damage(stats_atk, stats_def, damage_type, ctx, flags)
+        CombatCalculator._step_mitigation(stats_atk, stats_def, damage_type, ctx)  # Всегда применяем митигацию
 
         if ctx["is_blocked"] and ctx["block_type"] == "geo":
             if ctx["is_crit"]:
-                CombatCalculator._step_mitigation(stats_atk, stats_def, damage_type, ctx)
                 ctx["damage_final"] = int(ctx["damage_final"] * 0.5)
+                ctx["logs"].append("🛡️ Гео-блок ослабил критический удар!")  # Добавляем сообщение о гео-блоке
                 log.trace(f"CombatCalculator | geo_block_crit damage_final={ctx['damage_final']}")
             else:
-                ctx["damage_final"] = 0
+                ctx["damage_final"] = 0  # Обнуляем урон, если не крит и гео-блок
                 log.trace("CombatCalculator | geo_block_normal damage_final=0")
-        else:
-            CombatCalculator._step_mitigation(stats_atk, stats_def, damage_type, ctx)
 
         CombatCalculator._step_vampirism(stats_atk, ctx)
 

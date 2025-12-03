@@ -87,8 +87,12 @@ async def arena_submit_queue_handler(
         log.info(f"Arena | event=polling_cancelled user_id={user_id} state='{await state.get_state()}'")
         return
 
+    if not session_id:
+        log.info(f"Arena | event=match_not_found_creating_shadow user_id={user_id}")
+        session_id = await ui.action_create_shadow_battle(mode)
+
     if session_id:
-        log.info(f"Arena | event=match_found user_id={user_id} session_id='{session_id}'")
+        log.info(f"Arena | event=match_found_or_shadow_created user_id={user_id} session_id='{session_id}'")
         session_context["combat_session_id"] = session_id
         await state.update_data({FSM_CONTEXT_KEY: session_context})
         state_data[FSM_CONTEXT_KEY] = session_context
@@ -106,7 +110,6 @@ async def arena_submit_queue_handler(
         await state.set_state(InGame.combat)
         log.info(f"FSM | state=InGame.combat user_id={user_id}")
     else:
-        log.info(f"Arena | event=match_not_found user_id={user_id}")
-        # TODO: Обработать случай, когда матч не найден (вернуть в меню арены).
-        await call.message.edit_text("Не удалось найти противника. Попробуйте позже.")
+        log.error(f"Arena | event=shadow_battle_creation_failed user_id={user_id}")
+        await call.message.edit_text("Не удалось создать бой с тенью. Попробуйте позже.")
         await state.set_state(ArenaState.menu)

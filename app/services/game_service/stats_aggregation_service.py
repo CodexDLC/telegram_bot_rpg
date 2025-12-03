@@ -79,7 +79,7 @@ class StatsAggregationService:
         equipped_items: ItemList = await self.inv_repo.get_items_by_location(char_id, "equipped")
         base_keys = set(CharacterStatsReadDTO.model_fields.keys())
 
-        self._process_base_stats(char_id, stats_pool, base_stats_dto, base_keys)  # Pass char_id
+        self._process_base_stats(char_id, stats_pool, base_stats_dto, base_keys)
         self._process_equipment_stats(stats_pool, equipped_items, base_keys)
 
         total_stats_dto = self._create_stats_dto_from_pool(stats_pool, base_stats_dto)
@@ -97,9 +97,7 @@ class StatsAggregationService:
         log.info(f"StatsAggregation | status=finished char_id={char_id}")
         return {"stats": dict(stats_pool), "modifiers": dict(modifiers_pool)}
 
-    def _process_base_stats(
-        self, char_id: int, pool: PoolDict, dto: CharacterStatsReadDTO, keys: set[str]
-    ) -> None:  # Add char_id
+    def _process_base_stats(self, char_id: int, pool: PoolDict, dto: CharacterStatsReadDTO, keys: set[str]) -> None:
         """
         Обрабатывает базовые характеристики персонажа и добавляет их в пул.
 
@@ -111,7 +109,7 @@ class StatsAggregationService:
         """
         data = dto.model_dump(exclude={"created_at", "updated_at", "character_id"})
         self._add_layer(pool=pool, source_name="👤 База", data=data, target_keys=keys)
-        log.debug(f"StatsAggregation | action=process_base_stats char_id={char_id}")  # Use passed char_id
+        log.debug(f"StatsAggregation | action=process_base_stats char_id={char_id}")
 
     def _process_equipment_stats(self, pool: PoolDict, items: ItemList, keys: set[str]) -> None:
         """
@@ -159,6 +157,8 @@ class StatsAggregationService:
         Returns:
             Словарь, содержащий все бонусы предмета.
         """
+        # TODO: Разделить обработку бонусов и базовых свойств (например, урон у оружия, защита у брони)
+        # на два отдельных цикла или метода для лучшей читаемости и поддержки.
         if item.item_type == ItemType.CONSUMABLE:
             return {}
         total = item.data.bonuses.copy()

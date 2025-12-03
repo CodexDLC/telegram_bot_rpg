@@ -13,7 +13,7 @@ BASE_ITEM_TEMPLATES = {
         "damage_range": (3, 6),
         "weight": 2.0,
     },
-    "greatsword": {"type": "armor", "slots": ["two_hand"], "damage_range": (8, 14), "weight": 5.0},
+    "greatsword": {"type": "weapon", "slots": ["two_hand"], "damage_range": (8, 14), "weight": 5.0},
     "dagger": {
         "type": "weapon",
         "slots": ["main_hand", "off_hand"],

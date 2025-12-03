@@ -378,18 +378,20 @@ class CombatService:
             return
 
         combined_logs = []
+        # Лог для actor_a, атакующего actor_b
         text_a = CombatLogBuilder.build_log_entry(
-            actor_a.name,
-            actor_b.name,
+            f"⚔️ {actor_a.name}",  # Атакующий с эмодзи
+            f"🛡️ {actor_b.name}",  # Защищающийся с эмодзи
             res_a,
             defender_hp=actor_b.state.hp_current,
             defender_energy=actor_b.state.energy_current,
         )
         combined_logs.append(text_a)
 
+        # Лог для actor_b, атакующего actor_a
         text_b = CombatLogBuilder.build_log_entry(
-            actor_b.name,
-            actor_a.name,
+            f"⚔️ {actor_b.name}",  # Атакующий с эмодзи
+            f"🛡️ {actor_a.name}",  # Защищающийся с эмодзи
             res_b,
             defender_hp=actor_a.state.hp_current,
             defender_energy=actor_a.state.energy_current,
@@ -485,6 +487,25 @@ class CombatService:
         return None
 
     @staticmethod
+    def _determine_xp_outcome(outgoing: dict[str, Any]) -> str:
+        """
+        Определяет исход действия для регистрации опыта.
+
+        Args:
+            outgoing: Результаты исходящего удара.
+
+        Returns:
+            Строка, описывающая исход ("miss", "partial", "crit", "success").
+        """
+        if outgoing["is_dodged"]:
+            return "miss"
+        elif outgoing["is_blocked"]:
+            return "partial"
+        elif outgoing["is_crit"]:
+            return "crit"
+        return "success"
+
+    @staticmethod
     def _register_xp_events(
         actor: CombatSessionContainerDTO, outgoing: dict[str, Any], incoming: dict[str, Any]
     ) -> None:
@@ -496,13 +517,7 @@ class CombatService:
             outgoing: Результаты исходящего удара.
             incoming: Результаты входящего удара.
         """
-        outcome = "success"
-        if outgoing["is_dodged"]:
-            outcome = "miss"
-        elif outgoing["is_blocked"]:
-            outcome = "partial"
-        elif outgoing["is_crit"]:
-            outcome = "crit"
+        outcome = CombatService._determine_xp_outcome(outgoing)
 
         CombatXPManager.register_action(actor, "sword", outcome)
 

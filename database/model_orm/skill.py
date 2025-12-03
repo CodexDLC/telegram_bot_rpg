@@ -49,9 +49,7 @@ class CharacterSkillRate(Base):
         Integer, default=0, nullable=False, comment="Количество опыта, начисляемого за 'тик' действия."
     )
 
-    character: Mapped[Character] = relationship(
-        back_populates="skill_rate", comment="Обратная связь с моделью Character."
-    )
+    character: Mapped[Character] = relationship(back_populates="skill_rate")
 
     __table_args__ = (PrimaryKeyConstraint("character_id", "skill_key", name="pk_character_skill_rate"),)
 
@@ -93,9 +91,7 @@ class CharacterSkillProgress(Base, TimestampMixin):
         comment="Текущее состояние развития навыка (PLUS, PAUSE, MINUS).",
     )
 
-    character: Mapped[Character] = relationship(
-        back_populates="skill_progress", comment="Обратная связь с моделью Character."
-    )
+    character: Mapped[Character] = relationship(back_populates="skill_progress")
 
     __table_args__ = (PrimaryKeyConstraint("character_id", "skill_key", name="pk_character_skill_progress"),)
 

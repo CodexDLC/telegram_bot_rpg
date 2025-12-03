@@ -40,7 +40,7 @@ class Leaderboard(Base, TimestampMixin):
         Integer, default=1000, index=True, comment="Рейтинг PvP персонажа (например, ELO/MMR)."
     )
 
-    character: Mapped[Character] = relationship(backref="leaderboard", comment="Обратная связь с моделью Character.")
+    character: Mapped[Character] = relationship(backref="leaderboard")
 
     def __repr__(self) -> str:
         return f"<Leaderboard(char_id={self.character_id}, gs={self.gear_score})>"
