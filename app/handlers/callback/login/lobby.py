@@ -51,9 +51,25 @@ async def start_login_handler(call: CallbackQuery, state: FSMContext, bot: Bot, 
     characters_count = len(character_list) if character_list is not None else 0
     log.debug(f"LoginFlow | characters_found={characters_count} user_id={user_id}")
 
-    if character_list:  # character_list уже проверен на None выше
+    if character_list:
         await state.set_state(CharacterLobby.selection)
-        await state.update_data({FSM_CONTEXT_KEY: {"user_id": user_id, "char_id": None, "message_content": None}})
+
+        # 1. Достаем текущие данные, чтобы спасти message_menu
+        current_data = await state.get_data()
+        current_ctx = current_data.get(FSM_CONTEXT_KEY, {})
+        saved_menu = current_ctx.get("message_menu")  # Спасаем ID меню!
+
+        # 2. Формируем новый контекст, но спасенное меню кладем обратно
+        new_context = {
+            "user_id": user_id,
+            "char_id": None,
+            "message_content": None,
+            "message_menu": saved_menu,  # <--- Возвращаем на базу
+        }
+
+        # 3. Сохраняем
+        await state.update_data({FSM_CONTEXT_KEY: new_context})
+
         log.info(f"FSM | state=CharacterLobby.selection user_id={user_id}")
 
         text, kb = lobby_service.get_data_lobby_start(character_list)
