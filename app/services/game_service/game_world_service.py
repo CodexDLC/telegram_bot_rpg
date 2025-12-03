@@ -3,7 +3,7 @@ import json
 from loguru import logger as log
 
 from app.resources.game_data.graf_data_world.start_vilage import WORLD_DATA
-from app.services.core_service.manager.world_manager import world_manager
+from app.services.core_service.manager.world_manager import WorldManager
 
 
 class GameWorldService:
@@ -13,6 +13,16 @@ class GameWorldService:
     Отвечает за инициализацию мира из статических ресурсов,
     предоставление данных о локациях и управление игроками в локациях.
     """
+
+    def __init__(self, world_manager: WorldManager):
+        """
+        Инициализирует GameWorldService.
+
+        Args:
+            world_manager: Менеджер игрового мира.
+        """
+        self.world_manager = world_manager
+        log.debug("GameWorldService | status=initialized")
 
     async def initialize_world_locations(self) -> None:
         """
@@ -32,7 +42,7 @@ class GameWorldService:
                 "exits": json.dumps(loc_data.get("exits", {})),
                 "tags": json.dumps(loc_data.get("environment_tags", [])),
             }
-            await world_manager.write_location_meta(loc_id, data_to_write)
+            await self.world_manager.write_location_meta(loc_id, data_to_write)
             locations_loaded += 1
             log.debug(f"WorldInit | status=loaded loc_id='{loc_id}' name='{loc_data.get('title')}'")
 
@@ -70,7 +80,7 @@ class GameWorldService:
             Словарь с данными локации, готовыми для навигации, или None, если локация не найдена
             или произошла ошибка десериализации.
         """
-        raw_data = await world_manager.get_location_meta(loc_id)
+        raw_data = await self.world_manager.get_location_meta(loc_id)
 
         if not raw_data:
             log.warning(f"WorldService | status=failed reason='Meta data not found' loc_id='{loc_id}'")
@@ -86,6 +96,3 @@ class GameWorldService:
         except json.JSONDecodeError:
             log.error(f"WorldService | status=failed reason='JSON decode error' loc_id='{loc_id}'", exc_info=True)
             return None
-
-
-game_world_service = GameWorldService()

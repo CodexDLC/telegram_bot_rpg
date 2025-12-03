@@ -7,6 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.resources.fsm_states.states import ArenaState, InGame
 from app.resources.keyboards.callback_data import ArenaQueueCallback
 from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.arena_manager import ArenaManager
+from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.game_service.combat.combat_service import CombatService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
@@ -19,7 +22,13 @@ router = Router(name="arena_1v1_router")
 
 @router.callback_query(ArenaState.menu, ArenaQueueCallback.filter(F.action == "match_menu"))
 async def arena_1v1_menu_handler(
-    call: CallbackQuery, callback_data: ArenaQueueCallback, state: FSMContext, session: AsyncSession
+    call: CallbackQuery,
+    callback_data: ArenaQueueCallback,
+    state: FSMContext,
+    session: AsyncSession,
+    account_manager: AccountManager,
+    arena_manager: ArenaManager,
+    combat_manager: CombatManager,
 ) -> None:
     """Отображает меню выбора режима арены."""
     if not call.from_user or not call.message or isinstance(call.message, InaccessibleMessage):
@@ -31,7 +40,14 @@ async def arena_1v1_menu_handler(
     log.info(f"Arena | event=view_mode_menu user_id={user_id} char_id={char_id} mode='{mode}'")
 
     state_data = await state.get_data()
-    ui = ArenaUIService(char_id=char_id, state_data=state_data, session=session)
+    ui = ArenaUIService(
+        char_id=char_id,
+        state_data=state_data,
+        session=session,
+        account_manager=account_manager,
+        arena_manager=arena_manager,
+        combat_manager=combat_manager,
+    )
     text, kb = await ui.view_mode_menu(mode)
 
     if text and kb:
@@ -44,7 +60,14 @@ async def arena_1v1_menu_handler(
 
 @router.callback_query(ArenaState.menu, ArenaQueueCallback.filter(F.action == "submit_queue_1x1"))
 async def arena_submit_queue_handler(
-    call: CallbackQuery, callback_data: ArenaQueueCallback, state: FSMContext, session: AsyncSession, bot: Bot
+    call: CallbackQuery,
+    callback_data: ArenaQueueCallback,
+    state: FSMContext,
+    session: AsyncSession,
+    bot: Bot,
+    account_manager: AccountManager,
+    arena_manager: ArenaManager,
+    combat_manager: CombatManager,
 ) -> None:
     """Обрабатывает вход в очередь на арене и запускает поиск матча."""
     if not call.from_user or not call.message or isinstance(call.message, InaccessibleMessage):
@@ -56,7 +79,7 @@ async def arena_submit_queue_handler(
     log.info(f"Arena | event=join_queue user_id={user_id} char_id={char_id} mode='{mode}'")
 
     state_data = await state.get_data()
-    ui = ArenaUIService(char_id, state_data, session)
+    ui = ArenaUIService(char_id, state_data, session, account_manager, arena_manager, combat_manager)
     gs = await ui.action_join_queue(mode)
     if gs is None:
         log.error(f"Arena | status=failed reason='action_join_queue returned None' user_id={user_id}")
@@ -97,11 +120,11 @@ async def arena_submit_queue_handler(
         await state.update_data({FSM_CONTEXT_KEY: session_context})
         state_data[FSM_CONTEXT_KEY] = session_context
 
-        combat_service = CombatService(str(session_id))
+        combat_service = CombatService(str(session_id), combat_manager, account_manager)
         await combat_service.process_turn_updates()
         log.info(f"Combat | event=ai_initial_move status=triggered session_id='{session_id}'")
 
-        combat_ui = CombatUIService(user_id, char_id, session_id, state_data)
+        combat_ui = CombatUIService(user_id, char_id, session_id, state_data, combat_manager, account_manager)
         text, kb = await combat_ui.render_dashboard(current_selection={})
 
         await bot.edit_message_text(

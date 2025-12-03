@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import InGame
 from app.resources.keyboards.inventory_callback import InventoryCallback
+from app.services.core_service.manager.account_manager import AccountManager
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.inventory.inventory_ui_service import InventoryUIService
@@ -18,7 +19,12 @@ router = Router(name="inventory_main_router")
     InventoryCallback.filter(F.level == 0),
 )
 async def inventory_main_handler(
-    call: CallbackQuery, callback_data: InventoryCallback, state: FSMContext, session: AsyncSession, bot: Bot
+    call: CallbackQuery,
+    callback_data: InventoryCallback,
+    state: FSMContext,
+    session: AsyncSession,
+    bot: Bot,
+    account_manager: AccountManager,
 ) -> None:
     """Обрабатывает главное меню инвентаря."""
     user_id = call.from_user.id
@@ -38,7 +44,13 @@ async def inventory_main_handler(
         await Err.char_id_not_found_in_fsm(call)
         return
 
-    service = InventoryUIService(char_id=char_id_from_fsm, session=session, state_data=state_data, user_id=user_id)
+    service = InventoryUIService(
+        char_id=char_id_from_fsm,
+        session=session,
+        state_data=state_data,
+        user_id=user_id,
+        account_manager=account_manager,
+    )
     text, kb = await service.render_main_menu()
 
     message_data = service.get_message_content_data()

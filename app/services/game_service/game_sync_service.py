@@ -4,7 +4,7 @@ from typing import Any
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.core_service.manager.account_manager import account_manager
+from app.services.core_service.manager.account_manager import AccountManager
 from app.services.game_service.regen_service import RegenService
 from app.services.game_service.stats_aggregation_service import StatsAggregationService
 
@@ -18,14 +18,16 @@ class GameSyncService:
     для обновления игрового состояния.
     """
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, account_manager: AccountManager):
         """
         Инициализирует GameSyncService.
 
         Args:
             session: Асинхронная сессия базы данных.
+            account_manager: Менеджер аккаунтов.
         """
         self.session = session
+        self.account_manager = account_manager
         log.debug("GameSyncService | status=initialized")
 
     async def synchronize_player_state(self, char_id: int) -> None:
@@ -43,7 +45,7 @@ class GameSyncService:
 
         log.info(f"GameSync | event=start_sync char_id={char_id}")
 
-        regen_service = RegenService(self.session)
+        regen_service = RegenService(self.session, self.account_manager)
         await regen_service.synchronize_state(char_id)
         log.debug(f"GameSync | component=regen_service status=synchronized char_id={char_id}")
 
@@ -62,7 +64,7 @@ class GameSyncService:
         Returns:
             Кортеж `(current_hp, current_energy)` с текущими значениями.
         """
-        data = await account_manager.get_account_data(char_id)
+        data = await self.account_manager.get_account_data(char_id)
         hp_cur = int(data.get("hp_current", 0)) if data else 0
         en_cur = int(data.get("energy_current", 0)) if data else 0
         log.debug(f"GameSync | action=get_current_vitals char_id={char_id} hp={hp_cur} energy={en_cur}")
@@ -102,7 +104,7 @@ class GameSyncService:
             Асинхронная функция, которая принимает номер попытки и возвращает
             "Full", если HP и Energy полностью восстановлены, иначе None.
         """
-        regen_service = RegenService(self.session)
+        regen_service = RegenService(self.session, self.account_manager)
         hp_max, energy_max = await self.get_max_vitals(char_id)
 
         async def quick_recovery_tick(attempt: int) -> str | None:

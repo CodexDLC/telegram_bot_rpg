@@ -3,6 +3,7 @@
 aiogram~=3.22.0
 # валидация данных
 pydantic
+pydantic_settings
 
 
 # --- База данных (SQLite) ---

@@ -5,7 +5,7 @@ from typing import Any
 from loguru import logger as log
 
 from app.resources.schemas_dto.combat_source_dto import CombatSessionContainerDTO
-from app.services.core_service.manager.combat_manager import combat_manager
+from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.game_service.combat.ability_service import AbilityService
 
 
@@ -16,8 +16,11 @@ class CombatAIService:
     Отвечает за выбор цели, способности, зон атаки и защиты для AI-акторов.
     """
 
-    @staticmethod
+    def __init__(self, combat_manager: CombatManager):
+        self.combat_manager = combat_manager
+
     async def calculate_action(
+        self,
         actor_dto: CombatSessionContainerDTO,
         session_id: str,
     ) -> dict[str, Any]:
@@ -41,7 +44,7 @@ class CombatAIService:
         my_team = actor_dto.team
         log.debug(f"CombatAIService | action=calculate_action actor_id={char_id} session_id='{session_id}'")
 
-        all_ids = await combat_manager.get_session_participants(session_id)
+        all_ids = await self.combat_manager.get_session_participants(session_id)
         enemies: list[int] = []
         threats: list[int] = []
 
@@ -50,7 +53,7 @@ class CombatAIService:
             if pid_int == char_id:
                 continue
 
-            raw_target = await combat_manager.get_actor_json(session_id, pid_int)
+            raw_target = await self.combat_manager.get_actor_json(session_id, pid_int)
             if not raw_target:
                 continue
 
@@ -66,7 +69,7 @@ class CombatAIService:
             hp = target_obj.get("state", {}).get("hp_current", 0)
             if target_obj.get("team") != my_team and hp > 0:
                 enemies.append(pid_int)
-                pending = await combat_manager.get_pending_move(session_id, pid_int, char_id)
+                pending = await self.combat_manager.get_pending_move(session_id, pid_int, char_id)
                 if pending:
                     threats.append(pid_int)
 

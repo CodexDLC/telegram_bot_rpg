@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 from app.services.core_service.redis_key import RedisKeys as Rk
-from app.services.core_service.redis_service import redis_service
+from app.services.core_service.redis_service import RedisService
 
 
 class ArenaManager:
@@ -12,6 +12,9 @@ class ArenaManager:
     Предоставляет методы для создания, получения, удаления заявок,
     а также для добавления, удаления и поиска игроков в очередях арены.
     """
+
+    def __init__(self, redis_service: RedisService):
+        self.redis_service = redis_service
 
     async def create_request(self, char_id: int, meta: dict[str, Any], ttl: int = 300) -> None:
         """
@@ -23,7 +26,7 @@ class ArenaManager:
             ttl: Время жизни записи в секундах. По умолчанию 300 секунд (5 минут).
         """
         key = Rk.get_arena_request_key(char_id)
-        await redis_service.set_value(key, json.dumps(meta), ttl=ttl)
+        await self.redis_service.set_value(key, json.dumps(meta), ttl=ttl)
 
     async def get_request(self, char_id: int) -> dict[str, Any] | None:
         """
@@ -39,7 +42,7 @@ class ArenaManager:
             json.JSONDecodeError: Если сохраненные данные не являются валидным JSON.
         """
         key = Rk.get_arena_request_key(char_id)
-        raw = await redis_service.get_value(key)
+        raw = await self.redis_service.get_value(key)
         if raw:
             try:
                 return json.loads(raw)
@@ -55,7 +58,7 @@ class ArenaManager:
             char_id: Уникальный идентификатор персонажа.
         """
         key = Rk.get_arena_request_key(char_id)
-        await redis_service.delete_key(key)
+        await self.redis_service.delete_key(key)
 
     async def add_to_queue(self, mode: str, char_id: int, score: float) -> None:
         """
@@ -67,7 +70,7 @@ class ArenaManager:
             score: Очки персонажа (например, его GameScore) для сортировки в ZSET.
         """
         key = Rk.get_arena_queue_key(mode)
-        await redis_service.add_to_zset(key, {str(char_id): score})
+        await self.redis_service.add_to_zset(key, {str(char_id): score})
 
     async def remove_from_queue(self, mode: str, char_id: int) -> bool:
         """
@@ -81,7 +84,7 @@ class ArenaManager:
             True, если персонаж был успешно удален из очереди, иначе False.
         """
         key = Rk.get_arena_queue_key(mode)
-        return await redis_service.remove_from_zset(key, str(char_id))
+        return await self.redis_service.remove_from_zset(key, str(char_id))
 
     async def get_candidates(self, mode: str, min_score: float, max_score: float) -> list[str]:
         """
@@ -96,7 +99,7 @@ class ArenaManager:
             Список строковых идентификаторов персонажей, соответствующих критериям.
         """
         key = Rk.get_arena_queue_key(mode)
-        return await redis_service.get_zset_range_by_score(key, min_score, max_score)
+        return await self.redis_service.get_zset_range_by_score(key, min_score, max_score)
 
     async def get_score(self, mode: str, char_id: int) -> float | None:
         """
@@ -110,7 +113,4 @@ class ArenaManager:
             Очки персонажа в виде float, если найден, иначе None.
         """
         key = Rk.get_arena_queue_key(mode)
-        return await redis_service.get_zset_score(key, str(char_id))
-
-
-arena_manager = ArenaManager()
+        return await self.redis_service.get_zset_score(key, str(char_id))

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import InGame
 from app.resources.keyboards.inventory_callback import InventoryCallback
+from app.services.core_service.manager.account_manager import AccountManager
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.inventory.inventory_ui_service import InventoryUIService
@@ -18,7 +19,12 @@ router = Router(name="inventory_equip_router")
     InventoryCallback.filter((F.section == "equip") & (F.level == 1)),
 )
 async def inventory_equip_list_handler(
-    call: CallbackQuery, callback_data: InventoryCallback, state: FSMContext, session: AsyncSession, bot: Bot
+    call: CallbackQuery,
+    callback_data: InventoryCallback,
+    state: FSMContext,
+    session: AsyncSession,
+    bot: Bot,
+    account_manager: AccountManager,
 ) -> None:
     """Обрабатывает список экипировки, фильтры и пагинацию."""
     user_id = call.from_user.id
@@ -36,7 +42,9 @@ async def inventory_equip_list_handler(
         await Err.char_id_not_found_in_fsm(call)
         return
 
-    service = InventoryUIService(char_id=char_id, user_id=user_id, session=session, state_data=state_data)
+    service = InventoryUIService(
+        char_id=char_id, user_id=user_id, session=session, state_data=state_data, account_manager=account_manager
+    )
     text, kb = await service.render_item_list(section="equip", category=callback_data.category, page=callback_data.page)
 
     message_data = service.get_message_content_data()

@@ -92,23 +92,33 @@ def mock_callback(mock_bot, mock_message):
 
 
 @pytest.mark.asyncio
-async def test_full_game_cycle(get_async_session, fsm_context, mock_bot, mock_message, mock_callback):
+async def test_full_game_cycle(get_async_session, fsm_context, mock_bot, mock_message, mock_callback, app_container):
     """
     Полный цикл: Старт -> Создание -> Туториал (Статы) -> Туториал (Скиллы) -> Вход -> Выход -> Вход.
     """
+    # Имитация работы Middleware
+    data = {
+        "account_manager": app_container.account_manager,
+        "arena_manager": app_container.arena_manager,
+        "combat_manager": app_container.combat_manager,
+        "world_manager": app_container.world_manager,
+        "game_world_service": app_container.game_world_service,
+    }
+    await fsm_context.set_data(data)
+
     async with get_async_session() as session:
         # 1. СТАРТ
         print("\n🏁 Шаг 1: /start")
         await cmd_start(mock_message, fsm_context, mock_bot, session)
 
-        data = await fsm_context.get_data()
-        assert FSM_CONTEXT_KEY in data
-        assert data[FSM_CONTEXT_KEY].get("message_menu") is not None
+        fsm_data = await fsm_context.get_data()
+        assert FSM_CONTEXT_KEY in fsm_data
+        assert fsm_data[FSM_CONTEXT_KEY].get("message_menu") is not None
 
         # 2. НАЧАЛО (Авто-создание)
         print("\n🏁 Шаг 2: Начать приключение")
         mock_callback.data = "start_adventure"
-        await start_login_handler(mock_callback, fsm_context, mock_bot, session)
+        await start_login_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"])
         assert await fsm_context.get_state() == CharacterCreation.choosing_gender
 
         # 3. СОЗДАНИЕ
@@ -120,7 +130,7 @@ async def test_full_game_cycle(get_async_session, fsm_context, mock_bot, mock_me
         await choosing_name_handler(mock_message, fsm_context, mock_bot)
 
         mock_callback.data = "confirm"
-        await confirm_creation_handler(mock_callback, fsm_context, mock_bot, session)
+        await confirm_creation_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"])
         print("✅ Персонаж создан.")
 
         # 4. ТУТОРИАЛ (СТАТЫ)
@@ -172,7 +182,16 @@ async def test_full_game_cycle(get_async_session, fsm_context, mock_bot, mock_me
         # 6. ВХОД В ИГРУ
         print("\n🏁 Шаг 6: Вход в мир (Login)")
         mock_callback.data = "lsc:login"
-        await start_logging_handler(mock_callback, fsm_context, mock_bot, session)
+        await start_logging_handler(
+            call=mock_callback,
+            state=fsm_context,
+            bot=mock_bot,
+            session=session,
+            account_manager=data["account_manager"],
+            world_manager=data["world_manager"],
+            game_world_service=data["game_world_service"],
+            combat_manager=data["combat_manager"],
+        )
 
         state = await fsm_context.get_state()
         assert state == InGame.navigation, f"❌ Ошибка входа! Текущий стейт: {state}"
@@ -188,17 +207,26 @@ async def test_full_game_cycle(get_async_session, fsm_context, mock_bot, mock_me
         # 8. РЕ-ЛОГИН (Проверка сохранения)
         print("\n🏁 Шаг 8: Возвращение (Re-Login)")
         mock_callback.data = "start_adventure"
-        await start_login_handler(mock_callback, fsm_context, mock_bot, session)
+        await start_login_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"])
 
         # Выбираем чара
-        data = await fsm_context.get_data()
-        char_id = data["characters"][-1]["character_id"]
+        fsm_data = await fsm_context.get_data()
+        char_id = fsm_data["characters"][-1]["character_id"]
         cb_data = LobbySelectionCallback(action="select", char_id=char_id)
         await select_or_delete_character_handler(mock_callback, cb_data, fsm_context, mock_bot, session)
 
         # Входим
         mock_callback.data = "lsc:login"
-        await start_logging_handler(mock_callback, fsm_context, mock_bot, session)
+        await start_logging_handler(
+            call=mock_callback,
+            state=fsm_context,
+            bot=mock_bot,
+            session=session,
+            account_manager=data["account_manager"],
+            world_manager=data["world_manager"],
+            game_world_service=data["game_world_service"],
+            combat_manager=data["combat_manager"],
+        )
 
         state = await fsm_context.get_state()
         assert state == InGame.navigation

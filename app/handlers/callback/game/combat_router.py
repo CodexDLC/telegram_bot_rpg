@@ -14,8 +14,12 @@ from app.resources.keyboards.combat_callback import (
     CombatLogCallback,
     CombatZoneCallback,
 )
-from app.services.core_service.manager.combat_manager import combat_manager
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.arena_manager import ArenaManager
+from app.services.core_service.manager.combat_manager import CombatManager
+from app.services.core_service.manager.world_manager import WorldManager
 from app.services.game_service.combat.combat_service import CombatService
+from app.services.game_service.game_world_service import GameWorldService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.arena_ui_service.arena_ui_service import ArenaUIService
@@ -28,7 +32,13 @@ router = Router(name="combat_router")
 
 
 @router.callback_query(InGame.combat, CombatZoneCallback.filter())
-async def combat_zone_toggle_handler(call: CallbackQuery, callback_data: CombatZoneCallback, state: FSMContext) -> None:
+async def combat_zone_toggle_handler(
+    call: CallbackQuery,
+    callback_data: CombatZoneCallback,
+    state: FSMContext,
+    combat_manager: CombatManager,
+    account_manager: AccountManager,
+) -> None:
     """Обрабатывает нажатия на зоны атаки/защиты в бою."""
     if not call.from_user or not isinstance(call.message, Message):
         return
@@ -61,7 +71,7 @@ async def combat_zone_toggle_handler(call: CallbackQuery, callback_data: CombatZ
         await Err.generic_error(call)
         return
 
-    ui_service = CombatUIService(user_id, char_id, str(session_id), state_data)
+    ui_service = CombatUIService(user_id, char_id, str(session_id), state_data, combat_manager, account_manager)
     text, kb = await ui_service.render_dashboard(current_selection=selection)
 
     try:
@@ -73,7 +83,15 @@ async def combat_zone_toggle_handler(call: CallbackQuery, callback_data: CombatZ
 
 @router.callback_query(InGame.combat, CombatActionCallback.filter())
 async def combat_action_handler(
-    call: CallbackQuery, callback_data: CombatActionCallback, state: FSMContext, session: AsyncSession
+    call: CallbackQuery,
+    callback_data: CombatActionCallback,
+    state: FSMContext,
+    session: AsyncSession,
+    combat_manager: CombatManager,
+    account_manager: AccountManager,
+    world_manager: WorldManager,
+    arena_manager: ArenaManager,
+    game_world_service: GameWorldService,
 ) -> None:
     """Обрабатывает действия в бою (подтверждение хода, выход, меню)."""
     start_time = time.monotonic()
@@ -102,16 +120,20 @@ async def combat_action_handler(
         content_text, content_kb = None, None
         if mode == "arena":
             await state.set_state(ArenaState.menu)
-            arena_ui = ArenaUIService(char_id, state_data, session)
+            arena_ui = ArenaUIService(char_id, state_data, session, account_manager, arena_manager, combat_manager)
             content_text, content_kb = await arena_ui.view_main_menu()
         else:
             await state.set_state(InGame.navigation)
-            nav_service = NavigationService(char_id, state_data)
+            nav_service = NavigationService(
+                char_id, state_data, account_manager, world_manager, game_world_service=game_world_service
+            )
             content_text, content_kb = await nav_service.reload_current_ui()
 
         msg_menu = session_context.get("message_menu")
         if msg_menu:
-            ms = MenuService(game_stage="in_game", state_data=state_data, session=session)
+            ms = MenuService(
+                game_stage="in_game", state_data=state_data, session=session, account_manager=account_manager
+            )
             menu_text, menu_kb = await ms.get_data_menu()
             try:
                 await call.bot.edit_message_text(
@@ -148,7 +170,7 @@ async def combat_action_handler(
 
         log.debug(f"Combat | action=submit user_id={user_id} atk='{atk_zones}' def='{real_def_zones}'")
 
-        combat_service = CombatService(str(session_id))
+        combat_service = CombatService(str(session_id), combat_manager, account_manager)
         all_participants = await combat_manager.get_session_participants(str(session_id))
         target_id = next((int(pid) for pid in all_participants if int(pid) != char_id), None)
 
@@ -162,7 +184,7 @@ async def combat_action_handler(
         )
         await state.update_data(combat_selection={"atk": [], "def": []})
 
-        ui_service = CombatUIService(user_id, char_id, str(session_id), state_data)
+        ui_service = CombatUIService(user_id, char_id, str(session_id), state_data, combat_manager, account_manager)
         if msg_menu := session_context.get("message_menu"):
             log_text, log_kb = await ui_service.render_combat_log(page=0)
             try:
@@ -217,7 +239,7 @@ async def combat_action_handler(
 
     elif action == "refresh":
         log.debug(f"Combat | action=refresh user_id={user_id}")
-        ui_service = CombatUIService(user_id, char_id, str(session_id), state_data)
+        ui_service = CombatUIService(user_id, char_id, str(session_id), state_data, combat_manager, account_manager)
         text, kb = await ui_service.render_dashboard(current_selection={})
         if msg_content := session_context.get("message_content"):
             try:
@@ -236,7 +258,13 @@ async def combat_action_handler(
 
 
 @router.callback_query(InGame.combat, CombatLogCallback.filter())
-async def combat_log_pagination(call: CallbackQuery, callback_data: CombatLogCallback, state: FSMContext) -> None:
+async def combat_log_pagination(
+    call: CallbackQuery,
+    callback_data: CombatLogCallback,
+    state: FSMContext,
+    combat_manager: CombatManager,
+    account_manager: AccountManager,
+) -> None:
     """Обрабатывает пагинацию в логе боя."""
     if not call.from_user or not isinstance(call.message, Message):
         return
@@ -255,7 +283,7 @@ async def combat_log_pagination(call: CallbackQuery, callback_data: CombatLogCal
         await Err.generic_error(call)
         return
 
-    ui_service = CombatUIService(user_id, char_id, str(session_id), state_data)
+    ui_service = CombatUIService(user_id, char_id, str(session_id), state_data, combat_manager, account_manager)
     text, kb = await ui_service.render_combat_log(page=page)
 
     try:

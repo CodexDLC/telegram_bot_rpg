@@ -6,7 +6,7 @@ from typing import Any
 from loguru import logger as log
 
 from app.resources.schemas_dto.combat_source_dto import CombatSessionContainerDTO
-from app.services.core_service.manager.combat_manager import combat_manager
+from app.services.core_service.manager.combat_manager import CombatManager
 
 TURN_TIMEOUT = 60
 VALID_BLOCK_PAIRS = [
@@ -24,14 +24,16 @@ class CombatTurnManager:
     и отслеживанием таймеров в боевой сессии.
     """
 
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, combat_manager: CombatManager):
         """
         Инициализирует CombatTurnManager.
 
         Args:
             session_id: Уникальный идентификатор боевой сессии.
+            combat_manager: Менеджер боя.
         """
         self.session_id = session_id
+        self.combat_manager = combat_manager
         log.debug(f"CombatTurnManager | status=initialized session_id='{session_id}'")
 
     async def register_move_request(
@@ -82,19 +84,19 @@ class CombatTurnManager:
         }
 
         move_json = json.dumps(move_data)
-        await combat_manager.set_pending_move(self.session_id, actor_id, target_id, move_json)
+        await self.combat_manager.set_pending_move(self.session_id, actor_id, target_id, move_json)
         log.debug(
             f"CombatTurnManager | event=pending_move_set actor_id={actor_id} target_id={target_id} session_id='{self.session_id}'"
         )
 
-        counter_move_json = await combat_manager.get_pending_move(self.session_id, target_id, actor_id)
+        counter_move_json = await self.combat_manager.get_pending_move(self.session_id, target_id, actor_id)
 
         if counter_move_json:
             log.info(
                 f"CombatTurnManager | event=move_pair_found actor_a={actor_id} actor_b={target_id} session_id='{self.session_id}'"
             )
-            await combat_manager.delete_pending_move(self.session_id, actor_id, target_id)
-            await combat_manager.delete_pending_move(self.session_id, target_id, actor_id)
+            await self.combat_manager.delete_pending_move(self.session_id, actor_id, target_id)
+            await self.combat_manager.delete_pending_move(self.session_id, target_id, actor_id)
             log.debug(
                 f"CombatTurnManager | action=pending_moves_cleaned pair={actor_id},{target_id} session_id='{self.session_id}'"
             )
@@ -134,7 +136,7 @@ class CombatTurnManager:
                 continue
 
             target_id = actor_dto.state.targets[0]
-            pending_json = await combat_manager.get_pending_move(self.session_id, actor_id, target_id)
+            pending_json = await self.combat_manager.get_pending_move(self.session_id, actor_id, target_id)
 
             if pending_json:
                 try:

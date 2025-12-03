@@ -6,7 +6,8 @@ from loguru import logger as log
 from pydantic import ValidationError
 
 from app.resources.schemas_dto.combat_source_dto import CombatSessionContainerDTO
-from app.services.core_service.manager.combat_manager import combat_manager
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.game_service.combat.ability_service import AbilityService
 from app.services.game_service.combat.combat_ai_service import CombatAIService
 from app.services.game_service.combat.combat_calculator import CombatCalculator
@@ -25,16 +26,22 @@ class CombatService:
     Созданием и завершением боя занимается `CombatLifecycleService`.
     """
 
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, combat_manager: CombatManager, account_manager: AccountManager):
         """
         Инициализирует CombatService.
 
         Args:
             session_id: Уникальный идентификатор сессии боя.
+            combat_manager: Менеджер боя.
+            account_manager: Менеджер аккаунтов.
         """
         self.session_id = session_id
-        self.turn_manager = CombatTurnManager(session_id)
-        log.info(f"CombatService | status=initialized session_id='{session_id}'")
+        self.combat_manager = combat_manager
+        self.account_manager = account_manager
+        self.turn_manager = CombatTurnManager(session_id, combat_manager)
+        self.lifecycle_service = CombatLifecycleService(combat_manager, account_manager)
+        self.ai_service = CombatAIService(combat_manager)
+        log.info(f"CombatService | status=initialized session_id='{self.session_id}'")
 
     async def switch_target(self, actor_id: int, new_target_id: int) -> tuple[bool, str]:
         """
@@ -87,7 +94,7 @@ class CombatService:
             )
             return False, "Ошибка списка."
 
-        await combat_manager.save_actor_json(self.session_id, actor_id, actor.model_dump_json())
+        await self.combat_manager.save_actor_json(self.session_id, actor_id, actor.model_dump_json())
         log.info(
             f"CombatService | action=switch_target status=success actor_id={actor_id} new_target_id={new_target_id} charges_left={actor.state.switch_charges}"
         )
@@ -150,7 +157,7 @@ class CombatService:
                 log.debug(
                     f"CombatService | event=ai_turn_check ai_actor_id={real_target_id} session_id='{self.session_id}'"
                 )
-                decision = await CombatAIService.calculate_action(target_actor, self.session_id)
+                decision = await self.ai_service.calculate_action(target_actor, self.session_id)
                 if decision:
                     await self._process_ai_turns()
 
@@ -158,7 +165,7 @@ class CombatService:
         """
         Проверяет и обрабатывает истекшие таймеры ходов для участников боя.
         """
-        participants = await combat_manager.get_session_participants(self.session_id)
+        participants = await self.combat_manager.get_session_participants(self.session_id)
         actors_map: dict[int, CombatSessionContainerDTO] = {}
         for pid in participants:
             actor = await self._get_actor(int(pid))
@@ -179,7 +186,7 @@ class CombatService:
         """
         Обрабатывает ходы всех AI-участников в текущей боевой сессии.
         """
-        participants = await combat_manager.get_session_participants(self.session_id)
+        participants = await self.combat_manager.get_session_participants(self.session_id)
         for pid_str in participants:
             pid = int(pid_str)
             actor = await self._get_actor(pid)
@@ -187,7 +194,7 @@ class CombatService:
             if not actor or not actor.is_ai or (actor.state and actor.state.hp_current <= 0):
                 continue
 
-            decision = await CombatAIService.calculate_action(actor, self.session_id)
+            decision = await self.ai_service.calculate_action(actor, self.session_id)
             if not decision:
                 continue
 
@@ -195,7 +202,7 @@ class CombatService:
             if not target_id:
                 continue
 
-            existing = await combat_manager.get_pending_move(self.session_id, pid, target_id)
+            existing = await self.combat_manager.get_pending_move(self.session_id, pid, target_id)
             if existing:
                 continue
 
@@ -278,8 +285,8 @@ class CombatService:
         self._update_stats(actor_a, res_a, res_b)
         self._update_stats(actor_b, res_b, res_a)
 
-        await combat_manager.save_actor_json(self.session_id, id_a, actor_a.model_dump_json())
-        await combat_manager.save_actor_json(self.session_id, id_b, actor_b.model_dump_json())
+        await self.combat_manager.save_actor_json(self.session_id, id_a, actor_a.model_dump_json())
+        await self.combat_manager.save_actor_json(self.session_id, id_b, actor_b.model_dump_json())
         await self._log_exchange(actor_a, res_a, actor_b, res_b)
 
         if await self._check_battle_end():
@@ -404,7 +411,7 @@ class CombatService:
             "pair_names": [actor_a.name, actor_b.name],
             "logs": combined_logs,
         }
-        await combat_manager.push_combat_log(self.session_id, json.dumps(log_entry))
+        await self.combat_manager.push_combat_log(self.session_id, json.dumps(log_entry))
         log.debug(
             f"CombatService | event=exchange_logged session_id='{self.session_id}' round={actor_a.state.exchange_count}"
         )
@@ -416,7 +423,7 @@ class CombatService:
         Returns:
             True, если бой завершен, иначе False.
         """
-        p_ids = await combat_manager.get_session_participants(self.session_id)
+        p_ids = await self.combat_manager.get_session_participants(self.session_id)
         actors: dict[int, CombatSessionContainerDTO] = {}
         for pid in p_ids:
             actor = await self._get_actor(int(pid))
@@ -426,7 +433,7 @@ class CombatService:
         winner = VictoryChecker.check_battle_end(actors)
         if winner:
             log.info(f"CombatService | event=battle_ended session_id='{self.session_id}' winner_team='{winner}'")
-            await CombatLifecycleService.finish_battle(self.session_id, winner)
+            await self.lifecycle_service.finish_battle(self.session_id, winner)
             return True
         return False
 
@@ -450,7 +457,7 @@ class CombatService:
         Returns:
             DTO актора, если найден и успешно десериализован, иначе None.
         """
-        data = await combat_manager.get_actor_json(self.session_id, char_id)
+        data = await self.combat_manager.get_actor_json(self.session_id, char_id)
         if data:
             try:
                 return CombatSessionContainerDTO.model_validate_json(data)

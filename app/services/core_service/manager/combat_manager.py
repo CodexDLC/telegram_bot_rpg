@@ -1,7 +1,7 @@
 from typing import Any
 
 from app.services.core_service.redis_key import RedisKeys as Rk
-from app.services.core_service.redis_service import redis_service
+from app.services.core_service.redis_service import RedisService
 
 
 class CombatManager:
@@ -12,6 +12,9 @@ class CombatManager:
     состояний акторов, ожидающих ходов и логов боя.
     """
 
+    def __init__(self, redis_service: RedisService):
+        self.redis_service = redis_service
+
     async def create_session_meta(self, session_id: str, data: dict[str, Any]) -> None:
         """
         Создает или обновляет метаданные боевой сессии.
@@ -21,7 +24,7 @@ class CombatManager:
             data: Словарь с метаданными (например, тип боя, статус активности).
         """
         key = Rk.get_combat_meta_key(session_id)
-        await redis_service.set_hash_fields(key, data)
+        await self.redis_service.set_hash_fields(key, data)
 
     async def get_session_meta(self, session_id: str) -> dict[str, str] | None:
         """
@@ -34,7 +37,7 @@ class CombatManager:
             Словарь с метаданными сессии, или None, если метаданные не найдены.
         """
         key = Rk.get_combat_meta_key(session_id)
-        return await redis_service.get_all_hash(key)
+        return await self.redis_service.get_all_hash(key)
 
     async def add_participant_id(self, session_id: str, char_id: int) -> None:
         """
@@ -45,7 +48,7 @@ class CombatManager:
             char_id: Идентификатор персонажа-участника.
         """
         key = Rk.get_combat_participants_key(session_id)
-        await redis_service.add_to_set(key, str(char_id))
+        await self.redis_service.add_to_set(key, str(char_id))
 
     async def get_session_participants(self, session_id: str) -> set[str]:
         """
@@ -58,7 +61,7 @@ class CombatManager:
             Множество строковых идентификаторов участников.
         """
         key = Rk.get_combat_participants_key(session_id)
-        return await redis_service.get_to_set(key)
+        return await self.redis_service.get_to_set(key)
 
     async def save_actor_json(self, session_id: str, char_id: int, json_data: str) -> None:
         """
@@ -70,7 +73,7 @@ class CombatManager:
             json_data: JSON-строка с данными актора.
         """
         key = Rk.get_combat_actor_key(session_id, char_id)
-        await redis_service.set_value(key, json_data)
+        await self.redis_service.set_value(key, json_data)
 
     async def get_actor_json(self, session_id: str, char_id: int) -> str | None:
         """
@@ -84,7 +87,7 @@ class CombatManager:
             JSON-строка с данными актора, или None, если данные не найдены.
         """
         key = Rk.get_combat_actor_key(session_id, char_id)
-        return await redis_service.get_value(key)
+        return await self.redis_service.get_value(key)
 
     async def set_pending_move(self, session_id: str, actor_id: int, target_id: int, move_data: str) -> None:
         """
@@ -97,7 +100,7 @@ class CombatManager:
             move_data: Строка с данными хода.
         """
         key = Rk.get_combat_pending_move_key(session_id, actor_id, target_id)
-        await redis_service.set_value(key, move_data)
+        await self.redis_service.set_value(key, move_data)
 
     async def get_pending_move(self, session_id: str, actor_id: int, target_id: int) -> str | None:
         """
@@ -112,7 +115,7 @@ class CombatManager:
             Строка с данными хода, или None, если ход не найден.
         """
         key = Rk.get_combat_pending_move_key(session_id, actor_id, target_id)
-        return await redis_service.get_value(key)
+        return await self.redis_service.get_value(key)
 
     async def delete_pending_move(self, session_id: str, actor_id: int, target_id: int) -> None:
         """
@@ -124,7 +127,7 @@ class CombatManager:
             target_id: Идентификатор цели хода.
         """
         key = Rk.get_combat_pending_move_key(session_id, actor_id, target_id)
-        await redis_service.delete_key(key)
+        await self.redis_service.delete_key(key)
 
     async def delete_all_pending_moves_for_actor(self, session_id: str, actor_id: int) -> None:
         """
@@ -135,7 +138,7 @@ class CombatManager:
             actor_id: Идентификатор актора, чьи ходы нужно удалить.
         """
         pattern = Rk.get_combat_pending_move_pattern(session_id, actor_id)
-        await redis_service.delete_by_pattern(pattern)
+        await self.redis_service.delete_by_pattern(pattern)
 
     async def push_combat_log(self, session_id: str, log_entry_json: str) -> None:
         """
@@ -146,7 +149,7 @@ class CombatManager:
             log_entry_json: JSON-строка с записью лога.
         """
         key = Rk.get_combat_log_key(session_id)
-        await redis_service.push_to_list(key, log_entry_json)
+        await self.redis_service.push_to_list(key, log_entry_json)
 
     async def get_combat_log_list(self, session_id: str) -> list[str]:
         """
@@ -159,7 +162,7 @@ class CombatManager:
             Список JSON-строк, представляющих записи лога.
         """
         key = Rk.get_combat_log_key(session_id)
-        return await redis_service.get_list_range(key)
+        return await self.redis_service.get_list_range(key)
 
     async def set_player_status(self, char_id: int, status: str, ttl: int = 300) -> None:
         """
@@ -171,7 +174,7 @@ class CombatManager:
             ttl: Время жизни статуса в секундах. По умолчанию 300 секунд (5 минут).
         """
         key = Rk.get_player_status_key(char_id)
-        await redis_service.set_value(key, status, ttl=ttl)
+        await self.redis_service.set_value(key, status, ttl=ttl)
 
     async def get_player_status(self, char_id: int) -> str | None:
         """
@@ -184,7 +187,7 @@ class CombatManager:
             Строка, описывающая статус, или None, если статус не установлен.
         """
         key = Rk.get_player_status_key(char_id)
-        return await redis_service.get_value(key)
+        return await self.redis_service.get_value(key)
 
     async def delete_player_status(self, char_id: int) -> None:
         """
@@ -194,7 +197,4 @@ class CombatManager:
             char_id: Идентификатор персонажа.
         """
         key = Rk.get_player_status_key(char_id)
-        await redis_service.delete_key(key)
-
-
-combat_manager = CombatManager()
+        await self.redis_service.delete_key(key)

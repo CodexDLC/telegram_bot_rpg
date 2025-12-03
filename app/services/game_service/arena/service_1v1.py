@@ -5,8 +5,9 @@ from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.schemas_dto.combat_source_dto import CombatSessionContainerDTO
-from app.services.core_service.manager.arena_manager import arena_manager
-from app.services.core_service.manager.combat_manager import combat_manager
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.arena_manager import ArenaManager
+from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.game_service.combat.combat_lifecycle_service import CombatLifecycleService
 from app.services.game_service.matchmaking_service import MatchmakingService
 from database.repositories import get_character_repo
@@ -20,7 +21,14 @@ class Arena1v1Service:
     и обработку отмены поиска.
     """
 
-    def __init__(self, session: AsyncSession, char_id: int):
+    def __init__(
+        self,
+        session: AsyncSession,
+        char_id: int,
+        arena_manager: ArenaManager,
+        combat_manager: CombatManager,
+        account_manager: AccountManager,
+    ):
         """
         Инициализирует Arena1v1Service.
 
@@ -30,8 +38,11 @@ class Arena1v1Service:
         """
         self.session = session
         self.char_id = char_id
-        self.mm_service = MatchmakingService(session)
+        self.mm_service = MatchmakingService(session, account_manager)
         self.mode = "1v1"
+        self.arena_manager = arena_manager
+        self.combat_manager = combat_manager
+        self.combat_lifecycle_service = CombatLifecycleService(combat_manager, account_manager)
         log.debug(f"Arena1v1Service | status=initialized char_id={char_id}")
 
     async def join_queue(self) -> int:
@@ -44,11 +55,11 @@ class Arena1v1Service:
         Returns:
             Актуальный Gear Score персонажа.
         """
-        await combat_manager.delete_player_status(self.char_id)
+        await self.combat_manager.delete_player_status(self.char_id)
         gs = await self.mm_service.get_cached_gs(self.char_id)
-        await arena_manager.add_to_queue(self.mode, self.char_id, float(gs))
+        await self.arena_manager.add_to_queue(self.mode, self.char_id, float(gs))
         meta = {"start_time": time.time(), "gs": gs}
-        await arena_manager.create_request(self.char_id, meta)
+        await self.arena_manager.create_request(self.char_id, meta)
         log.info(f"Arena1v1 | event=joined_queue char_id={self.char_id} gs={gs}")
         return gs
 
@@ -87,7 +98,7 @@ class Arena1v1Service:
             log.debug(f"Arena1v1 | event=active_battle_found char_id={self.char_id} session_id='{active_session}'")
             return active_session
 
-        my_req = await arena_manager.get_request(self.char_id)
+        my_req = await self.arena_manager.get_request(self.char_id)
         if not my_req:
             log.debug(f"Arena1v1 | event=request_not_found char_id={self.char_id}")
             return None
@@ -97,7 +108,7 @@ class Arena1v1Service:
         min_score = my_gs * (1.0 - range_pct)
         max_score = my_gs * (1.0 + range_pct)
 
-        candidates = await arena_manager.get_candidates(self.mode, min_score, max_score)
+        candidates = await self.arena_manager.get_candidates(self.mode, min_score, max_score)
 
         opponent_id = None
         for c_id_str in candidates:
@@ -110,14 +121,14 @@ class Arena1v1Service:
             log.debug(f"Arena1v1 | event=no_opponent_found char_id={self.char_id} attempt={attempt}")
             return None
 
-        is_removed = await arena_manager.remove_from_queue(self.mode, opponent_id)
+        is_removed = await self.arena_manager.remove_from_queue(self.mode, opponent_id)
         if not is_removed:
             log.debug(f"Arena1v1 | event=opponent_taken char_id={self.char_id} opponent_id={opponent_id}")
             return None
 
-        await arena_manager.remove_from_queue(self.mode, self.char_id)
-        await arena_manager.delete_request(self.char_id)
-        await arena_manager.delete_request(opponent_id)
+        await self.arena_manager.remove_from_queue(self.mode, self.char_id)
+        await self.arena_manager.delete_request(self.char_id)
+        await self.arena_manager.delete_request(opponent_id)
 
         session_id = await self._create_pvp_battle(opponent_id)
         log.info(
@@ -129,8 +140,8 @@ class Arena1v1Service:
         """
         Удаляет персонажа из очереди на арену и удаляет его заявку.
         """
-        await arena_manager.remove_from_queue(self.mode, self.char_id)
-        await arena_manager.delete_request(self.char_id)
+        await self.arena_manager.remove_from_queue(self.mode, self.char_id)
+        await self.arena_manager.delete_request(self.char_id)
         log.info(f"Arena1v1 | event=queue_cancelled char_id={self.char_id}")
 
     async def create_shadow_battle(self) -> str:
@@ -148,10 +159,10 @@ class Arena1v1Service:
         me = await char_repo.get_character(self.char_id)
         name_me = me.name if me else "Unknown"
 
-        session_id = await CombatLifecycleService.create_battle(is_pve=True, mode="arena")
-        await CombatLifecycleService.add_participant(self.session, session_id, self.char_id, "blue", name_me)
+        session_id = await self.combat_lifecycle_service.create_battle(is_pve=True, mode="arena")
+        await self.combat_lifecycle_service.add_participant(self.session, session_id, self.char_id, "blue", name_me)
 
-        player_json = await combat_manager.get_actor_json(session_id, self.char_id)
+        player_json = await self.combat_manager.get_actor_json(session_id, self.char_id)
 
         if player_json:
             shadow_dto = CombatSessionContainerDTO.model_validate_json(player_json)
@@ -161,16 +172,16 @@ class Arena1v1Service:
             shadow_dto.team = "red"
             shadow_dto.is_ai = True
 
-            await combat_manager.add_participant_id(session_id, shadow_id)
-            await combat_manager.save_actor_json(session_id, shadow_id, shadow_dto.model_dump_json())
+            await self.combat_manager.add_participant_id(session_id, shadow_id)
+            await self.combat_manager.save_actor_json(session_id, shadow_id, shadow_dto.model_dump_json())
             log.info(f"Arena1v1 | event=shadow_created char_id={self.char_id} shadow_id={shadow_id}")
         else:
-            await CombatLifecycleService.add_dummy_participant(session_id, -1, 100, 50, "Глючная Тень")
+            await self.combat_lifecycle_service.add_dummy_participant(session_id, -1, 100, 50, "Глючная Тень")
             log.warning(
                 f"Arena1v1 | event=shadow_creation_failed reason='Player JSON not found' char_id={self.char_id}"
             )
 
-        await CombatLifecycleService.initialize_battle_state(session_id)
+        await self.combat_lifecycle_service.initialize_battle_state(session_id)
         await self._set_player_status(self.char_id, session_id)
         log.info(f"Arena1v1 | event=shadow_battle_created char_id={self.char_id} session_id='{session_id}'")
         return session_id
@@ -182,7 +193,7 @@ class Arena1v1Service:
         Returns:
             Идентификатор боевой сессии, если персонаж в бою, иначе None.
         """
-        val = await combat_manager.get_player_status(self.char_id)
+        val = await self.combat_manager.get_player_status(self.char_id)
         if val and val.startswith("combat:"):
             return val.split(":")[1]
         return None
@@ -195,7 +206,7 @@ class Arena1v1Service:
             char_id: Идентификатор персонажа.
             session_id: Идентификатор боевой сессии.
         """
-        await combat_manager.set_player_status(char_id, f"combat:{session_id}", ttl=300)
+        await self.combat_manager.set_player_status(char_id, f"combat:{session_id}", ttl=300)
         log.debug(f"Arena1v1 | event=player_status_set char_id={char_id} status='combat:{session_id}'")
 
     async def _create_pvp_battle(self, opponent_id: int) -> str:
@@ -215,12 +226,12 @@ class Arena1v1Service:
         name_me = me.name if me else f"Player {self.char_id}"
         name_enemy = enemy.name if enemy else f"Player {opponent_id}"
 
-        session_id = await CombatLifecycleService.create_battle(is_pve=False, mode="arena")
+        session_id = await self.combat_lifecycle_service.create_battle(is_pve=False, mode="arena")
 
-        await CombatLifecycleService.add_participant(self.session, session_id, self.char_id, "blue", name_me)
-        await CombatLifecycleService.add_participant(self.session, session_id, opponent_id, "red", name_enemy)
+        await self.combat_lifecycle_service.add_participant(self.session, session_id, self.char_id, "blue", name_me)
+        await self.combat_lifecycle_service.add_participant(self.session, session_id, opponent_id, "red", name_enemy)
 
-        await CombatLifecycleService.initialize_battle_state(session_id)
+        await self.combat_lifecycle_service.initialize_battle_state(session_id)
 
         await self._set_player_status(self.char_id, session_id)
         await self._set_player_status(opponent_id, session_id)

@@ -1,7 +1,7 @@
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.core_service.manager.account_manager import account_manager
+from app.services.core_service.manager.account_manager import AccountManager
 from app.services.game_service.stats_aggregation_service import StatsAggregationService
 from database.repositories import get_leaderboard_repo
 
@@ -34,16 +34,18 @@ class MatchmakingService:
     для долгосрочного хранения и поиска.
     """
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, account_manager: AccountManager):
         """
         Инициализирует MatchmakingService.
 
         Args:
             session: Асинхронная сессия базы данных.
+            account_manager: Менеджер аккаунтов.
         """
         self.session = session
         self.aggregator = StatsAggregationService(session)
         self.lb_repo = get_leaderboard_repo(session)
+        self.account_manager = account_manager
         log.debug("MatchmakingService | status=initialized")
 
     async def calculate_raw_gs(self, char_id: int) -> int:
@@ -95,7 +97,7 @@ class MatchmakingService:
             Актуальное значение Gear Score персонажа.
         """
         gs = await self.calculate_raw_gs(char_id)
-        await account_manager.update_account_fields(char_id, {"gear_score": gs})
+        await self.account_manager.update_account_fields(char_id, {"gear_score": gs})
         await self.lb_repo.update_score(char_id, gear_score=gs)
         log.info(f"Matchmaking | event=gs_synced char_id={char_id} gs={gs}")
         return gs
@@ -112,7 +114,7 @@ class MatchmakingService:
         Returns:
             Актуальное значение Gear Score персонажа.
         """
-        val = await account_manager.get_account_field(char_id, "gear_score")
+        val = await self.account_manager.get_account_field(char_id, "gear_score")
         if val:
             log.debug(f"Matchmaking | action=get_cached_gs status=hit char_id={char_id} gs={val}")
             return int(val)

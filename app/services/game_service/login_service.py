@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.texts.buttons_callback import GameStage
-from app.services.core_service.manager.account_manager import account_manager
+from app.services.core_service.manager.account_manager import AccountManager
 from database.repositories import get_character_repo
 
 
@@ -17,16 +17,18 @@ class LoginService:
     загрузку или создание сессии персонажа в Redis.
     """
 
-    def __init__(self, char_id: int, state_data: dict[str, Any]):
+    def __init__(self, char_id: int, state_data: dict[str, Any], account_manager: AccountManager):
         """
         Инициализирует LoginService.
 
         Args:
             char_id: Уникальный идентификатор персонажа.
             state_data: Текущие данные FSM-состояния.
+            account_manager: Менеджер аккаунтов.
         """
         self.char_id = char_id
         self.state_data = state_data
+        self.account_manager = account_manager
         log.debug(f"LoginService | status=initialized char_id={self.char_id}")
 
     async def handle_login(self, session: AsyncSession) -> tuple[str, str] | str | None:
@@ -85,8 +87,8 @@ class LoginService:
         Returns:
             Кортеж `(state, location_id)`, представляющий текущее состояние и локацию персонажа.
         """
-        if await account_manager.account_exists(self.char_id):
-            data = await account_manager.get_account_data(self.char_id)
+        if await self.account_manager.account_exists(self.char_id):
+            data = await self.account_manager.get_account_data(self.char_id)
             if data:
                 state = data.get("state", "world")
                 loc_id = data.get("location_id", "portal_plats")
@@ -97,7 +99,7 @@ class LoginService:
                         f"LoginService | event=location_migration char_id={self.char_id} old='town_hall_in' new='town_hall_interior'"
                     )
                     loc_id = "town_hall_interior"
-                    await account_manager.update_account_fields(self.char_id, {"location_id": loc_id})
+                    await self.account_manager.update_account_fields(self.char_id, {"location_id": loc_id})
 
                 log.debug(
                     f"LoginService | event=redis_session_loaded char_id={self.char_id} state='{state}' location='{loc_id}'"
@@ -126,7 +128,7 @@ class LoginService:
             "prev_state": "world",
             "prev_location_id": start_loc_id,
         }
-        await account_manager.create_account(self.char_id, initial_data)
+        await self.account_manager.create_account(self.char_id, initial_data)
         log.info(
             f"LoginService | event=redis_session_created char_id={self.char_id} state='world' location='{start_loc_id}'"
         )

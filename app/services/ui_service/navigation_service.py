@@ -7,9 +7,9 @@ from loguru import logger as log
 
 from app.resources.keyboards.callback_data import NavigationCallback, ServiceEntryCallback
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
-from app.services.core_service.manager.account_manager import account_manager
-from app.services.core_service.manager.world_manager import world_manager
-from app.services.game_service.game_world_service import game_world_service
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.world_manager import WorldManager
+from app.services.game_service.game_world_service import GameWorldService
 from app.services.ui_service.base_service import BaseUIService
 
 # Точка спавна по умолчанию (Safe Zone)
@@ -26,10 +26,16 @@ class NavigationService(BaseUIService):
         self,
         char_id: int,
         state_data: dict[str, Any],
+        account_manager: AccountManager,
+        world_manager: WorldManager,
+        game_world_service: GameWorldService,
         symbiote_name: str | None = None,
     ):
         super().__init__(state_data=state_data, char_id=char_id)
         self.actor_name = symbiote_name or DEFAULT_ACTOR_NAME
+        self.account_manager = account_manager
+        self.world_manager = world_manager
+        self.game_world_service = game_world_service
         log.debug(f"Инициализирован NavigationService для char_id={self.char_id}")
 
     async def get_navigation_ui(self, state: str, loc_id: str) -> tuple[str, InlineKeyboardMarkup | None]:
@@ -38,9 +44,9 @@ class NavigationService(BaseUIService):
         """
         log.debug(f"get_navigation_ui | state={state}, loc_id={loc_id}")
         if state == "world":
-            await world_manager.add_player_to_location(loc_id, self.char_id)
+            await self.world_manager.add_player_to_location(loc_id, self.char_id)
 
-            nav_data = await game_world_service.get_location_for_navigation(loc_id)
+            nav_data = await self.game_world_service.get_location_for_navigation(loc_id)
 
             # Если данные не найдены — возвращаем None, чтобы запустить Unstuck
             if not nav_data:
@@ -50,7 +56,7 @@ class NavigationService(BaseUIService):
                     None,
                 )
 
-            account_data = await account_manager.get_account_data(self.char_id)
+            account_data = await self.account_manager.get_account_data(self.char_id)
             prev_loc_id = account_data.get("prev_location_id") if account_data else None
             log.debug(f"get_navigation_ui | prev_loc_id={prev_loc_id}")
 
@@ -72,7 +78,7 @@ class NavigationService(BaseUIService):
         Если текущая локация сломана, переносит игрока на спавн.
         """
         log.debug(f"reload_current_ui | char_id={self.char_id}")
-        data = await account_manager.get_account_data(self.char_id)
+        data = await self.account_manager.get_account_data(self.char_id)
         if not data:
             log.error(f"reload_current_ui | Не удалось получить данные аккаунта для char_id={self.char_id}")
             return "Ошибка аккаунта", None
@@ -94,10 +100,10 @@ class NavigationService(BaseUIService):
             target_safe_zone = DEFAULT_SPAWN_POINT
 
             # А. Удаляем из старой (сломанной) локации (на всякий случай)
-            await world_manager.remove_player_from_location(current_loc_id, self.char_id)
+            await self.world_manager.remove_player_from_location(current_loc_id, self.char_id)
 
             # Б. Обновляем запись в Redis насильно
-            await account_manager.update_account_fields(
+            await self.account_manager.update_account_fields(
                 self.char_id,
                 {
                     "location_id": target_safe_zone,
@@ -173,7 +179,7 @@ class NavigationService(BaseUIService):
 
     async def move_player(self, target_loc_id: str) -> tuple[float, str, InlineKeyboardMarkup | None] | None:
         log.debug(f"move_player | char_id={self.char_id}, target_loc_id={target_loc_id}")
-        current_data = await account_manager.get_account_data(self.char_id)
+        current_data = await self.account_manager.get_account_data(self.char_id)
         if not current_data:
             log.error(f"move_player | Не удалось получить данные аккаунта для char_id={self.char_id}")
             return None
@@ -184,14 +190,14 @@ class NavigationService(BaseUIService):
 
         if current_state == "world" and isinstance(current_loc_id, str):
             # Проверка существования целевой локации
-            target_exists = await game_world_service.get_location_for_navigation(target_loc_id)
+            target_exists = await self.game_world_service.get_location_for_navigation(target_loc_id)
             if not target_exists:
                 log.warning(f"move_player | Целевая локация не найдена: target_loc_id={target_loc_id}")
                 error_text = f"<b>{self.actor_name}:</b> Ошибка. Путь '{target_loc_id}' нестабилен или разрушен."
                 return 0.0, error_text, None
 
             travel_time = 0.0
-            current_loc_data = await game_world_service.get_location_for_navigation(current_loc_id)
+            current_loc_data = await self.game_world_service.get_location_for_navigation(current_loc_id)
             log.debug(f"move_player | current_loc_data exists: {bool(current_loc_data)}")
 
             if current_loc_data:
@@ -201,9 +207,9 @@ class NavigationService(BaseUIService):
                     travel_time = float(target_exit.get("time_duration", 0))
                 log.debug(f"move_player | travel_time={travel_time}")
 
-            await world_manager.remove_player_from_location(current_loc_id, self.char_id)
+            await self.world_manager.remove_player_from_location(current_loc_id, self.char_id)
 
-            await account_manager.update_account_fields(
+            await self.account_manager.update_account_fields(
                 self.char_id,
                 {
                     "location_id": target_loc_id,

@@ -12,6 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.resources.fsm_states.states import InGame
 from app.resources.keyboards.callback_data import NavigationCallback
 from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.world_manager import WorldManager
+from app.services.game_service.game_world_service import GameWorldService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.helpers_ui.ui_animation_service import UIAnimationService
@@ -31,7 +34,14 @@ TRAVEL_FLAVOR_TEXTS = [
 
 @router.callback_query(InGame.navigation, NavigationCallback.filter(F.action == "move"))
 async def navigation_move_handler(
-    call: CallbackQuery, state: FSMContext, bot: Bot, callback_data: NavigationCallback, session: AsyncSession
+    call: CallbackQuery,
+    state: FSMContext,
+    bot: Bot,
+    callback_data: NavigationCallback,
+    session: AsyncSession,
+    account_manager: AccountManager,
+    world_manager: WorldManager,
+    game_world_service: GameWorldService,
 ) -> None:
     """Обрабатывает перемещение игрока между локациями."""
     if not call.from_user:
@@ -56,7 +66,13 @@ async def navigation_move_handler(
         await Err.generic_error(call)
         return
 
-    nav_service = NavigationService(char_id=char_id, state_data=state_data)
+    nav_service = NavigationService(
+        char_id=char_id,
+        state_data=state_data,
+        account_manager=account_manager,
+        world_manager=world_manager,
+        game_world_service=game_world_service,
+    )
     result = await nav_service.move_player(target_loc_id)
     log.debug(f"Navigation | move_player_result='{result}' char_id={char_id}")
 

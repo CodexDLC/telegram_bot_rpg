@@ -5,6 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import InGame
 from app.resources.game_data.hub_config import HUB_CONFIGS
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.arena_manager import ArenaManager
+from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.ui_service.base_service import BaseUIService
 
 
@@ -16,7 +19,16 @@ class HubEntryService(BaseUIService):
     соответствующих UI-билдеров и управления FSM-состояниями.
     """
 
-    def __init__(self, char_id: int, target_loc: str, state_data: dict, session: AsyncSession):
+    def __init__(
+        self,
+        char_id: int,
+        target_loc: str,
+        state_data: dict,
+        session: AsyncSession,
+        account_manager: AccountManager,
+        arena_manager: ArenaManager,
+        combat_manager: CombatManager,
+    ):
         """
         Инициализирует HubEntryService.
 
@@ -25,11 +37,17 @@ class HubEntryService(BaseUIService):
             target_loc: Идентификатор целевой локации/хаба.
             state_data: Текущие данные FSM-состояния.
             session: Асинхронная сессия базы данных.
+            account_manager: Менеджер аккаунтов.
+            arena_manager: Менеджер арены.
+            combat_manager: Менеджер боя.
         """
         super().__init__(char_id=char_id, state_data=state_data)
         self.target_loc = target_loc
         self.session = session
-        log.debug(f"HubEntryService | status=initialized char_id={char_id} target_loc='{target_loc}'")
+        self.account_manager = account_manager
+        self.arena_manager = arena_manager
+        self.combat_manager = combat_manager
+        log.debug(f"HubEntryService | status=initialized char_id={char_id} target_loc='{self.target_loc}'")
 
     async def render_hub_menu(self) -> tuple[str, InlineKeyboardMarkup | None, State]:
         """
@@ -66,7 +84,15 @@ class HubEntryService(BaseUIService):
                 )
                 return "Ошибка конфигурации: отсутствует билдер UI.", None, new_fsm_state
 
-            ui_builder = builder_class(char_id=self.char_id, session=self.session, state_data=self.state_data)
+            # Передаем все необходимые зависимости в конструктор
+            ui_builder = builder_class(
+                char_id=self.char_id,
+                session=self.session,
+                state_data=self.state_data,
+                account_manager=self.account_manager,
+                arena_manager=self.arena_manager,
+                combat_manager=self.combat_manager,
+            )
             render_method = getattr(ui_builder, method_name, None)
 
             if render_method is None:

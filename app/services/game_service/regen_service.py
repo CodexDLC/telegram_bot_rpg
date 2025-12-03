@@ -4,7 +4,7 @@ from typing import Any
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.core_service.manager.account_manager import account_manager
+from app.services.core_service.manager.account_manager import AccountManager
 from app.services.game_service.stats_aggregation_service import StatsAggregationService
 
 BASE_REGEN_TIME_SEC = 300.0
@@ -19,15 +19,17 @@ class RegenService:
     с момента последнего обновления.
     """
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, account_manager: AccountManager):
         """
         Инициализирует RegenService.
 
         Args:
             session: Асинхронная сессия базы данных.
+            account_manager: Менеджер аккаунтов.
         """
         self.session = session
         self.aggregator = StatsAggregationService(session)
+        self.account_manager = account_manager
         log.debug("RegenService | status=initialized")
 
     async def synchronize_state(self, char_id: int) -> dict[str, int]:
@@ -45,7 +47,7 @@ class RegenService:
         Returns:
             Словарь с актуальными значениями "hp" и "energy" после регенерации.
         """
-        ac_data = await account_manager.get_account_data(char_id)
+        ac_data = await self.account_manager.get_account_data(char_id)
         if not ac_data:
             log.warning(f"RegenService | status=skipped reason='Account data not found' char_id={char_id}")
             return {"hp": 0, "energy": 0}
@@ -94,6 +96,6 @@ class RegenService:
             "energy_current": new_energy,
             "last_update": now,
         }
-        await account_manager.update_account_fields(char_id, update_data)
+        await self.account_manager.update_account_fields(char_id, update_data)
 
         return {"hp": int(new_hp), "energy": new_energy}
