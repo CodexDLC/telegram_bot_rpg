@@ -52,6 +52,14 @@ class InventoryItem(Base):
         comment="JSON-поле, содержащее детальные данные предмета (название, описание, статы, бонусы).",
     )
 
+    equipped_slot: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="Слот экипировки (head_armor, ring_1, etc.)."
+    )
+
+    quick_slot_position: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="Позиция в быстром доступе (quick_slot_1, etc.)."
+    )
+
     character: Mapped[Character] = relationship(back_populates="inventory")
 
     def __repr__(self):

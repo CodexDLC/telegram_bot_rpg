@@ -35,15 +35,6 @@ class CombatAggregator:
     async def collect_session_container(self, char_id: int) -> CombatSessionContainerDTO:
         """
         Собирает полный контейнер данных для боевой сессии персонажа.
-
-        Оркестрирует загрузку базовых характеристик, экипировки,
-        расчет производных модификаторов и их агрегацию.
-
-        Args:
-            char_id: Уникальный идентификатор персонажа.
-
-        Returns:
-            Заполненный `CombatSessionContainerDTO` со всеми необходимыми данными.
         """
         log.info(f"CombatAggregator | event=collect_container char_id={char_id}")
         container = CombatSessionContainerDTO(char_id=char_id, team="none", name="Unknown")
@@ -76,41 +67,30 @@ class CombatAggregator:
     def _process_equipment_bonuses(self, container: CombatSessionContainerDTO, items: list[InventoryItemDTO]) -> bool:
         """
         Обрабатывает бонусы от экипированных предметов и добавляет их в контейнер.
-
-        Также проверяет наличие экипированного оружия.
-
-        Args:
-            container: `CombatSessionContainerDTO` для обновления.
-            items: Список экипированных предметов.
-
-        Returns:
-            True, если у персонажа есть экипированное оружие, иначе False.
         """
         has_weapon = False
         for item in items:
-            if item.item_type == ItemType.WEAPON:
-                has_weapon = True
+            if item.item_type in (ItemType.RESOURCE, ItemType.CURRENCY, ItemType.CONSUMABLE):
+                continue
+            else:
+                if item.item_type == ItemType.WEAPON:
+                    has_weapon = True
 
-            if item.data.bonuses:
-                for stat_k, stat_v in item.data.bonuses.items():
-                    self._add_stat(container, stat_k, float(stat_v), "equipment")
+                if item.data.bonuses:
+                    for stat_k, stat_v in item.data.bonuses.items():
+                        self._add_stat(container, stat_k, float(stat_v), "equipment")
 
-            if item.item_type == ItemType.WEAPON and hasattr(item.data, "damage_min"):
-                self._add_stat(container, "physical_damage_min", float(item.data.damage_min), "equipment")
-                self._add_stat(container, "physical_damage_max", float(item.data.damage_max), "equipment")
+                if item.item_type == ItemType.WEAPON:
+                    self._add_stat(container, "physical_damage_min", float(item.data.damage_min), "equipment")
+                    self._add_stat(container, "physical_damage_max", float(item.data.damage_max), "equipment")
 
-            if item.item_type == ItemType.ARMOR and hasattr(item.data, "protection"):
-                self._add_stat(container, "damage_reduction_flat", float(item.data.protection), "equipment")
+                if item.item_type == ItemType.ARMOR:
+                    self._add_stat(container, "damage_reduction_flat", float(item.data.protection), "equipment")
         return has_weapon
 
     def _calculate_unarmed_damage(self, container: CombatSessionContainerDTO) -> None:
         """
         Рассчитывает и добавляет урон от кулачного боя в контейнер, если оружие отсутствует.
-
-        Урон зависит от характеристики "strength".
-
-        Args:
-            container: `CombatSessionContainerDTO` для обновления.
         """
         str_data = container.stats.get("strength")
         strength_val = str_data.base if str_data else 0.0
@@ -137,12 +117,6 @@ class CombatAggregator:
     ) -> None:
         """
         Добавляет значение к указанной характеристике в контейнере из определенного источника.
-
-        Args:
-            container: `CombatSessionContainerDTO` для обновления.
-            key: Ключ характеристики.
-            value: Значение для добавления.
-            source_type: Тип источника ("base", "equipment", "skills").
         """
         if key not in container.stats:
             container.stats[key] = StatSourceData()
