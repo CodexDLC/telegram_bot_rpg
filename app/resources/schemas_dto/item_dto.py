@@ -9,7 +9,52 @@
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class EquippedSlot(StrEnum):
+    """Перечисление всех конкретных слотов для экипировки (Кукла)."""
+
+    # Броня (Armor)
+    HEAD_ARMOR = "head_armor"
+    CHEST_ARMOR = "chest_armor"
+    ARMS_ARMOR = "arms_armor"
+    LEGS_ARMOR = "legs_armor"
+    FEET_ARMOR = "feet_armor"
+
+    # Одежда (Garment)
+    CHEST_GARMENT = "chest_garment"
+    LEGS_GARMENT = "legs_garment"
+    OUTER_GARMENT = "outer_garment"
+    GLOVES_GARMENT = "gloves_garment"
+
+    # 👇 НЕДОСТАЮЩИЕ СЛОТЫ ОРУЖИЯ (Мы добавили их)
+    MAIN_HAND = "main_hand"
+    OFF_HAND = "off_hand"
+    TWO_HAND = "two_hand"
+
+    # Аксессуары
+    AMULET = "amulet"
+    EARRING = "earring"
+    RING_1 = "ring_1"
+    RING_2 = "ring_2"
+    BELT_ACCESSORY = "belt_accessory"
+
+
+# --- 2. Слоты Быстрого Доступа (Используются в quick_slot_position) ---
+class QuickSlot(StrEnum):
+    """Перечисление позиций в Quick Slot (для расходников)."""
+
+    QUICK_SLOT_1 = "quick_slot_1"
+    QUICK_SLOT_2 = "quick_slot_2"
+    QUICK_SLOT_3 = "quick_slot_3"
+    QUICK_SLOT_4 = "quick_slot_4"
+
+    # Будущее: Динамический лимит N (N > 4)
+    QUICK_SLOT_5 = "quick_slot_5"
+    QUICK_SLOT_6 = "quick_slot_6"
+    QUICK_SLOT_7 = "quick_slot_7"
+    QUICK_SLOT_8 = "quick_slot_8"
 
 
 class ItemType(StrEnum):
@@ -46,10 +91,8 @@ class ItemCoreData(BaseModel):
     name: str  # Название предмета.
     description: str  # Описание предмета.
     base_price: int  # Базовая цена предмета (для продажи/покупки у NPC).
-    weight: float  # Вес предмета (влияет на переносимый вес персонажа).
     material: str  # Основной материал, из которого сделан предмет (например, "iron", "leather").
     bonuses: ItemBonuses = Field(default_factory=dict)  # Словарь бонусных характеристик,
-    # которые предмет дает персонажу (например, {"strength": 5, "hp_max": 10}).
 
 
 class WeaponData(ItemCoreData):
@@ -77,83 +120,73 @@ class AccessoryData(ItemCoreData):
 class ConsumableData(ItemCoreData):
     """Специфичные данные для расходников (зелий, еды)."""
 
-    restore_hp: int = 0  # Количество HP, восстанавливаемое при использовании.
-    restore_energy: int = 0  # Количество энергии, восстанавливаемое при использовании.
-    effects: list[str] = Field(default_factory=list)  # Список эффектов, накладываемых при использовании.
+    restore_hp: int = 0
+    restore_energy: int = 0
+    effects: list[str] = Field(default_factory=list)
+    cooldown_rounds: int = 0
+    is_quick_slot_compatible: bool = False
 
 
 class ResourceData(ItemCoreData):
     """Специфичные данные для ресурсов."""
 
-    pass  # Ресурсы могут не иметь дополнительных специфичных полей, кроме базовых.
+    pass
 
 
-class WeaponItemDTO(BaseModel):
-    """Полное DTO для оружия, включая данные из БД и `ItemCoreData`."""
+class BaseInventoryItemDTO(BaseModel):
+    """Общая основа для всех DTO предметов в инвентаре."""
 
     inventory_id: int  # Уникальный идентификатор предмета в инвентаре.
     character_id: int  # Идентификатор персонажа, которому принадлежит предмет.
     location: str  # Местонахождение предмета ("inventory", "equipped", "stash").
-    item_type: Literal[ItemType.WEAPON]  # Тип предмета (строго "weapon").
-    subtype: str  # Подтип оружия (например, "sword", "bow").
+    subtype: str  # Подтип предмета (например, "sword", "bow").
     rarity: ItemRarity  # Редкость предмета.
-    data: WeaponData  # Детальные данные оружия.
     quantity: int = 1  # Количество предметов (для стакающихся).
 
+    equipped_slot: EquippedSlot | None = None
+    quick_slot_position: QuickSlot | None = None
 
-class ArmorItemDTO(BaseModel):
+    # Конфигурация для Pydantic
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WeaponItemDTO(BaseInventoryItemDTO):
+    """Полное DTO для оружия."""
+
+    # Поля, которые были общими, удалены.
+    item_type: Literal[ItemType.WEAPON]  # Тип предмета (строго "weapon") - ОСТАЕТСЯ КАК ДИСКРИМИНАТОР.
+    data: WeaponData  # Детальные данные оружия.
+
+
+class ArmorItemDTO(BaseInventoryItemDTO):
     """Полное DTO для брони."""
 
-    inventory_id: int  # Уникальный идентификатор предмета в инвентаре.
-    character_id: int  # Идентификатор персонажа, которому принадлежит предмет.
-    location: str  # Местонахождение предмета.
-    item_type: Literal[ItemType.ARMOR]  # Тип предмета (строго "armor").
-    subtype: str  # Подтип брони (например, "heavy", "light").
-    rarity: ItemRarity  # Редкость предмета.
-    data: ArmorData  # Детальные данные брони.
-    quantity: int = 1  # Количество предметов.
+    item_type: Literal[ItemType.ARMOR]
+    data: ArmorData
 
 
-class AccessoryItemDTO(BaseModel):
+class AccessoryItemDTO(BaseInventoryItemDTO):
     """Полное DTO для аксессуаров."""
 
-    inventory_id: int  # Уникальный идентификатор предмета в инвентаре.
-    character_id: int  # Идентификатор персонажа, которому принадлежит предмет.
-    location: str  # Местонахождение предмета.
-    item_type: Literal[ItemType.ACCESSORY]  # Тип предмета (строго "accessory").
-    subtype: str  # Подтип аксессуара (например, "ring", "amulet").
-    rarity: ItemRarity  # Редкость предмета.
-    data: AccessoryData  # Детальные данные аксессуара.
-    quantity: int = 1  # Количество предметов.
+    item_type: Literal[ItemType.ACCESSORY]
+    data: AccessoryData
 
 
-class ConsumableItemDTO(BaseModel):
+class ConsumableItemDTO(BaseInventoryItemDTO):
     """Полное DTO для расходников."""
 
-    inventory_id: int  # Уникальный идентификатор предмета в инвентаре.
-    character_id: int  # Идентификатор персонажа, которому принадлежит предмет.
-    location: str  # Местонахождение предмета.
-    item_type: Literal[ItemType.CONSUMABLE]  # Тип предмета (строго "consumable").
-    subtype: str  # Подтип расходника (например, "potion_hp", "food_ration").
-    rarity: ItemRarity  # Редкость предмета.
-    data: ConsumableData  # Детальные данные расходника.
-    quantity: int  # Количество предметов.
+    item_type: Literal[ItemType.CONSUMABLE]
+    data: ConsumableData
 
 
-class ResourceItemDTO(BaseModel):
+class ResourceItemDTO(BaseInventoryItemDTO):
     """Полное DTO для ресурсов и валюты."""
 
-    inventory_id: int  # Уникальный идентификатор предмета в инвентаре.
-    character_id: int  # Идентификатор персонажа, которому принадлежит предмет.
-    location: str  # Местонахождение предмета.
-    item_type: Literal[ItemType.RESOURCE, ItemType.CURRENCY]  # Тип предмета (строго "resource" или "currency").
-    subtype: str  # Подтип ресурса (например, "ore", "dust").
-    rarity: ItemRarity  # Редкость предмета.
-    data: ResourceData  # Детальные данные ресурса.
-    quantity: int  # Количество предметов.
+    item_type: Literal[ItemType.RESOURCE, ItemType.CURRENCY]
+    data: ResourceData
 
 
-# Полиморфный тип для любого предмета в инвентаре.
+# Полиморфный тип (остается без изменений, так как классы выше обновлены)
 InventoryItemDTO = Annotated[
     WeaponItemDTO | ArmorItemDTO | AccessoryItemDTO | ConsumableItemDTO | ResourceItemDTO,
     Field(discriminator="item_type"),

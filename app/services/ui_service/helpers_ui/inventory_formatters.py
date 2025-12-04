@@ -1,7 +1,7 @@
 # app/services/ui_service/helpers_ui/inventory_formatters.py
 from loguru import logger as log
 
-from app.resources.schemas_dto.item_dto import InventoryItemDTO
+from app.resources.schemas_dto.item_dto import EquippedSlot, InventoryItemDTO
 
 
 class InventoryFormatter:
@@ -14,6 +14,7 @@ class InventoryFormatter:
     SECTION_NAMES = {
         "equip": "⚔️ Экипировка",
         "resource": "🎒 Ресурсы",
+        "consumable": "🧪 Расходники",
         "component": "⚙️ Компоненты",
         "quest": "📜 Квестовые",
     }
@@ -23,6 +24,7 @@ class InventoryFormatter:
         "equip": {
             "weapon": "🔪 Оружие",
             "armor": "🛡️ Броня",
+            "garment": "🧥 Одежда",
             "accessory": "💍 Аксессуары",
         },
         "resource": {
@@ -33,14 +35,28 @@ class InventoryFormatter:
         },
     }
 
-    # 🔥 ИСПРАВЛЕНИЕ: Константа перенесена на уровень класса
     SLOT_NAMES = {
-        "head": "🤕 Голова",
-        "chest": "👕 Тело",
-        "main_hand": "🗡 Прав. р.",
-        "off_hand": "🛡 Лев. р.",
-        "legs": "👖 Ноги",
-        "feet": "👞 Обувь",
+        # Броня (Armor)
+        "head_armor": "🤕 Броня (Голова)",
+        "chest_armor": "👕 Броня (Тело)",
+        "arms_armor": "💪 Броня (Руки)",
+        "legs_armor": "👖 Броня (Ноги)",
+        "feet_armor": "👞 Броня (Ступни)",
+        # Одежда (Garment)
+        "chest_garment": "👚 Одежда (Тело)",
+        "legs_garment": "🩳 Одежда (Ноги)",
+        "outer_garment": "🧥 Верхняя одежда",
+        "gloves_garment": "🧤 Перчатки",
+        # Оружие/Щит
+        "main_hand": "🗡 Осн. рука",
+        "off_hand": "🛡 Вт. рука",
+        "two_hand": "⚔️ Двуручн.",
+        # Аксессуары
+        "amulet": "💎 Амулет",
+        "earring": "👂 Серьга",
+        "ring_1": "💍 Кольцо 1",
+        "ring_2": "💍 Кольцо 2",
+        "belt_accessory": "🔗 Пояс",
     }
 
     @staticmethod
@@ -52,43 +68,66 @@ class InventoryFormatter:
     @staticmethod
     def format_main_menu(equipped: list[InventoryItemDTO], current_slots: int, max_slots: int, dust_amount: int) -> str:
         """
-        Форматирует текст для главного экрана 'Кукла'.
-
-        Args:
-            equipped (list[InventoryItemDTO]): Список надетых предметов.
-            current_slots (int): Текущее количество занятых слотов.
-            max_slots (int): Максимальное количество слотов.
-            dust_amount (int): Количество основной валюты.
-
-        Returns:
-            str: Отформатированное сообщение для Telegram.
+        Форматирует текст для главного экрана 'Кукла', включая все слои.
         """
-        # 🔥 ИСПРАВЛЕНИЕ: Используем константу класса
-        equipped_map = {slot: "—пусто—" for slot in InventoryFormatter.SLOT_NAMES}
+        all_display_slots = [
+            "head_armor",
+            "head_garment",
+            "outer_garment",
+            "chest_armor",
+            "chest_garment",
+            "arms_armor",
+            "gloves_garment",
+            "main_hand",
+            "off_hand",
+            "two_hand",
+            "belt_accessory",
+            "legs_armor",
+            "legs_garment",
+            "feet_armor",
+            "amulet",
+            "ring_1",
+            "ring_2",
+            "earring",
+        ]
 
+        equipped_map = {}
         for item in equipped:
-            # Для надетого предмета используем первый слот как ключевой для отображения
-            if hasattr(item.data, "valid_slots") and item.data.valid_slots:
-                slot_key = item.data.valid_slots[0]
-                # Проверка на наличие слота в нашем списке (защита от багов)
-                if slot_key in equipped_map:
-                    icon = InventoryFormatter._get_rarity_icon(item.rarity.value)
-                    equipped_map[slot_key] = f"{icon} {item.data.name}"
+            if item.equipped_slot:
+                try:
+                    equipped_map[item.equipped_slot] = item
+                except ValueError:
+                    log.warning(
+                        f"Formatter | skip_item reason='Invalid equipped_slot value' slot='{item.equipped_slot}'"
+                    )
 
-        text = (
-            f"<b>👤 Экипировка:</b>\n"
-            f"<code>"
-            f"[{InventoryFormatter.SLOT_NAMES['head']:<10}]: {equipped_map['head']}\n"
-            f"[{InventoryFormatter.SLOT_NAMES['chest']:<10}]: {equipped_map['chest']}\n"
-            f"[{InventoryFormatter.SLOT_NAMES['main_hand']:<10}]: {equipped_map['main_hand']}\n"
-            f"[{InventoryFormatter.SLOT_NAMES['off_hand']:<10}]: {equipped_map['off_hand']}\n"
-            f"[{InventoryFormatter.SLOT_NAMES['legs']:<10}]: {equipped_map['legs']}\n"
-            f"[{InventoryFormatter.SLOT_NAMES['feet']:<10}]: {equipped_map['feet']}\n"
-            f"</code>\n"
-            f"🎒 <b>Рюкзак:</b> {current_slots} / {max_slots}\n"
-            f"💎 <b>Пыль Резидуу:</b> {dust_amount}"
-        )
-        return text
+        text_lines = ["<b>👤 Экипировка:</b>", "<code>"]
+
+        for slot_key_str in InventoryFormatter.SLOT_NAMES:
+            if slot_key_str not in all_display_slots:
+                continue
+
+            slot_name = InventoryFormatter.SLOT_NAMES.get(slot_key_str, "???")
+
+            try:
+                slot_key_enum = EquippedSlot(slot_key_str)
+            except ValueError:
+                continue
+
+            item_in_slot = equipped_map.get(slot_key_enum)
+
+            item_display = "—пусто—"
+            if item_in_slot:
+                icon = InventoryFormatter._get_rarity_icon(item_in_slot.rarity.value)
+                item_display = f"{icon} {item_in_slot.data.name}"
+
+            text_lines.append(f"[{slot_name:<15}]: {item_display}")
+
+        text_lines.append("</code>")
+        text_lines.append(f"\n🎒 <b>Рюкзак:</b> {current_slots} / {max_slots}")
+        text_lines.append(f"💎 <b>Пыль Резидуу:</b> {dust_amount}")
+
+        return "\n".join(text_lines)
 
     @staticmethod
     def format_item_list(
@@ -96,17 +135,6 @@ class InventoryFormatter:
     ) -> str:
         """
         Форматирует список предметов в выбранной категории.
-
-        Args:
-            items (list[InventoryItemDTO]): Список предметов на текущей странице.
-            section (str): Основная секция (equip, resource).
-            category (str): Подкатегория (weapon, ores).
-            page (int): Номер текущей страницы (начиная с 0).
-            total_pages (int): Общее количество страниц.
-            actor_name (str): Имя актора (System).
-
-        Returns:
-            str: Отформатированный список предметов с пагинацией.
         """
         section_title = InventoryFormatter.SECTION_NAMES.get(section, "Предметы")
         category_title = InventoryFormatter.SUB_CATEGORIES.get(section, {}).get(category, category)
@@ -120,14 +148,10 @@ class InventoryFormatter:
             return "\n".join(text_lines)
 
         text_lines.append("<code>")
-        for i, item in enumerate(items, start=page * 9 + 1):  # 9 - размер сетки 3x3
-            item_name = item.data.name
+        for i, item in enumerate(items, start=page * 9 + 1):
             rarity_icon = InventoryFormatter._get_rarity_icon(item.rarity.value)
-
-            # Статус: [E] - надет, [S] - системный, [T] - для торговли
+            item_name = item.data.name
             status = "[E]" if item.location == "equipped" else ""
-
-            # Нумерация для кнопок
             text_lines.append(f"{i: >2}. {rarity_icon} {item_name} {status}")
 
         text_lines.append("</code>")
@@ -138,14 +162,8 @@ class InventoryFormatter:
     @staticmethod
     def format_item_details(item: InventoryItemDTO, actor_name: str) -> str:
         """
-        Форматирует детальную карточку предмета.
-
-        Args:
-            item (InventoryItemDTO): DTO предмета для детализации.
-            actor_name (str): Имя актора (System).
-
-        Returns:
-            str: Отформатированная карточка предмета.
+        Форматирует детальную карточку предмета, корректно обрабатывая
+        разные типы данных (экипировка vs. ресурсы).
         """
         rarity_icon = InventoryFormatter._get_rarity_icon(item.rarity.value)
 
@@ -157,33 +175,22 @@ class InventoryFormatter:
             f"├ Тип:      {item.item_type.value}\n"
             f"├ Подтип:   {item.subtype}\n"
             f"├ Редкость: {item.rarity.value.capitalize()}\n"
-            f"├ Вес:      {item.data.weight}\n"
             f"└ Кол-во:   {item.quantity}\n"
             f"</code>\n"
-            f"<b>✨ Бонусы:</b>\n"
-            f"<code>"
         )
 
         if item.data.bonuses:
+            text += "<b>✨ Бонусы:</b>\n<code>"
             for k, v in item.data.bonuses.items():
                 text += f"├ +{v} к {k}\n"
-        else:
-            text += "└ Нет прямых бонусов.\n"
+            text += "</code>"
 
-        text += "</code>"
         return text
 
     @staticmethod
     def format_sub_menu(section: str, actor_name: str) -> str:
         """
         Форматирует текст для меню подкатегорий.
-
-        Args:
-            section (str): Основная секция (equip, resource).
-            actor_name (str): Имя актора (System).
-
-        Returns:
-            str: Отформатированное сообщение.
         """
         title = InventoryFormatter.SECTION_NAMES.get(section, "Категория")
         return f"<b>{title}</b>\n\n<i>{actor_name}: Выберите тип предметов, которые хотите просмотреть.</i>"

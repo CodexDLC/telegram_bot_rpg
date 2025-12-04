@@ -155,3 +155,16 @@ class IInventoryRepo(ABC):
             True, если данные успешно обновлены, иначе False.
         """
         pass
+
+    @abstractmethod
+    async def update_fields(self, inventory_id: int, update_data: dict[str, Any]) -> bool:
+        """
+        Обновляет несколько полей предмета одним вызовом.
+
+        Args:
+            inventory_id: ID предмета.
+            update_data: Словарь {поле: новое_значение}.
+
+        Returns: True, если обновлено, иначе False.
+        """
+        pass

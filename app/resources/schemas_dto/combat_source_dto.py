@@ -44,6 +44,8 @@ class FighterStateDTO(BaseModel):
     effects: dict[str, Any] = Field(default_factory=dict)  # Активные временные эффекты (баффы/дебаффы).
     stats: BattleStatsDTO = Field(default_factory=BattleStatsDTO)  # Статистика бойца за текущий бой.
     xp_buffer: dict[str, int] = Field(default_factory=dict)  # Буфер накопленного опыта для навыков.
+    consumable_used_this_round: bool = False  # Блокировка предмета до размена
+    item_cooldowns: dict[int, int] = Field(default_factory=dict)  # {inventory_id: exchange_count_ready}
 
 
 class StatSourceData(BaseModel):

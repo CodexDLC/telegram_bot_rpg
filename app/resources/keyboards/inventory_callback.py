@@ -27,6 +27,7 @@ class InventoryCallback(CallbackData, prefix="inv"):
     user_id: int
     section: str = "main"
     category: str = "all"
+    filter_type: str = "category"
     page: int = 0
     item_id: int = 0
     action: str = "view"

@@ -293,6 +293,26 @@ class InventoryRepo(IInventoryRepo):
             log.exception(f"InventoryRepo | action=update_item_data status=failed item_id={inventory_id}")
             return False
 
+    async def update_fields(self, inventory_id: int, update_data: dict[str, Any]) -> bool:
+        """
+        Обновляет несколько полей предмета одним вызовом.
+
+        Args:
+            inventory_id: ID предмета.
+            update_data: Словарь {поле: новое_значение}.
+
+        Returns: True, если обновлено, иначе False.
+        """
+        log.debug(f"InventoryRepo | action=update_fields item_id={inventory_id}")
+        stmt = update(InventoryItem).where(InventoryItem.id == inventory_id).values(**update_data)
+        try:
+            await self.session.execute(stmt)
+            log.info(f"InventoryRepo | action=update_fields status=success item_id={inventory_id}")
+            return True
+        except SQLAlchemyError:
+            log.exception(f"InventoryRepo | action=update_fields status=failed item_id={inventory_id}")
+            return False
+
     def _to_dto(self, orm_item: InventoryItem) -> InventoryItemDTO:
         """
         Преобразует ORM-объект `InventoryItem` в полиморфный DTO `InventoryItemDTO`.

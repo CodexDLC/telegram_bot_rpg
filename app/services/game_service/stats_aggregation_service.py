@@ -47,21 +47,6 @@ class StatsAggregationService:
     async def get_character_total_stats(self, char_id: int) -> dict[str, dict[str, StatInfo]]:
         """
         Возвращает полный слепок всех характеристик и модификаторов персонажа.
-
-        Процесс включает:
-        1. Сбор базовых характеристик персонажа из БД.
-        2. Применение бонусов от экипированных предметов к базовым характеристикам.
-        3. Расчет производных модификаторов на основе итоговых характеристик.
-        4. Применение прямых бонусов от экипированных предметов к модификаторам.
-
-        Args:
-            char_id: Уникальный идентификатор персонажа.
-
-        Returns:
-            Словарь, содержащий два основных раздела: "stats" (первичные характеристики)
-            и "modifiers" (производные модификаторы). Каждый раздел содержит словарь,
-            где ключ — название характеристики/модификатора, а значение — `StatInfo`.
-            Возвращает пустой словарь, если базовые статы не найдены.
         """
         log.info(f"StatsAggregation | event=start_aggregation char_id={char_id}")
 
@@ -100,12 +85,6 @@ class StatsAggregationService:
     def _process_base_stats(self, char_id: int, pool: PoolDict, dto: CharacterStatsReadDTO, keys: set[str]) -> None:
         """
         Обрабатывает базовые характеристики персонажа и добавляет их в пул.
-
-        Args:
-            char_id: Уникальный идентификатор персонажа.
-            pool: Пул характеристик для обновления.
-            dto: DTO с базовыми характеристиками персонажа.
-            keys: Множество ключей базовых характеристик.
         """
         data = dto.model_dump(exclude={"created_at", "updated_at", "character_id"})
         self._add_layer(pool=pool, source_name="👤 База", data=data, target_keys=keys)
@@ -114,73 +93,52 @@ class StatsAggregationService:
     def _process_equipment_stats(self, pool: PoolDict, items: ItemList, keys: set[str]) -> None:
         """
         Обрабатывает бонусы от экипированных предметов к первичным характеристикам.
-
-        Args:
-            pool: Пул характеристик для обновления.
-            items: Список экипированных предметов.
-            keys: Множество ключей первичных характеристик.
         """
         for item in items:
-            if item.item_type == ItemType.CONSUMABLE:
+            if item.item_type in (ItemType.RESOURCE, ItemType.CURRENCY, ItemType.CONSUMABLE):
                 continue
-            bonuses = self._extract_total_bonuses(item)
-            item_name = item.data.name
-            self._add_layer(pool=pool, source_name=item_name, data=bonuses, target_keys=keys)
-            log.debug(f"StatsAggregation | action=process_equipment_stats item='{item_name}'")
+            else:
+                bonuses = self._extract_total_bonuses(item)
+                item_name = item.data.name
+                self._add_layer(pool=pool, source_name=item_name, data=bonuses, target_keys=keys)
+                log.debug(f"StatsAggregation | action=process_equipment_stats item='{item_name}'")
 
     def _process_equipment_modifiers(self, pool: PoolDict, items: ItemList, keys: set[str]) -> None:
         """
         Обрабатывает прямые бонусы от экипированных предметов к модификаторам.
-
-        Args:
-            pool: Пул модификаторов для обновления.
-            items: Список экипированных предметов.
-            keys: Множество ключей первичных характеристик (для исключения).
         """
         for item in items:
-            if item.item_type == ItemType.CONSUMABLE:
+            if item.item_type in (ItemType.RESOURCE, ItemType.CURRENCY, ItemType.CONSUMABLE):
                 continue
-            bonuses = self._extract_total_bonuses(item)
-            item_name = item.data.name
-            mod_bonuses = {k: v for k, v in bonuses.items() if k not in keys}
-            self._add_layer(pool=pool, source_name=item_name, data=mod_bonuses, target_keys=None)
-            log.debug(f"StatsAggregation | action=process_equipment_modifiers item='{item_name}'")
+            else:
+                bonuses = self._extract_total_bonuses(item)
+                item_name = item.data.name
+                mod_bonuses = {k: v for k, v in bonuses.items() if k not in keys}
+                self._add_layer(pool=pool, source_name=item_name, data=mod_bonuses, target_keys=None)
+                log.debug(f"StatsAggregation | action=process_equipment_modifiers item='{item_name}'")
 
     @staticmethod
     def _extract_total_bonuses(item: InventoryItemDTO) -> dict[str, int | float]:
         """
         Извлекает все применимые бонусы из предмета.
-
-        Args:
-            item: DTO экипированного предмета.
-
-        Returns:
-            Словарь, содержащий все бонусы предмета.
         """
-        # TODO: Разделить обработку бонусов и базовых свойств (например, урон у оружия, защита у брони)
-        # на два отдельных цикла или метода для лучшей читаемости и поддержки.
-        if item.item_type == ItemType.CONSUMABLE:
+        if item.item_type in (ItemType.RESOURCE, ItemType.CURRENCY, ItemType.CONSUMABLE):
             return {}
-        total = item.data.bonuses.copy()
-        if item.item_type == ItemType.WEAPON:
-            avg_dmg = (item.data.damage_min + item.data.damage_max) / 2
-            total["physical_damage_bonus"] = total.get("physical_damage_bonus", 0) + avg_dmg
-        elif item.item_type == ItemType.ARMOR:
-            if item.data.protection:
-                total["physical_resistance"] = total.get("physical_resistance", 0) + item.data.protection
-        return total
+        else:
+            total = item.data.bonuses.copy() if item.data.bonuses else {}
+
+            if item.item_type == ItemType.WEAPON:
+                avg_dmg = (item.data.damage_min + item.data.damage_max) / 2
+                total["physical_damage_bonus"] = total.get("physical_damage_bonus", 0) + avg_dmg
+            elif item.item_type == ItemType.ARMOR:
+                if item.data.protection:
+                    total["physical_resistance"] = total.get("physical_resistance", 0) + item.data.protection
+            return total
 
     @staticmethod
     def _add_layer(pool: PoolDict, source_name: str, data: dict[str, Any], target_keys: set[str] | None = None) -> None:
         """
         Добавляет слой бонусов от источника в указанный пул.
-
-        Args:
-            pool: Пул характеристик/модификаторов для обновления.
-            source_name: Название источника бонусов (например, "База", "Меч").
-            data: Словарь с бонусами для добавления.
-            target_keys: Опциональное множество ключей, если нужно добавить только
-                         определенные бонусы. Если None, добавляются все.
         """
         for key, value in data.items():
             if target_keys is not None and key not in target_keys:
@@ -195,13 +153,6 @@ class StatsAggregationService:
     def _create_stats_dto_from_pool(stats_pool: PoolDict, template: CharacterStatsReadDTO) -> CharacterStatsReadDTO:
         """
         Создает DTO `CharacterStatsReadDTO` на основе агрегированного пула характеристик.
-
-        Args:
-            stats_pool: Пул агрегированных первичных характеристик.
-            template: Шаблон DTO для инициализации.
-
-        Returns:
-            Новый DTO `CharacterStatsReadDTO` с обновленными значениями.
         """
         final_data = template.model_dump()
         for stat_name, stat_data in stats_pool.items():

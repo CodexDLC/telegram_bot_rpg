@@ -1,5 +1,6 @@
+# app/handlers/callback/ui/inventory/inventory_item_details.py (НОВЫЙ ХЕНДЛЕР)
+
 from aiogram import Bot, F, Router
-from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger as log
@@ -12,14 +13,14 @@ from app.services.helpers_module.callback_exceptions import UIErrorHandler as Er
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.inventory.inventory_ui_service import InventoryUIService
 
-router = Router(name="inventory_details_router")
+router = Router(name="inventory_item_details")
 
 
 @router.callback_query(
     InGame.inventory,
-    InventoryCallback.filter(F.level == 2),
+    InventoryCallback.filter(F.level == 3),
 )
-async def inventory_item_actions_handler(
+async def inventory_quick_slot_handler(
     call: CallbackQuery,
     callback_data: InventoryCallback,
     state: FSMContext,
@@ -27,89 +28,72 @@ async def inventory_item_actions_handler(
     bot: Bot,
     account_manager: AccountManager,
 ) -> None:
-    """Обрабатывает действия с предметами в инвентаре (просмотр, надеть, снять, выбросить)."""
+    """
+    Обрабатывает выбор Quick Slot. (Handler вызывает только публичные методы UI Service).
+    """
+    if not call.from_user:
+        return
+
     user_id = call.from_user.id
-    if user_id != callback_data.user_id:
-        log.warning(f"InventoryItem | status=access_denied user_id={user_id} callback_user_id={callback_data.user_id}")
-        await Err.access_denied(call)
-        return
-
     state_data = await state.get_data()
-    session_context = state_data.get(FSM_CONTEXT_KEY, {})
-    char_id = session_context.get("char_id")
-
-    if not char_id:
-        log.error(f"InventoryItem | status=failed reason='char_id not found in FSM' user_id={user_id}")
-        await Err.char_id_not_found_in_fsm(call)
-        return
-
-    service = InventoryUIService(
-        char_id=char_id, user_id=user_id, session=session, state_data=state_data, account_manager=account_manager
-    )
+    char_id = state_data.get(FSM_CONTEXT_KEY, {}).get("char_id")
     item_id = callback_data.item_id
     action = callback_data.action
 
-    log.info(f"InventoryItem | event=action user_id={user_id} char_id={char_id} item_id={item_id} action='{action}'")
-
-    if action == "view":
-        pass
-
-    elif action == "equip":
-        success, msg = await service.inventory_service.equip_item(item_id)
-        if success:
-            await call.answer(f"⚔️ {msg}")
-            log.info(f"InventoryItem | action=equip status=success user_id={user_id} item_id={item_id}")
-        else:
-            await call.answer(f"🚫 {msg}", show_alert=True)
-            log.warning(
-                f"InventoryItem | action=equip status=failed user_id={user_id} item_id={item_id} reason='{msg}'"
-            )
-            return
-
-    elif action == "unequip":
-        success, msg = await service.inventory_service.unequip_item(item_id)
-        if success:
-            await call.answer(f"🎒 {msg}")
-            log.info(f"InventoryItem | action=unequip status=success user_id={user_id} item_id={item_id}")
-        else:
-            await call.answer(f"🚫 {msg}", show_alert=True)
-            log.warning(
-                f"InventoryItem | action=unequip status=failed user_id={user_id} item_id={item_id} reason='{msg}'"
-            )
-            return
-
-    elif action == "drop":
-        success = await service.inventory_service.drop_item(item_id)
-        if success:
-            await call.answer("🗑 Предмет выброшен.")
-            log.info(f"InventoryItem | action=drop status=success user_id={user_id} item_id={item_id}")
-            text, kb = await service.render_item_list("equip", "all", 0)
-            message_data = service.get_message_content_data()
-            if message_data:
-                await bot.edit_message_text(
-                    chat_id=message_data[0], message_id=message_data[1], text=text, reply_markup=kb, parse_mode="HTML"
-                )
-            return
-        else:
-            await call.answer("Не удалось выбросить.", show_alert=True)
-            log.warning(f"InventoryItem | action=drop status=failed user_id={user_id} item_id={item_id}")
-            return
-
-    text, kb = await service.render_item_details(item_id)
-
-    message_data = service.get_message_content_data()
-    if not message_data:
-        log.error(f"InventoryItem | status=failed reason='message_content not found' user_id={user_id}")
-        await Err.generic_error(call)
+    if not char_id:
+        await Err.char_id_not_found_in_fsm(call)
         return
 
-    try:
+    log.info(f"InventoryQuickSlot | event=action user_id={user_id} item_id={item_id} action='{action}'")
+    await call.answer()
+
+    ui_service = InventoryUIService(
+        char_id=char_id, user_id=user_id, session=session, state_data=state_data, account_manager=account_manager
+    )
+    message_data = ui_service.get_message_content_data()
+    if not message_data:
+        await Err.message_content_not_found_in_fsm(call)
+        return
+
+    chat_id, message_id = message_data
+
+    # --- 1. ACTION: Go to Quick Slot Selection Menu (UI Service renders buttons) ---
+    if action == "bind_quick_slot_menu":
+        context_data = {
+            "category": callback_data.category,
+            "page": callback_data.page,
+            "filter_type": callback_data.filter_type,
+        }
+        text, kb = await ui_service.render_quick_slot_selection_menu(item_id, context_data)
         await bot.edit_message_text(
-            chat_id=message_data[0], message_id=message_data[1], text=text, reply_markup=kb, parse_mode="HTML"
+            chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML"
         )
-        log.debug(f"UIRender | component=item_details status=success user_id={user_id} item_id={item_id}")
-    except TelegramBadRequest:
-        log.debug(f"UIRender | component=item_details status=not_modified user_id={user_id} item_id={item_id}")
-        await call.answer()
-    except TelegramAPIError:  # Changed from Exception
-        log.exception(f"UIRender | component=item_details status=failed user_id={user_id} item_id={item_id}")
+
+    # --- 2. ACTION: Bind Item to Selected Slot (UI Service executes action) ---
+    elif action == "bind_quick_slot_select":
+        quick_slot_key = callback_data.section
+        success, msg = await ui_service.action_bind_quick_slot(item_id, quick_slot_key)
+
+        await call.answer(msg, show_alert=True)
+
+        # Rerender Item Details (Level 2)
+        text, kb = await ui_service.render_item_details(
+            item_id, callback_data.category, callback_data.page, callback_data.filter_type
+        )
+        await bot.edit_message_text(
+            chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML"
+        )
+
+    # --- 3. ACTION: Unbind Item from Slot (UI Service executes action) ---
+    elif action == "unbind_quick_slot":
+        success, msg = await ui_service.action_unbind_quick_slot(item_id)
+
+        await call.answer(msg, show_alert=True)
+
+        # Rerender Item Details (Level 2)
+        text, kb = await ui_service.render_item_details(
+            item_id, callback_data.category, callback_data.page, callback_data.filter_type
+        )
+        await bot.edit_message_text(
+            chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML"
+        )

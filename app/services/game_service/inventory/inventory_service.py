@@ -3,14 +3,22 @@ from typing import cast
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.resources.schemas_dto.item_dto import InventoryItemDTO, ItemType
+from app.resources.schemas_dto.item_dto import EquippedSlot, InventoryItemDTO, ItemType, QuickSlot
 from app.services.core_service.manager.account_manager import AccountManager
 from app.services.game_service.matchmaking_service import MatchmakingService
 from app.services.game_service.stats_aggregation_service import StatsAggregationService
 from database.repositories import get_inventory_repo, get_wallet_repo
 from database.repositories.ORM.wallet_repo import ResourceTypeGroup
 
+CONFLICT_MAP: dict[EquippedSlot, list[EquippedSlot]] = {
+    # Если надеваем двуручное оружие (TWO_HAND), оно занимает два слота.
+    EquippedSlot.TWO_HAND: [EquippedSlot.MAIN_HAND, EquippedSlot.OFF_HAND],
+    # Если надеваем MAIN_HAND, оно конфликтует с двуручным оружием.
+    EquippedSlot.MAIN_HAND: [EquippedSlot.TWO_HAND],
+}
+
 BASE_INVENTORY_SIZE = 20
+BASE_QUICK_SLOT_LIMIT = 0
 
 
 class InventoryService:
@@ -41,13 +49,6 @@ class InventoryService:
     async def add_resource(self, subtype: str, amount: int) -> int:
         """
         Добавляет указанное количество ресурса в кошелек персонажа.
-
-        Args:
-            subtype: Подтип ресурса (например, "dust", "ore").
-            amount: Количество ресурса для добавления.
-
-        Returns:
-            Новое общее количество ресурса в кошельке.
         """
         group = self._map_subtype_to_group(subtype)
         new_total = await self.wallet_repo.add_resource(char_id=self.char_id, group=group, key=subtype, amount=amount)
@@ -59,9 +60,6 @@ class InventoryService:
     async def get_dust_amount(self) -> int:
         """
         Возвращает текущее количество ресурса "dust" в кошельке персонажа.
-
-        Returns:
-            Количество "dust".
         """
         amount = await self.wallet_repo.get_resource_amount(char_id=self.char_id, group="currency", key="dust")
         log.debug(f"InventoryService | action=get_dust_amount char_id={self.char_id} amount={amount}")
@@ -70,13 +68,6 @@ class InventoryService:
     async def consume_resource(self, subtype: str, amount: int) -> bool:
         """
         Удаляет указанное количество ресурса из кошелька персонажа.
-
-        Args:
-            subtype: Подтип ресурса.
-            amount: Количество ресурса для удаления.
-
-        Returns:
-            True, если ресурс успешно удален, иначе False.
         """
         group = self._map_subtype_to_group(subtype)
         success = await self.wallet_repo.remove_resource(char_id=self.char_id, group=group, key=subtype, amount=amount)
@@ -88,13 +79,6 @@ class InventoryService:
     async def get_capacity(self) -> tuple[int, int]:
         """
         Возвращает текущую занятость и максимальную вместимость инвентаря.
-
-        Максимальная вместимость рассчитывается с учетом базового размера
-        и бонусов от характеристик персонажа (например, Perception).
-
-        Returns:
-            Кортеж `(current_slots, max_slots)`, где `current_slots` —
-            количество занятых слотов, а `max_slots` — общая вместимость.
         """
         all_items = await self.inventory_repo.get_all_items(self.char_id)
         in_bag = [i for i in all_items if i.location == "inventory"]
@@ -118,12 +102,6 @@ class InventoryService:
     async def has_free_slots(self, amount: int = 1) -> bool:
         """
         Проверяет, достаточно ли свободных слотов в инвентаре для N предметов.
-
-        Args:
-            amount: Количество предметов, для которых нужно проверить наличие места.
-
-        Returns:
-            True, если есть достаточно свободных слотов, иначе False.
         """
         current, max_cap = await self.get_capacity()
         has_space = (current + amount) <= max_cap
@@ -135,12 +113,6 @@ class InventoryService:
     async def claim_item(self, item_id: int) -> bool:
         """
         Перемещает предмет из "мира" или другого источника в инвентарь персонажа.
-
-        Args:
-            item_id: Уникальный идентификатор предмета.
-
-        Returns:
-            True, если предмет успешно получен, иначе False.
         """
         item = await self.inventory_repo.get_item_by_id(item_id)
         if not item:
@@ -152,26 +124,17 @@ class InventoryService:
         )
 
         if success:
+            item_name = item.subtype if item.item_type in (ItemType.RESOURCE, ItemType.CURRENCY) else item.data.name
             log.info(
-                f"InventoryService | action=claim_item status=success char_id={self.char_id} item_id={item_id} name='{item.data.name}'"
+                f"InventoryService | action=claim_item status=success char_id={self.char_id} item_id={item_id} name='{item_name}'"
             )
             return True
         log.warning(f"InventoryService | action=claim_item status=failed char_id={self.char_id} item_id={item_id}")
         return False
 
-    async def equip_item(self, item_id: int) -> tuple[bool, str]:
+    async def equip_item(self, item_id: int, target_slot: EquippedSlot) -> tuple[bool, str]:
         """
-        Экипирует предмет на персонажа.
-
-        Обрабатывает конфликты слотов (автоматически снимает старые предметы).
-        Обновляет Gear Score персонажа после экипировки.
-
-        Args:
-            item_id: Уникальный идентификатор предмета для экипировки.
-
-        Returns:
-            Кортеж `(bool, str)`, где `bool` указывает на успешность экипировки,
-            а `str` содержит соответствующее сообщение.
+        Экипирует предмет на персонажа, обрабатывая конфликты слотов.
         """
         item = await self.inventory_repo.get_item_by_id(item_id)
         if not item or item.character_id != self.char_id:
@@ -185,33 +148,30 @@ class InventoryService:
                 f"InventoryService | action=equip_item status=failed reason='Item type not equippable' char_id={self.char_id} item_id={item_id} type='{item.item_type}'"
             )
             return False, "Это нельзя надеть."
+        else:
+            await self._handle_slot_conflicts(item, target_slot)
 
-        await self._handle_slot_conflicts(item)
+            update_data = {
+                "location": "equipped",
+                "equipped_slot": target_slot.value,
+                "quick_slot_position": None,
+            }
 
-        if await self.inventory_repo.move_item(item_id, "equipped"):
-            await self.mm_service.refresh_gear_score(self.char_id)
-            log.info(
-                f"InventoryService | action=equip_item status=success char_id={self.char_id} item_id={item_id} name='{item.data.name}'"
+            if await self.inventory_repo.update_fields(item_id, update_data):
+                await self.mm_service.refresh_gear_score(self.char_id)
+                log.info(
+                    f"InventoryService | action=equip_item status=success char_id={self.char_id} item_id={item_id} slot='{target_slot.name}'"
+                )
+                return True, f"Надето: {item.data.name} в {target_slot.name}"
+
+            log.error(
+                f"InventoryService | action=equip_item status=failed reason='DB error in update_fields' char_id={self.char_id} item_id={item_id}"
             )
-            return True, f"Надето: {item.data.name}"
-
-        log.error(
-            f"InventoryService | action=equip_item status=failed reason='DB error moving item' char_id={self.char_id} item_id={item_id}"
-        )
-        return False, "Ошибка БД."
+            return False, "Ошибка БД."
 
     async def unequip_item(self, item_id: int) -> tuple[bool, str]:
         """
         Снимает экипированный предмет с персонажа и перемещает его в инвентарь.
-
-        Обновляет Gear Score персонажа после снятия.
-
-        Args:
-            item_id: Уникальный идентификатор предмета для снятия.
-
-        Returns:
-            Кортеж `(bool, str)`, где `bool` указывает на успешность снятия,
-            а `str` содержит соответствующее сообщение.
         """
         item = await self.inventory_repo.get_item_by_id(item_id)
         if not item or item.character_id != self.char_id:
@@ -220,30 +180,24 @@ class InventoryService:
             )
             return False, "Ошибка."
 
-        if await self.inventory_repo.move_item(item_id, "inventory"):
-            await self.mm_service.refresh_gear_score(self.char_id)
-            log.info(
-                f"InventoryService | action=unequip_item status=success char_id={self.char_id} item_id={item_id} name='{item.data.name}'"
-            )
-            return True, f"Снято: {item.data.name}"
+        if item.item_type in (ItemType.RESOURCE, ItemType.CURRENCY):
+            return False, "Ресурсы не могут быть экипированы."
+        else:
+            if await self.inventory_repo.move_item(item_id, "inventory"):
+                await self.mm_service.refresh_gear_score(self.char_id)
+                log.info(
+                    f"InventoryService | action=unequip_item status=success char_id={self.char_id} item_id={item_id} name='{item.data.name}'"
+                )
+                return True, f"Снято: {item.data.name}"
 
-        log.error(
-            f"InventoryService | action=unequip_item status=failed reason='DB error moving item' char_id={self.char_id} item_id={item_id}"
-        )
-        return False, "Ошибка БД."
+            log.error(
+                f"InventoryService | action=unequip_item status=failed reason='DB error moving item' char_id={self.char_id} item_id={item_id}"
+            )
+            return False, "Ошибка БД."
 
     async def drop_item(self, item_id: int) -> bool:
         """
         Удаляет предмет из инвентаря персонажа.
-
-        Если предмет был экипирован, он сначала перемещается в инвентарь,
-        а затем удаляется.
-
-        Args:
-            item_id: Уникальный идентификатор предмета для удаления.
-
-        Returns:
-            True, если предмет успешно удален, иначе False.
         """
         item = await self.inventory_repo.get_item_by_id(item_id)
         if not item or item.character_id != self.char_id:
@@ -265,12 +219,6 @@ class InventoryService:
     async def get_items(self, location: str = "inventory") -> list[InventoryItemDTO]:
         """
         Возвращает список предметов персонажа, находящихся в указанной локации.
-
-        Args:
-            location: Локация предметов (например, "inventory", "equipped").
-
-        Returns:
-            Список DTO `InventoryItemDTO`.
         """
         items = await self.inventory_repo.get_items_by_location(self.char_id, location)
         log.debug(
@@ -281,12 +229,6 @@ class InventoryService:
     def _map_subtype_to_group(self, subtype: str) -> ResourceTypeGroup:
         """
         Определяет группу ресурсов для `WalletRepo` на основе подтипа.
-
-        Args:
-            subtype: Подтип ресурса.
-
-        Returns:
-            Группа ресурсов (`ResourceTypeGroup`).
         """
         mapping = {
             "currency": ("dust", "shard", "core"),
@@ -302,28 +244,100 @@ class InventoryService:
 
         return "parts"
 
-    async def _handle_slot_conflicts(self, new_item: InventoryItemDTO) -> None:
+    async def _get_equipped_map(self) -> dict[EquippedSlot, InventoryItemDTO]:
         """
-        Автоматически снимает экипированные предметы, если они конфликтуют
-        со слотами нового предмета.
-
-        Args:
-            new_item: Новый предмет, который будет экипирован.
+        Получает все экипированные предметы и преобразует их в словарь
+        для быстрого поиска по EquippedSlot.
         """
-        if new_item.item_type not in (ItemType.WEAPON, ItemType.ARMOR, ItemType.ACCESSORY):
-            return
+        equipped_items = await self.get_items("equipped")
+        equipped_map = {EquippedSlot(item.equipped_slot): item for item in equipped_items if item.equipped_slot}
+        log.debug(f"InventoryService | action=get_equipped_map count={len(equipped_map)}")
+        return equipped_map
 
-        required_slots = set(new_item.data.valid_slots)  # type: ignore[union-attr]
-        equipped = await self.inventory_repo.get_items_by_location(self.char_id, "equipped")
+    async def _handle_slot_conflicts(self, new_item: InventoryItemDTO, target_slot: EquippedSlot) -> None:
+        """
+        Снимает предметы, конфликтующие с целевым слотом.
+        """
+        equipped_map = await self._get_equipped_map()
+        items_to_unequip: list[InventoryItemDTO] = []
 
-        for old in equipped:
-            if old.item_type not in (ItemType.WEAPON, ItemType.ARMOR, ItemType.ACCESSORY):
+        if target_slot in equipped_map:
+            items_to_unequip.append(equipped_map[target_slot])
+
+        slots_to_check = CONFLICT_MAP.get(target_slot, [])
+        for conflict_slot in slots_to_check:
+            if conflict_slot in equipped_map:
+                items_to_unequip.append(equipped_map[conflict_slot])
+
+        for old_item in set(items_to_unequip):
+            if old_item.item_type in (ItemType.RESOURCE, ItemType.CURRENCY):
                 continue
-
-            old_slots = set(old.data.valid_slots)  # type: ignore[union-attr]
-
-            if not required_slots.isdisjoint(old_slots):
-                await self.unequip_item(old.inventory_id)
-                log.debug(
-                    f"InventoryService | action=unequip_conflict char_id={self.char_id} old_item_id={old.inventory_id} new_item_id={new_item.inventory_id}"
+            else:
+                await self.inventory_repo.update_fields(
+                    old_item.inventory_id, {"location": "inventory", "equipped_slot": None, "quick_slot_position": None}
                 )
+                log.info(f"Конфликт разрешен: снят {old_item.data.name} из {old_item.equipped_slot}.")
+
+    async def _get_quick_slot_limit(self) -> int:
+        """
+        Рассчитывает максимальное количество доступных Quick Slots.
+        """
+        equipped_map = await self._get_equipped_map()
+        belt_item = equipped_map.get(EquippedSlot.BELT_ACCESSORY)
+
+        if not belt_item or belt_item.item_type in (ItemType.RESOURCE, ItemType.CURRENCY):
+            return BASE_QUICK_SLOT_LIMIT
+        else:
+            current_limit = 0
+            if belt_item.data.bonuses:
+                capacity = belt_item.data.bonuses.get("quick_slot_capacity", 0)
+                if isinstance(capacity, (int, float)):
+                    current_limit = int(capacity)
+
+            final_limit = max(BASE_QUICK_SLOT_LIMIT, current_limit)
+            log.info(f"QuickSlot | calculated_limit={final_limit} belt='{belt_item.data.name}'")
+            return final_limit
+
+    async def move_to_quick_slot(self, item_id: int, position: QuickSlot) -> tuple[bool, str]:
+        """
+        Привязывает CONSUMABLE к слоту быстрого доступа.
+        """
+        item = await self.inventory_repo.get_item_by_id(item_id)
+
+        if not item or item.character_id != self.char_id:
+            return False, "Предмет недоступен."
+
+        if item.item_type != ItemType.CONSUMABLE:
+            return False, "В быстрые слоты можно поместить только расходники."
+        else:
+            if not item.data.is_quick_slot_compatible:
+                return False, "Этот расходник не предназначен для быстрого использования."
+
+            max_limit = await self._get_quick_slot_limit()
+            target_pos_int = int(position.value.split("_")[-1])
+
+            if target_pos_int > max_limit:
+                return False, f"Слот {position.name} ({target_pos_int}) недоступен. Лимит {max_limit} слотов."
+
+            equipped_items = await self.inventory_repo.get_items_by_location(self.char_id, "inventory")
+            for existing_item in equipped_items:
+                if existing_item.quick_slot_position == position.value and existing_item.inventory_id != item_id:
+                    await self.inventory_repo.update_fields(existing_item.inventory_id, {"quick_slot_position": None})
+                    log.info(
+                        f"QuickSlot | action=cleared_slot char_id={self.char_id} old_item_id={existing_item.inventory_id}"
+                    )
+                    break
+
+            update_data = {
+                "location": "inventory",
+                "quick_slot_position": position.value,
+                "equipped_slot": None,
+            }
+
+            if await self.inventory_repo.update_fields(item_id, update_data):
+                log.info(
+                    f"QuickSlot | action=assigned char_id={self.char_id} item_id={item_id} position={position.name}"
+                )
+                return True, f"Предмет {item.data.name} закреплен за {position.name}."
+
+            return False, "Ошибка при сохранении в БД."
