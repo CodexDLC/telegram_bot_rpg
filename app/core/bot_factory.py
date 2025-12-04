@@ -38,7 +38,7 @@ async def build_app(redis_client: Redis) -> tuple[Bot, Dispatcher]:
     log.debug("RedisCheck | status=started")
     try:
         # Явное ожидание, чтобы mypy был доволен
-        pong = await redis_client.ping()
+        pong = await redis_client.ping()  # type: ignore[misc]
         if not pong:
             raise RedisConnectionError("Redis ping failed")
         log.info("RedisCheck | status=success")
