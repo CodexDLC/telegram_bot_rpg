@@ -15,6 +15,7 @@ from app.services.game_service.combat.combat_lifecycle_service import CombatLife
 from app.services.game_service.combat.combat_log_builder import CombatLogBuilder
 from app.services.game_service.combat.combat_turn_manager import CombatTurnManager
 from app.services.game_service.combat.combat_xp_manager import CombatXPManager
+from app.services.game_service.combat.consumable_service import ConsumableService
 from app.services.game_service.combat.stats_calculator import StatsCalculator
 from app.services.game_service.combat.victory_checker import VictoryChecker
 
@@ -42,6 +43,28 @@ class CombatService:
         self.lifecycle_service = CombatLifecycleService(combat_manager, account_manager)
         self.ai_service = CombatAIService(combat_manager)
         log.info(f"CombatService | status=initialized session_id='{self.session_id}'")
+
+    async def use_consumable(self, actor_id: int, item_id: int) -> tuple[bool, str]:
+        """
+        Использует расходуемый предмет в бою.
+
+        Args:
+            actor_id: ID актора, использующего предмет.
+            item_id: ID предмета.
+
+        Returns:
+            Кортеж (успех, сообщение).
+        """
+        actor = await self._get_actor(actor_id)
+        if not actor:
+            return False, "Ошибка данных актора."
+
+        success, msg = ConsumableService.use_item(actor, item_id)
+
+        if success:
+            await self.combat_manager.save_actor_json(self.session_id, actor_id, actor.model_dump_json())
+
+        return success, msg
 
     async def switch_target(self, actor_id: int, new_target_id: int) -> tuple[bool, str]:
         """

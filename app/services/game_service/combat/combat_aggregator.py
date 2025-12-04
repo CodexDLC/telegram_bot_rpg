@@ -6,6 +6,8 @@ from app.resources.schemas_dto.combat_source_dto import (
     StatSourceData,
 )
 from app.resources.schemas_dto.item_dto import InventoryItemDTO, ItemType
+from app.services.core_service.manager.account_manager import AccountManager
+from app.services.game_service.inventory.inventory_service import InventoryService
 from app.services.game_service.modifiers_calculator_service import (
     ModifiersCalculatorService,
 )
@@ -20,14 +22,16 @@ class CombatAggregator:
     в единый `CombatSessionContainerDTO`.
     """
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, account_manager: AccountManager):
         """
         Инициализирует CombatAggregator.
 
         Args:
             session: Асинхронная сессия SQLAlchemy.
+            account_manager: Менеджер аккаунтов.
         """
         self.session = session
+        self.account_manager = account_manager
         self.stats_repo = get_character_stats_repo(session)
         self.inv_repo = get_inventory_repo(session)
         log.debug("CombatAggregator | status=initialized")
@@ -40,7 +44,8 @@ class CombatAggregator:
         container = CombatSessionContainerDTO(char_id=char_id, team="none", name="Unknown")
 
         base_stats = await self.stats_repo.get_stats(char_id)
-        items = await self.inv_repo.get_items_by_location(char_id, "equipped")
+        equipped_items = await self.inv_repo.get_items_by_location(char_id, "equipped")
+        inventory_items = await self.inv_repo.get_items_by_location(char_id, "inventory")
 
         if base_stats:
             for field, val in base_stats.model_dump().items():
@@ -53,13 +58,23 @@ class CombatAggregator:
                     self._add_stat(container, field, float(val), "base")
             log.debug(f"CombatAggregator | event=base_stats_processed char_id={char_id}")
 
-        has_weapon = self._process_equipment_bonuses(container, items)
+        has_weapon = self._process_equipment_bonuses(container, equipped_items)
         log.debug(f"CombatAggregator | event=equipment_processed char_id={char_id}")
 
         if not has_weapon:
             self._calculate_unarmed_damage(container)
 
-        container.equipped_items = items
+        container.equipped_items = equipped_items
+
+        # Собираем предметы с пояса
+        belt_items = [i for i in inventory_items if i.quick_slot_position]
+        if belt_items:
+            belt_items.sort(key=lambda x: x.quick_slot_position or "")
+        container.belt_items = belt_items
+
+        # Получаем лимит слотов
+        inv_service = InventoryService(self.session, char_id, self.account_manager)
+        container.quick_slot_limit = await inv_service.get_quick_slot_limit()
 
         log.info(f"CombatAggregator | status=success char_id={char_id} final_stats_count={len(container.stats)}")
         return container

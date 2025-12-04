@@ -85,7 +85,7 @@ class CombatLifecycleService:
         log.info(
             f"CombatLifecycle | event=add_participant session_id='{session_id}' char_id={char_id} name='{name}' team='{team}' is_ai={is_ai}"
         )
-        aggregator = CombatAggregator(session)
+        aggregator = CombatAggregator(session, self.account_manager)
         container = await aggregator.collect_session_container(char_id)
         container.team, container.name, container.is_ai = team, name, is_ai
 
