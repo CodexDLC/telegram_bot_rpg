@@ -1,16 +1,17 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
-from loguru import logger as log
+
+from app.resources.fsm_states.states import ArenaState
+from app.resources.keyboards.callback_data import ArenaQueueCallback
+from app.services.helpers_module.universal_stub import UniversalStubService
 
 router = Router(name="arena_group_router")
 
+# Создаем экземпляр сервиса-заглушки
+stub_service = UniversalStubService("🛡️ Групповые бои находятся в разработке.")
 
-# TODO: Реализовать логику для групповых боев на арене.
-@router.callback_query(F.data == "arena_group_placeholder")
-async def group_handler_placeholder(call: CallbackQuery) -> None:
+
+@router.callback_query(ArenaState.menu, ArenaQueueCallback.filter(F.action == "match_menu_fixed"))
+async def group_handler_placeholder(call: CallbackQuery, callback_data: ArenaQueueCallback):
     """Заглушка для обработки групповых боев."""
-    if not call.from_user:
-        return
-    user_id = call.from_user.id
-    log.info(f"Arena | event=placeholder_triggered user_id={user_id} type=group_battle")
-    await call.answer("Групповой бой (в разработке)", show_alert=True)
+    await stub_service.handle_callback(call, callback_data)
