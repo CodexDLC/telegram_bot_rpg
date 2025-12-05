@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -22,10 +22,11 @@ class Settings(BaseSettings):
         return f"redis://{self.redis_host}:{self.redis_port}"
 
     # --- БЛОК 3: Настройки самого Pydantic ---
-    class Config:
-        env_file = ".env"  # Имя файла
-        env_file_encoding = "utf-8"  # Кодировка
-        extra = "ignore"  # ВАЖНО: Игнорировать чужие переменные (токены бота и т.д.)
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",  # Игнорировать лишние переменные в .env
+    )
 
 
 # Создаем объект, который будем импортировать
