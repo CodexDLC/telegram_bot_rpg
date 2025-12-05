@@ -32,6 +32,11 @@ class CombatActionCallback(CallbackData, prefix="c_act"):
     action: str
 
 
+class CombatItemCallback(CallbackData, prefix="c_item"):
+    action: str  # "use"
+    item_id: int
+
+
 class CombatLogCallback(CallbackData, prefix="c_log"):
     """
     Callback для пагинации лога боя.

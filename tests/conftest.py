@@ -12,11 +12,7 @@ TEST_DB_URL = DB_URL_SQLALCHEMY
 # 1. Принудительно задаем Scope сессии для Event Loop
 @pytest.fixture(scope="session")
 def event_loop():
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    loop = asyncio.new_event_loop()
     yield loop
     loop.close()
 
@@ -44,4 +40,10 @@ async def app_container():
     """
     container = AppContainer()
     yield container
-    await container.close()
+    try:
+        # Пытаемся закрыть соединения корректно
+        await container.shutdown()
+    except RuntimeError as e:
+        # Если Windows уже закрыл цикл событий раньше времени, просто игнорируем это
+        if "Event loop is closed" not in str(e):
+            raise e

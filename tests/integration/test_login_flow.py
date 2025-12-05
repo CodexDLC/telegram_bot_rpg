@@ -106,128 +106,134 @@ async def test_full_game_cycle(get_async_session, fsm_context, mock_bot, mock_me
     }
     await fsm_context.set_data(data)
 
-    async with get_async_session() as session:
-        # 1. СТАРТ
-        print("\n🏁 Шаг 1: /start")
-        await cmd_start(mock_message, fsm_context, mock_bot, session)
+    try:
+        async with get_async_session() as session:
+            # 1. СТАРТ
+            print("\n🏁 Шаг 1: /start")
+            await cmd_start(mock_message, fsm_context, mock_bot, session)
 
-        fsm_data = await fsm_context.get_data()
-        assert FSM_CONTEXT_KEY in fsm_data
-        assert fsm_data[FSM_CONTEXT_KEY].get("message_menu") is not None
+            fsm_data = await fsm_context.get_data()
+            assert FSM_CONTEXT_KEY in fsm_data
+            assert fsm_data[FSM_CONTEXT_KEY].get("message_menu") is not None
 
-        # 2. НАЧАЛО (Авто-создание)
-        print("\n🏁 Шаг 2: Начать приключение")
-        mock_callback.data = "start_adventure"
-        await start_login_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"])
-        assert await fsm_context.get_state() == CharacterCreation.choosing_gender
+            # 2. НАЧАЛО (Авто-создание)
+            print("\n🏁 Шаг 2: Начать приключение")
+            mock_callback.data = "start_adventure"
+            await start_login_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"])
+            assert await fsm_context.get_state() == CharacterCreation.choosing_gender
 
-        # 3. СОЗДАНИЕ
-        print("\n🏁 Шаг 3: Ввод данных")
-        mock_callback.data = "gender:male"
-        await choose_gender_handler(mock_callback, fsm_context, mock_bot)
+            # 3. СОЗДАНИЕ
+            print("\n🏁 Шаг 3: Ввод данных")
+            mock_callback.data = "gender:male"
+            await choose_gender_handler(mock_callback, fsm_context, mock_bot)
 
-        mock_message.text = "Hero"
-        await choosing_name_handler(mock_message, fsm_context, mock_bot)
+            mock_message.text = "Hero"
+            await choosing_name_handler(mock_message, fsm_context, mock_bot)
 
-        mock_callback.data = "confirm"
-        await confirm_creation_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"])
-        print("✅ Персонаж создан.")
+            mock_callback.data = "confirm"
+            await confirm_creation_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"])
+            print("✅ Персонаж создан.")
 
-        # 4. ТУТОРИАЛ (СТАТЫ)
-        print("\n🏁 Шаг 4: Туториал (Статы)")
-        # Фикс бага с InGame стейтом (если ты его еще не поправил в коде, тут мы страхуемся)
-        state = await fsm_context.get_state()
-        if state != StartTutorial.start:
-            await fsm_context.set_state(StartTutorial.start)
+            # 4. ТУТОРИАЛ (СТАТЫ)
+            print("\n🏁 Шаг 4: Туториал (Статы)")
+            # Фикс бага с InGame стейтом (если ты его еще не поправил в коде, тут мы страхуемся)
+            state = await fsm_context.get_state()
+            if state != StartTutorial.start:
+                await fsm_context.set_state(StartTutorial.start)
 
-        mock_callback.data = "tut:start"
-        await start_tutorial_handler(mock_callback, fsm_context, mock_bot)
+            mock_callback.data = "tut:start"
+            await start_tutorial_handler(mock_callback, fsm_context, mock_bot)
 
-        for _ in range(4):
-            mock_callback.data = "tut_ev1:might"
-            await tutorial_event_stats_handler(mock_callback, fsm_context, mock_bot)
+            for _ in range(4):
+                mock_callback.data = "tut_ev1:might"
+                await tutorial_event_stats_handler(mock_callback, fsm_context, mock_bot)
 
-        mock_callback.data = "tut:continue"
-        await tutorial_confirmation_handler(mock_callback, fsm_context, mock_bot, session)
-        print("✅ Статы распределены.")
+            mock_callback.data = "tut:continue"
+            await tutorial_confirmation_handler(mock_callback, fsm_context, mock_bot, session)
+            print("✅ Статы распределены.")
 
-        # 5. ТУТОРИАЛ (СКИЛЛЫ)
-        print("\n🏁 Шаг 5: Туториал (Скиллы)")
-        # Начало фазы скиллов
-        mock_callback.data = "tut_quest:start_skill_phase"
-        await start_skill_phase_handler(mock_callback, fsm_context, mock_bot)
-        assert await fsm_context.get_state() == StartTutorial.in_skills_progres
+            # 5. ТУТОРИАЛ (СКИЛЛЫ)
+            print("\n🏁 Шаг 5: Туториал (Скиллы)")
+            # Начало фазы скиллов
+            mock_callback.data = "tut_quest:start_skill_phase"
+            await start_skill_phase_handler(mock_callback, fsm_context, mock_bot)
+            assert await fsm_context.get_state() == StartTutorial.in_skills_progres
 
-        # Прокликиваем ветку (Меч -> Легкая броня -> Рефлексы -> Лут)
-        # Используем TutorialQuestCallback
-        path = [
-            ("step_1", "path_melee", "path_melee"),
-            ("step_2", "path_melee", "light_armor"),
-            ("step_3", "path_melee", "reflexes"),
-            ("finale", "path_melee", "FINALE_LOOTING"),
-        ]
+            # Прокликиваем ветку (Меч -> Легкая броня -> Рефлексы -> Лут)
+            # Используем TutorialQuestCallback
+            path = [
+                ("step_1", "path_melee", "path_melee"),
+                ("step_2", "path_melee", "light_armor"),
+                ("step_3", "path_melee", "reflexes"),
+                ("finale", "path_melee", "FINALE_LOOTING"),
+            ]
 
-        for phase, branch, val in path:
-            cb_data = TutorialQuestCallback(phase=phase, branch=branch, value=val)
-            await in_skills_progres_handler(mock_callback, fsm_context, cb_data, mock_bot)
+            for phase, branch, val in path:
+                cb_data = TutorialQuestCallback(phase=phase, branch=branch, value=val)
+                await in_skills_progres_handler(mock_callback, fsm_context, cb_data, mock_bot)
 
-        # Подтверждение (Награда)
-        print("✅ Скиллы выбраны, подтверждаем...")
-        cb_data = TutorialQuestCallback(phase="p_end", branch="none", value="mining")
-        await skill_confirm_handler(mock_callback, fsm_context, cb_data, mock_bot, session)
+            # Подтверждение (Награда)
+            print("✅ Скиллы выбраны, подтверждаем...")
+            cb_data = TutorialQuestCallback(phase="p_end", branch="none", value="mining")
+            await skill_confirm_handler(mock_callback, fsm_context, cb_data, mock_bot, session)
 
-        # После скиллов нас должно перекинуть в Лобби для входа
-        assert await fsm_context.get_state() == CharacterLobby.selection
+            # После скиллов нас должно перекинуть в Лобби для входа
+            assert await fsm_context.get_state() == CharacterLobby.selection
 
-        # 6. ВХОД В ИГРУ
-        print("\n🏁 Шаг 6: Вход в мир (Login)")
-        mock_callback.data = "lsc:login"
-        await start_logging_handler(
-            call=mock_callback,
-            state=fsm_context,
-            bot=mock_bot,
-            session=session,
-            account_manager=data["account_manager"],
-            world_manager=data["world_manager"],
-            game_world_service=data["game_world_service"],
-            combat_manager=data["combat_manager"],
-        )
+            # 6. ВХОД В ИГРУ
+            print("\n🏁 Шаг 6: Вход в мир (Login)")
+            mock_callback.data = "lsc:login"
+            await start_logging_handler(
+                call=mock_callback,
+                state=fsm_context,
+                bot=mock_bot,
+                session=session,
+                account_manager=data["account_manager"],
+                world_manager=data["world_manager"],
+                game_world_service=data["game_world_service"],
+                combat_manager=data["combat_manager"],
+            )
 
-        state = await fsm_context.get_state()
-        assert state == InGame.navigation, f"❌ Ошибка входа! Текущий стейт: {state}"
-        print("✅ Успешный вход в Навигацию.")
+            state = await fsm_context.get_state()
+            assert state == InGame.navigation, f"❌ Ошибка входа! Текущий стейт: {state}"
+            print("✅ Успешный вход в Навигацию.")
 
-        # 7. ВЫХОД (Logout)
-        print("\n🏁 Шаг 7: Выход (Logout)")
-        mock_callback.data = "lsc:logout"
-        await global_logout_handler(mock_callback, fsm_context, mock_bot)
-        assert await fsm_context.get_state() is None
-        print("✅ Выход успешен.")
+            # 7. ВЫХОД (Logout)
+            print("\n🏁 Шаг 7: Выход (Logout)")
+            mock_callback.data = "lsc:logout"
+            await global_logout_handler(mock_callback, fsm_context, mock_bot)
+            assert await fsm_context.get_state() is None
+            print("✅ Выход успешен.")
 
-        # 8. РЕ-ЛОГИН (Проверка сохранения)
-        print("\n🏁 Шаг 8: Возвращение (Re-Login)")
-        mock_callback.data = "start_adventure"
-        await start_login_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"])
+            # 8. РЕ-ЛОГИН (Проверка сохранения)
+            print("\n🏁 Шаг 8: Возвращение (Re-Login)")
+            mock_callback.data = "start_adventure"
+            await start_login_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"])
 
-        # Выбираем чара
-        fsm_data = await fsm_context.get_data()
-        char_id = fsm_data["characters"][-1]["character_id"]
-        cb_data = LobbySelectionCallback(action="select", char_id=char_id)
-        await select_or_delete_character_handler(mock_callback, cb_data, fsm_context, mock_bot, session)
+            # Выбираем чара
+            fsm_data = await fsm_context.get_data()
+            char_id = fsm_data["characters"][-1]["character_id"]
+            cb_data = LobbySelectionCallback(action="select", char_id=char_id)
+            await select_or_delete_character_handler(mock_callback, cb_data, fsm_context, mock_bot, session)
 
-        # Входим
-        mock_callback.data = "lsc:login"
-        await start_logging_handler(
-            call=mock_callback,
-            state=fsm_context,
-            bot=mock_bot,
-            session=session,
-            account_manager=data["account_manager"],
-            world_manager=data["world_manager"],
-            game_world_service=data["game_world_service"],
-            combat_manager=data["combat_manager"],
-        )
+            # Входим
+            mock_callback.data = "lsc:login"
+            await start_logging_handler(
+                call=mock_callback,
+                state=fsm_context,
+                bot=mock_bot,
+                session=session,
+                account_manager=data["account_manager"],
+                world_manager=data["world_manager"],
+                game_world_service=data["game_world_service"],
+                combat_manager=data["combat_manager"],
+            )
 
-        state = await fsm_context.get_state()
-        assert state == InGame.navigation
-        print("✅ Ре-логин успешен! Цепочка работает.")
+            state = await fsm_context.get_state()
+            assert state == InGame.navigation
+            print("✅ Ре-логин успешен! Цепочка работает.")
+    finally:
+        # Я предполагаю, что у вашего сервиса есть метод shutdown
+        # для очистки фоновых задач.
+        if app_container.game_world_service and hasattr(app_container.game_world_service, "shutdown"):
+            await app_container.game_world_service.shutdown()

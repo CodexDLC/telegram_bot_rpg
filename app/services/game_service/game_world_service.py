@@ -96,3 +96,10 @@ class GameWorldService:
         except json.JSONDecodeError:
             log.error(f"WorldService | status=failed reason='JSON decode error' loc_id='{loc_id}'", exc_info=True)
             return None
+
+    async def shutdown(self):
+        """
+        Placeholder for graceful shutdown of GameWorldService.
+        Add logic here to cancel any background tasks if they are introduced later.
+        """
+        log.debug("GameWorldService | status=shutting_down")

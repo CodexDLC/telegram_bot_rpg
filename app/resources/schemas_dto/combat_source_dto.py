@@ -74,5 +74,7 @@ class CombatSessionContainerDTO(BaseModel):
     active_abilities: list[str] = Field(default_factory=list)  # Список ключей активных способностей бойца.
     persistent_pipeline: list[str] = Field(default_factory=list)  # Список ключей пассивных эффектов/способностей.
     equipped_items: list[InventoryItemDTO] = Field(default_factory=list)  # Список экипированных предметов.
+    belt_items: list[InventoryItemDTO] = Field(default_factory=list)  # Список предметов в быстрых слотах.
+    quick_slot_limit: int = 0  # Максимальное количество быстрых слотов.
     state: FighterStateDTO | None = None  # Динамическое состояние бойца в текущем раунде.
     stats: dict[str, StatSourceData] = Field(default_factory=dict)  # Агрегированные характеристики бойца.

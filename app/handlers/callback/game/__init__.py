@@ -1,7 +1,7 @@
 from aiogram import Router
 
 from .arena import arena_router_group
-from .combat_router import router as combat_router
+from .combat import combat_router
 from .hub_entry import router as hub_entry_router
 from .navigation import router as navigation_router
 

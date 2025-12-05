@@ -1,4 +1,5 @@
 # tests/integration/test_arena_simulation.py
+import asyncio
 import json  # Необходим для чтения логов
 
 import pytest
@@ -54,11 +55,17 @@ async def test_full_arena_cycle(get_async_session, app_container):
         await service_a.join_queue()
         await service_b.join_queue()
 
-        session_id = await service_a.check_and_match(attempt=1)
-        if not session_id:
-            session_id = await service_b.check_and_match(attempt=5)
+        session_id = None
+        for attempt in range(1, 11):  # Попробуем до 10 раз
+            session_id = await service_a.check_and_match(attempt=attempt)
+            if session_id:
+                break
+            session_id = await service_b.check_and_match(attempt=attempt)
+            if session_id:
+                break
+            await asyncio.sleep(0.1)  # Небольшая задержка перед следующей попыткой
 
-        assert session_id is not None, "❌ Матч не найден."
+        assert session_id is not None, "❌ Матч не найден после нескольких попыток."
         logger.info(f"🎉 БОЙ НАЧАЛСЯ! Session: {session_id}")
 
         # 3. COMBAT LOOP

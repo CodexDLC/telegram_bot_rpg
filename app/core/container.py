@@ -31,5 +31,16 @@ class AppContainer:
         self.world_manager = WorldManager(self.redis_service)
         self.game_world_service = GameWorldService(self.world_manager)
 
-    async def close(self):
+    async def shutdown(self):
+        """
+        Gracefully shuts down all services and connections managed by the container.
+        """
+        # Close Redis client connection
         await self.redis_client.aclose()
+
+        # Call shutdown methods of other services/managers here if they have any
+        if hasattr(self.game_world_service, "shutdown"):
+            await self.game_world_service.shutdown()
+        # if hasattr(self.arena_manager, 'shutdown'):
+        #     await self.arena_manager.shutdown()
+        # ... and so on for other managers/services
