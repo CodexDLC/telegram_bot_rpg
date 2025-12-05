@@ -64,7 +64,7 @@ async def main() -> None:
         # Запускаем бота в режиме long-polling.
         await dp.start_polling(bot)
     finally:
-        await container.close()
+        await container.shutdown()
         log.info("Соединение с Redis закрыто.")
 
 
