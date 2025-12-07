@@ -1,3 +1,4 @@
+# app/handlers/callback/game/combat/menu_handlers.py
 """
 Обработчики навигации по меню боя: открытие меню, переключение вкладок (скиллы/предметы).
 """
@@ -23,9 +24,13 @@ menu_router = Router(name="combat_menu")
 
 async def get_services(
     call: CallbackQuery, state: FSMContext, combat_manager: CombatManager, account_manager: AccountManager
-) -> tuple[CombatUIService | None, dict]:
+) -> CombatUIService | None:
+    """
+    Хелпер для инициализации сервисов боя из хэндлера.
+    Возвращает CombatUIService или None, если данные сессии не найдены.
+    """
     if not call.from_user or not call.message:
-        return None, {}
+        return None
 
     user_id = call.from_user.id
     state_data = await state.get_data()
@@ -34,17 +39,17 @@ async def get_services(
     session_id = session_context.get("combat_session_id")
 
     if not char_id or not session_id:
-        return None, {}
+        return None
 
     ui_service = CombatUIService(user_id, char_id, str(session_id), state_data, combat_manager, account_manager)
-    return ui_service, {}
+    return ui_service
 
 
 @menu_router.callback_query(InGame.combat, CombatActionCallback.filter(F.action == "menu"))
 async def open_combat_menu_handler(
     call: CallbackQuery, state: FSMContext, combat_manager: CombatManager, account_manager: AccountManager
 ):
-    ui_service, _ = await get_services(call, state, combat_manager, account_manager)
+    ui_service = await get_services(call, state, combat_manager, account_manager)
     if not ui_service or not isinstance(call.message, Message):
         return
 
@@ -59,7 +64,7 @@ async def open_combat_menu_handler(
 async def switch_to_skills_handler(
     call: CallbackQuery, state: FSMContext, combat_manager: CombatManager, account_manager: AccountManager
 ):
-    ui_service, _ = await get_services(call, state, combat_manager, account_manager)
+    ui_service = await get_services(call, state, combat_manager, account_manager)
     if not ui_service or not isinstance(call.message, Message):
         return
 
@@ -73,7 +78,7 @@ async def switch_to_skills_handler(
 async def switch_to_items_handler(
     call: CallbackQuery, state: FSMContext, combat_manager: CombatManager, account_manager: AccountManager
 ):
-    ui_service, _ = await get_services(call, state, combat_manager, account_manager)
+    ui_service = await get_services(call, state, combat_manager, account_manager)
     if not ui_service or not isinstance(call.message, Message):
         return
 
