@@ -92,4 +92,4 @@ class ThreatService:
             active_tags.extend(secondary["tags"])
             active_tags.append("elemental_clash")  # Тег для LLM: "Тут битва стихий"
 
-        return list(set(active_tags))  # Убираем дубликаты
+        return list(dict.fromkeys(active_tags))  # Убираем дубликаты, сохраняя порядок

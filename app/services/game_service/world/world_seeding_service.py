@@ -75,7 +75,7 @@ class WorldSeedingService:
                     static_data = STATIC_LOCATIONS[(x, y)]
                     is_active = static_data.get("is_active", True)
                     service_key = static_data.get("service_object_key")
-                    flags = static_data.get("flags", {})
+                    flags = static_data.get("flags", {}).copy()
                     content = static_data.get("content")
 
                     threat_val = ThreatService.calculate_threat(x, y)

@@ -83,7 +83,7 @@ class _StaticLocationContent(TypedDict):
     environment_tags: list[str]
 
 
-class _StaticLocation(TypedDict, total=False):
+class _StaticLocation(TypedDict):
     sector_id: str
     is_active: bool
     service_object_key: str | None

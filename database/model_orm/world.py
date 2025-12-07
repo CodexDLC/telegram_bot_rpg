@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import JSON, Boolean, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from database.model_orm.base import Base
+from database.model_orm.base import Base, TimestampMixin
 
 
 class WorldSector(Base):
@@ -30,7 +30,7 @@ class WorldSector(Base):
         return f"<Sector {self.id} (Tier {self.tier})>"
 
 
-class WorldGrid(Base):
+class WorldGrid(Base, TimestampMixin):
     """
     Физическая матрица мира (105x105).
     """
