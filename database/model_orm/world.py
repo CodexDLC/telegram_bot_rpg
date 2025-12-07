@@ -30,7 +30,7 @@ class WorldSector(Base):
         return f"<Sector {self.id} (Tier {self.tier})>"
 
 
-class WorldGrid(Base):
+class WorldGrid(Base, TimestampMixin):
     """
     Физическая матрица мира (105x105).
     """
