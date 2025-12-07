@@ -20,7 +20,7 @@ async def seed_world():
         # 1. Создаем Сектора (Config)
         # 7x7 = 49 секторов
         sectors_data = []
-        for _r_idx, row_char in enumerate(SECTOR_ROWS):
+        for row_char in SECTOR_ROWS:
             for c_idx in range(1, 8):
                 sec_id = f"{row_char}{c_idx}"
                 # Простая логика биомов для старта (можно усложнить)
