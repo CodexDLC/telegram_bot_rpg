@@ -139,7 +139,7 @@ class InventoryLogicHelpers:
             if (
                 hasattr(item.data, "valid_slots")
                 and item.data.valid_slots
-                and category in [str(s) for s in item.data.valid_slots]
+                and any(str(s) == category for s in item.data.valid_slots)
             ):
                 filtered.append(item)
                 continue
