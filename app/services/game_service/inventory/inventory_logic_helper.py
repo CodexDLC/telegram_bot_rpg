@@ -7,11 +7,9 @@ from app.resources.schemas_dto.item_dto import EquippedSlot, InventoryItemDTO, I
 from database.db_contract.i_inventory_repo import IInventoryRepo
 from database.repositories.ORM.wallet_repo import ResourceTypeGroup
 
-# Логика конфликтов остается здесь, так как это часть логического домена
+# Логика конфликтов остается здесь
 CONFLICT_MAP: dict[EquippedSlot, list[EquippedSlot]] = {
-    # Если надеваем двуручное оружие (TWO_HAND), оно занимает два слота.
     EquippedSlot.TWO_HAND: [EquippedSlot.MAIN_HAND, EquippedSlot.OFF_HAND],
-    # Если надеваем MAIN_HAND, оно конфликтует с двуручным оружием.
     EquippedSlot.MAIN_HAND: [EquippedSlot.TWO_HAND],
 }
 
@@ -19,19 +17,9 @@ CONFLICT_MAP: dict[EquippedSlot, list[EquippedSlot]] = {
 class InventoryLogicHelpers:
     """
     Класс-помощник, содержащий внутреннюю логику и чистые функции для InventoryService (Layer 3).
-
-    Этот класс призван уменьшить размер и повысить чистоту основного InventoryService,
-    инкапсулируя вспомогательные операции, такие как маппинг ресурсов и управление слотами.
     """
 
     def __init__(self, inventory_repo: IInventoryRepo):
-        """
-        Инициализирует хелпер.
-
-        Args:
-            inventory_repo: Репозиторий инвентаря (для операций чтения/записи),
-                            инжектированный из InventoryService.
-        """
         self.inventory_repo = inventory_repo
         log.debug("InventoryLogicHelpers | status=initialized")
 
@@ -39,54 +27,38 @@ class InventoryLogicHelpers:
     def map_subtype_to_group(subtype: str) -> ResourceTypeGroup:
         """
         [STATIC] Определяет группу ресурсов для WalletRepo на основе подтипа.
-        (Перенесено из InventoryService, сделано статическим).
         """
         mapping = {
             "currency": ("dust", "shard", "core"),
             "ores": ("ore", "ingot", "stone"),
-            "leathers": ("leather", "hide", "skin"),
-            "fabrics": ("cloth", "fiber"),
+            "leathers": ("leather", "hide", "skin", "scale"),
+            "fabrics": ("cloth", "fiber", "weave", "roll", "rag"),
             "organics": ("herb", "food", "meat"),
         }
 
         for group, keywords in mapping.items():
             if any(keyword in subtype for keyword in keywords):
-                # Кастинг необходим из-за типа Literal в ResourceTypeGroup
                 return cast(ResourceTypeGroup, group)
 
         return "parts"
 
     async def get_equipped_map(self, char_id: int) -> dict[EquippedSlot, InventoryItemDTO]:
-        """
-        Получает все экипированные предметы и преобразует их в словарь
-        для быстрого поиска по EquippedSlot.
-        (Перенесено из InventoryService).
-        """
-        # 🔥 Используем инжектированный репозиторий
         equipped_items = await self.inventory_repo.get_items_by_location(char_id, "equipped")
         equipped_map = {EquippedSlot(item.equipped_slot): item for item in equipped_items if item.equipped_slot}
-        log.debug(f"InventoryLogicHelpers | action=get_equipped_map count={len(equipped_map)}")
         return equipped_map
 
     async def handle_slot_conflicts(self, new_item: InventoryItemDTO, target_slot: EquippedSlot) -> None:
-        """
-        Снимает предметы, конфликтующие с целевым слотом.
-        (Перенесено из InventoryService).
-        """
         equipped_map = await self.get_equipped_map(new_item.character_id)
         items_to_unequip: list[InventoryItemDTO] = []
 
-        # 1. Снимаем предмет из того же слота (если он есть)
         if target_slot in equipped_map:
             items_to_unequip.append(equipped_map[target_slot])
 
-        # 2. Снимаем предметы, с которыми конфликтует новый слот (двуручное оружие)
         slots_to_check = CONFLICT_MAP.get(target_slot, [])
         for conflict_slot in slots_to_check:
             if conflict_slot in equipped_map:
                 items_to_unequip.append(equipped_map[conflict_slot])
 
-        # 3. Обновляем БД
         for old_item in set(items_to_unequip):
             if old_item.item_type in (ItemType.RESOURCE, ItemType.CURRENCY):
                 continue
@@ -97,14 +69,6 @@ class InventoryLogicHelpers:
                 log.info(f"Конфликт разрешен: снят {old_item.data.name} из {old_item.equipped_slot}.")
 
     async def get_quick_slot_limit(self, char_id: int) -> int:
-        """
-        Рассчитывает максимальное количество доступных Quick Slots.
-        (Перенесено из InventoryService).
-        """
-        # Для расчета лимита требуется агрегация, но для MVP мы берем данные
-        # только из пояса (belt). В дальнейшем этот метод будет использовать StatsAggregationService
-        # для полного расчета.
-
         equipped_map = await self.get_equipped_map(char_id)
         belt_item = equipped_map.get(EquippedSlot.BELT_ACCESSORY)
 
@@ -119,13 +83,9 @@ class InventoryLogicHelpers:
                     current_limit = int(capacity)
 
             final_limit = max(base_quick_slot_limit, current_limit)
-            log.info(f"QuickSlot | calculated_limit={final_limit} belt='{belt_item.data.name}'")
             return final_limit
 
     async def unbind_quick_slot(self, item_id: int, char_id: int) -> tuple[bool, str]:
-        """
-        Убирает предмет из слота быстрого доступа.
-        """
         item = await self.inventory_repo.get_item_by_id(item_id)
 
         if not item or item.character_id != char_id:
@@ -134,7 +94,6 @@ class InventoryLogicHelpers:
         if not item.quick_slot_position:
             return False, "Предмет не находится в быстром слоте."
 
-        # Обновляем поле в БД (ставим None)
         success = await self.inventory_repo.update_fields(item_id, {"quick_slot_position": None})
 
         if success:
@@ -147,26 +106,51 @@ class InventoryLogicHelpers:
     ) -> list[InventoryItemDTO]:
         """
         Фильтрует предметы для отображения в инвентаре (Frontend API).
+        Поддерживает фильтрацию по секциям, типам предметов, группам ресурсов и конкретным слотам.
         """
         filtered = []
 
         for item in items:
-            # 1. Фильтрация по секции (Инвентарь vs Экипировка)
-            if (section == "inventory" and item.location != "inventory") or (
-                section == "equipment" and item.location != "equipped"
+            # 1. Фильтрация по Секции (Локация предмета)
+            # Если мы смотрим "Инвентарь", нам не нужны надетые вещи (они на кукле)
+            if (
+                section == "inventory"
+                and item.location != "inventory"
+                or section == "equip"
+                and item.location != "inventory"
             ):
                 continue
 
-            # 2. Фильтрация по категории (Вкладки: Оружие, Ресурсы и т.д.)
-            # Если категория "all" - показываем всё в этой секции
+                # 2. Фильтрация по Категории (Тип фильтра)
             if category == "all":
                 filtered.append(item)
                 continue
 
-            # Логика сопоставления category (из фронта) с item_type или subtype
-            # Пример простой проверки:
-            if item.item_type.lower() == category.lower():
+            # А. Ресурсы: Проверяем принадлежность к группе (руды, ткани и т.д.)
+            if section == "resource":
+                # item.subtype -> Group (e.g. iron_ore -> ores)
+                item_group = self.map_subtype_to_group(item.subtype)
+                if item_group == category:
+                    filtered.append(item)
+                continue
+
+            # Б. Экипировка: Фильтр по Слоту (если category == 'head_armor' и т.д.)
+            # Проверяем, есть ли у предмета список валидных слотов и входит ли туда наш слот
+            if (
+                hasattr(item.data, "valid_slots")
+                and item.data.valid_slots
+                and category in [str(s) for s in item.data.valid_slots]
+            ):
                 filtered.append(item)
-            # Тут можно добавить более сложную логику, если categories отличаются от item_type
+                continue
+
+            # В. Экипировка: Фильтр по Типу (weapon, armor, accessory) - для табов
+            if item.item_type.value == category:
+                filtered.append(item)
+                continue
+
+            # Г. Запасной вариант: совпадение по подтипу (на всякий случай)
+            if item.subtype == category:
+                filtered.append(item)
 
         return filtered

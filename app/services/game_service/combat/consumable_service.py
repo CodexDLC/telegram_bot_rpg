@@ -86,17 +86,18 @@ class ConsumableService:
         # Восстановление HP
         restore_hp = getattr(item.data, "restore_hp", 0)
         if restore_hp > 0:
-            # Нужно знать максимальное HP, чтобы не уйти в перехил
-            # Пока предполагаем, что оно где-то есть, или просто добавляем
-            # Для примера, просто добавляем, но это нужно будет улучшить
-            max_hp = 1000  # Заглушка, нужно брать из статов
+            # TODO: [Temporary] Заменить заглушку на динамический расчет max_hp из статов
+            # max_hp = int(StatsCalculator.calculate("hp_max", actor.stats.get("hp_max", StatSourceData(base=1))))
+            max_hp = 1000  # Временная заглушка
             actor.state.hp_current = min(max_hp, actor.state.hp_current + restore_hp)
             log.debug(f"Consumable | Restored {restore_hp} HP for char_id={actor.char_id}")
 
         # Восстановление Энергии
         restore_energy = getattr(item.data, "restore_energy", 0)
         if restore_energy > 0:
-            max_energy = 1000  # Заглушка
+            # TODO: [Temporary] Заменить заглушку на динамический расчет max_energy из статов
+            # max_energy = int(StatsCalculator.calculate("energy_max", actor.stats.get("energy_max", StatSourceData(base=1))))
+            max_energy = 1000  # Временная заглушка
             actor.state.energy_current = min(max_energy, actor.state.energy_current + restore_energy)
             log.debug(f"Consumable | Restored {restore_energy} Energy for char_id={actor.char_id}")
 
