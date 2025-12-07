@@ -104,6 +104,9 @@ class GameWorldService:
         """
         log.debug("GameWorldService | status=shutting_down")
 
+    # TODO: Удалить закомментированный метод load_active_zone_to_cache.
+    # Его функциональность была заменена новым WorldSeedingService.
+    # Старая логика сохранена в истории Git и должна быть удалена из кода.
     # async def load_active_zone_to_cache(self, session: AsyncSession) -> None:
     #     """
     #     Читает из SQL только активные клетки (is_active=True) и загружает их в Redis.

@@ -213,8 +213,8 @@ async def test_full_game_cycle(get_async_session, fsm_context, mock_bot, mock_me
             # Выбираем чара
             fsm_data = await fsm_context.get_data()
             char_id = fsm_data["characters"][-1]["character_id"]
-            cb_data = LobbySelectionCallback(action="select", char_id=char_id)
-            await select_or_delete_character_handler(mock_callback, cb_data, fsm_context, mock_bot, session)
+            lobby_cb_data = LobbySelectionCallback(action="select", char_id=char_id)
+            await select_or_delete_character_handler(mock_callback, lobby_cb_data, fsm_context, mock_bot, session)
 
             # Входим
             mock_callback.data = "lsc:login"
