@@ -1,4 +1,12 @@
+from operator import itemgetter
+from typing import TypedDict
+
 from app.resources.game_data.world_config import ANCHORS, HUB_CENTER, PORTAL_PARAMS
+
+
+class _Influence(TypedDict):
+    tags: list[str]
+    val: float
 
 
 class ThreatService:
@@ -52,3 +60,36 @@ class ThreatService:
     def _get_dist(x1: int, y1: int, x2: int, y2: int) -> float:
         # Дистанция Чебышёва (для квадратной сетки) подходит лучше Евклидовой
         return max(abs(x1 - x2), abs(y1 - y2))
+
+    @staticmethod
+    def get_narrative_tags(x: int, y: int) -> list[str]:
+        """
+        Возвращает список нарративных тегов для координаты на основе влияния Якорей.
+        Смешивает теги, если в точке пересекаются влияния двух сильных источников.
+        """
+        active_tags: list[str] = []
+        influences: list[_Influence] = []
+
+        # 1. Считаем влияние каждого Якоря
+        for anchor in ANCHORS:
+            dist = ThreatService._get_dist(x, y, anchor["x"], anchor["y"])
+            influence_val = anchor["power"] / (1 + dist * anchor["falloff"])
+            influences.append({"tags": anchor["narrative_tags"], "val": influence_val})
+
+        # 2. Сортируем: от самого сильного влияния к слабому
+        influences.sort(key=itemgetter("val"), reverse=True)
+
+        # 3. Логика смешивания
+        primary = influences[0]
+        secondary = influences[1]
+
+        # Если доминирующий якорь влияет достаточно сильно (> 0.25)
+        if primary["val"] > 0.25:
+            active_tags.extend(primary["tags"])
+
+        # Если второй якорь тоже силен (его сила > 50% от первого) — это Зона Конфликта
+        if secondary["val"] > 0.25 and secondary["val"] > (primary["val"] * 0.5):
+            active_tags.extend(secondary["tags"])
+            active_tags.append("elemental_clash")  # Тег для LLM: "Тут битва стихий"
+
+        return list(dict.fromkeys(active_tags))  # Убираем дубликаты, сохраняя порядок

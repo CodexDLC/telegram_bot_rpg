@@ -91,16 +91,19 @@ async def test_full_arena_cycle(get_async_session, app_container):
                 for line in last_entry.get("logs", []):
                     # NOTE: СКОРЕЕ ВСЕГО ЗДЕСЬ ОШИБКА, Т.К. line = JSON, но оставим как есть в тесте
                     clean_line = line.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "")
-                    logger.info(f"   {clean_line}")
+                    logger.info(f"    {clean_line}")
 
             # --- 🔥 ОБНОВЛЕНИЕ СОСТОЯНИЯ (State Refresh) ---
             actor_a = await combat._get_actor(char_a_id)
             actor_b = await combat._get_actor(char_b_id)
 
+            assert actor_a is not None and actor_a.state is not None
+            assert actor_b is not None and actor_b.state is not None
+
             hp_a = actor_a.state.hp_current
             hp_b = actor_b.state.hp_current
 
-            logger.info(f"   📊 Итог: [A: {hp_a} HP] vs [B: {hp_b} HP]")
+            logger.info(f"    📊 Итог: [A: {hp_a} HP] vs [B: {hp_b} HP]")
 
             # --- ПРОВЕРКА СМЕРТИ (Death Check) ---
             # NOTE: Мы полагаемся на combat._check_battle_end() внутри register_move,
@@ -124,6 +127,7 @@ async def test_full_arena_cycle(get_async_session, app_container):
 
         # 4. FINAL CHECK
         meta = await combat_manager.get_session_meta(session_id)
+        assert meta is not None
         # Мы ожидаем, что finish_battle был вызван и установил active=0
         assert int(meta.get("active")) == 0
         logger.info("\n✅ Тест завершен корректно.")
