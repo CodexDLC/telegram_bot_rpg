@@ -10,7 +10,7 @@ from app.services.core_service.manager.account_manager import AccountManager
 from app.services.core_service.manager.arena_manager import ArenaManager
 from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.core_service.manager.world_manager import WorldManager
-from app.services.game_service.game_world_service import GameWorldService
+from app.services.game_service.world.game_world_service import GameWorldService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.arena_ui_service.arena_ui_service import ArenaUIService

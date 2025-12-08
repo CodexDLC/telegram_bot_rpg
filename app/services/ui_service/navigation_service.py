@@ -9,7 +9,7 @@ from app.resources.keyboards.callback_data import NavigationCallback, ServiceEnt
 from app.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from app.services.core_service.manager.account_manager import AccountManager
 from app.services.core_service.manager.world_manager import WorldManager
-from app.services.game_service.game_world_service import GameWorldService
+from app.services.game_service.world.game_world_service import GameWorldService
 from app.services.ui_service.base_service import BaseUIService
 
 # Точка спавна по умолчанию (Safe Zone)

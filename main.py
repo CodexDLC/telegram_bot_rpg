@@ -3,12 +3,14 @@ import asyncio
 from loguru import logger as log
 
 from app.core.bot_factory import build_app
-from app.core.config import BOT_TOKEN, REDIS_URL
+
+# Импорты должны быть корректными. Я предполагаю, что вы импортируете AppContainer,
+# который мы обновили, и все остальные зависимости
+from app.core.config import BOT_TOKEN, REDIS_URL  # Используются для проверки
 from app.core.container import AppContainer
 from app.core.loguru_setup import setup_loguru
 from app.handlers import router as main_router
 from app.middlewares.container_middleware import ContainerMiddleware
-from database.session import create_db_tables as create_tables
 
 setup_loguru()
 
@@ -17,20 +19,7 @@ setup_loguru()
 async def main() -> None:
     """
     Основная асинхронная функция для запуска приложения.
-
-    Выполняет следующие шаги:
-    1. Инициализирует таблицы в базе данных.
-    2. Создает экземпляры бота и диспетчера.
-    3. Подключает основной роутер.
-    4. Запускает long-polling для получения обновлений от Telegram.
-
-    Returns:
-        None
     """
-
-    log.info("Инициализация базы данных...")
-    await create_tables()
-    log.info("Инициализация базы данных завершена.")
 
     if BOT_TOKEN is None:
         log.critical("Токен бота не найден. Убедитесь, что он задан в .env файле.")
@@ -40,12 +29,22 @@ async def main() -> None:
         log.critical("URL Redis не найден. Убедитесь, что он задан в .env файле.")
         return
 
+    # 1. Создаем контейнер, где теперь настроены Redis и SQLAlchemy
     container = AppContainer()
 
     # Загрузка игрового мира в Redis
-    log.info("Загрузка игрового мира в Redis...")
-    await container.game_world_service.initialize_world_locations()
-    log.info("Игровой мир загружен.")
+    log.info("Запуск загрузки игрового мира в Redis...")
+
+    # 🔥 ИСПРАВЛЕНИЕ 1: Имя инъекции изменено с game_world_service на world_loader_service
+    # 🔥 ИСПРАВЛЕНИЕ 2: Имя метода изменено на init_world_cache()
+    # 🔥 ИСПРАВЛЕНИЕ 3: Получаем и логируем количество загруженных нод (int)
+    try:
+        loaded_count = await container.world_loader_service.init_world_cache()
+        log.info(f"Игровой мир загружен успешно. Всего загружено нод: {loaded_count}")
+    except RuntimeError as e:
+        log.error(f"Критическая ошибка при загрузке игрового мира: {e}")
+        # Если мир не загрузился, возможно, стоит остановить запуск бота
+        return
 
     # Создаем экземпляры бота и диспетчера с помощью фабрики.
     bot, dp = await build_app(container.redis_client)
@@ -55,7 +54,7 @@ async def main() -> None:
     dp.update.middleware(ContainerMiddleware(container))
     log.info("Middleware контейнера подключен.")
 
-    # Подключаем все роутеры, собранные в app/handlers/__init__.py
+    # Подключаем все роутеры
     dp.include_router(main_router)
     log.info("Роутеры подключены.")
 
@@ -64,8 +63,9 @@ async def main() -> None:
         # Запускаем бота в режиме long-polling.
         await dp.start_polling(bot)
     finally:
+        # shutdown контейнера теперь включает закрытие Redis и SQLAlchemy
         await container.shutdown()
-        log.info("Соединение с Redis закрыто.")
+        log.info("Соединения приложения закрыты.")
 
 
 if __name__ == "__main__":

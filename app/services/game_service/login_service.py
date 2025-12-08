@@ -91,7 +91,7 @@ class LoginService:
             data = await self.account_manager.get_account_data(self.char_id)
             if data:
                 state = data.get("state", "world")
-                loc_id = data.get("location_id", "portal_plats")
+                loc_id = data.get("location_id", "52_52")
 
                 # Временная миграция для исправления неверного ID локации
                 if loc_id == "town_hall_in":
@@ -121,7 +121,7 @@ class LoginService:
         Returns:
             Кортеж `(state, location_id)` новой сессии.
         """
-        start_loc_id = "portal_plats"
+        start_loc_id = "52_52"
         initial_data = {
             "state": "world",
             "location_id": start_loc_id,
