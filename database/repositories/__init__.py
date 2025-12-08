@@ -10,6 +10,7 @@ from database.db_contract.i_skill_repo import ISkillProgressRepo, ISkillRateRepo
 from database.db_contract.i_symbiote_repo import ISymbioteRepo
 from database.db_contract.i_users_repo import IUserRepo
 from database.db_contract.i_wallet_repo import IWalletRepo
+from database.db_contract.i_world_repo import IWorldRepo
 from database.repositories.ORM.characters_repo_orm import CharactersRepoORM, CharacterStatsRepoORM
 from database.repositories.ORM.inventory_repo import InventoryRepo
 from database.repositories.ORM.leaderboard_repo import LeaderboardRepoORM
@@ -17,6 +18,7 @@ from database.repositories.ORM.skill_repo import SkillProgressRepo, SkillRateRep
 from database.repositories.ORM.symbiote_repo import SymbioteRepoORM
 from database.repositories.ORM.users_repo_orm import UsersRepoORM
 from database.repositories.ORM.wallet_repo import WalletRepoORM
+from database.repositories.ORM.world_repo import WorldRepoORM
 
 
 def get_user_repo(session: AsyncSession) -> IUserRepo:
@@ -94,3 +96,10 @@ def get_leaderboard_repo(session: AsyncSession) -> ILeaderboardRepo:
     """
 
     return LeaderboardRepoORM(session=session)
+
+
+def get_world_repo(session: AsyncSession) -> IWorldRepo:
+    """
+    Возвращает репозиторий для работы с Миром.
+    """
+    return WorldRepoORM(session=session)

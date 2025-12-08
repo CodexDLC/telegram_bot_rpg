@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-ChatMode = Literal["dungeon_generator", "item_description", "npc_dialogue"]
+ChatMode = Literal["dungeon_generator", "item_description", "npc_dialogue", "batch_location_desc"]
 
 
 class ModePreset(TypedDict):
@@ -44,6 +44,34 @@ MODE_PRESETS: dict[ChatMode, ModePreset] = {
 Отвечай строго в JSON-формате: {\"greeting\": \"...\", \"topics\": {\"key\": \"...\"}}""",
         "temperature": 0.7,
         "max_tokens": 500,
+        "model_alias": "fast",
+    },
+    "batch_location_desc": {
+        "system_instruction": """ROLE: Narrative Designer / World Builder.
+TASK: Generate atmospheric descriptions for a sequence of RPG locations based on their INTERNAL TAGS and SURROUNDINGS.
+
+INPUT FORMAT:
+A JSON list of objects. Each object has:
+- "id": coordinates.
+- "internal_tags": what is INSIDE this location (e.g., 'road', 'forest').
+- "surroundings": what is VISIBLE around (e.g., 'north': ['gate'], 'south': ['fog']).
+
+OUTPUT FORMAT:
+A single JSON object mapping ID -> Content.
+{
+  "52_60": {
+    "title": "Title in Russian",
+    "description": "Atmospheric text in Russian (2-3 sentences). Incorporate visual cues from surroundings (e.g., 'To the north, the massive gates loom...')."
+  }
+}
+
+RULES:
+1. Language: RUSSIAN.
+2. If 'road' tag is present, describe the path/road condition.
+3. Use 'surroundings' to create smooth transitions and landmarks references.
+4. Return ONLY JSON.""",
+        "temperature": 0.7,
+        "max_tokens": 3000,
         "model_alias": "fast",
     },
 }

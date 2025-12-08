@@ -28,7 +28,8 @@ def build_simple_gemini(preset: ModePreset, user_text: str, **kw: Any) -> tuple[
         - contents: Содержимое промпта (строка).
         - system_instruction: Системная инструкция для модели.
     """
-    log.debug(f"GeminiBuilder | type=simple mode='{preset.get('name', 'unknown')}'")
+    # Логируем, какой именно режим обрабатывается (если есть имя в пресете)
+    log.debug(f"GeminiBuilder | type=simple mode='{preset.get('name', 'generic')}'")
     system_instruction = preset["system_instruction"]
     contents = user_text
     return contents, system_instruction
@@ -78,8 +79,12 @@ def build_dungeon_gemini(
     return contents, final_instruction
 
 
+# Реестр сборщиков промптов
 BUILDERS_GEMINI: dict[ChatMode, GeminiBuilder] = {
     "dungeon_generator": build_dungeon_gemini,
     "item_description": build_simple_gemini,
+    # Добавлен явный кейс для batch_location_desc, использующий простой билдер
+    "batch_location_desc": build_simple_gemini,
 }
+
 log.debug(f"GeminiBuilder | status=registered count={len(BUILDERS_GEMINI)}")
