@@ -6,28 +6,28 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database.model_orm.base import Base, TimestampMixin
 
 
-class WorldSector(Base):
+class WorldRegion(Base):
     """
-    Конфигурация макро-регионов (7x7).
-    Заполняется статично (49 записей).
+    Макро-регион мира (15x15 клеток).
     """
 
-    __tablename__ = "world_sectors"
+    __tablename__ = "world_regions"
 
-    id: Mapped[str] = mapped_column(String(10), primary_key=True, comment="Код сектора (например, 'D4', 'A1').")
-    tier: Mapped[int] = mapped_column(Integer, default=1, nullable=False, comment="Уровень сложности мобов (0-5).")
+    id: Mapped[str] = mapped_column(String(10), primary_key=True, comment="Код региона (например, 'D4').")
+
+    # ВОТ ЭТО ГЛАВНЫЙ ТИП РЕГИОНА (название палитры)
     biome_id: Mapped[str] = mapped_column(
-        String(50), nullable=False, comment="ID биома ('forest', 'ruins', 'fire_waste'). Влияет на генерацию."
-    )
-    anchor_type: Mapped[str] = mapped_column(
-        String(20), default="WILD", comment="Тип якоря (HUB, OUTPOST, RIFT_ENTRY, WILD)."
+        String(50), nullable=False, comment="ID биома (например, 'wasteland', 'hub')."
     )
 
-    # Связь с клетками
-    nodes: Mapped[list[WorldGrid]] = relationship(back_populates="sector")
+    # Глобальные влияния (от Якорей)
+    climate_tags: Mapped[list[str]] = mapped_column(JSON, default=list, comment="Глобальные теги региона.")
 
-    def __repr__(self) -> str:
-        return f"<Sector {self.id} (Tier {self.tier})>"
+    # КАРТА ПОД-ЗОН (3x3)
+    # Ключ: "x_y" (0..2), Значение: "terrain_id" (конкретный тип из палитры, например 'ruins_residential')
+    sector_map: Mapped[dict] = mapped_column(JSON, default=dict, comment="Карта под-зон 3x3.")
+
+    nodes: Mapped[list[WorldGrid]] = relationship(back_populates="region")
 
 
 class WorldGrid(Base, TimestampMixin):
@@ -41,11 +41,12 @@ class WorldGrid(Base, TimestampMixin):
     x: Mapped[int] = mapped_column(Integer, primary_key=True)
     y: Mapped[int] = mapped_column(Integer, primary_key=True)
 
+    # Ссылка на Регион (бывший сектор)
     sector_id: Mapped[str] = mapped_column(
-        ForeignKey("world_sectors.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("world_regions.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
-    # --- STATUS FLAGS ---
+    # --- STATUS FLAGS (Главный рубильник) ---
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=False,
@@ -53,29 +54,30 @@ class WorldGrid(Base, TimestampMixin):
         comment="True = Локация доступна игрокам и грузится в Redis. False = Туман войны.",
     )
 
-    # --- CONTENT & LOGIC ---
-    service_object_key: Mapped[str | None] = mapped_column(
-        String(100), nullable=True, comment="Ссылка на сервис (напр. 'svc_arena_main'). Если NULL - обычная локация."
-    )
-
+    # --- LOGIC & MECHANICS (Источник Истины) ---
     flags: Mapped[dict] = mapped_column(
         JSON,
         default=dict,
-        comment="Локальные правила и свойства: {'is_safe_zone': true, 'has_road': true, 'rift_id': '...'}",
+        comment="Механика: {'is_safe_zone': true, 'has_road': true, 'biome_tags': ['forest', 'road'], 'threat_tier': 2}.",
     )
 
+    # --- NARRATIVE & CONTENT (Для Игрока) ---
     content: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True, comment="Сгенерированный контент (Название, Описание, Теги). NULL если не активно."
+        JSON,
+        nullable=True,
+        comment="Нарратив: {'title': '...', 'description': '...', 'environment_tags': [...]}. Заполняется ЛЛМ или скриптом.",
+    )
+
+    # Ссылка на Сервис (если это вход в Данж или Арену)
+    service_object_key: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="Ссылка на сервис (напр. 'svc_arena_main')."
     )
 
     # Связи
-    sector: Mapped[WorldSector] = relationship(back_populates="nodes")
+    region: Mapped[WorldRegion] = relationship(back_populates="nodes")
 
-    # Индексы для оптимизации
-    __table_args__ = (
-        # Индекс для быстрого поиска активных соседей (Pathfinder)
-        Index("idx_world_active_path", "x", "y", "is_active"),
-    )
+    # Индексы для оптимизации (например, поиск всех активных клеток для загрузки)
+    __table_args__ = (Index("idx_world_active_path", "x", "y", "is_active"),)
 
     def __repr__(self) -> str:
         return f"<Node ({self.x}, {self.y}) Active={self.is_active}>"
