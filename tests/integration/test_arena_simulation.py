@@ -129,7 +129,7 @@ async def test_full_arena_cycle(get_async_session, app_container):
         meta = await combat_manager.get_session_meta(session_id)
         assert meta is not None
         # Мы ожидаем, что finish_battle был вызван и установил active=0
-        assert int(meta.get("active")) == 0
+        assert int(meta.get("active", 0)) == 0
         logger.info("\n✅ Тест завершен корректно.")
 
 

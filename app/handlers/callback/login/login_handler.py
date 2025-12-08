@@ -18,8 +18,8 @@ from app.services.core_service.manager.account_manager import AccountManager
 from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.core_service.manager.world_manager import WorldManager
 from app.services.game_service.game_sync_service import GameSyncService
-from app.services.game_service.game_world_service import GameWorldService
 from app.services.game_service.login_service import LoginService
+from app.services.game_service.world.game_world_service import GameWorldService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY, fsm_clean_core_state
 from app.services.ui_service.combat.combat_ui_service import CombatUIService
@@ -122,21 +122,27 @@ async def _handle_combat_restore(
     msg_content = session_context.get("message_content")
 
     if isinstance(msg_menu, dict):
-        await bot.edit_message_text(
-            chat_id=msg_menu["chat_id"],
-            message_id=msg_menu["message_id"],
-            text=log_text,
-            reply_markup=log_kb,
-            parse_mode="HTML",
-        )
+        try:
+            await bot.edit_message_text(
+                chat_id=msg_menu["chat_id"],
+                message_id=msg_menu["message_id"],
+                text=log_text,
+                reply_markup=log_kb,
+                parse_mode="HTML",
+            )
+        except TelegramAPIError as e:
+            log.warning(f"SessionRestore | action=update_menu status=failed char_id={char_id} error='{e}'")
     if isinstance(msg_content, dict):
-        await bot.edit_message_text(
-            chat_id=msg_content["chat_id"],
-            message_id=msg_content["message_id"],
-            text=dash_text,
-            reply_markup=dash_kb,
-            parse_mode="HTML",
-        )
+        try:
+            await bot.edit_message_text(
+                chat_id=msg_content["chat_id"],
+                message_id=msg_content["message_id"],
+                text=dash_text,
+                reply_markup=dash_kb,
+                parse_mode="HTML",
+            )
+        except TelegramAPIError as e:
+            log.warning(f"SessionRestore | action=update_content status=failed char_id={char_id} error='{e}'")
 
     await fsm_clean_core_state(state=state, event_source=call)
     await state.set_state(InGame.combat)
@@ -187,20 +193,26 @@ async def _handle_in_game_login(
         await Err.generic_error(call)
         return
 
-    await bot.edit_message_text(
-        chat_id=msg_menu["chat_id"],
-        message_id=msg_menu["message_id"],
-        text=menu_text,
-        reply_markup=menu_kb,
-        parse_mode="HTML",
-    )
-    await bot.edit_message_text(
-        chat_id=msg_content["chat_id"],
-        message_id=msg_content["message_id"],
-        text=nav_text,
-        reply_markup=nav_kb,
-        parse_mode="HTML",
-    )
+    try:
+        await bot.edit_message_text(
+            chat_id=msg_menu["chat_id"],
+            message_id=msg_menu["message_id"],
+            text=menu_text,
+            reply_markup=menu_kb,
+            parse_mode="HTML",
+        )
+    except TelegramAPIError as e:
+        log.warning(f"Login | action=update_menu status=failed char_id={char_id} error='{e}'")
+    try:
+        await bot.edit_message_text(
+            chat_id=msg_content["chat_id"],
+            message_id=msg_content["message_id"],
+            text=nav_text,
+            reply_markup=nav_kb,
+            parse_mode="HTML",
+        )
+    except TelegramAPIError as e:
+        log.warning(f"Login | action=update_content status=failed char_id={char_id} error='{e}'")
 
     await fsm_clean_core_state(state=state, event_source=call)
     await state.set_state(InGame.navigation)

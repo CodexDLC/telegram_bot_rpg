@@ -10,9 +10,10 @@ from app.resources.llm_data.mode_preset import MODE_PRESETS, ChatMode
 from app.services.gemini_service.gemini_service_build import BUILDERS_GEMINI as BUILDERS
 from app.services.gemini_service.gemini_service_build import build_simple_gemini
 
+# 🔥 FIX 1: Точные названия моделей. SDK требует полные ID.
 GEMINI_MODEL_ALIASES = {
-    "fast": "gemini-1.5-flash",
-    "pro": "gemini-1.5-pro-latest",
+    "fast": "gemini-2.0-flash",
+    "pro": "gemini-1.5-pro-001",
 }
 DEFAULT_MODEL_NAME = GEMINI_MODEL_ALIASES["fast"]
 
@@ -23,7 +24,7 @@ else:
     try:
         _client = genai.Client(api_key=GEMINI_TOKEN)
         log.info("GeminiClient | status=initialized")
-    except (errors.ClientError, ValueError) as e:  # Changed from Exception
+    except (errors.ClientError, ValueError) as e:
         log.exception(f"GeminiClient | status=failed reason='Initialization error' error='{e}'")
 
 
@@ -34,16 +35,10 @@ async def gemini_answer(mode: ChatMode, user_text: str, **kw: Any) -> str:
     Args:
         mode: Режим чата, определяющий пресет настроек и функцию-сборщик промпта.
         user_text: Основной текст пользователя, который будет включен в промпт.
-        **kw: Дополнительные параметры, такие как `temperature`, `max_tokens`,
-              `model_alias` или `theme_prompt_from_db` для специализированных сборщиков.
+        **kw: Дополнительные параметры (temperature, max_tokens, model_alias).
 
     Returns:
-        Сгенерированный текстовый ответ от модели Gemini. В случае ошибки возвращает
-        строку с описанием ошибки.
-
-    Raises:
-        errors.ClientError: Если произошла ошибка на стороне клиента Google Gemini API.
-        google.api_core.exceptions.GoogleAPIError: Для любых других неожиданных ошибок в процессе генерации.
+        Сгенерированный текстовый ответ.
     """
     if not _client:
         error_msg = "GeminiAnswer | status=failed reason='Client not initialized'"
@@ -78,10 +73,13 @@ async def gemini_answer(mode: ChatMode, user_text: str, **kw: Any) -> str:
         return response_text
 
     except errors.ClientError as e:
-        log.error(
-            f"GeminiAnswer | status=failed reason='Google API ClientError' mode='{mode}' error='{e}'", exc_info=True
-        )
+        # 🔥 FIX 2: Безопасное логирование.
+        # Мы не суем {e} внутрь f-строки логгера, так как 'e' содержит JSON с фигурными скобками,
+        # что ломает форматирование Loguru (вызывая KeyError: 'error').
+        log.error(f"GeminiAnswer | status=failed reason='Google API ClientError' mode='{mode}'")
+        log.error(f"API Error Trace: {e}")
         return f"Ошибка API: {e}"
-    except exceptions.DefaultCredentialsError as e:  # Changed from Exception
+
+    except exceptions.DefaultCredentialsError as e:
         log.exception(f"GeminiAnswer | status=failed reason='Unexpected error' mode='{mode}' error='{e}'")
         return f"Критическая ошибка генерации: {e}"

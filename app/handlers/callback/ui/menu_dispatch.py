@@ -10,7 +10,7 @@ from app.resources.keyboards.callback_data import MeinMenuCallback
 from app.services.core_service.manager.account_manager import AccountManager
 from app.services.core_service.manager.world_manager import WorldManager
 from app.services.game_service.game_sync_service import GameSyncService
-from app.services.game_service.game_world_service import GameWorldService
+from app.services.game_service.world.game_world_service import GameWorldService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
 from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 from app.services.ui_service.inventory.inventory_ui_service import InventoryUIService

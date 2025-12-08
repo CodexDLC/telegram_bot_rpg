@@ -6,14 +6,14 @@ from app.services.core_service.manager.arena_manager import ArenaManager
 from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.core_service.manager.world_manager import WorldManager
 from app.services.core_service.redis_service import RedisService
-from app.services.game_service.game_world_service import GameWorldService
+from app.services.game_service.world.game_world_service import GameWorldService
+from app.services.game_service.world.world_loader_service import WorldLoaderService
 
 
 class AppContainer:
     def __init__(self):
         # Сохраняем настройки, чтобы было удобно обращаться
         self.settings = settings
-
         self.redis_client = Redis.from_url(
             # 3. ТЕПЕРЬ URL БЕРЕТСЯ ОТСЮДА (он сам собрался с паролем или без)
             self.settings.redis_url,
@@ -30,6 +30,7 @@ class AppContainer:
         self.combat_manager = CombatManager(self.redis_service)
         self.world_manager = WorldManager(self.redis_service)
         self.game_world_service = GameWorldService(self.world_manager)
+        self.world_loader_service = WorldLoaderService(self.world_manager)
 
     async def shutdown(self):
         """
