@@ -106,7 +106,7 @@ class ThreatService:
 
         # 3. Смешивание и Реакции
         # Если вторая стихия достаточно сильна (> 70% от первой)
-        if secondary["val"] > 0.15 and secondary["val"] > (primary["val"] * 0.7):
+        if secondary and secondary["val"] > 0.15 and secondary["val"] > (primary["val"] * 0.7):
             sec_tier = max(1, current_tier - 1)
 
             # А. Добавляем "фоновые" теги второй стихии
