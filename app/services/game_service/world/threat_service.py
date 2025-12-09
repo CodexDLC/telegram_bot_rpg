@@ -94,7 +94,7 @@ class ThreatService:
 
         influences.sort(key=itemgetter("val"), reverse=True)
         primary = influences[0]
-        secondary = influences[1]
+        secondary = influences[1] if len(influences) > 1 else None
 
         # 2. Основная стихия (через Градиент)
         if primary["val"] > 0.15:
