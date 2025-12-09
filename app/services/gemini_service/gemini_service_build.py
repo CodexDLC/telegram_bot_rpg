@@ -5,13 +5,13 @@ from google.genai import types
 from loguru import logger as log
 
 from app.resources.llm_data.json_sheme import DUNGEON_JSON_SCHEMA_PROMPT
-from app.resources.llm_data.mode_preset import ChatMode, ModePreset
+from app.resources.llm_data.mode_preset import ChatMode
 
 GeminiContents = str | list[types.ContentDict]
 GeminiBuilder = Callable[..., tuple[GeminiContents, str]]
 
 
-def build_simple_gemini(preset: ModePreset, user_text: str, **kw: Any) -> tuple[GeminiContents, str]:
+def build_simple_gemini(preset: dict, user_text: str, **kw: Any) -> tuple[GeminiContents, str]:
     """
     Универсальный сборщик промптов для простых текстовых задач Gemini.
 
@@ -36,7 +36,7 @@ def build_simple_gemini(preset: ModePreset, user_text: str, **kw: Any) -> tuple[
 
 
 def build_dungeon_gemini(
-    preset: ModePreset,
+    preset: dict,
     user_text: str,  # Этот параметр игнорируется
     **kw: Any,
 ) -> tuple[GeminiContents, str]:

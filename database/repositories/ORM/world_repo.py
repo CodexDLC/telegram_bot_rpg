@@ -59,7 +59,7 @@ class WorldRepoORM(IWorldRepo):
         is_active: bool = False,
         flags: dict | None = None,
         content: dict | None = None,
-        service_key: str | None = None,
+        service_object_key: str | None = None,  # ИСПРАВЛЕНО
     ) -> None:
         """
         Полная запись клетки (UPSERT).
@@ -73,7 +73,7 @@ class WorldRepoORM(IWorldRepo):
             is_active=is_active,
             flags=flags or {},
             content=content,
-            service_object_key=service_key,
+            service_object_key=service_object_key,  # ИСПРАВЛЕНО
         )
 
         do_update_stmt = stmt.on_conflict_do_update(

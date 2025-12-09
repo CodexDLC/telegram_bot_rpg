@@ -1,49 +1,35 @@
-"""
-Модуль содержит предопределенные настройки (пресеты) для различных режимов
-работы с моделью Gemini.
+from typing import Literal
 
-Каждый пресет включает системные инструкции, параметры генерации
-(температура, максимальное количество токенов) и алиас модели,
-оптимизированные для конкретной задачи (например, генерация подземелий,
-описание предметов, диалоги NPC).
-"""
-
-from __future__ import annotations
-
-from typing import Literal, TypedDict
-
-ChatMode = Literal["dungeon_generator", "item_description", "npc_dialogue", "batch_location_desc"]
-
-
-class ModePreset(TypedDict):
-    system_instruction: str
-    temperature: float
-    max_tokens: int
-    model_alias: str
-
-
-MODE_PRESETS: dict[ChatMode, ModePreset] = {
+# Словарь режимов работы чата с Gemini
+MODE_PRESETS = {
     "dungeon_generator": {
-        "system_instruction": """Ты — ассистент-сценарист для текстовой RPG. Твоя задача — генерировать локации (подземелья) в строгом формате JSON.
-Ты должен быть креативным в описаниях, но абсолютно точным в соблюдении JSON-схемы.
-Твой ответ ДОЛЖЕН быть только одним JSON-объектом, без каких-либо вступлений или текста вне JSON.""",
+        "system_instruction": """You are an expert game designer creating a dungeon for a dark fantasy RPG.
+Generate a dungeon map as a JSON object based on the user's theme.
+The map should be a list of rooms, each with an ID, name, description, and connections to other rooms.
+The final room must be a 'boss_room'.
+Return ONLY the JSON object.""",
         "temperature": 0.8,
-        "max_tokens": 4096,
-        "model_alias": "pro",
+        "max_tokens": 2048,
+        "model_alias": "fast",
     },
     "item_description": {
-        "system_instruction": """Ты — писатель, дающий короткое (2-3 предложения) художественное описание игрового предмета.
-Отвечай только текстом описания, без пояснений.
-Ответ должен быть в JSON-формате: {\"description\": \"...\"}""",
-        "temperature": 0.4,
-        "max_tokens": 300,
+        "system_instruction": """You are a creative writer for a dark fantasy RPG.
+Write a short, atmospheric description for an item based on its name and tags.
+The description should be 2-3 sentences long.
+Format the output as a JSON object: {"description": "your text"}.
+Return ONLY the JSON object.""",
+        "temperature": 0.7,
+        "max_tokens": 256,
         "model_alias": "fast",
     },
     "npc_dialogue": {
-        "system_instruction": """Ты — сценарист диалогов. Придумай 2-3 короткие реплики для NPC.
-Отвечай строго в JSON-формате: {\"greeting\": \"...\", \"topics\": {\"key\": \"...\"}}""",
-        "temperature": 0.7,
-        "max_tokens": 500,
+        "system_instruction": """You are an NPC in a dark fantasy RPG.
+Your personality is defined by the tags provided by the user.
+Respond to the user's message in character, keeping your response to 2-3 sentences.
+Format the output as a JSON object: {"dialogue": "your text"}.
+Return ONLY the JSON object.""",
+        "temperature": 0.9,
+        "max_tokens": 256,
         "model_alias": "fast",
     },
     "batch_location_desc": {
@@ -57,11 +43,13 @@ A JSON list of objects. Each object has:
 - "surroundings": what is VISIBLE around (e.g., 'north': ['gate'], 'south': ['fog']).
 
 OUTPUT FORMAT:
-A single JSON object mapping ID -> Content.
+A single JSON object mapping ID -> Content. The content object must contain a 'content' key.
 {
   "52_60": {
-    "title": "Title in Russian",
-    "description": "Atmospheric text in Russian (2-3 sentences). Incorporate visual cues from surroundings (e.g., 'To the north, the massive gates loom...')."
+    "content": {
+      "title": "Title in Russian",
+      "description": "Atmospheric text in Russian (2-3 sentences). Incorporate visual cues from surroundings (e.g., 'To the north, the massive gates loom...')."
+    }
   }
 }
 
@@ -75,3 +63,5 @@ RULES:
         "model_alias": "fast",
     },
 }
+
+ChatMode = Literal["dungeon_generator", "item_description", "npc_dialogue", "batch_location_desc"]
