@@ -2,64 +2,67 @@ import asyncio
 import json
 import os
 import sys
-
-from loguru import logger as log
-from sqlalchemy import exc, text
-
-from database.session import async_session_factory
+from contextlib import suppress
 
 # --- Настройка окружения ---
+# Этот блок должен выполняться ДО импорта любых модулей проекта,
+# так как они могут зависеть от текущей рабочей директории при инициализации.
 current_dir = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(current_dir)
-os.chdir(PROJECT_ROOT)
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
+os.chdir(PROJECT_ROOT)
+
+# --- Импорты ---
+# Теперь, когда рабочая директория установлена на корень проекта,
+# можно безопасно импортировать модули.
+from loguru import logger as log  # noqa: E402
+from sqlalchemy import exc, text  # noqa: E402
+
+from database.session import async_session_factory  # noqa: E402
 
 
-async def read_arena_node():
+async def read_region_data():
     """
-    Подключается к БД и выводит все данные для нода "Ангар Арены" (51, 51).
+    Подключается к БД и выводит все данные из таблицы world_regions
+    в формате JSON-строк.
     """
-    log.info("Запускаем скрипт для чтения данных 'Ангара Арены' (51, 51)...")
+    log.info("Запускаем скрипт для чтения данных из таблицы 'world_regions'...")
 
-    x_coord, y_coord = 51, 51
-
-    # Запрашиваем ВСЕ колонки (*) для конкретной ячейки
-    query = text(f"""
+    query = text("""
         SELECT *
-        FROM world_grid
-        WHERE x = {x_coord} AND y = {y_coord};
+        FROM world_regions;
     """)
 
     async with async_session_factory() as session:
         try:
-            log.info(f"Сессия с БД открыта. Выполняем запрос для координат ({x_coord}, {y_coord})...")
+            log.info("Сессия с БД открыта. Выполняем запрос к таблице 'world_regions'...")
 
             result = await session.execute(query)
-            row = result.fetchone()  # Ожидаем только одну строку
+            rows = result.fetchall()
 
-            if not row:
-                log.warning(f"В координатах ({x_coord}, {y_coord}) нод не найден.")
+            if not rows:
+                log.warning("Данные в таблице 'world_regions' не найдены.")
                 return
 
             keys = list(result.keys())
-            json_column_indices = {i for i, key in enumerate(keys) if key in ["flags", "content"]}
 
-            log.info("--- НАЙДЕНА ЗАПИСЬ ---")
-            for i, value in enumerate(row):
-                key_name = keys[i]
-                cell_value = value
+            log.info(f"--- НАЙДЕНО {len(rows)} ЗАПИСЕЙ В ТАБЛИЦЕ 'world_regions' ---")
+            for row in rows:
+                row_data = {}
+                for i, value in enumerate(row):
+                    key_name = keys[i]
+                    cell_value = value
 
-                # Декодируем JSON-строки для читаемости
-                if i in json_column_indices and isinstance(value, str):
-                    try:
-                        data = json.loads(value)
-                        cell_value = json.dumps(data, ensure_ascii=False, indent=2)
-                    except json.JSONDecodeError:
-                        pass
+                    # Попытка декодировать JSON-строки для лучшей читаемости
+                    if isinstance(value, str):
+                        with suppress(json.JSONDecodeError):
+                            cell_value = json.loads(value)
+                    row_data[key_name] = cell_value
 
-                log.info(f"{key_name}: {cell_value}")
-            log.info("----------------------")
+                # Выводим каждую строку как JSON-объект
+                print(json.dumps(row_data, ensure_ascii=False, indent=2))
+            log.info("-------------------------------------------------")
 
         except exc.SQLAlchemyError as e:
             log.exception(f"Произошла ошибка при чтении из БД: {e}")
@@ -68,4 +71,8 @@ async def read_arena_node():
 
 
 if __name__ == "__main__":
-    asyncio.run(read_arena_node())
+    # Устанавливаем корневую директорию проекта как текущую рабочую директорию
+    # для корректного разрешения относительных путей (например, к БД).
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    os.chdir(project_root)
+    asyncio.run(read_region_data())
