@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.resources.fsm_states.states import InGame
 from app.resources.keyboards.callback_data import MeinMenuCallback
 from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.core_service.manager.world_manager import WorldManager
 from app.services.game_service.game_sync_service import GameSyncService
 from app.services.game_service.world.game_world_service import GameWorldService
@@ -30,6 +31,7 @@ async def main_menu_dispatcher(
     account_manager: AccountManager,
     world_manager: WorldManager,
     game_world_service: GameWorldService,
+    combat_manager: CombatManager,
 ) -> None:
     """
     Единая точка входа из Главного Меню.
@@ -102,7 +104,7 @@ async def main_menu_dispatcher(
     content_msg = session_context.get("message_content")
     if not content_msg:
         log.error(f"MenuDispatch | status=failed reason='message_content not found' user_id={user_id}")
-        await Err.message_content_not_found_in_fsm(call)
+        await Err.generic_error(call)
         return
 
     chat_id = content_msg["chat_id"]
@@ -130,6 +132,7 @@ async def main_menu_dispatcher(
                 account_manager=account_manager,
                 world_manager=world_manager,
                 game_world_service=game_world_service,
+                combat_manager=combat_manager,
             )
             text, kb = await nav_service.reload_current_ui()
 

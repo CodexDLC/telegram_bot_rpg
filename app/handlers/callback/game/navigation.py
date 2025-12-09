@@ -7,12 +7,12 @@ from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger as log
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.resources.fsm_states.states import InGame
 from app.resources.keyboards.callback_data import NavigationCallback
 from app.resources.schemas_dto.fsm_state_dto import SessionDataDTO
 from app.services.core_service.manager.account_manager import AccountManager
+from app.services.core_service.manager.combat_manager import CombatManager
 from app.services.core_service.manager.world_manager import WorldManager
 from app.services.game_service.world.game_world_service import GameWorldService
 from app.services.helpers_module.callback_exceptions import UIErrorHandler as Err
@@ -38,10 +38,10 @@ async def navigation_move_handler(
     state: FSMContext,
     bot: Bot,
     callback_data: NavigationCallback,
-    session: AsyncSession,
     account_manager: AccountManager,
     world_manager: WorldManager,
     game_world_service: GameWorldService,
+    combat_manager: CombatManager,
 ) -> None:
     """Обрабатывает перемещение игрока между локациями."""
     if not call.from_user:
@@ -72,6 +72,8 @@ async def navigation_move_handler(
         account_manager=account_manager,
         world_manager=world_manager,
         game_world_service=game_world_service,
+        symbiote_name=None,
+        combat_manager=combat_manager,
     )
     result = await nav_service.move_player(target_loc_id)
     log.debug(f"Navigation | move_player_result='{result}' char_id={char_id}")
@@ -112,7 +114,7 @@ async def navigation_move_handler(
                 log.error(f"UIRender | component=nav_restore status=failed user_id={user_id} error='{e}'")
         return
 
-    if total_travel_time > 2:
+    if total_travel_time >= 2.0:
         log.debug(f"Navigation | animation=start duration={total_travel_time}s char_id={char_id}")
         session_dto = SessionDataDTO(**session_context)
         anim_service = UIAnimationService(bot=bot, message_data=session_dto)
@@ -127,3 +129,38 @@ async def navigation_move_handler(
         log.info(f"Navigation | event=move_end status=success user_id={user_id} target_loc='{target_loc_id}'")
     except TelegramAPIError as e:
         log.error(f"UIRender | component=navigation status=failed user_id={user_id} error='{e}'")
+
+
+@router.callback_query(InGame.navigation, F.data.startswith("nav:action:"))
+async def navigation_action_stub(call: CallbackQuery):
+    """
+    Обработчик функциональных кнопок навигационной панели.
+    """
+    if not call.data:
+        await call.answer()
+        return
+    action = call.data.split(":")[-1]
+
+    responses = {
+        "search": "🔍 Вы начинаете прочесывать сектор в поисках ресурсов и врагов... (Механика в разработке)",
+        "battles": "⚔️ Сканирование эфира на наличие активных боевых сигнатур... (Механика в разработке)",
+        "safe_zone": "🕊 Здесь действует Пакт о ненападении. Бои между игроками запрещены.",
+        "people": "👥 Загрузка списка сталкеров в радиусе видимости... (Механика в разработке)",
+        "auto": "🧭 Системы авто-навигации калибруются. Выберите точку назначения... (Механика в разработке)",
+        "look_around": "👁 Данные обновлены.",
+        "ignore": None,
+    }
+
+    text = responses.get(action, "Функция недоступна.")
+
+    if action == "ignore":
+        await call.answer()
+        return
+
+    # Для осмотра можно делать реальный рефреш UI
+    if action == "look_around":
+        # Тут в будущем будет вызов метода обновления
+        await call.answer("Сканирование завершено.")
+        return
+
+    await call.answer(text, show_alert=True)

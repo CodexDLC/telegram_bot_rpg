@@ -68,6 +68,7 @@ async def arena_exit_service_handler(
     account_manager: AccountManager,
     world_manager: WorldManager,
     game_world_service: GameWorldService,
+    combat_manager: CombatManager,
 ) -> None:
     """Обрабатывает выход из Арены и возврат в мир."""
     if not call.from_user:
@@ -88,6 +89,7 @@ async def arena_exit_service_handler(
         account_manager=account_manager,
         world_manager=world_manager,
         game_world_service=game_world_service,
+        combat_manager=combat_manager,
     )
     text, kb = await nav_service.reload_current_ui()
 
