@@ -163,6 +163,7 @@ async def _handle_in_game_login(
     account_manager: AccountManager,
     world_manager: WorldManager,
     game_world_service: GameWorldService,
+    combat_manager: CombatManager,  # <--- [FIX] Добавлен аргумент
 ) -> None:
     """Обрабатывает вход в игру, отображая навигационный интерфейс и меню."""
     log.debug(f"Login | event=in_game user_id={user_id} char_id={char_id} location_id={loc_id}")
@@ -171,12 +172,14 @@ async def _handle_in_game_login(
     await sync_service.synchronize_player_state(char_id)
     log.debug(f"StateSync | status=success char_id={char_id}")
 
+    # [FIX] Передаем combat_manager в NavigationService
     nav_service = NavigationService(
         char_id=char_id,
         state_data=state_data,
         account_manager=account_manager,
         world_manager=world_manager,
         game_world_service=game_world_service,
+        combat_manager=combat_manager,
     )
     nav_text, nav_kb = await nav_service.get_navigation_ui(state_name, loc_id)
 
@@ -343,4 +346,5 @@ async def start_logging_handler(
                 account_manager,
                 world_manager,
                 game_world_service,
+                combat_manager,
             )

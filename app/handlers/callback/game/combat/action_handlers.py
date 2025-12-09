@@ -69,7 +69,12 @@ async def leave_combat_handler(
     else:
         await state.set_state(InGame.navigation)
         nav_service = NavigationService(
-            char_id, state_data, account_manager, world_manager, game_world_service=game_world_service
+            char_id=char_id,
+            state_data=state_data,
+            account_manager=account_manager,
+            world_manager=world_manager,
+            game_world_service=game_world_service,
+            combat_manager=combat_manager,
         )
         content_text, content_kb = await nav_service.reload_current_ui()
 
