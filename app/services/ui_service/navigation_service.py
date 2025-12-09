@@ -89,16 +89,19 @@ class NavigationService(BaseUIService):
             visual_objects = []
             service_key = nav_data.get("service")
             if service_key:
-                # Простой маппинг для примера (можно расширить)
-                if "arena" in service_key:
-                    visual_objects.append("Вход: Арена")
-                elif "taverna" in service_key:
-                    visual_objects.append("Таверна 'Едальня'")
-                elif "town_hall" in service_key:
-                    visual_objects.append("Палатка Совета")
-                elif "market" in service_key:
-                    visual_objects.append("Рынок")
+                service_map = {
+                    "arena": "Вход: Арена",
+                    "taverna": "Таверна 'Едальня'",
+                    "town_hall": "Палатка Совета",
+                    "market": "Рынок",
+                }
+                # Находим первый ключ из карты, который содержится в service_key
+                for key, text in service_map.items():
+                    if key in service_key:
+                        visual_objects.append(text)
+                        break
                 else:
+                    # Если ни один известный ключ не найден, добавляем "Неизвестное строение"
                     visual_objects.append("Неизвестное строение")
 
             # 3. Формирование Текста (через новый NavigationFormatter)
