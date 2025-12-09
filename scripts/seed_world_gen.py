@@ -25,12 +25,12 @@ if PROJECT_ROOT not in sys.path:
 @log.catch
 async def seed_world_final():
     # --- Local Imports (after sys.path is configured) ---
+    from app.resources.game_data.graf_data_world.start_vilage import STATIC_LOCATIONS
     from app.resources.game_data.world_config import (
         HUB_CENTER,
         LOCATION_VARIANTS,
         SECTOR_ROWS,
         SECTOR_SIZE,
-        STATIC_LOCATIONS,
         WORLD_HEIGHT,
         WORLD_WIDTH,
         ZONE_SIZE,
@@ -133,7 +133,7 @@ async def seed_world_final():
                 is_active=data["is_active"],
                 flags=data["flags"],
                 content=safe_content,
-                service_key=data["service_object_key"],
+                service_object_key=data.get("service_object_key"),  # ИСПРАВЛЕНО
             )
             if "environment_tags" in data["content"]:
                 grid_tags_cache[(sx, sy)] = data["content"]["environment_tags"]
@@ -151,12 +151,10 @@ async def seed_world_final():
                 if (rx, ry) in STATIC_LOCATIONS:
                     continue
                 await repo.update_flags(rx, ry, {"has_road": True}, activate_node=True)
-                current_node = await repo.get_node(rx, ry)
-                current_tags = []
-                if current_node and current_node.content and isinstance(current_node.content, dict):
-                    current_tags = current_node.content.get("environment_tags", [])
+                current_tags = grid_tags_cache.get((rx, ry), [])
                 if "road" not in current_tags:
                     current_tags.append("road")
+                    grid_tags_cache[(rx, ry)] = current_tags  # Обновляем кэш
                     await repo.update_content(rx, ry, {"environment_tags": current_tags})
                 llm_batch_queue.append((rx, ry))
         await session.commit()

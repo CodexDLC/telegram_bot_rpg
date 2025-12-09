@@ -13,13 +13,12 @@ from app.services.game_service.world.game_world_service import GameWorldService
 from app.services.ui_service.base_service import BaseUIService
 
 # Точка спавна по умолчанию (Safe Zone)
-DEFAULT_SPAWN_POINT = "portal_plats"
+DEFAULT_SPAWN_POINT = "52_52"
 
 
 class NavigationService(BaseUIService):
     """
     Сервис-Оркестратор для Навигации.
-    Используется в хандлерах
     """
 
     def __init__(
@@ -48,7 +47,6 @@ class NavigationService(BaseUIService):
 
             nav_data = await self.game_world_service.get_location_for_navigation(loc_id)
 
-            # Если данные не найдены — возвращаем None, чтобы запустить Unstuck
             if not nav_data:
                 log.warning(f"get_navigation_ui | Локация не найдена: loc_id={loc_id}")
                 return (
@@ -75,7 +73,6 @@ class NavigationService(BaseUIService):
     async def reload_current_ui(self) -> tuple[str, InlineKeyboardMarkup | None]:
         """
         Перезагружает UI. Включает механику 'Unstuck' (Аварийный телепорт).
-        Если текущая локация сломана, переносит игрока на спавн.
         """
         log.debug(f"reload_current_ui | char_id={self.char_id}")
         data = await self.account_manager.get_account_data(self.char_id)
@@ -87,51 +84,31 @@ class NavigationService(BaseUIService):
         current_loc_id = data.get("location_id", DEFAULT_SPAWN_POINT)
         log.debug(f"reload_current_ui | current_state={current_state}, current_loc_id={current_loc_id}")
 
-        # 1. Пробуем загрузить текущую локацию
         text, kb = await self.get_navigation_ui(current_state, current_loc_id)
 
-        # 2. Если клавиатуры нет (kb is None) — значит мы в "черной дыре"
         if kb is None:
             log.warning(
                 f"User char_id={self.char_id} застрял в '{current_loc_id}'. Выполняем аварийный телепорт (Unstuck)."
             )
-
-            # АВАРИЙНАЯ ЭВАКУАЦИЯ
             target_safe_zone = DEFAULT_SPAWN_POINT
-
-            # А. Удаляем из старой (сломанной) локации (на всякий случай)
             await self.world_manager.remove_player_from_location(current_loc_id, self.char_id)
-
-            # Б. Обновляем запись в Redis насильно
             await self.account_manager.update_account_fields(
                 self.char_id,
-                {
-                    "location_id": target_safe_zone,
-                    "prev_location_id": target_safe_zone,  # Сбрасываем историю
-                },
+                {"location_id": target_safe_zone, "prev_location_id": target_safe_zone},
             )
             log.info(f"reload_current_ui | Unstuck | char_id={self.char_id} перемещен в {target_safe_zone}")
-
-            # В. Получаем UI спавна
             text, kb = await self.get_navigation_ui("world", target_safe_zone)
-
-            # Г. Добавляем сообщение о спасении
             text = (
                 f"⚠️ <b>{self.actor_name}:</b> Критический сбой навигации detected.\n"
                 "🌀 <i>Протокол аварийной эвакуации активирован...</i>\n\n"
                 f"{text}"
             )
-
         return text, kb
-
-    # --- 2. Приватные методы (Логика UI) ---
 
     async def _format_location_text(self, nav_data: dict) -> str:
         loc_name = nav_data.get("name", "Неизвестное место")
         loc_desc = nav_data.get("description", "...")
-
         text = f"<b>{self.actor_name}:</b> Локация идентифицирована.\n📍 <b>{loc_name}</b>\n\n{loc_desc}"
-
         exits = nav_data.get("exits", {})
         if isinstance(exits, dict) and exits:
             text += "\n\n<b>Визуальный обзор путей:</b>"
@@ -147,24 +124,39 @@ class NavigationService(BaseUIService):
     ) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()
 
+        nav_buttons = []
+        service_buttons = []
+
         if isinstance(exits_dict, dict):
-            for target_id, exit_data in exits_dict.items():
-                if isinstance(exit_data, dict):
-                    button_text = exit_data.get("text_button", ">>>")
+            for target_id_with_prefix, exit_data in exits_dict.items():
+                if not isinstance(exit_data, dict):
+                    continue
 
-                    # 🔥 НОВАЯ ЛОГИКА: ПРОВЕРКА ПРЕФИКСА КЛЮЧА
-                    if target_id.startswith("svc_"):
-                        # Если это Сервисный Хаб, используем ServiceEntryCallback
-                        callback_data = ServiceEntryCallback(char_id=self.char_id, target_loc=target_id).pack()
-                        log.debug(f"Создан ServiceEntryCallback для {target_id}")
+                button_text = exit_data.get("text_button", ">>>")
 
-                    else:
-                        # Иначе — обычная навигация
-                        callback_data = NavigationCallback(action="move", target_id=target_id).pack()
-                        log.debug(f"Создан NavigationCallback для {target_id}")
+                try:
+                    prefix, target_id = target_id_with_prefix.split(":", 1)
+                except ValueError:
+                    log.warning(f"Некорректный ключ выхода: {target_id_with_prefix}")
+                    continue
 
-                    kb.button(text=button_text, callback_data=callback_data)
-        kb.adjust(1)
+                if prefix == "svc":
+                    callback_data = ServiceEntryCallback(char_id=self.char_id, target_loc=target_id).pack()
+                    button = InlineKeyboardButton(text=button_text, callback_data=callback_data)
+                    service_buttons.append(button)
+                    log.debug(f"Создана кнопка сервиса для {target_id}")
+                elif prefix == "nav":
+                    callback_data = NavigationCallback(action="move", target_id=target_id).pack()
+                    button = InlineKeyboardButton(text=button_text, callback_data=callback_data)
+                    nav_buttons.append(button)
+                    log.debug(f"Создана кнопка навигации для {target_id}")
+
+        if nav_buttons:
+            kb.add(*nav_buttons)
+            kb.adjust(2)
+
+        if service_buttons:
+            kb.row(*service_buttons, width=1)
 
         if prev_loc_id and prev_loc_id != current_loc_id:
             back_btn = InlineKeyboardButton(
@@ -174,8 +166,6 @@ class NavigationService(BaseUIService):
             kb.row(back_btn)
 
         return kb.as_markup()
-
-    # --- 3. Логика Действий (Move) ---
 
     async def move_player(self, target_loc_id: str) -> tuple[float, str, InlineKeyboardMarkup | None] | None:
         log.debug(f"move_player | char_id={self.char_id}, target_loc_id={target_loc_id}")
@@ -189,7 +179,6 @@ class NavigationService(BaseUIService):
         log.debug(f"move_player | current_state={current_state}, current_loc_id={current_loc_id}")
 
         if current_state == "world" and isinstance(current_loc_id, str):
-            # Проверка существования целевой локации
             target_exists = await self.game_world_service.get_location_for_navigation(target_loc_id)
             if not target_exists:
                 log.warning(f"move_player | Целевая локация не найдена: target_loc_id={target_loc_id}")
@@ -202,7 +191,10 @@ class NavigationService(BaseUIService):
 
             if current_loc_data:
                 exits = current_loc_data.get("exits", {})
-                target_exit = exits.get(target_loc_id)
+                # ИСПРАВЛЕНО: Ищем ключ с префиксом и без него для обратной совместимости и кнопки "Назад"
+                full_target_key_with_prefix = f"nav:{target_loc_id}"
+                target_exit = exits.get(full_target_key_with_prefix) or exits.get(target_loc_id)
+
                 if target_exit and isinstance(target_exit, dict):
                     travel_time = float(target_exit.get("time_duration", 0))
                 log.debug(f"move_player | travel_time={travel_time}")
@@ -211,10 +203,7 @@ class NavigationService(BaseUIService):
 
             await self.account_manager.update_account_fields(
                 self.char_id,
-                {
-                    "location_id": target_loc_id,
-                    "prev_location_id": current_loc_id,
-                },
+                {"location_id": target_loc_id, "prev_location_id": current_loc_id},
             )
             log.info(f"move_player | char_id={self.char_id} перемещен в {target_loc_id}")
 

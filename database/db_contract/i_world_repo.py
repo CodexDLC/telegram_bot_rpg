@@ -47,7 +47,7 @@ class IWorldRepo(ABC):
         is_active: bool = False,
         flags: dict | None = None,
         content: dict | None = None,
-        service_key: str | None = None,
+        service_object_key: str | None = None,
     ) -> None:
         """
         Полная запись клетки (UPSERT).
