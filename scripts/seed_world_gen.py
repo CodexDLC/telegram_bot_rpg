@@ -6,6 +6,13 @@ from typing import Any, cast
 
 from loguru import logger as log
 
+from apps.common.database.model_orm import Base
+from apps.common.database.model_orm.world import WorldRegion
+from apps.game_core.game_service.world.zone_orchestrator import ZoneOrchestrator
+from apps.game_core.resources.game_data.graf_data_world.start_vilage import (
+    STATIC_LOCATIONS,
+)
+
 # ==============================================================================
 # 🔥 FIX: НАСТРОЙКИ ОКРУЖЕНИЯ ДОЛЖНЫ БЫТЬ ДО ИМПОРТОВ APP/DATABASE
 # ==============================================================================
@@ -25,8 +32,14 @@ if PROJECT_ROOT not in sys.path:
 @log.catch
 async def seed_world_final():
     # --- Local Imports (after sys.path is configured) ---
-    from app.resources.game_data.graf_data_world.start_vilage import STATIC_LOCATIONS
-    from app.resources.game_data.world_config import (
+
+    from apps.common.database.repositories import get_world_repo
+    from apps.common.database.session import async_engine, async_session_factory
+    from apps.game_core.game_service.world.content_gen_service import (
+        ContentGenerationService,
+    )
+    from apps.game_core.game_service.world.threat_service import ThreatService
+    from apps.game_core.resources.game_data.world_config import (
         HUB_CENTER,
         LOCATION_VARIANTS,
         SECTOR_ROWS,
@@ -35,13 +48,6 @@ async def seed_world_final():
         WORLD_WIDTH,
         ZONE_SIZE,
     )
-    from app.services.game_service.world.content_gen_service import ContentGenerationService
-    from app.services.game_service.world.threat_service import ThreatService
-    from app.services.game_service.world.zone_orchestrator import ZoneOrchestrator
-    from database.model_orm import Base
-    from database.model_orm.world import WorldRegion
-    from database.repositories import get_world_repo
-    from database.session import async_engine, async_session_factory
 
     def get_sector_id_from_coords(x: int, y: int) -> str:
         col = (x // SECTOR_SIZE) + 1
@@ -112,9 +118,18 @@ async def seed_world_final():
                     "has_road": False,
                     "terrain_id": terrain_id,
                 }
-                content_payload = {"title": None, "description": None, "environment_tags": final_tags}
+                content_payload = {
+                    "title": None,
+                    "description": None,
+                    "environment_tags": final_tags,
+                }
                 await repo.create_or_update_node(
-                    x=x, y=y, sector_id=sec_id, is_active=False, flags=flags_payload, content=content_payload
+                    x=x,
+                    y=y,
+                    sector_id=sec_id,
+                    is_active=False,
+                    flags=flags_payload,
+                    content=content_payload,
                 )
             if x % 20 == 0:
                 log.info(f"   ...column {x} processed")

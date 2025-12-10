@@ -7,17 +7,17 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.core_service.manager.account_manager import AccountManager
-from app.services.core_service.manager.arena_manager import ArenaManager
-from app.services.core_service.manager.combat_manager import CombatManager
+from apps.common.database.model_orm import Character
+from apps.common.services.core_service import CombatManager
+from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.common.services.core_service.manager.arena_manager import ArenaManager
 
 # Импортируем "боевые" части приложения
-from app.services.game_service.arena.service_1v1 import Arena1v1Service
+from apps.game_core.game_service.arena.service_1v1 import Arena1v1Service
 
 # 🔥 ИМПОРТИРУЕМ LIFECYCLE ДЛЯ ПРИНУДИТЕЛЬНОГО ЗАВЕРШЕНИЯ
-from app.services.game_service.combat.combat_lifecycle_service import CombatLifecycleService
-from app.services.game_service.combat.combat_service import CombatService
-from database.model_orm import Character
+from apps.game_core.game_service.combat.combat_lifecycle_service import CombatLifecycleService
+from apps.game_core.game_service.combat.combat_service import CombatService
 
 # Настройка отдельного логгера
 logger.add("logs/test_battle_report.log", level="INFO", rotation="1 MB", format="{message}")
@@ -134,8 +134,8 @@ async def test_full_arena_cycle(get_async_session, app_container):
 
 
 async def _create_test_char(session: AsyncSession, uid: int, name: str) -> int:
-    from app.resources.schemas_dto.user_dto import UserUpsertDTO
-    from database.repositories.ORM.users_repo_orm import UsersRepoORM
+    from apps.common.database.repositories import UsersRepoORM
+    from apps.common.schemas_dto import UserUpsertDTO
 
     u_repo = UsersRepoORM(session)
     await u_repo.upsert_user(
@@ -149,8 +149,8 @@ async def _create_test_char(session: AsyncSession, uid: int, name: str) -> int:
     char = res.scalars().first()
 
     if not char:
-        from app.resources.schemas_dto.character_dto import CharacterOnboardingUpdateDTO, CharacterShellCreateDTO
-        from database.repositories.ORM.characters_repo_orm import CharactersRepoORM
+        from apps.common.database.repositories.ORM.characters_repo_orm import CharactersRepoORM
+        from apps.common.schemas_dto import CharacterOnboardingUpdateDTO, CharacterShellCreateDTO
 
         c_repo = CharactersRepoORM(session)
         char_id = await c_repo.create_character_shell(CharacterShellCreateDTO(user_id=uid))
@@ -160,8 +160,12 @@ async def _create_test_char(session: AsyncSession, uid: int, name: str) -> int:
         )
 
         # Stats
-        from app.services.game_service.skill.skill_service import CharacterSkillsService
-        from database.repositories import get_character_stats_repo, get_skill_progress_repo, get_skill_rate_repo
+        from apps.common.database.repositories import (
+            get_character_stats_repo,
+            get_skill_progress_repo,
+            get_skill_rate_repo,
+        )
+        from apps.game_core.game_service.skill.skill_service import CharacterSkillsService
 
         skill_service = CharacterSkillsService(
             get_character_stats_repo(session), get_skill_rate_repo(session), get_skill_progress_repo(session)

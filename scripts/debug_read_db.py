@@ -7,7 +7,7 @@ from contextlib import suppress
 from loguru import logger as log
 from sqlalchemy import exc, text
 
-from database.session import async_session_factory
+from apps.common.database.session import async_session_factory
 
 # --- Настройка окружения ---
 current_dir = os.path.dirname(os.path.abspath(__file__))

@@ -2,15 +2,16 @@ import asyncio
 
 from loguru import logger as log
 
-from app.core.bot_factory import build_app
+from apps.bot.handlers import router as main_router
+from apps.bot.middlewares.container_middleware import ContainerMiddleware
+from apps.common.core.bot_factory import build_app
+from apps.common.core.config import BOT_TOKEN, REDIS_URL  # Используются для проверки
+from apps.common.core.container import AppContainer
+from apps.common.core.loguru_setup import setup_loguru
 
 # Импорты должны быть корректными. Я предполагаю, что вы импортируете AppContainer,
 # который мы обновили, и все остальные зависимости
-from app.core.config import BOT_TOKEN, REDIS_URL  # Используются для проверки
-from app.core.container import AppContainer
-from app.core.loguru_setup import setup_loguru
-from app.handlers import router as main_router
-from app.middlewares.container_middleware import ContainerMiddleware
+
 
 setup_loguru()
 
