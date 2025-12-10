@@ -60,7 +60,7 @@ class WorldLoaderService:
 
     def _calculate_exits_for_node(self, node: WorldGrid, node_map: dict[str, WorldGrid]) -> dict[str, Any]:
         """
-        Рассчитывает доступные выходы, учитывая флаг 'restricted_exits'.
+        Рассчитывает доступные выходы, учитывая флаг 'restricted_exits' и логику изоляции регионов.
         """
         exits = {}
         directions = {
@@ -70,9 +70,13 @@ class WorldLoaderService:
             "east": (1, 0),
         }
 
-        current_flags = node.flags if isinstance(node.flags, dict) else {}
-        restricted = current_flags.get("restricted_exits", [])
+        # 1. Получаем флаги текущей клетки
+        # (Гарантируем, что это dict, даже если в БД None)
+        my_flags = node.flags if isinstance(node.flags, dict) else {}
+        my_has_road = my_flags.get("has_road", False)
+        restricted = my_flags.get("restricted_exits", [])
 
+        # 2. Обработка сервисного входа (если есть)
         if node.service_object_key:
             key = f"svc:{node.service_object_key}"
             content = node.content or {}
@@ -83,6 +87,7 @@ class WorldLoaderService:
                 "text_button": f"Войти в {title}",
             }
 
+        # 3. Перебор соседей
         for dir_name, (dx, dy) in directions.items():
             if dir_name in restricted:
                 continue
@@ -95,10 +100,21 @@ class WorldLoaderService:
                 content = neighbor.content or {}
                 title = content.get("title") or f"Путь в {nx}:{ny}"
 
-                # ИСПРАВЛЕНО: Гарантируем, что neighbor.flags - это словарь
+                # Флаги соседа
                 neighbor_flags = neighbor.flags if isinstance(neighbor.flags, dict) else {}
-                has_road = neighbor_flags.get("has_road", False)
-                time_duration = 2.0 if has_road else 4.0
+                neighbor_has_road = neighbor_flags.get("has_road", False)
+
+                # 🔥 ЛОГИКА ИЗОЛЯЦИИ РЕГИОНОВ (HARD BORDER) 🔥
+                # Если мы переходим границу Регионов (например, из D4 в D5),
+                # то проход возможен ТОЛЬКО по дороге (has_road=True у обоих).
+                is_sector_crossing = node.sector_id != neighbor.sector_id
+
+                if is_sector_crossing and not (my_has_road and neighbor_has_road):
+                    # Дорога прерывается или отсутствует -> Стена.
+                    continue
+
+                # Расчет времени: по дороге быстрее
+                time_duration = 2.0 if neighbor_has_road else 4.0
 
                 key = f"nav:{neighbor_id}"
 

@@ -33,33 +33,40 @@ Return ONLY the JSON object.""",
         "model_alias": "fast",
     },
     "batch_location_desc": {
-        "system_instruction": """ROLE: Narrative Designer / World Builder.
-TASK: Generate atmospheric descriptions for a sequence of RPG locations based on their INTERNAL TAGS and SURROUNDINGS.
+        "system_instruction": """ROLE: Narrative Designer for a dark fantasy RPG.
+TASK: Generate a title and atmospheric description for multiple game locations.
 
 INPUT FORMAT:
 A JSON list of objects. Each object has:
-- "id": coordinates.
-- "internal_tags": what is INSIDE this location (e.g., 'road', 'forest').
-- "surroundings": what is VISIBLE around (e.g., 'north': ['gate'], 'south': ['fog']).
+- "id": The coordinate of the location.
+- "tags": A list of keywords describing what is INSIDE this location (e.g., 'road', 'forest', 'ruins').
+- "context": A list of strings describing what is VISIBLE in the distance (e.g., 'На севере виднеется стена').
 
 OUTPUT FORMAT:
-A single JSON object mapping ID -> Content. The content object must contain a 'content' key.
+A single JSON object where keys are the location IDs from the input.
+For each ID, provide a "title" and a "description".
 {
-  "52_60": {
-    "content": {
-      "title": "Title in Russian",
-      "description": "Atmospheric text in Russian (2-3 sentences). Incorporate visual cues from surroundings (e.g., 'To the north, the massive gates loom...')."
-    }
+  "52_52": {
+    "title": "Южные Ворота (Внешняя сторона)",
+    "description": "Разбитая дорога упирается в массивные ворота на севере. Вокруг раскинулась выжженная пустошь."
+  },
+  "52_53": {
+    "title": "Выжженная пустошь",
+    "description": "Бесплодная земля, усеянная редкими колючими кустарниками. Вдалеке на юге виднеются топи."
   }
 }
 
 RULES:
-1. Language: RUSSIAN.
-2. If 'road' tag is present, describe the path/road condition.
-3. Use 'surroundings' to create smooth transitions and landmarks references.
-4. Return ONLY JSON.""",
+1.  **Language**: RUSSIAN.
+2.  **Title**: Create a short, evocative title in Russian.
+3.  **Description**: Write 2-3 atmospheric sentences in Russian.
+4.  **Use Context**: Your description MUST incorporate visual cues from the "context" field to create a cohesive world.
+5.  **Adhere to Tags**: The description MUST reflect the provided "tags".
+6.  **Do NOT invent new tags or mechanics.** Your role is creative writing, not game design.
+7.  **Return ONLY the JSON object.** No other text or explanations.
+""",
         "temperature": 0.7,
-        "max_tokens": 3000,
+        "max_tokens": 8000,
         "model_alias": "fast",
     },
 }

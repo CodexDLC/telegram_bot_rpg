@@ -121,3 +121,33 @@ class ContentGenerationService:
                 result[dir_name] = ["void"]
 
         return result
+
+    async def generate_from_orchestrator(self, payload_items: list[dict]) -> dict | None:
+        """
+        Принимает готовый payload от ZoneOrchestrator и отправляет его в LLM.
+        """
+        if not payload_items:
+            return None
+
+        response_text = ""
+        try:
+            log.debug(f"ContentGen | orchestrator_mode action=sending_request items={len(payload_items)}")
+            response_text = await gemini_answer(
+                mode="batch_location_desc",
+                user_text=json.dumps(payload_items, ensure_ascii=False),
+                max_tokens=4000,
+            )
+            clean_json = response_text.replace("```json", "").replace("```", "").strip()
+            if not clean_json:
+                raise ValueError("Empty response from LLM")
+
+            # Ожидаемый формат ответа: {"id_1": {"title": "...", "description": "..."}, ...}
+            result_map = json.loads(clean_json)
+            return result_map
+
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            log.error(
+                f"ContentGen | orchestrator_mode status=llm_error exception='{e}' raw_preview='{response_text[:100]}'"
+            )
+            log.error(traceback.format_exc())
+            return None
