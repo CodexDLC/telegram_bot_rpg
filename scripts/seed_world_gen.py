@@ -37,6 +37,7 @@ async def seed_world_final():
     )
     from app.services.game_service.world.content_gen_service import ContentGenerationService
     from app.services.game_service.world.threat_service import ThreatService
+    from app.services.game_service.world.zone_orchestrator import ZoneOrchestrator
     from database.model_orm import Base
     from database.model_orm.world import WorldRegion
     from database.repositories import get_world_repo
@@ -49,20 +50,7 @@ async def seed_world_final():
         row_char = SECTOR_ROWS[row_idx]
         return f"{row_char}{col}"
 
-    def _get_simple_line_path(x1, y1, x2, y2) -> list[tuple[int, int]]:
-        """Строит прямую линию (ортогонально)."""
-        path = []
-        if x1 == x2:
-            step_y = 1 if y2 > y1 else -1
-            for y in range(y1, y2 + step_y, step_y):
-                path.append((x1, y))
-        elif y1 == y2:
-            step_x = 1 if x2 > x1 else -1
-            for x in range(x1, x2 + step_x, step_x):
-                path.append((x, y1))
-        return path
-
-    log.info("🚀 World Seeding Pipeline V5.0 (Hub Cross Roads) Started")
+    log.info("🚀 World Seeding Pipeline V6.0 (Orchestrated) Started")
 
     # 0. Init DB
     async with async_engine.begin() as conn:
@@ -72,23 +60,35 @@ async def seed_world_final():
         repo = get_world_repo(session)
         content_service = ContentGenerationService(repo)
 
-        # STAGE 1: МАКРО-СЕТКА
+        # STAGE 1: МАКРО-СЕТКА (С ЗЕЛЕНЫМ ПОЯСОМ)
         log.info("🔹 Stage 1: Terrain Layout")
         region_cache = {}
-        terrain_keys = list(LOCATION_VARIANTS.keys())
+
+        all_terrain_keys = list(LOCATION_VARIANTS.keys())
+        safe_terrain_keys = ["flat_wasteland", "sparse_forest"]
+
         for _row_idx, row_char in enumerate(SECTOR_ROWS):
             for col_idx in range(1, 8):
                 sec_id = f"{row_char}{col_idx}"
-                sector_map = {f"{zx}_{zy}": random.choice(terrain_keys) for zx in range(3) for zy in range(3)}
-                region_obj = WorldRegion(id=sec_id, biome_id="dynamic", sector_map=sector_map, climate_tags=[])
+
+                if sec_id == "D4":
+                    current_pool = safe_terrain_keys
+                    biome_tag = "hub_surroundings"
+                else:
+                    current_pool = all_terrain_keys
+                    biome_tag = "wild"
+
+                sector_map = {f"{zx}_{zy}": random.choice(current_pool) for zx in range(3) for zy in range(3)}
+
+                region_obj = WorldRegion(id=sec_id, biome_id=biome_tag, sector_map=sector_map, climate_tags=[])
                 await repo.upsert_region(region_obj)
                 region_cache[sec_id] = region_obj
+
         await session.flush()
-        log.info("✅ Terrain layout generated.")
+        log.info("✅ Terrain layout generated (Safe D4 ensured).")
 
         # STAGE 2: МИКРО-СЕТКА
         log.info("🔹 Stage 2: Grid Injection")
-        grid_tags_cache = {}
         for x in range(WORLD_WIDTH):
             for y in range(WORLD_HEIGHT):
                 sec_id = get_sector_id_from_coords(x, y)
@@ -104,7 +104,6 @@ async def seed_world_final():
                 threat_val = ThreatService.calculate_threat(x, y)
                 influence_tags = ThreatService.get_narrative_tags(x, y)
                 final_tags = list(set(terrain_tags + influence_tags))
-                grid_tags_cache[(x, y)] = final_tags
 
                 flags_payload = {
                     "threat_val": round(threat_val, 3),
@@ -133,38 +132,57 @@ async def seed_world_final():
                 is_active=data["is_active"],
                 flags=data["flags"],
                 content=safe_content,
-                service_object_key=data.get("service_object_key"),  # ИСПРАВЛЕНО
+                service_object_key=data.get("service_object_key"),
             )
-            if "environment_tags" in data["content"]:
-                grid_tags_cache[(sx, sy)] = data["content"]["environment_tags"]
-        await session.flush()
+        await session.commit()
+        log.info("✅ Static locations placed.")
 
-        # STAGE 4: ДОРОГИ
-        log.info("🔹 Stage 4: Hub Cross Roads")
-        hx, hy = HUB_CENTER["x"], HUB_CENTER["y"]
-        target_points = [(hx, 45), (hx, 59), (45, hy), (59, hy)]
-        llm_batch_queue = []
-        for tx, ty in target_points:
-            path = _get_simple_line_path(hx, hy, tx, ty)
-            log.info(f"   Ray ({hx}:{hy}) -> ({tx}:{ty}) | Len: {len(path)}")
-            for rx, ry in path:
-                if (rx, ry) in STATIC_LOCATIONS:
+        # STAGE 4: INITIAL WORLD GENERATION (ORCHESTRATED)
+        log.info("🔹 Stage 4: Initial World Generation (Orchestrated)")
+
+        zone_orchestrator = ZoneOrchestrator(repo, content_service)
+
+        hub_x, hub_y = HUB_CENTER["x"], HUB_CENTER["y"]
+        region_start_x = (hub_x // SECTOR_SIZE) * SECTOR_SIZE
+        region_start_y = (hub_y // SECTOR_SIZE) * SECTOR_SIZE
+
+        log.info(f"   Starting region generation around hub ({hub_x},{hub_y})...")
+
+        chunk_size = 5  # Размер чанка в ZoneOrchestrator
+        center_chunk_x = region_start_x + (1 * chunk_size) + (chunk_size // 2)
+        center_chunk_y = region_start_y + (1 * chunk_size) + (chunk_size // 2)
+
+        chunk_centers = []
+        for i in range(3):  # Ряды чанков
+            for j in range(3):  # Колонки чанков
+                center_x = region_start_x + (j * chunk_size) + (chunk_size // 2)
+                center_y = region_start_y + (i * chunk_size) + (chunk_size // 2)
+
+                # Пропускаем центральный чанк, так как там статичный город
+                if center_x == center_chunk_x and center_y == center_chunk_y:
+                    log.info(f"   Skipping central chunk at ({center_x}, {center_y}) - contains static hub.")
                     continue
-                await repo.update_flags(rx, ry, {"has_road": True}, activate_node=True)
-                current_tags = grid_tags_cache.get((rx, ry), [])
-                if "road" not in current_tags:
-                    current_tags.append("road")
-                    grid_tags_cache[(rx, ry)] = current_tags  # Обновляем кэш
-                    await repo.update_content(rx, ry, {"environment_tags": current_tags})
-                llm_batch_queue.append((rx, ry))
-        await session.commit()
-        log.info(f"✅ Rays activated. Queue: {len(llm_batch_queue)}")
 
-        # STAGE 5: ГЕНЕРАЦИЯ
-        if llm_batch_queue:
-            log.info("🔹 Stage 5: AI Generation (Sequential Batches)")
-            await content_service.generate_content_for_path(llm_batch_queue)
+                chunk_centers.append((center_x, center_y))
+
+        total_chunks = len(chunk_centers)
+        for i, (cx, cy) in enumerate(chunk_centers):
+            log.info(f"   Generating chunk {i + 1}/{total_chunks} centered at ({cx}, {cy})...")
+            success = await zone_orchestrator.generate_chunk(cx, cy)
+
+            if success:
+                log.info(f"   ✅ Chunk ({cx}, {cy}) generated successfully.")
+            else:
+                log.error(f"   ❌ Failed to generate chunk ({cx}, {cy}).")
+
+            await asyncio.sleep(1)
+
+            # --- ТЕСТОВЫЙ РЕЖИМ: Генерируем только один чанк ---
+            log.warning("   TEST MODE: Stopping after one chunk generation.")
+            break
+
         await session.commit()
+        log.info("✅ Initial world region surrounding the hub has been generated.")
 
     log.info("🎉 World Seeding COMPLETED.")
 

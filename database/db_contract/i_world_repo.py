@@ -87,3 +87,11 @@ class IWorldRepo(ABC):
         Используется Runtime-сервисом при старте сервера для загрузки в Redis.
         """
         pass
+
+    @abstractmethod
+    async def get_nodes_in_rect(self, x_start: int, y_start: int, width: int, height: int) -> list[WorldGrid]:
+        """
+        Возвращает все клетки в указанном прямоугольнике одним запросом.
+        Нужен для ZoneOrchestrator.
+        """
+        pass

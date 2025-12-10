@@ -131,9 +131,6 @@ class WorldRepoORM(IWorldRepo):
         if not node:
             return False
 
-        # Мерджим контент (например, обновляем описание, сохраняя старые теги, если они там были)
-        # Хотя обычно для контента мы перезаписываем его целиком из ЛЛМ,
-        # но безопаснее сначала прочитать.
         current_content = dict(node.content) if node.content else {}
         current_content.update(new_content)
 
@@ -153,5 +150,20 @@ class WorldRepoORM(IWorldRepo):
         stmt = select(WorldGrid).where(WorldGrid.is_active == True)  # noqa: E712
         result = await self.session.execute(stmt)
         nodes = result.scalars().all()
-        # log.debug(f"WorldRepo | fetched {len(nodes)} active nodes")
         return list(nodes)
+
+    async def get_nodes_in_rect(self, x: int, y: int, width: int, height: int) -> list[WorldGrid]:
+        """
+        Возвращает список всех клеток в прямоугольной области.
+        Используется Оркестратором для получения контекста (Чанк + Соседи).
+        """
+        stmt = select(WorldGrid).where(
+            WorldGrid.x >= x, WorldGrid.x < x + width, WorldGrid.y >= y, WorldGrid.y < y + height
+        )
+        try:
+            result = await self.session.execute(stmt)
+            nodes = result.scalars().all()
+            return list(nodes)
+        except SQLAlchemyError as e:
+            log.error(f"WorldRepo | get_nodes_in_rect failed x={x} y={y} error={e}")
+            return []
