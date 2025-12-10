@@ -3,8 +3,8 @@ import asyncio
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.config import DB_URL_SQLALCHEMY
-from app.core.container import AppContainer
+from apps.common.core.config import DB_URL_SQLALCHEMY
+from apps.common.core.container import AppContainer
 
 TEST_DB_URL = DB_URL_SQLALCHEMY
 

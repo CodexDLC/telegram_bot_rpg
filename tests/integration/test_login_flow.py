@@ -7,37 +7,45 @@ from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, Message, User
 
-# 2. Создание
-from app.handlers.callback.login.char_creation import (
+from apps.bot.handlers.callback.login.char_creation import (
     choose_gender_handler,
     choosing_name_handler,
     confirm_creation_handler,
 )
-from app.handlers.callback.login.lobby import start_login_handler
-from app.handlers.callback.login.lobby_character_selection import select_or_delete_character_handler
-from app.handlers.callback.login.login_handler import start_logging_handler
-from app.handlers.callback.login.logout import global_logout_handler
-
-# 3. Туториалы
-from app.handlers.callback.tutorial.tutorial_game import (
+from apps.bot.handlers.callback.login.lobby import start_login_handler
+from apps.bot.handlers.callback.login.lobby_character_selection import (
+    select_or_delete_character_handler,
+)
+from apps.bot.handlers.callback.login.login_handler import start_logging_handler
+from apps.bot.handlers.callback.login.logout import global_logout_handler
+from apps.bot.handlers.callback.tutorial.tutorial_game import (
     start_tutorial_handler,
     tutorial_confirmation_handler,
     tutorial_event_stats_handler,
 )
-from app.handlers.callback.tutorial.tutorial_skill import (
+from apps.bot.handlers.callback.tutorial.tutorial_skill import (
     in_skills_progres_handler,
     skill_confirm_handler,
     start_skill_phase_handler,
 )
+from apps.bot.handlers.commands import cmd_start
+from apps.bot.resources.fsm_states import (
+    CharacterCreation,
+    CharacterLobby,
+    InGame,
+    StartTutorial,
+)
+from apps.bot.resources.keyboards.callback_data import (
+    LobbySelectionCallback,
+    TutorialQuestCallback,
+)
+from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 
+# 2. Создание
+# 3. Туториалы
 # --- ИМПОРТЫ ХЭНДЛЕРОВ ---
 # 1. Общие
-from app.handlers.commands import cmd_start
-
 # --- РЕСУРСЫ ---
-from app.resources.fsm_states.states import CharacterCreation, CharacterLobby, InGame, StartTutorial
-from app.resources.keyboards.callback_data import LobbySelectionCallback, TutorialQuestCallback
-from app.services.helpers_module.dto_helper import FSM_CONTEXT_KEY
 
 TEST_USER_ID = 777
 TEST_CHAT_ID = 777
@@ -64,7 +72,13 @@ def fsm_context():
 @pytest.fixture
 def mock_message(mock_bot):
     msg = AsyncMock(spec=Message)
-    msg.from_user = User(id=TEST_USER_ID, is_bot=False, first_name="Tester", username="test_user", language_code="ru")
+    msg.from_user = User(
+        id=TEST_USER_ID,
+        is_bot=False,
+        first_name="Tester",
+        username="test_user",
+        language_code="ru",
+    )
     msg.chat = Chat(id=TEST_CHAT_ID, type="private")
     msg.text = "/start"
     msg.bot = mock_bot
