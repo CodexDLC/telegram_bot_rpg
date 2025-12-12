@@ -12,6 +12,7 @@ from apps.common.database.session import get_async_session
 class WorldLoaderService:
     """
     Сервис загрузки активной части мира (Active Grid) из SQL в кэш Redis.
+    Архитектура: Iterator -> WorldManager.write_location_meta
     """
 
     def __init__(self, world_manager):
@@ -33,34 +34,56 @@ class WorldLoaderService:
                 log.exception(f"WorldLoaderService | status=failed reason='SQL fetch error' error='{e}'")
                 return 0
 
+            # Создаем карту для быстрого поиска соседей
             node_map: dict[str, WorldGrid] = {f"{node.x}_{node.y}": node for node in active_nodes}
 
             count = 0
             for node in active_nodes:
                 loc_id = f"{node.x}_{node.y}"
+
+                # 1. Расчет выходов
                 exits_data = self._calculate_exits_for_node(node, node_map)
 
                 content_data: dict[str, Any] = node.content or {}
                 flags_data: dict[str, Any] = node.flags or {}
 
+                # 2. Обработка сервисов (Адаптация под List в новой БД)
+                # Если services это список ["svc_portal"], берем первый.
+                service_val = ""
+                if node.services and isinstance(node.services, list) and len(node.services) > 0:
+                    service_val = node.services[0]
+
+                # 3. Подготовка данных для Redis
                 redis_data = {
                     "name": content_data.get("title", f"Узел {loc_id}"),
                     "description": content_data.get("description", "..."),
-                    "exits": json.dumps(exits_data),
-                    "tags": json.dumps(content_data.get("environment_tags", [])),
-                    "service": node.service_object_key or "",
-                    "flags": json.dumps(flags_data),
+                    "exits": json.dumps(exits_data, ensure_ascii=False),  # Важно: False для русского языка
+                    "tags": json.dumps(content_data.get("environment_tags", []), ensure_ascii=False),
+                    "service": service_val,
+                    "flags": json.dumps(flags_data, ensure_ascii=False),
+                    "zone_id": str(node.zone_id),
+                    "terrain": str(node.terrain_type),
                 }
 
+                # 4. Вызов твоего менеджера (как было раньше)
                 await self.world_manager.write_location_meta(loc_id, redis_data)
                 count += 1
 
             log.info(f"WorldLoaderService | status=finished loaded_count={count}")
             return count
 
+    def _get_region_id_from_zone_id(self, zone_id: str) -> str:
+        """
+        Извлекает ID региона из ID зоны.
+        """
+        parts = zone_id.split("_")
+        if len(parts) > 1:
+            return parts[0]
+        return zone_id
+
     def _calculate_exits_for_node(self, node: WorldGrid, node_map: dict[str, WorldGrid]) -> dict[str, Any]:
         """
-        Рассчитывает доступные выходы, учитывая флаг 'restricted_exits' и логику изоляции регионов.
+        Рассчитывает доступные выходы.
         """
         exits = {}
         directions = {
@@ -70,24 +93,29 @@ class WorldLoaderService:
             "east": (1, 0),
         }
 
-        # 1. Получаем флаги текущей клетки
-        # (Гарантируем, что это dict, даже если в БД None)
         my_flags = node.flags if isinstance(node.flags, dict) else {}
         my_has_road = my_flags.get("has_road", False)
         restricted = my_flags.get("restricted_exits", [])
 
-        # 2. Обработка сервисного входа (если есть)
-        if node.service_object_key:
-            key = f"svc:{node.service_object_key}"
-            content = node.content or {}
-            title = content.get("title", "Сервис")
-            exits[key] = {
-                "desc_next_room": f"Войти в {title}",
-                "time_duration": 1.0,
-                "text_button": f"Войти в {title}",
-            }
+        # А. СЕРВИСЫ (Адаптация под список)
+        if node.services and isinstance(node.services, list):
+            for svc in node.services:
+                key = f"svc:{svc}"
+                # Простая логика кнопки
+                btn_name = "Войти"
+                if "portal" in svc:
+                    btn_name = "К Порталу"
+                elif "tavern" in svc:
+                    btn_name = "В Таверну"
 
-        # 3. Перебор соседей
+                exits[key] = {
+                    "desc_next_room": f"Вход в {btn_name}",
+                    "time_duration": 0.0,
+                    "text_button": btn_name,
+                    "type": "service",
+                }
+
+        # Б. НАВИГАЦИЯ
         for dir_name, (dx, dy) in directions.items():
             if dir_name in restricted:
                 continue
@@ -100,28 +128,32 @@ class WorldLoaderService:
                 content = neighbor.content or {}
                 title = content.get("title") or f"Путь в {nx}:{ny}"
 
-                # Флаги соседа
                 neighbor_flags = neighbor.flags if isinstance(neighbor.flags, dict) else {}
                 neighbor_has_road = neighbor_flags.get("has_road", False)
 
-                # 🔥 ЛОГИКА ИЗОЛЯЦИИ РЕГИОНОВ (HARD BORDER) 🔥
-                # Если мы переходим границу Регионов (например, из D4 в D5),
-                # то проход возможен ТОЛЬКО по дороге (has_road=True у обоих).
-                is_sector_crossing = node.sector_id != neighbor.sector_id
+                # Логика изоляции регионов
+                my_region_id = self._get_region_id_from_zone_id(str(node.zone_id))
+                neighbor_region_id = self._get_region_id_from_zone_id(str(neighbor.zone_id))
 
-                if is_sector_crossing and not (my_has_road and neighbor_has_road):
-                    # Дорога прерывается или отсутствует -> Стена.
+                is_region_crossing = my_region_id != neighbor_region_id
+
+                if is_region_crossing and not (my_has_road and neighbor_has_road):
                     continue
 
-                # Расчет времени: по дороге быстрее
-                time_duration = 2.0 if neighbor_has_road else 4.0
+                time_duration = 2.0 if (my_has_road and neighbor_has_road) else 4.0
+
+                # Перевод направлений для кнопки
+                ru_dirs = {"north": "Север", "south": "Юг", "west": "Запад", "east": "Восток"}
+                dir_ru = ru_dirs.get(dir_name, dir_name)
 
                 key = f"nav:{neighbor_id}"
 
                 exits[key] = {
                     "desc_next_room": title,
                     "time_duration": time_duration,
-                    "text_button": f"К {title}",
+                    "text_button": f"На {dir_ru}",
+                    "type": "move",
+                    "direction": dir_name,
                 }
 
         return exits

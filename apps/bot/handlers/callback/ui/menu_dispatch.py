@@ -1,3 +1,4 @@
+# TODO [ARCH-DEBT]: Legacy Handler. Требует рефакторинга для работы через API Gateway (убрать прямые импорты game_core).
 from aiogram import Bot, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext

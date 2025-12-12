@@ -1,3 +1,4 @@
+# TODO [ARCH-DEBT]: Legacy Handler. Требует рефакторинга для работы через API Gateway (убрать прямые импорты game_core).
 import asyncio
 from typing import Any
 

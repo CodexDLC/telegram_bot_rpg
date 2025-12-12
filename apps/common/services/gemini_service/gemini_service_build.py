@@ -4,8 +4,8 @@ from typing import Any
 from google.genai import types
 from loguru import logger as log
 
-from apps.game_core.resources.llm_data.json_sheme import DUNGEON_JSON_SCHEMA_PROMPT
-from apps.game_core.resources.llm_data.mode_preset import ChatMode
+from apps.common.resources.llm_data.json_sheme import DUNGEON_JSON_SCHEMA_PROMPT
+from apps.common.resources.llm_data.mode_preset import ChatMode
 
 GeminiContents = str | list[types.ContentDict]
 GeminiBuilder = Callable[..., tuple[GeminiContents, str]]

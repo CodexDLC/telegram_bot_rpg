@@ -23,6 +23,8 @@ from apps.common.schemas_dto import (
 )
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
+
+# TODO [ARCH-DEBT]: UI не должен считать статы. Создать фасадный метод в CombatService, возвращающий DTO с MaxHP.
 from apps.game_core.game_service.combat.stats_calculator import StatsCalculator
 
 
