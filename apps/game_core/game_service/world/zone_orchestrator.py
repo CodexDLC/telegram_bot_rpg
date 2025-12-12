@@ -1,5 +1,6 @@
 # app/services/game_service/world/zone_orchestrator.py
 import json
+import math
 
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
@@ -10,10 +11,13 @@ from apps.game_core.game_service.world.content_gen_service import (
 )
 from apps.game_core.game_service.world.threat_service import ThreatService
 from apps.game_core.resources.game_data.world_config import (
+    ANCHORS,
+    HUB_CENTER,
+    REGION_ROWS,
+    REGION_SIZE,
     ROAD_TAGS,
-    SECTOR_ROWS,
-    SECTOR_SIZE,
     VISUAL_DOMINANTS,
+    ZONE_SIZE,
 )
 
 
@@ -26,27 +30,28 @@ class ZoneOrchestrator:
     def __init__(self, repo: IWorldRepo, content_service: ContentGenerationService):
         self.repo = repo
         self.content_service = content_service
-        self.chunk_size = 5  # Размер стороны квадрата
+        self.chunk_size = 5
 
-    def _get_sector_id_from_coords(self, x: int, y: int) -> str:
-        """Вычисляет ID сектора (например, 'D4') по глобальным координатам."""
-        col = (x // SECTOR_SIZE) + 1
-        row_idx = y // SECTOR_SIZE
-        row_idx = min(row_idx, len(SECTOR_ROWS) - 1)
-        row_char = SECTOR_ROWS[row_idx]
-        return f"{row_char}{col}"
+    def _get_zone_id(self, x: int, y: int) -> str:
+        """Вычисляет ID зоны по координатам."""
+        col = (x // REGION_SIZE) + 1
+        row_idx = min(y // REGION_SIZE, len(REGION_ROWS) - 1)
+        region_id = f"{REGION_ROWS[row_idx]}{col}"
+
+        local_x = x % REGION_SIZE
+        local_y = y % REGION_SIZE
+        zone_x = local_x // ZONE_SIZE
+        zone_y = local_y // ZONE_SIZE
+
+        return f"{region_id}_{zone_x}_{zone_y}"
 
     def _get_structural_tags(self, x: int, y: int, start_x: int, start_y: int, main_biome: str) -> list[str]:
-        """
-        Добавляет теги, описывающие положение ячейки внутри чанка (опушка, центр и т.д.).
-        """
         structural_tags = []
         local_x = x - start_x
         local_y = y - start_y
         center = self.chunk_size // 2
 
         is_edge = local_x == 0 or local_x == self.chunk_size - 1 or local_y == 0 or local_y == self.chunk_size - 1
-
         is_center = local_x == center and local_y == center
 
         if is_center:
@@ -59,9 +64,6 @@ class ZoneOrchestrator:
         return structural_tags
 
     async def generate_chunk(self, center_x: int, center_y: int) -> bool:
-        """
-        Генерирует или обновляет квадрат 5x5 вокруг центральной точки.
-        """
         log.info(f"ZoneOrchestrator | start_chunk center={center_x}:{center_y}")
 
         half = self.chunk_size // 2
@@ -92,7 +94,12 @@ class ZoneOrchestrator:
                 influence_tags = ThreatService.get_narrative_tags(x, y)
                 narrative_tags = list(set(base_tags + structural_tags + influence_tags))
 
-                context_hints = self._scan_surroundings(x, y, node_map)
+                # --- CONTEXT SCANNING ---
+                local_hints = self._scan_surroundings(x, y, node_map)
+                global_hints = self._scan_global_landmarks(x, y)
+                context_hints = local_hints + global_hints
+                # --- END CONTEXT ---
+
                 has_road_connection = self._check_incoming_roads(x, y, node_map)
                 if has_road_connection and "road" not in narrative_tags:
                     narrative_tags.append("road")
@@ -135,11 +142,18 @@ class ZoneOrchestrator:
 
                 node_to_update = node_map.get((x, y))
                 existing_flags = node_to_update.flags if node_to_update else {}
+                terrain_type = node_to_update.terrain_type if node_to_update else "flat"
 
-                sector_id = self._get_sector_id_from_coords(x, y)
+                zone_id = self._get_zone_id(x, y)
 
                 await self.repo.create_or_update_node(
-                    x=x, y=y, sector_id=sector_id, is_active=True, content=final_content, flags=existing_flags
+                    x=x,
+                    y=y,
+                    zone_id=zone_id,
+                    terrain_type=terrain_type,
+                    is_active=True,
+                    content=final_content,
+                    flags=existing_flags,
                 )
             except (ValueError, SQLAlchemyError) as e:
                 log.error(f"ZoneOrchestrator | save_error id={loc_id} error={e}")
@@ -154,7 +168,6 @@ class ZoneOrchestrator:
         return True
 
     def _scan_surroundings(self, x: int, y: int, node_map: dict) -> list[str]:
-        """Смотрит на соседей и ищет визуальные доминанты."""
         hints = []
         directions = [
             (0, -1, "севере"),
@@ -186,6 +199,46 @@ class ZoneOrchestrator:
                     if tag in n_tags:
                         hints.append(f"На {side_name} виднеется {tag}")
                         break
+        return hints
+
+    def _scan_global_landmarks(self, x: int, y: int) -> list[str]:
+        """
+        Проверяет видимость глобальных ориентиров (Хаб, Якоря) и возвращает подсказки.
+        """
+        hints = []
+        landmarks = [
+            {"name": "Шпиль Хаба", "x": HUB_CENTER["x"], "y": HUB_CENTER["y"]},
+            {"name": "Ледяной Пик", "x": ANCHORS[0]["x"], "y": ANCHORS[0]["y"]},
+            {"name": "Дымящийся Вулкан", "x": ANCHORS[1]["x"], "y": ANCHORS[1]["y"]},
+            {"name": "Гравитационная Аномалия", "x": ANCHORS[2]["x"], "y": ANCHORS[2]["y"]},
+            {"name": "Живые Джунгли", "x": ANCHORS[3]["x"], "y": ANCHORS[3]["y"]},
+        ]
+
+        for landmark in landmarks:
+            lm_x_val = landmark.get("x")
+            lm_y_val = landmark.get("y")
+
+            if not isinstance(lm_x_val, (int, float)) or not isinstance(lm_y_val, (int, float)):
+                continue
+
+            lm_x = int(lm_x_val)
+            lm_y = int(lm_y_val)
+            dist = math.sqrt((x - lm_x) ** 2 + (y - lm_y) ** 2)
+
+            if dist < 35:  # Порог видимости
+                dx = lm_x - x
+                dy = lm_y - y
+
+                direction = ("востоке" if dx > 0 else "западе") if abs(dx) > abs(dy) else "юге" if dy > 0 else "севере"
+
+                if dist < 5:
+                    proximity = "совсем рядом"
+                elif dist < 15:
+                    proximity = "неподалеку"
+                else:
+                    proximity = "вдалеке"
+
+                hints.append(f"{proximity.capitalize()} на {direction} виднеется {landmark['name']}.")
 
         return hints
 

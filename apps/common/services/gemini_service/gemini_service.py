@@ -6,13 +6,13 @@ from google.genai import errors, types
 from loguru import logger as log
 
 from apps.common.core.config import GEMINI_TOKEN
+from apps.common.resources.llm_data.mode_preset import MODE_PRESETS, ChatMode
 from apps.common.services.gemini_service.gemini_service_build import (
     BUILDERS_GEMINI as BUILDERS,
 )
 from apps.common.services.gemini_service.gemini_service_build import (
     build_simple_gemini,
 )
-from apps.game_core.resources.llm_data.mode_preset import MODE_PRESETS, ChatMode
 
 # 🔥 FIX 1: Точные названия моделей. SDK требует полные ID.
 GEMINI_MODEL_ALIASES = {

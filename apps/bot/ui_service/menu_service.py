@@ -10,6 +10,8 @@ from apps.bot.resources.texts.menu_data.buttons_text import ButtonsTextData
 from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.common.services.core_service.manager.account_manager import AccountManager
+
+# TODO [ARCH-DEBT]: Убрать прямой импорт Core. Регенерацию перенести в Cron/Background Worker.
 from apps.game_core.game_service.game_sync_service import GameSyncService
 
 

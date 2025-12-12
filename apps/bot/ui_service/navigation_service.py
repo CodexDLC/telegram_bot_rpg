@@ -11,6 +11,9 @@ from apps.bot.ui_service.helpers_ui.formatters.navigation_formatter import Navig
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
 from apps.common.services.core_service.manager.world_manager import WorldManager
+
+# TODO [ARCH-DEBT]: Разделить GameWorldService на Reader (для UI) и Logic (для Core).
+# UI не должен импортировать логику мира напрямую.
 from apps.game_core.game_service.world.game_world_service import GameWorldService
 
 # Точка спавна по умолчанию (Safe Zone)

@@ -1,3 +1,5 @@
+# app/common/database/model_orm/world.py
+
 from __future__ import annotations
 
 from sqlalchemy import JSON, Boolean, ForeignKey, Index, Integer, String
@@ -6,78 +8,85 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from apps.common.database.model_orm.base import Base, TimestampMixin
 
 
+# ----------------------------------------------------------------------
+# УРОВЕНЬ 1: РЕГИОН (15x15)
+# Контейнер для изоляции и глобальных эффектов.
+# ----------------------------------------------------------------------
 class WorldRegion(Base):
-    """
-    Макро-регион мира (15x15 клеток).
-    """
-
     __tablename__ = "world_regions"
 
-    id: Mapped[str] = mapped_column(String(10), primary_key=True, comment="Код региона (например, 'D4').")
+    # ID региона, например "D4".
+    id: Mapped[str] = mapped_column(String(10), primary_key=True)
 
-    # ВОТ ЭТО ГЛАВНЫЙ ТИП РЕГИОНА (название палитры)
-    biome_id: Mapped[str] = mapped_column(
-        String(50), nullable=False, comment="ID биома (например, 'wasteland', 'hub')."
-    )
+    # Глобальные теги (погода, атмосфера, магия).
+    # Влияют на описание всех зон внутри.
+    climate_tags: Mapped[list[str]] = mapped_column(JSON, default=list)
 
-    # Глобальные влияния (от Якорей)
-    climate_tags: Mapped[list[str]] = mapped_column(JSON, default=list, comment="Глобальные теги региона.")
-
-    # КАРТА ПОД-ЗОН (3x3)
-    # Ключ: "x_y" (0..2), Значение: "terrain_id" (конкретный тип из палитры, например 'ruins_residential')
-    sector_map: Mapped[dict] = mapped_column(JSON, default=dict, comment="Карта под-зон 3x3.")
-
-    nodes: Mapped[list[WorldGrid]] = relationship(back_populates="region")
+    # Связь вниз: Один Регион -> Много Зон
+    zones: Mapped[list[WorldZone]] = relationship(back_populates="region")
 
 
-class WorldGrid(Base, TimestampMixin):
-    """
-    Физическая матрица мира (105x105).
-    """
+# ----------------------------------------------------------------------
+# УРОВЕНЬ 2: ЗОНА (5x5)
+# Владелец Биома. Определяет палитру.
+# ----------------------------------------------------------------------
+class WorldZone(Base):
+    __tablename__ = "world_zones"
 
-    __tablename__ = "world_grid"
+    # Уникальный ID зоны, например "D4_1_1" (Region_X_Y внутри региона).
+    id: Mapped[str] = mapped_column(String(20), primary_key=True)
 
-    # Составной первичный ключ по координатам
-    x: Mapped[int] = mapped_column(Integer, primary_key=True)
-    y: Mapped[int] = mapped_column(Integer, primary_key=True)
-
-    # Ссылка на Регион (бывший сектор)
-    sector_id: Mapped[str] = mapped_column(
+    # Ссылка на родителя (Регион)
+    region_id: Mapped[str] = mapped_column(
         ForeignKey("world_regions.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
-    # --- STATUS FLAGS (Главный рубильник) ---
-    is_active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        index=True,
-        comment="True = Локация доступна игрокам и грузится в Redis. False = Туман войны.",
-    )
-
-    # --- LOGIC & MECHANICS (Источник Истины) ---
-    flags: Mapped[dict] = mapped_column(
-        JSON,
-        default=dict,
-        comment="Механика: {'is_safe_zone': true, 'has_road': true, 'biome_tags': ['forest', 'road'], 'threat_tier': 2}.",
-    )
-
-    # --- NARRATIVE & CONTENT (Для Игрока) ---
-    content: Mapped[dict | None] = mapped_column(
-        JSON,
-        nullable=True,
-        comment="Нарратив: {'title': '...', 'description': '...', 'environment_tags': [...]}. Заполняется ЛЛМ или скриптом.",
-    )
-
-    # Ссылка на Сервис (если это вход в Данж или Арену)
-    service_object_key: Mapped[str | None] = mapped_column(
-        String(100), nullable=True, comment="Ссылка на сервис (напр. 'svc_arena_main')."
-    )
+    # БИОМ (Главный ключ словаря конфига)
+    # Пример: "forest", "wasteland", "swamp"
+    # Говорит генератору, какую палитру использовать для нод.
+    biome_id: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Связи
-    region: Mapped[WorldRegion] = relationship(back_populates="nodes")
+    region: Mapped[WorldRegion] = relationship(back_populates="zones")
+    nodes: Mapped[list[WorldGrid]] = relationship(back_populates="zone")
 
-    # Индексы для оптимизации (например, поиск всех активных клеток для загрузки)
+
+# ----------------------------------------------------------------------
+# УРОВЕНЬ 3: НОДА / КЛЕТКА (1x1)
+# Конкретная физическая точка мира.
+# ----------------------------------------------------------------------
+class WorldGrid(Base, TimestampMixin):
+    __tablename__ = "world_grid"
+
+    # Координаты (Primary Key)
+    x: Mapped[int] = mapped_column(Integer, primary_key=True)
+    y: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Ссылка на Зону (5x5)
+    zone_id: Mapped[str] = mapped_column(ForeignKey("world_zones.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # 1. ТИП МЕСТНОСТИ (Sub-Type / Terrain Key)
+    terrain_type: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    # 2. СПИСОК СЕРВИСОВ
+    # Хранит список ключей сервисов, доступных в этой клетке.
+    # Например: ["svc_arena_main", "svc_blacksmith_repair"]
+    services: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+
+    # 3. НАРРАТИВ (Генерация LLM)
+    content: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, comment="{'title': '...', 'description': '...', 'tags': [...]}"
+    )
+
+    # 4. ТЕХНИЧЕСКИЕ ФЛАГИ
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    flags: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    # Связи
+    zone: Mapped[WorldZone] = relationship(back_populates="nodes")
+
+    # Индекс для ускорения выборки активных клеток при старте сервера
     __table_args__ = (Index("idx_world_active_path", "x", "y", "is_active"),)
 
     def __repr__(self) -> str:
-        return f"<Node ({self.x}, {self.y}) Active={self.is_active}>"
+        return f"<Node ({self.x}, {self.y}) Type={self.terrain_type}>"
