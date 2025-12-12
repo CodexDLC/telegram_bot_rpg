@@ -1387,37 +1387,37 @@ class AnchorData(TypedDict):
 
 
 ANCHORS: list[AnchorData] = [
-    # --- СЕВЕР (A4): Лед, Стазис ---
+    # --- СЕВЕР (A1): Лед, Стазис (Левый Верхний Угол) ---
     {
         "x": 7,
-        "y": 52,
+        "y": 7,
         "power": 1.2,
         "falloff": 0.08,
         "type": "north_prime",
         "narrative_tags": ["frozen", "ice_crystals", "ancient_tech", "stasis"],
     },
-    # --- ЮГ (G4): Огонь, Пепел ---
+    # --- ЮГ (G7): Огонь, Пепел (Правый Нижний Угол) ---
     {
         "x": 97,
-        "y": 52,
+        "y": 97,
         "power": 1.2,
         "falloff": 0.08,
         "type": "south_prime",
         "narrative_tags": ["magma", "ash", "scorched_earth", "smoke"],
     },
-    # --- ЗАПАД (D1): Гравитация, Шторм ---
+    # --- ЗАПАД (G1): Гравитация, Шторм (Левый Нижний Угол) ---
     {
-        "x": 52,
-        "y": 7,
+        "x": 7,
+        "y": 97,
         "power": 1.2,
         "falloff": 0.08,
         "type": "west_prime",
         "narrative_tags": ["zero_gravity", "floating_rocks", "storm", "lightning"],
     },
-    # --- ВОСТОК (D7): Биомасса, Яд ---
+    # --- ВОСТОК (A7): Биомасса, Яд (Правый Верхний Угол) ---
     {
-        "x": 52,
-        "y": 97,
+        "x": 97,
+        "y": 7,
         "power": 1.2,
         "falloff": 0.08,
         "type": "east_prime",
