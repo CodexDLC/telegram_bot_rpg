@@ -4,44 +4,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.common.database.repositories import get_leaderboard_repo
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.game_core.game_service.stats_aggregation_service import StatsAggregationService
-
-GS_WEIGHTS = {
-    "strength": 2.0,
-    "agility": 2.0,
-    "intelligence": 2.0,
-    "wisdom": 2.0,
-    "endurance": 2.0,
-    "men": 2.0,
-    "perception": 1.0,
-    "luck": 1.0,
-    "charisma": 1.0,
-    "hp_max": 0.2,
-    "energy_max": 0.2,
-    "physical_damage_bonus": 200.0,
-    "magical_damage_bonus": 200.0,
-    "physical_crit_chance": 200.0,
-    "magical_crit_chance": 200.0,
-    "dodge_chance": 200.0,
-}
+from apps.game_core.resources.game_data.balance.gs_weights import GS_DIVISORS
 
 
 class MatchmakingService:
     """
     Сервис для расчета и управления Gear Score (GS) персонажей.
-
-    Отвечает за вычисление GS на основе агрегированных характеристик,
-    сохранение его в Redis для быстрого доступа и в SQL Leaderboard
-    для долгосрочного хранения и поиска.
     """
 
     def __init__(self, session: AsyncSession, account_manager: AccountManager):
-        """
-        Инициализирует MatchmakingService.
-
-        Args:
-            session: Асинхронная сессия базы данных.
-            account_manager: Менеджер аккаунтов.
-        """
         self.session = session
         self.aggregator = StatsAggregationService(session)
         self.lb_repo = get_leaderboard_repo(session)
@@ -50,16 +21,7 @@ class MatchmakingService:
 
     async def calculate_raw_gs(self, char_id: int) -> int:
         """
-        Рассчитывает "сырой" Gear Score (GS) персонажа на основе его характеристик.
-
-        Использует веса, определенные в `GS_WEIGHTS`, для оценки вклада каждой
-        характеристики в общий GS.
-
-        Args:
-            char_id: Уникальный идентификатор персонажа.
-
-        Returns:
-            Целочисленное значение Gear Score, не менее 10.
+        Рассчитывает "сырой" Gear Score (GS) персонажа на основе его модификаторов.
         """
         total_data = await self.aggregator.get_character_total_stats(char_id)
         if not total_data:
@@ -67,21 +29,20 @@ class MatchmakingService:
             return 10
 
         score = 0.0
-        all_stats: dict[str, float] = {}
-        for category in ["stats", "modifiers"]:
-            for key, info in total_data.get(category, {}).items():
-                all_stats[key] = float(info.get("total", 0))
+        modifiers = total_data.get("modifiers", {})
 
-        for key, val in all_stats.items():
-            weight = GS_WEIGHTS.get(key, 0.0)
-            if weight == 0.0:
-                if "damage" in key:
-                    weight = 1.0
-                elif "chance" in key:
-                    weight = 100.0
-                elif "resistance" in key:
-                    weight = 50.0
-            score += val * weight
+        for key, info in modifiers.items():
+            stat_value = float(info.get("total", 0))
+            if stat_value == 0:
+                continue
+
+            divisor = GS_DIVISORS.get(key)
+            if not divisor or divisor == 0.0:
+                continue
+
+            # Новая, упрощенная формула: Значение / Делитель
+            stat_gs = stat_value / divisor
+            score += stat_gs
 
         log.debug(f"Matchmaking | action=calculate_raw_gs char_id={char_id} raw_gs={int(score)}")
         return max(10, int(score))
@@ -89,12 +50,6 @@ class MatchmakingService:
     async def refresh_gear_score(self, char_id: int) -> int:
         """
         Обновляет Gear Score персонажа, сохраняя его в Redis и SQL Leaderboard.
-
-        Args:
-            char_id: Уникальный идентификатор персонажа.
-
-        Returns:
-            Актуальное значение Gear Score персонажа.
         """
         gs = await self.calculate_raw_gs(char_id)
         await self.account_manager.update_account_fields(char_id, {"gear_score": gs})
@@ -105,14 +60,6 @@ class MatchmakingService:
     async def get_cached_gs(self, char_id: int) -> int:
         """
         Получает Gear Score персонажа из кэша Redis.
-
-        Если GS отсутствует в кэше, он будет рассчитан и обновлен.
-
-        Args:
-            char_id: Уникальный идентификатор персонажа.
-
-        Returns:
-            Актуальное значение Gear Score персонажа.
         """
         val = await self.account_manager.get_account_field(char_id, "gear_score")
         if val:

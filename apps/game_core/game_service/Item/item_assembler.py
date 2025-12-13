@@ -29,7 +29,6 @@ class ItemAssembler:
         base_id: str,
         target_tier: int,
         bundle_id: str | None = None,
-        force_material_id: str | None = None,
     ) -> tuple[str, str, str, dict[str, Any]]:
         """
         Создает экипировку (Оружие, Броня, Аксессуары).
@@ -66,10 +65,8 @@ class ItemAssembler:
 
         final_bonuses = base_data.get("implicit_bonuses", {}).copy()
 
-        # --- Новая, элегантная логика для поясов ---
         if base_id == "belt":
-            # Формула: 1 базовый слот + количество слотов от материала
-            base_slots = final_bonuses.get("quick_slot_capacity", 1.0)  # Берем базу из implicit_bonuses
+            base_slots = final_bonuses.get("quick_slot_capacity", 1.0)
             material_slots = material_data.get("slots", 0)
             total_slots = base_slots + material_slots
             final_bonuses["quick_slot_capacity"] = float(total_slots)
@@ -151,7 +148,7 @@ class ItemAssembler:
                 current_bonus = data_payload["bonuses"].get(target_field, 0.0)
                 data_payload["bonuses"][target_field] = current_bonus + final_value
 
-        data_payload["components"]["essence_id"] = ", ".join(all_bundle_ids)
+        data_payload["components"]["essence_id"] = all_bundle_ids
         suffix = " ".join([f"<{b['id'].capitalize()}>" for b in bundles_to_apply])
         data_payload["name"] += f" {suffix}"
 

@@ -1,11 +1,11 @@
 import random
-from typing import Literal, cast
 
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.database.repositories import get_inventory_repo, get_wallet_repo
 from apps.common.schemas_dto import ItemType
+from apps.game_core.game_service.inventory.inventory_logic_helper import InventoryLogicHelpers
 from apps.game_core.resources.game_data.items import get_bundle_by_id
 
 # Настройки экономики
@@ -43,8 +43,10 @@ class DismantleService:
 
         # Расчет эссенций
         if item.data.components and item.data.components.essence_id:
-            # Обрабатываем случай, когда несколько бандлов
-            essence_ids = [eid.strip() for eid in item.data.components.essence_id.split(",")]
+            essence_ids = item.data.components.essence_id
+            if isinstance(essence_ids, str):  # Обратная совместимость, если в БД еще остались строки
+                essence_ids = [eid.strip() for eid in essence_ids.split(",")]
+
             for essence_id in essence_ids:
                 bundle_data = get_bundle_by_id(essence_id)
                 if bundle_data and random.random() < ESSENCE_EXTRACT_CHANCE:
@@ -60,16 +62,7 @@ class DismantleService:
         # Транзакция
         if await self.inventory_repo.delete_item(item_id):
             for key, amount in rewards.items():
-                group: Literal["currency", "resources", "components"]
-                if "currency_" in key:
-                    group = "currency"
-                elif "res_" in key:
-                    group = "resources"
-                else:
-                    group = "components"
-
-                # Явное приведение типа для mypy
-                wallet_group = cast(Literal["currency", "resources", "components"], group)
+                wallet_group = InventoryLogicHelpers.get_resource_group(key)
                 await self.wallet_repo.add_resource(char_id, wallet_group, key, amount)
 
             log.info(f"Dismantle | User {char_id} -> {rewards}")
