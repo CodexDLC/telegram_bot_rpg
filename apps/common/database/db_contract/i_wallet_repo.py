@@ -11,7 +11,7 @@ class IWalletRepo(ABC):
         pass
 
     @abstractmethod
-    async def get_wallet(self, char_id: int):
+    async def get_wallet(self, char_id: int) -> "ResourceWallet":
         pass
 
     @abstractmethod
