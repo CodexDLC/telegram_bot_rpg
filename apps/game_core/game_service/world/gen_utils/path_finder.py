@@ -2,7 +2,7 @@ import heapq
 import math
 import random
 
-from apps.game_core.resources.game_data.world_config import (
+from apps.game_core.resources.game_data.graf_data_world.world_config import (
     BIOME_DEFINITIONS,
     WORLD_HEIGHT,
     WORLD_WIDTH,

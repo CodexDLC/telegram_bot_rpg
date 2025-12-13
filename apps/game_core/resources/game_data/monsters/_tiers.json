@@ -1,0 +1,35 @@
+{
+  "_comment": "Множители статов монстров в зависимости от Threat Tier (0-7).",
+  "0": {
+    "multiplier": 0.5,
+    "description": "Safe Zone / Tutorial. Weakened enemies."
+  },
+  "1": {
+    "multiplier": 1.0,
+    "description": "Baseline. Standard difficulty."
+  },
+  "2": {
+    "multiplier": 1.5,
+    "description": "Hard. Moderate challenge for prepared players."
+  },
+  "3": {
+    "multiplier": 2.2,
+    "description": "Very Hard. Requires good gear."
+  },
+  "4": {
+    "multiplier": 3.0,
+    "description": "Extreme. Group content or optimized builds."
+  },
+  "5": {
+    "multiplier": 4.5,
+    "description": "Nightmare. Epicenter of anomalies."
+  },
+  "6": {
+    "multiplier": 6.0,
+    "description": "Hell. Near Anchor presence."
+  },
+  "7": {
+    "multiplier": 8.0,
+    "description": "Absolute. Raid bosses and Anchor Guardians."
+  }
+}

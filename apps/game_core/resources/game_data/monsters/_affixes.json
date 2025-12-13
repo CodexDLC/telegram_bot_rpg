@@ -1,0 +1,32 @@
+{
+  "ice": {
+    "visual_prefix": "Ice-Infused",
+    "narrative_flavor": "covered in frost, exhaling cold vapor",
+    "added_stats": {
+      "water_resistance": 0.5,
+      "fire_resistance": -0.2,
+      "water_damage_bonus": 0.2
+    },
+    "inject_skills": ["chilling_touch"]
+  },
+  "fire": {
+    "visual_prefix": "Flame-Touched",
+    "narrative_flavor": "veins glowing like magma, smell of sulfur",
+    "added_stats": {
+      "fire_resistance": 0.5,
+      "water_resistance": -0.2,
+      "fire_damage_bonus": 0.2
+    },
+    "inject_skills": ["heat_wave"]
+  },
+  "void": {
+    "visual_prefix": "Void-Corrupted",
+    "narrative_flavor": "shifting geometry, purple aura, whispers in the air",
+    "added_stats": {
+      "light_resistance": -0.3,
+      "dark_resistance": 0.5,
+      "dark_damage_bonus": 0.3
+    },
+    "inject_skills": ["void_step"]
+  }
+}

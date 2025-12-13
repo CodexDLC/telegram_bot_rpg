@@ -10,7 +10,7 @@ from apps.game_core.game_service.world.content_gen_service import (
     ContentGenerationService,
 )
 from apps.game_core.game_service.world.threat_service import ThreatService
-from apps.game_core.resources.game_data.world_config import (
+from apps.game_core.resources.game_data.graf_data_world.world_config import (
     ANCHORS,
     HUB_CENTER,
     REGION_ROWS,
