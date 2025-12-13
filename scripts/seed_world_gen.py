@@ -2,7 +2,7 @@ import asyncio
 import os
 import random
 import sys
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 from loguru import logger as log
 from sqlalchemy import text
@@ -14,7 +14,7 @@ from apps.game_core.game_service.world.zone_orchestrator import ZoneOrchestrator
 from apps.game_core.resources.game_data.graf_data_world.start_vilage import (
     STATIC_LOCATIONS,
 )
-from apps.game_core.resources.game_data.world_config import TerrainMeta
+from apps.game_core.resources.game_data.graf_data_world.world_config import TerrainMeta
 
 # ==============================================================================
 # НАСТРОЙКИ ОКРУЖЕНИЯ
@@ -51,7 +51,7 @@ async def seed_world_final(mode: str = "test"):
     from apps.common.database.session import async_engine, async_session_factory
     from apps.game_core.game_service.world.content_gen_service import ContentGenerationService
     from apps.game_core.game_service.world.threat_service import ThreatService
-    from apps.game_core.resources.game_data.world_config import (
+    from apps.game_core.resources.game_data.graf_data_world.world_config import (
         ANCHORS,
         BIOME_DEFINITIONS,
         HUB_CENTER,
@@ -131,7 +131,7 @@ async def seed_world_final(mode: str = "test"):
                 for wy in range(WORLD_HEIGHT):
                     z_id = coord_to_zone.get((wx, wy), "")
                     biome_id = zone_biome_map.get(z_id, "wasteland")
-                    biome_config = BIOME_DEFINITIONS.get(biome_id, {})
+                    biome_config: dict[str, Any] = BIOME_DEFINITIONS.get(biome_id, {})
 
                     # Фон
                     backgrounds = [k for k, v in biome_config.items() if v.get("role") == "background"]
@@ -143,7 +143,7 @@ async def seed_world_final(mode: str = "test"):
                     except IndexError:
                         t_key = "flat"
 
-                    t_config: TerrainMeta = biome_config.get(t_key) or {
+                    t_config_raw = biome_config.get(t_key) or {
                         "spawn_weight": 0,
                         "travel_cost": 1.0,
                         "is_passable": True,
@@ -152,6 +152,7 @@ async def seed_world_final(mode: str = "test"):
                         "role": "background",
                         "narrative_hint": "",
                     }
+                    t_config = cast(TerrainMeta, t_config_raw)
                     threat_val = ThreatService.calculate_threat(wx, wy)
 
                     influence_tags = ThreatService.get_narrative_tags(wx, wy)
@@ -192,13 +193,13 @@ async def seed_world_final(mode: str = "test"):
                     # --- СТАТИКА (ЦИТАДЕЛЬ) ---
                     if (wx, wy) in STATIC_LOCATIONS:
                         static_data = STATIC_LOCATIONS[(wx, wy)]
-                        content: dict[str, Any] = static_data["content"].copy()
+                        content = dict(static_data["content"]).copy()
                         if "environment_tags" not in content:
                             content["environment_tags"] = []
                         cell.update(
                             {
                                 "terrain_key": "static_structure",
-                                "tags": content["environment_tags"],
+                                "tags": cast(list[str], content["environment_tags"]),
                                 "flags": static_data["flags"],
                                 "content": content,
                                 "services": static_data.get("services", []),
