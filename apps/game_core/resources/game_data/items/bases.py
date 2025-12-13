@@ -1,81 +1,43 @@
-from typing import TypedDict
+"""
+ГЛОБАЛЬНЫЙ РЕЕСТР БАЗОВЫХ ПРЕДМЕТОВ
+===================================
+
+Этот модуль собирает все категории предметов ("болванок") в единый словарь BASES_DB.
+
+Подробные руководства по заполнению находятся внутри соответствующих модулей:
+- Оружие:       apps/game_core/resources/game_data/items/base_item/weapons.py
+- Броня:        apps/game_core/resources/game_data/items/base_item/armor.py
+- Одежда:       apps/game_core/resources/game_data/items/base_item/garment.py
+- Аксессуары:   apps/game_core/resources/game_data/items/base_item/accessories.py
+"""
+
+from typing import NotRequired, TypedDict, cast
+
+from .base_item.accessories import ACCESSORIES_DB
+from .base_item.armor import ARMOR_DB
+from .base_item.garment import GARMENT_DB
+from .base_item.weapons import WEAPONS_DB
 
 
-# Описываем строгую структуру словаря, чтобы IDE помогала
 class BaseItemData(TypedDict):
     id: str
-    name_ru: str  # Название для "Мусорной" версии (Tier 0)
-    slot: str  # main_hand, off_hand, body, head, legs, etc.
-    damage_type: str | None  # physical, magical (None если это броня)
-    defense_type: str | None  # physical, magical (None если это оружие)
-    allowed_materials: list[str]  # Ссылка на категории материалов ('ingots', 'leathers')
-    base_power: int  # Фундамент силы (Урон или Защита) для множителя x1.0
-    base_durability: int  # Фундамент прочности
-    narrative_tags: list[str]  # Теги "Формы" для LLM (без качественных прилагательных)
+    name_ru: str
+    slot: str
+    extra_slots: NotRequired[list[str]]
+    damage_type: str | None
+    defense_type: str | None
+    allowed_materials: list[str]
+    base_power: int
+    base_durability: int
+    damage_spread: float
+    implicit_bonuses: dict[str, float]
+    narrative_tags: list[str]
 
 
-# Основная база данных
-# Структура: Категория -> ID Базы -> Данные
-BASES_DB: dict[str, dict[str, BaseItemData]] = {
-    # === ОРУЖИЕ БЛИЖНЕГО БОЯ ===
-    "melee_weapons": {
-        "sword": {
-            "id": "sword",
-            "name_ru": "Ржавый меч",
-            "slot": "main_hand",
-            "damage_type": "physical",
-            "defense_type": None,
-            "allowed_materials": ["ingots"],  # Только металлы
-            "base_power": 10,  # 10 урона на Tier 1
-            "base_durability": 50,
-            "narrative_tags": ["sword", "blade", "1h", "melee"],
-        },
-        "axe": {
-            "id": "axe",
-            "name_ru": "Тупой топор",
-            "slot": "main_hand",
-            "damage_type": "physical",
-            "defense_type": None,
-            "allowed_materials": ["ingots"],
-            "base_power": 12,  # Чуть мощнее меча
-            "base_durability": 45,  # Но ломается быстрее
-            "narrative_tags": ["axe", "chop", "1h", "heavy"],
-        },
-        "club": {
-            "id": "club",
-            "name_ru": "Дубина",
-            "slot": "main_hand",
-            "damage_type": "physical",
-            "defense_type": None,
-            "allowed_materials": ["woods", "ingots"],  # Дерево или Металл
-            "base_power": 15,  # Высокий разовый урон
-            "base_durability": 40,
-            "narrative_tags": ["club", "blunt", "1h", "smash"],
-        },
-    },
-    # === БРОНЯ ТЕЛА ===
-    "body_armor": {
-        "shirt": {
-            "id": "shirt",
-            "name_ru": "Тряпье",
-            "slot": "body",
-            "damage_type": None,
-            "defense_type": "physical",
-            "allowed_materials": ["cloths"],  # Только ткани
-            "base_power": 2,  # 2 защиты на Tier 1
-            "base_durability": 20,
-            "narrative_tags": ["clothing", "shirt", "light"],
-        },
-        "plate_chest": {
-            "id": "plate_chest",
-            "name_ru": "Гнутая кираса",
-            "slot": "body",
-            "damage_type": None,
-            "defense_type": "physical",
-            "allowed_materials": ["ingots"],  # Только металл
-            "base_power": 15,  # Высокая защита
-            "base_durability": 100,
-            "narrative_tags": ["plate", "armor", "heavy", "metal"],
-        },
-    },
-}
+# Сборка единой базы данных из модулей
+BASES_DB: dict[str, dict[str, BaseItemData]] = (
+    cast(dict[str, dict[str, BaseItemData]], WEAPONS_DB)
+    | cast(dict[str, dict[str, BaseItemData]], ARMOR_DB)
+    | cast(dict[str, dict[str, BaseItemData]], GARMENT_DB)
+    | cast(dict[str, dict[str, BaseItemData]], ACCESSORIES_DB)
+)

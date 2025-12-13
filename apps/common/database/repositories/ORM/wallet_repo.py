@@ -9,179 +9,100 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.common.database.db_contract.i_wallet_repo import IWalletRepo
 from apps.common.database.model_orm.inventory import ResourceWallet
 
-ResourceTypeGroup = Literal["currency", "ores", "leathers", "fabrics", "organics", "parts"]
+# Три столпа
+ResourceTypeGroup = Literal["currency", "resources", "components"]
 
 
 class WalletRepoORM(IWalletRepo):
     """
-    ORM-реализация репозитория для управления Кошельком Ресурсов (`ResourceWallet`).
-
-    Предоставляет методы для создания, получения, добавления и удаления
-    ресурсов персонажа, используя SQLAlchemy ORM.
+    ORM-реализация репозитория для управления Кошельком Ресурсов.
     """
 
     def __init__(self, session: AsyncSession):
-        """
-        Инициализирует WalletRepoORM.
-
-        Args:
-            session: Асинхронная сессия SQLAlchemy.
-        """
         self.session = session
-        log.debug(f"WalletRepoORM | status=initialized session={session}")
 
     async def ensure_wallet_exists(self, char_id: int) -> None:
-        """
-        Создает запись кошелька для персонажа, если она еще не существует.
-
-        Использует `on_conflict_do_nothing` для атомарности.
-
-        Args:
-            char_id: Идентификатор персонажа.
-        """
-        log.debug(f"WalletRepoORM | action=ensure_wallet_exists char_id={char_id}")
+        """Создает пустой кошелек, если его нет."""
         stmt = sqlite_insert(ResourceWallet).values(character_id=char_id).on_conflict_do_nothing()
         try:
             await self.session.execute(stmt)
-            log.debug(f"WalletRepoORM | action=ensure_wallet_exists status=success char_id={char_id}")
         except SQLAlchemyError:
-            log.exception(f"WalletRepoORM | action=ensure_wallet_exists status=failed char_id={char_id}")
+            log.exception(f"WalletRepo | Failed to ensure wallet for {char_id}")
             raise
 
     async def get_wallet(self, char_id: int) -> ResourceWallet:
-        """
-        Получает объект кошелька (`ResourceWallet`) для указанного персонажа.
-
-        Если кошелек не существует, он будет создан.
-
-        Args:
-            char_id: Идентификатор персонажа.
-
-        Returns:
-            Объект `ResourceWallet`.
-        """
-        log.debug(f"WalletRepoORM | action=get_wallet char_id={char_id}")
+        """Возвращает объект кошелька."""
         await self.ensure_wallet_exists(char_id)
         stmt = select(ResourceWallet).where(ResourceWallet.character_id == char_id)
         try:
             result = await self.session.execute(stmt)
-            wallet = result.scalar_one()
-            log.debug(f"WalletRepoORM | action=get_wallet status=success char_id={char_id}")
-            return wallet
+            return result.scalar_one()
         except SQLAlchemyError:
-            log.exception(f"WalletRepoORM | action=get_wallet status=failed char_id={char_id}")
+            log.exception(f"WalletRepo | Failed to get wallet for {char_id}")
             raise
 
     async def get_resource_amount(self, char_id: int, group: ResourceTypeGroup, key: str) -> int:
         """
-        Возвращает количество конкретного ресурса из кошелька персонажа.
+        Возвращает количество ресурса.
 
         Args:
-            char_id: Идентификатор персонажа.
-            group: Группа ресурсов (например, "currency", "ores").
-            key: Ключ ресурса (например, "dust", "iron_ore").
-
-        Returns:
-            Количество ресурса.
+            group: 'currency', 'resources' или 'components'.
         """
-        log.debug(f"WalletRepoORM | action=get_resource_amount char_id={char_id} group='{group}' key='{key}'")
         try:
             wallet = await self.get_wallet(char_id)
-            group_data = getattr(wallet, group, {})
-            amount = group_data.get(key, 0)
-            log.debug(
-                f"WalletRepoORM | action=get_resource_amount status=success char_id={char_id} key='{key}' amount={amount}"
-            )
-            return amount
-        except SQLAlchemyError:
-            log.exception(
-                f"WalletRepoORM | action=get_resource_amount status=failed char_id={char_id} group='{group}' key='{key}'"
-            )
-            raise
+            # Безопасно берем нужный JSON-словарь
+            group_data = getattr(wallet, group, {}) or {}
+            return group_data.get(key, 0)
         except AttributeError:
-            log.error(
-                f"WalletRepoORM | action=get_resource_amount status=failed reason='Invalid group' char_id={char_id} group='{group}'"
-            )
+            log.error(f"WalletRepo | Invalid group '{group}' requested")
             return 0
+        except SQLAlchemyError:
+            log.exception(f"WalletRepo | Error getting {group}/{key}")
+            raise
 
     async def add_resource(self, char_id: int, group: ResourceTypeGroup, key: str, amount: int) -> int:
-        """
-        Добавляет указанное количество ресурса в кошелек персонажа.
-
-        Args:
-            char_id: Идентификатор персонажа.
-            group: Группа ресурсов.
-            key: Ключ ресурса.
-            amount: Количество для добавления.
-
-        Returns:
-            Новое итоговое количество ресурса.
-        """
-        log.debug(f"WalletRepoORM | action=add_resource char_id={char_id} group='{group}' key='{key}' amount={amount}")
+        """Добавляет ресурс."""
         try:
             wallet = await self.get_wallet(char_id)
-            current_data = getattr(wallet, group, {}).copy()
+            if not hasattr(wallet, group):
+                raise ValueError(f"Invalid resource group: {group}")
+
+            # Копируем словарь для SQLAlchemy (чтобы он увидел изменения)
+            current_data = dict(getattr(wallet, group, {}) or {})
             new_total = current_data.get(key, 0) + amount
             current_data[key] = new_total
+
             setattr(wallet, group, current_data)
-            log.info(
-                f"WalletRepoORM | action=add_resource status=success char_id={char_id} key='{key}' new_total={new_total}"
-            )
+
+            log.info(f"WalletRepo | +{amount} {key} -> {new_total} (Group: {group}) for {char_id}")
             return new_total
         except SQLAlchemyError:
-            log.exception(
-                f"WalletRepoORM | action=add_resource status=failed char_id={char_id} group='{group}' key='{key}'"
-            )
-            raise
-        except AttributeError:
-            log.error(
-                f"WalletRepoORM | action=add_resource status=failed reason='Invalid group' char_id={char_id} group='{group}'"
-            )
+            log.exception(f"WalletRepo | Error adding {group}/{key}")
             raise
 
     async def remove_resource(self, char_id: int, group: ResourceTypeGroup, key: str, amount: int) -> bool:
-        """
-        Списывает указанное количество ресурса из кошелька персонажа.
-
-        Args:
-            char_id: Идентификатор персонажа.
-            group: Группа ресурсов.
-            key: Ключ ресурса.
-            amount: Количество для списания.
-
-        Returns:
-            True, если ресурс успешно списан, иначе False (например, если ресурсов недостаточно).
-        """
-        log.debug(
-            f"WalletRepoORM | action=remove_resource char_id={char_id} group='{group}' key='{key}' amount={amount}"
-        )
+        """Списывает ресурс."""
         try:
             wallet = await self.get_wallet(char_id)
-            current_data = getattr(wallet, group, {}).copy()
+            if not hasattr(wallet, group):
+                raise ValueError(f"Invalid resource group: {group}")
+
+            current_data = dict(getattr(wallet, group, {}) or {})
             current_amount = current_data.get(key, 0)
 
             if current_amount < amount:
-                log.warning(
-                    f"WalletRepoORM | action=remove_resource status=failed reason='Insufficient resources' char_id={char_id} key='{key}' current={current_amount} requested={amount}"
-                )
                 return False
 
-            current_data[key] = current_amount - amount
-            if current_data[key] <= 0:
-                del current_data[key]
+            new_amount = current_amount - amount
+            if new_amount <= 0:
+                if key in current_data:
+                    del current_data[key]
+            else:
+                current_data[key] = new_amount
 
             setattr(wallet, group, current_data)
-            log.info(
-                f"WalletRepoORM | action=remove_resource status=success char_id={char_id} key='{key}' new_total={current_data.get(key, 0)}"
-            )
+            log.info(f"WalletRepo | -{amount} {key} -> {new_amount} (Group: {group}) for {char_id}")
             return True
         except SQLAlchemyError:
-            log.exception(
-                f"WalletRepoORM | action=remove_resource status=failed char_id={char_id} group='{group}' key='{key}'"
-            )
-            raise
-        except AttributeError:
-            log.error(
-                f"WalletRepoORM | action=remove_resource status=failed reason='Invalid group' char_id={char_id} group='{group}'"
-            )
+            log.exception(f"WalletRepo | Error removing {group}/{key}")
             raise
