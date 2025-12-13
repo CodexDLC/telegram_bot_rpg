@@ -68,30 +68,30 @@ class InventoryItem(Base):
 
 class ResourceWallet(Base):
     """
-    ORM-модель для таблицы `resource_wallets`.
-
-    Представляет "пространственный карман" персонажа для хранения ресурсов,
-    сгруппированных по категориям.
+    Кошелек Ресурсов (3 Столпа Экономики).
+    Все поля — JSON словари { "item_id": amount }.
     """
 
     __tablename__ = "resource_wallets"
 
     character_id: Mapped[int] = mapped_column(
-        ForeignKey("characters.character_id", ondelete="CASCADE"),
-        primary_key=True,
-        comment="Идентификатор персонажа (первичный и внешний ключ).",
+        ForeignKey("characters.character_id", ondelete="CASCADE"), primary_key=True
     )
 
-    currency: Mapped[dict] = mapped_column(
-        JSON, default=dict, comment="Словарь для хранения валюты (например, 'dust', 'shard')."
-    )
-    ores: Mapped[dict] = mapped_column(JSON, default=dict, comment="Словарь для хранения руд и камней.")
-    leathers: Mapped[dict] = mapped_column(JSON, default=dict, comment="Словарь для хранения шкур и кожи.")
-    fabrics: Mapped[dict] = mapped_column(JSON, default=dict, comment="Словарь для хранения тканей и ниток.")
-    organics: Mapped[dict] = mapped_column(
-        JSON, default=dict, comment="Словарь для хранения трав, еды, частей монстров."
-    )
-    parts: Mapped[dict] = mapped_column(JSON, default=dict, comment="Словарь для хранения компонентов и эссенций.")
+    # 1. ВАЛЮТА (Катализаторы)
+    # Пыль (dust), Осколки (shards), Ядра (cores).
+    # Выделено, чтобы легко проверять баланс и делать транзакции.
+    currency: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    # 2. СЫРЬЕ (Tier 0 - Gathered)
+    # Всё, что добывается в мире: Руда, Шкуры, Бревна, Травы, Эссенции.
+    # Пример: { "res_iron_ore": 10, "res_wolf_pelt": 5 }
+    resources: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    # 3. КОМПОНЕНТЫ (Tier 1+ - Crafted/Refined)
+    # Всё, что прошло обработку: Слитки, Кожа, Ткань, Лезвия, Рукояти.
+    # Пример: { "mat_iron_ingot": 2, "part_blade_iron": 1 }
+    components: Mapped[dict] = mapped_column(JSON, default=dict)
 
     character: Mapped[Character] = relationship("Character", back_populates="wallet")
 

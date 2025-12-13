@@ -1,82 +1,190 @@
-from typing import TypedDict
+"""
+КОНФИГУРАЦИЯ АФФИКСОВ И БАНДЛОВ
+===============================
 
-# --- 1. АТОМАРНЫЕ ЭФФЕКТЫ ---
-# Это кирпичики. Значения указаны для Tier Multiplier = 1.0.
-# При сборке: Final_Value = Base_Value * Material_Tier_Mult
+Этот модуль содержит:
+1. EFFECTS_DB: Атомарные эффекты (кирпичики), привязанные к modifier_dto.py.
+2. BUNDLES_DB: Сборные сеты эффектов (суффиксы), требующие эссенций и слотов.
+
+Бандлы разделены по файлам в папке `affixes/` в зависимости от стоимости слотов.
+"""
+
+from typing import TypedDict, cast
+
+from .affixes.bundles_2_slots import BUNDLES_2_SLOTS
+from .affixes.bundles_3_slots import BUNDLES_3_SLOTS
+from .affixes.bundles_4_slots import BUNDLES_4_SLOTS
 
 
+# --- 1. АТОМАРНЫЕ ЭФФЕКТЫ (EFFECTS) ---
 class EffectData(TypedDict):
-    target_field: str  # Поле в DTO (bonuses)
-    base_value: float  # Значение (например 0.05 = 5%)
-    is_percentage: bool  # Для форматирования в UI (+5% или +5 ед.)
+    target_field: str
+    base_value: float
+    is_percentage: bool
     narrative_tags: list[str]
 
 
 EFFECTS_DB: dict[str, EffectData] = {
     "phys_dmg_flat": {
         "target_field": "physical_damage_bonus",
-        "base_value": 5.0,  # +5 урона на Тир 1
-        "is_percentage": False,
-        "narrative_tags": ["deadly", "impact"],
+        "base_value": 0.05,
+        "is_percentage": True,
+        "narrative_tags": ["strong", "forceful"],
+    },
+    "phys_penetration": {
+        "target_field": "physical_penetration",
+        "base_value": 0.05,
+        "is_percentage": True,
+        "narrative_tags": ["piercing", "sharp"],
+    },
+    "phys_accuracy": {
+        "target_field": "physical_accuracy",
+        "base_value": 0.05,
+        "is_percentage": True,
+        "narrative_tags": ["precise", "accurate"],
     },
     "crit_chance": {
-        "target_field": "crit_chance",
-        "base_value": 0.02,  # +2% крита на Тир 1
+        "target_field": "physical_crit_chance",
+        "base_value": 0.03,
         "is_percentage": True,
-        "narrative_tags": ["sharp", "precision"],
+        "narrative_tags": ["deadly", "critical"],
+    },
+    "crit_power": {
+        "target_field": "physical_crit_power_float",
+        "base_value": 0.10,
+        "is_percentage": True,
+        "narrative_tags": ["brutal", "devastating"],
+    },
+    "magic_dmg_pct": {
+        "target_field": "magical_damage_bonus",
+        "base_value": 0.05,
+        "is_percentage": True,
+        "narrative_tags": ["arcane", "mystic"],
+    },
+    "magic_penetration": {
+        "target_field": "magical_penetration",
+        "base_value": 0.05,
+        "is_percentage": True,
+        "narrative_tags": ["void", "piercing"],
+    },
+    "phys_resist": {
+        "target_field": "physical_resistance",
+        "base_value": 0.03,
+        "is_percentage": True,
+        "narrative_tags": ["hard", "sturdy"],
+    },
+    "magic_resist": {
+        "target_field": "magical_resistance",
+        "base_value": 0.03,
+        "is_percentage": True,
+        "narrative_tags": ["warded", "shielded"],
     },
     "dodge": {
         "target_field": "dodge_chance",
         "base_value": 0.02,
         "is_percentage": True,
-        "narrative_tags": ["agile", "wind", "elusive"],
+        "narrative_tags": ["agile", "elusive"],
     },
-    "lifesteal": {
-        "target_field": "lifesteal_power",
-        "base_value": 0.01,  # 1% вампиризма
+    "parry": {
+        "target_field": "parry_chance",
+        "base_value": 0.02,
         "is_percentage": True,
-        "narrative_tags": ["blood", "parasitic"],
+        "narrative_tags": ["defensive", "guarding"],
+    },
+    "block_chance": {
+        "target_field": "shield_block_chance",
+        "base_value": 0.03,
+        "is_percentage": True,
+        "narrative_tags": ["blocking", "wall"],
     },
     "hp_max": {
-        "target_field": "hp_max_bonus",
+        "target_field": "hp_max",
         "base_value": 20.0,
         "is_percentage": False,
-        "narrative_tags": ["vitality", "sturdy"],
+        "narrative_tags": ["vitality", "healthy"],
+    },
+    "energy_max": {
+        "target_field": "energy_max",
+        "base_value": 10.0,
+        "is_percentage": False,
+        "narrative_tags": ["mind", "spirit"],
+    },
+    "hp_regen": {
+        "target_field": "hp_regen",
+        "base_value": 1.0,
+        "is_percentage": False,
+        "narrative_tags": ["regeneration", "troll"],
+    },
+    "energy_regen": {
+        "target_field": "energy_regen",
+        "base_value": 0.5,
+        "is_percentage": False,
+        "narrative_tags": ["meditation", "focus"],
+    },
+    "fire_dmg": {
+        "target_field": "fire_damage_bonus",
+        "base_value": 0.05,
+        "is_percentage": True,
+        "narrative_tags": ["burning", "fiery"],
+    },
+    "fire_res": {
+        "target_field": "fire_resistance",
+        "base_value": 0.10,
+        "is_percentage": True,
+        "narrative_tags": ["fireproof", "dousing"],
+    },
+    "vampirism": {
+        "target_field": "vampiric_power",
+        "base_value": 0.02,
+        "is_percentage": True,
+        "narrative_tags": ["vampiric", "blood"],
+    },
+    "thorns": {
+        "target_field": "thorns_damage_reflect",
+        "base_value": 0.05,
+        "is_percentage": True,
+        "narrative_tags": ["spiked", "thorny"],
+    },
+    "loot_chance": {
+        "target_field": "find_loot_chance",
+        "base_value": 0.05,
+        "is_percentage": True,
+        "narrative_tags": ["lucky", "fortune"],
+    },
+    "craft_speed": {
+        "target_field": "crafting_speed",
+        "base_value": 0.05,
+        "is_percentage": True,
+        "narrative_tags": ["artisan", "skilled"],
+    },
+    "env_cold_res": {
+        "target_field": "environment_cold_resistance",
+        "base_value": 5.0,
+        "is_percentage": False,
+        "narrative_tags": ["warm", "insulated"],
+    },
+    "env_heat_res": {
+        "target_field": "environment_heat_resistance",
+        "base_value": 5.0,
+        "is_percentage": False,
+        "narrative_tags": ["cool", "ventilated"],
     },
 }
 
 
 # --- 2. БАНДЛЫ (СУФФИКСЫ) ---
-# Это сеты эффектов. Они требуют конкретного ресурса (Эссенции) для крафта.
-
-
 class BundleData(TypedDict):
     id: str
-    # Если это крафт - нужен ингредиент. Если лут - просто ID.
-    ingredient_id: str  # Ссылка на RAW_RESOURCES_DB['essences']
-    cost_slots: int  # Сколько слотов занимает в предмете
-    min_tier: int  # Минимальный тир материала
-    effects: list[str]  # Ключи из EFFECTS_DB
-    narrative_tags: list[str]  # Теги для LLM ("Sword [of Vampire]")
+    ingredient_id: str
+    cost_slots: int
+    min_tier: int
+    effects: list[str]
+    narrative_tags: list[str]
 
 
-BUNDLES_DB: dict[str, BundleData] = {
-    # Бандл "Вампира" (делается из Флакона Крови)
-    "vampire": {
-        "id": "vampire",
-        "ingredient_id": "essence_blood_vial",
-        "cost_slots": 2,  # Занимает 2 слота (нужна сталь или выше)
-        "min_tier": 2,  # Только на редких вещах
-        "effects": ["lifesteal", "phys_dmg_flat"],
-        "narrative_tags": ["vampire", "blood", "crimson", "thirsty"],
-    },
-    # Бандл "Тени" (делается из Пыли Теней)
-    "shadow": {
-        "id": "shadow",
-        "ingredient_id": "essence_shadow_dust",
-        "cost_slots": 1,  # Влезает даже в железо
-        "min_tier": 1,
-        "effects": ["dodge", "crit_chance"],
-        "narrative_tags": ["shadow", "silent", "assassin", "hidden"],
-    },
-}
+# Сборка всех бандлов
+BUNDLES_DB: dict[str, BundleData] = (
+    cast(dict[str, BundleData], BUNDLES_2_SLOTS)
+    | cast(dict[str, BundleData], BUNDLES_3_SLOTS)
+    | cast(dict[str, BundleData], BUNDLES_4_SLOTS)
+)

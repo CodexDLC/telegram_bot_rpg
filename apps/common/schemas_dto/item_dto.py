@@ -1,10 +1,18 @@
+"""
+Модуль содержит DTO (Data Transfer Objects) для работы с игровыми предметами.
+
+Определяет базовые типы предметов, их редкость, а также детальные
+структуры данных для различных категорий предметов (оружие, броня,
+аксессуары, расходники, ресурсы) и их полиморфное представление.
+"""
+
 from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# --- ENUMS (Остаются без изменений) ---
+# --- ENUMS ---
 class EquippedSlot(StrEnum):
     HEAD_ARMOR = "head_armor"
     CHEST_ARMOR = "chest_armor"
@@ -48,26 +56,25 @@ class ItemRarity(StrEnum):
     RARE = "rare"
     EPIC = "epic"
     LEGENDARY = "legendary"
-    MYTHIC = "mythic"  # Добавлено согласно новой концепции
-    EXOTIC = "exotic"  # Добавлено согласно новой концепции
-    ABSOLUTE = "absolute"  # Добавлено согласно новой концепции
+    MYTHIC = "mythic"
+    EXOTIC = "exotic"
+    ABSOLUTE = "absolute"
 
 
 ItemBonuses = dict[str, float | int]
 
 
-# --- НОВЫЕ ВСПОМОГАТЕЛЬНЫЕ МОДЕЛИ ---
+# --- ВСПОМОГАТЕЛЬНЫЕ МОДЕЛИ ---
 
 
 class ItemComponents(BaseModel):
     """
     Хранит информацию о том, из чего собран предмет.
-    Нужно для механики разбора (Dismantle) и ре-ролла.
     """
 
-    base_id: str  # ID базы (например, 'sword')
-    material_id: str  # ID материала (например, 'mat_void_ingot')
-    essence_id: str | None = None  # ID эссенции/бандла (например, 'bundle_vampire')
+    base_id: str
+    material_id: str
+    essence_id: list[str] | None = None  # Теперь это список ID бандлов
 
 
 class ItemDurability(BaseModel):
@@ -75,11 +82,11 @@ class ItemDurability(BaseModel):
     Информация о прочности предмета.
     """
 
-    current: float  # Текущая прочность (может быть дробной из-за формул износа)
-    max: float  # Максимальная прочность (зависит от Материала)
+    current: float
+    max: float
 
 
-# --- ОБНОВЛЕННАЯ СТРУКТУРА ДАННЫХ (CORE) ---
+# --- ОСНОВНЫЕ ДАННЫЕ ---
 
 
 class ItemCoreData(BaseModel):
@@ -87,33 +94,26 @@ class ItemCoreData(BaseModel):
     Базовые данные, которые лежат в JSON-поле `item_data` в БД.
     """
 
-    name: str  # Сгенерированное имя ("Меч Кровавой Луны")
-    description: str  # Сгенерированное описание
-    base_price: int  # Цена продажи
-
-    # --- Новые поля для Генератора ---
-    components: ItemComponents | None = None  # Состав предмета
-    durability: ItemDurability | None = None  # Прочность (None для ресурсов)
-    narrative_tags: list[str] = Field(default_factory=list)  # Теги для LLM и UI
-
-    # --- Старые поля (для совместимости) ---
-    material: str = "unknown"  # Оставляем строкой для совместимости, но логика теперь в components
+    name: str
+    description: str
+    base_price: int
+    components: ItemComponents | None = None
+    durability: ItemDurability | None = None
+    narrative_tags: list[str] = Field(default_factory=list)
     bonuses: ItemBonuses = Field(default_factory=dict)
 
 
-# --- СПЕЦИФИЧНЫЕ ДАННЫЕ (Почти без изменений, наследуют новые поля) ---
+# --- СПЕЦИФИЧНЫЕ ДАННЫЕ ---
 
 
 class WeaponData(ItemCoreData):
     damage_min: int
     damage_max: int
-    # damage_type: str = "physical" # Можно добавить, если нужно в UI
     valid_slots: list[str]
 
 
 class ArmorData(ItemCoreData):
     protection: int
-    mobility_penalty: int = 0
     valid_slots: list[str]
 
 
@@ -130,12 +130,10 @@ class ConsumableData(ItemCoreData):
 
 
 class ResourceData(ItemCoreData):
-    """Ресурсы обычно не имеют прочности и компонентов."""
-
     pass
 
 
-# --- DTO ДЛЯ ИНВЕНТАРЯ (Обертки) ---
+# --- DTO ДЛЯ ИНВЕНТАРЯ ---
 
 
 class BaseInventoryItemDTO(BaseModel):
@@ -147,10 +145,8 @@ class BaseInventoryItemDTO(BaseModel):
     subtype: str
     rarity: ItemRarity
     quantity: int = 1
-
     equipped_slot: EquippedSlot | None = None
     quick_slot_position: QuickSlot | None = None
-
     model_config = ConfigDict(from_attributes=True)
 
 
