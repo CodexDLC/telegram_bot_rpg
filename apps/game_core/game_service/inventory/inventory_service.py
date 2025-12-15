@@ -1,4 +1,5 @@
 from loguru import logger as log
+from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -168,7 +169,7 @@ class InventoryService:
             max_slots = BASE_INVENTORY_SIZE + slots_bonus
             log.debug(f"GetCapacity | char_id={self.char_id} current={current_slots} max={max_slots}")
             return current_slots, max_slots
-        except Exception as e:  # noqa: BLE001
+        except (SQLAlchemyError, ValidationError) as e:
             log.exception(f"GetCapacityError | char_id={self.char_id} error='{e}'")
             return 0, BASE_INVENTORY_SIZE
 

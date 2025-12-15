@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 import time
+from typing import Any
 
 import streamlit as st
 from loguru import logger as log
@@ -30,34 +31,37 @@ apply_global_styles()
 
 
 # --- 3. Логика загрузки данных (Real Data) ---
-async def load_kpi_data():
+async def load_kpi_data() -> dict[str, Any]:
     """
     Загружает реальные метрики из БД с замером времени отклика.
     Возвращает dict с данными.
     """
     start_time = time.perf_counter()
-    stats = {"players_total": 0, "monster_clans": 0, "active_cells": 0, "db_latency_ms": 0, "db_status": False}
+    stats: dict[str, Any] = {
+        "players_total": 0,
+        "monster_clans": 0,
+        "active_cells": 0,
+        "db_latency_ms": 0.0,
+        "db_status": False,
+    }
 
     try:
         async with async_session_factory() as session:
             # 1. Считаем игроков (таблица users)
-            # Предполагаем, что таблица называется 'users'
             res_users = await session.execute(text("SELECT count(*) FROM users"))
-            stats["players_total"] = res_users.scalar()
+            stats["players_total"] = res_users.scalar() or 0
 
             # 2. Считаем кланы монстров (таблица generated_clans)
-            # Имя таблицы берем из контекста ORM, обычно это 'generated_clans' или похожее
-            # Если будет ошибка - нужно уточнить имя таблицы в твоих моделях
             try:
                 res_clans = await session.execute(text("SELECT count(*) FROM generated_clans"))
-                stats["monster_clans"] = res_clans.scalar()
+                stats["monster_clans"] = res_clans.scalar() or 0
             except SQLAlchemyError:
-                stats["monster_clans"] = 0  # Таблица может называться иначе
+                stats["monster_clans"] = 0
 
             # 3. Считаем активные клетки (world_nodes)
             try:
                 res_cells = await session.execute(text("SELECT count(*) FROM world_nodes"))
-                stats["active_cells"] = res_cells.scalar()
+                stats["active_cells"] = res_cells.scalar() or 0
             except SQLAlchemyError:
                 stats["active_cells"] = 0
 
@@ -82,8 +86,6 @@ render_header("COMMAND CENTER", "🛠️", "// System Status & Overview")
 
 # Загрузка данных
 with st.spinner("Connecting to neural network..."):
-    # В Streamlit async запускается через asyncio.run, но внутри страницы лучше использовать цикл
-    # Если ты на Windows, нужен фикс для event loop
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
@@ -100,12 +102,11 @@ with col1:
     )
 
 with col2:
-    # Логическое объяснение: Это не гильдии игроков, а популяция врагов
     st.metric(
         label="👹 Монстр-Кланы",
         value=kpi["monster_clans"],
         delta="Популяция",
-        delta_color="off",  # Серый цвет дельты, так как это просто инфо
+        delta_color="off",
         help="Количество сгенерированных групп монстров (GeneratedClanORM), бродящих по миру.",
     )
 
@@ -129,13 +130,11 @@ st.divider()
 st.subheader("🚀 Quick Actions")
 st.caption("Управление состоянием сервера (Mock-кнопки для примера)")
 
-# Используем контейнер для группировки
 with st.container():
     c1, c2, c3 = st.columns(3)
 
     if c1.button("🔄 Restart Bot Service", use_container_width=True):
         st.toast("Команда перезагрузки отправлена...", icon="🔄")
-        # Тут можно добавить вызов API для рестарта докера/сервиса
 
     if c2.button("🧹 Clear Cache (Redis)", use_container_width=True):
         st.cache_data.clear()

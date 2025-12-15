@@ -379,12 +379,12 @@ def render_skills_section_modern(skills_data: list):
             skill_to_group[skill_key] = (group_key, group_title)
 
     # Группируем скиллы игрока
-    grouped_skills = {}
+    grouped_skills: dict[str, list[dict[str, Any]]] = {}
     for skill in skills_data:
         skill_dict = skill.model_dump() if hasattr(skill, "model_dump") else skill
         skill_key = skill_dict.get("skill_key")
 
-        if skill_key in skill_to_group:
+        if skill_key and skill_key in skill_to_group:
             group_key, group_title = skill_to_group[skill_key]
             if group_key not in grouped_skills:
                 grouped_skills[group_key] = []
@@ -403,6 +403,9 @@ def render_skills_section_modern(skills_data: list):
 def render_single_skill_card(skill_dict: dict):
     """Рендерит одну карточку навыка с прогресс-баром."""
     skill_key = skill_dict.get("skill_key")
+    if not skill_key:
+        return
+
     total_xp = skill_dict.get("total_xp", 0)
     is_unlocked = skill_dict.get("is_unlocked", False)
     progress_state = skill_dict.get("progress_state", "PAUSE")

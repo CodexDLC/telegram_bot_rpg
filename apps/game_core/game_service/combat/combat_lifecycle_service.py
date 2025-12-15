@@ -105,7 +105,7 @@ class CombatLifecycleService:
             await self.combat_manager.add_participant_id(session_id, char_id)
             await self.combat_manager.save_actor_json(session_id, char_id, container.model_dump_json())
             log.debug(f"AddParticipant | event=success session_id='{session_id}' char_id={char_id}")
-        except Exception as e:  # noqa: BLE001
+        except (SQLAlchemyError, ValidationError, json.JSONDecodeError) as e:
             log.exception(f"AddParticipantError | session_id='{session_id}' char_id={char_id} error='{e}'")
 
     async def add_dummy_participant(self, session_id: str, char_id: int, hp: int, energy: int, name: str) -> None:

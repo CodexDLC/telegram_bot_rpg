@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+from typing import Literal, cast
 
 import streamlit as st
 from loguru import logger as log
@@ -234,7 +235,12 @@ def render_cells_grid(zone_id: str, cells_data: list, zone_biome: str):
                 is_selected = st.session_state.selected_cell == (abs_x, abs_y)
                 btn_type = "primary" if is_selected else "secondary"
 
-                if col.button(label, key=f"cell_{abs_x}_{abs_y}", type=btn_type, use_container_width=True):
+                if col.button(
+                    label,
+                    key=f"cell_{abs_x}_{abs_y}",
+                    type=cast("Literal['primary', 'secondary', 'tertiary']", btn_type),
+                    use_container_width=True,
+                ):
                     st.session_state.selected_cell = (abs_x, abs_y)
                     st.rerun()
             else:

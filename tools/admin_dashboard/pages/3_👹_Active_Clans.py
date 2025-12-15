@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import sys
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -130,12 +131,15 @@ async def run_async_app():
                 )
             st.dataframe(pd.DataFrame(monster_records), use_container_width=True, hide_index=True)
 
-            monster_map = {m.id: m for m in clan.members}
+            monster_map: dict[int, Any] = {m.id: m for m in clan.members}
+
+            def format_monster(x: int, m_map: dict[int, Any] = monster_map) -> str:
+                return f"{m_map[x].name_ru} ({m_map[x].variant_key})"
+
             selected_monster_id = st.selectbox(
                 "Выберите монстра для детального просмотра:",
                 options=list(monster_map.keys()),
-                format_func=lambda x,
-                monster_map=monster_map: f"{monster_map[x].name_ru} ({monster_map[x].variant_key})",
+                format_func=format_monster,
                 key=f"select_{clan.id}",
             )
 

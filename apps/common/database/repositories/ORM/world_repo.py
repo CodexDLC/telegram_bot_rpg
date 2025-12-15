@@ -126,6 +126,10 @@ class WorldRepoORM(IWorldRepo):
             return False
 
     async def update_content(self, x: int, y: int, new_content: dict[str, Any]) -> bool:
+        """
+        Обновляет поле content для указанной ноды.
+        Внимание: Этот метод полностью заменяет содержимое поля `content`, а не объединяет его.
+        """
         stmt = update(WorldGrid).where(WorldGrid.x == x, WorldGrid.y == y).values(content=new_content)
         try:
             await self.session.execute(stmt)
