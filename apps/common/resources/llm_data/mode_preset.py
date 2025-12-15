@@ -4,8 +4,7 @@ from typing import Literal
 MODE_PRESETS = {
     "dungeon_generator": {
         "system_instruction": """You are an expert game designer creating a dungeon for a dark fantasy RPG.
-Generate a dungeon map as a JSON object based on the user's theme.
-The map should be a list of rooms, each with an ID, name, description, and connections to other rooms.
+Generate a dungeon map as a list of rooms, each with an ID, name, description, and connections to other rooms.
 The final room must be a 'boss_room'.
 Return ONLY the JSON object.""",
         "temperature": 0.8,
@@ -32,7 +31,6 @@ Return ONLY the JSON object.""",
         "max_tokens": 256,
         "model_alias": "fast",
     },
-    # === ОСНОВНОЙ ГЕНЕРАТОР МИРА ===
     "batch_location_desc": {
         "system_instruction": """ROLE: Narrative Designer for 'Echo of Ancients' (Post-Apocalyptic Techno-Fantasy RPG).
 SETTING: A world of ancient, high-tech ruins ("The Ancients") reclaimed by nature and scavengers.
@@ -88,6 +86,70 @@ RULES:
         "max_tokens": 8000,
         "model_alias": "fast",
     },
+    # === ГЕНЕРАТОР КЛАНОВ МОНСТРОВ ===
+    "clan_generation": {
+        "system_instruction": """ROLE: Lead Narrative Designer for a Dark Fantasy RPG.
+TASK: Create a unique, atmospheric 'Monster Clan' flavor based on the provided Family Archetype and Environment Context.
+
+INPUT DATA (JSON):
+- family_id: The base family ID.
+- archetype: The creature type (e.g., 'humanoid', 'beast').
+- organization: The group type (e.g., 'clan', 'pack', 'swarm').
+- family_tags: Core identity tags (e.g., ["human", "outlaw"] or ["goblin", "tinkerer"]).
+- context_tags: Environmental/Mutation tags (e.g., ['forest', 'ice_shards']).
+- tier: Threat level (0-7).
+- units_to_name: A dictionary of unit keys and their narrative hints (including Role).
+
+OUTPUT FORMAT (JSON ONLY):
+{
+  "name_ru": "Name of the Clan in Russian",
+  "description": "Rich, atmospheric description in Russian (3-4 sentences).",
+  "variants_flavor": {
+    "UNIT_KEY_1": {
+      "name": "Unique unit name in Russian",
+      "flavor": {
+        "appearance": "Visual description for Bestiary/Inspect (1-2 sentences).",
+        "encounter": "Action text for Battle Start (1-2 sentences).",
+        "behavior": "Hint for 'Sense' skill (1 sentence)."
+      }
+    }
+  }
 }
 
-ChatMode = Literal["dungeon_generator", "item_description", "npc_dialogue", "batch_location_desc"]
+RULES (STRICTLY ADHERE):
+1. **Clan Name**:
+   - MUST include a word related to the 'organization' type (e.g., "Банда", "Стая", "Клан", "Рой").
+   - **FORBIDDEN**: Do NOT use the species name (e.g., "Rat", "Goblin", "Wolf") directly in the name. Use metaphors!
+   - BAD: "Стая Крыс", "Банда Гоблинов".
+   - GOOD: "Стая Серых Хвостов", "Банда Ржавого Клинка", "Рой Могильщиков".
+   - MUST be 2-4 words long, max 25 characters.
+
+2. **Unit Names**:
+   - MUST follow the format: "Роль 'Кличка'" (e.g., "Миньон 'Кривой'", "Элита 'Шрам'").
+   - The 'Кличка' (nickname) should be thematic and short.
+
+3. **Flavor Fields**:
+   - **appearance**: Static visual description.
+   - **encounter**: Dynamic action. Depends on Role (Minion -> Stumble upon; Elite -> Block path; Boss -> Epic entrance).
+   - **behavior**: Current activity or mood.
+
+4. **Mutation Logic**: If 'context_tags' contains elements (ice, fire, void), the clan MUST physically mutate.
+   - Ice -> Pale skin, frozen breath, slow movements.
+   - Fire -> Charred flesh, internal glow, ash trails.
+   - Void -> Distorted limbs, whispering aura, gravity glitches.
+
+5. **Tier Logic**:
+   - Tier 0-1: Scavengers, weak, ragged equipment.
+   - Tier 5+: Ancient, evolved, magically infused armor.
+
+6. **Language**: RUSSIAN.
+7. **Consistency**: The 'name' in variants_flavor MUST match the clan's theme.
+8. NO Markdown. NO explanations. ONLY JSON.
+""",
+        "temperature": 0.9,  # Повысил для большей креативности в именах
+        "max_tokens": 2500,
+        "model_alias": "fast",
+    },
+}
+
+ChatMode = Literal["dungeon_generator", "item_description", "npc_dialogue", "batch_location_desc", "clan_generation"]

@@ -1,7 +1,10 @@
+from typing import Any
+
 from loguru import logger as log
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from apps.common.database.db_contract.i_users_repo import IUserRepo
 from apps.common.database.model_orm.user import User
@@ -105,4 +108,32 @@ class UsersRepoORM(IUserRepo):
                 return []
         except SQLAlchemyError:
             log.exception("UsersRepoORM | action=get_users status=failed")
+            raise
+
+    async def get_users_with_pagination(self, offset: int, limit: int) -> tuple[list[Any], int]:
+        """
+        Возвращает страницу пользователей и общее их количество.
+        """
+        log.debug(f"UsersRepoORM | action=get_users_with_pagination offset={offset} limit={limit}")
+        try:
+            count_stmt = select(func.count(User.telegram_id))
+            total_res = await self.session.execute(count_stmt)
+            total = total_res.scalar_one()
+
+            stmt = (
+                select(User)
+                .options(selectinload(User.characters))
+                .order_by(User.telegram_id)
+                .offset(offset)
+                .limit(limit)
+            )
+            result = await self.session.execute(stmt)
+            orm_users_list = result.scalars().all()
+
+            log.debug(
+                f"UsersRepoORM | action=get_users_with_pagination status=success count={len(orm_users_list)} total={total}"
+            )
+            return list(orm_users_list), total
+        except SQLAlchemyError:
+            log.exception("UsersRepoORM | action=get_users_with_pagination status=failed")
             raise

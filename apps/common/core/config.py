@@ -10,6 +10,7 @@
 """
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from loguru import logger as log
@@ -19,7 +20,6 @@ load_dotenv()
 log.debug("EnvLoad | status=success")
 
 # --- Telegram Bot Token ---
-# Критически важная переменная для подключения к API Telegram.
 BOT_TOKEN: str | None = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     log.critical("ConfigError | reason=missing_env_var var=BOT_TOKEN")
@@ -27,7 +27,6 @@ if not BOT_TOKEN:
 log.info("ConfigLoad | var=BOT_TOKEN status=success")
 
 # --- Gemini API Token ---
-# Токен для доступа к API генеративной модели Gemini.
 GEMINI_TOKEN: str | None = os.getenv("GEMINI_TOKEN")
 if not GEMINI_TOKEN:
     log.critical("ConfigError | reason=missing_env_var var=GEMINI_TOKEN")
@@ -40,13 +39,24 @@ if not DB_NAME:
     log.critical("ConfigError | reason=missing_env_var var=DB_NAME_SQLITE")
     raise RuntimeError("DB_NAME_SQLITE не найден. Проверьте .env файл или переменные окружения.")
 
-# Формат: 'dialect+driver://path'
-DB_URL_SQLALCHEMY: str = f"sqlite+aiosqlite:///{DB_NAME}"
-log.info(f"DatabaseURL | type=sqlite url={DB_URL_SQLALCHEMY}")
+# 🔥 FIX: Используем абсолютный путь к БД, чтобы скрипты работали из любой папки
+# 1. Находим корень проекта (поднимаемся на 4 уровня вверх от этого файла)
+# apps/common/core/config.py -> apps/common/core -> apps/common -> apps -> ROOT
+BASE_DIR = Path(__file__).parent.parent.parent.parent
+
+# 2. Строим полный путь к файлу БД
+DB_PATH = BASE_DIR / DB_NAME
+
+# 3. Создаем папку для БД, если она не существует (защита от ошибки unable to open database file)
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+# 4. Формируем URL с абсолютным путем
+# В Windows путь будет выглядеть как sqlite+aiosqlite:///C:/.../data/game.db
+DB_URL_SQLALCHEMY: str = f"sqlite+aiosqlite:///{DB_PATH.resolve()}"
+log.info(f"DatabaseURL | type=sqlite path='{DB_PATH.resolve()}'")
+
 
 # --- Redis Configuration ---
-# Настройки для Redis, используемого для FSM.
-# Используются значения по умолчанию ('localhost', 6379), если они не заданы.
 REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT: int = int(os.getenv("REDIS_PORT", 6379))
 REDIS_PASSWORD: str | None = os.getenv("REDIS_PASSWORD")
@@ -68,7 +78,6 @@ SYSTEM_USER_ID = 2_000_000_000
 SYSTEM_CHAR_ID = SYSTEM_USER_ID
 
 # --- Admin Configuration ---
-# TODO: Рассмотреть использование Pydantic для более надежной валидации конфигурации.
 admin_ids_str = os.getenv("ADMIN_IDS", "")
 ADMIN_IDS: list[int] = []
 if admin_ids_str:

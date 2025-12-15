@@ -18,6 +18,8 @@ pytest
 
 pandas
 
+streamlit
+
 # --- Плагин для Pytest ---
 # КРАЙНЕ ВАЖНО:
 # Так как aiogram и aiosqlite асинхронные,

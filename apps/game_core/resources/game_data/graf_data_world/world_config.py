@@ -1341,7 +1341,7 @@ BIOME_DEFINITIONS: dict[str, dict[str, TerrainMeta]] = {
         # --- LANDMARKS (Точки интереса в городе) ---
         "city_gate_outer": {
             "spawn_weight": 0,
-            "travel_cost": 1.0,
+            "travel_cost": 0.2,
             "is_passable": True,
             "visual_tags": ["massive_gate", "portcullis", "guard_room"],
             "danger_mod": 1.5,

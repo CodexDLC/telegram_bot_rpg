@@ -103,7 +103,7 @@ async def arena_submit_queue_handler(
     check_func = ui.get_check_func(mode)
 
     session_id = await anim_service.animate_polling(
-        base_text=text, check_func=check_func, steps=10, step_delay=3.0, fixed_duration=False
+        base_text=text, check_func=check_func, steps=20, step_delay=3.0, fixed_duration=False
     )
 
     if await state.get_state() != ArenaState.waiting:

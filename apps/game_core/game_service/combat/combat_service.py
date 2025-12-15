@@ -130,6 +130,7 @@ class CombatService:
         attack_zones: list[str] | None,
         block_zones: list[str] | None,
         ability_key: str | None = None,
+        actor_dto: CombatSessionContainerDTO | None = None,
     ) -> None:
         """
         Регистрирует ход актора и запускает расчет обмена, если оба хода сделаны.
@@ -140,11 +141,12 @@ class CombatService:
             attack_zones: Список зон атаки.
             block_zones: Список зон блокировки.
             ability_key: Ключ используемой способности.
+            actor_dto: DTO актора, совершающего ход. Если None, будет загружен из Redis.
         """
         log.debug(
             f"CombatService | action=register_move actor_id={actor_id} target_id={target_id} session_id='{self.session_id}'"
         )
-        actor = await self._get_actor(actor_id)
+        actor = actor_dto or await self._get_actor(actor_id)
         if not actor or not actor.state:
             log.warning(
                 f"CombatService | status=failed reason='Actor data missing' actor_id={actor_id} session_id='{self.session_id}'"
@@ -162,7 +164,7 @@ class CombatService:
                 return
 
         exchange_data = await self.turn_manager.register_move_request(
-            actor_id, real_target_id, attack_zones, block_zones, ability_key
+            actor_id, real_target_id, attack_zones, block_zones, ability_key, actor
         )
 
         if exchange_data:
@@ -201,8 +203,14 @@ class CombatService:
             log.warning(
                 f"CombatService | event=deadline_expired lazy_actor_id={lazy_id} opponent_id={agg_id} session_id='{self.session_id}'"
             )
+            lazy_actor_dto = actors_map.get(lazy_id)
             await self.register_move(
-                actor_id=lazy_id, target_id=agg_id, attack_zones=None, block_zones=None, ability_key=None
+                actor_id=lazy_id,
+                target_id=agg_id,
+                attack_zones=None,
+                block_zones=None,
+                ability_key=None,
+                actor_dto=lazy_actor_dto,
             )
 
     async def _process_ai_turns(self) -> None:
@@ -238,6 +246,7 @@ class CombatService:
                 attack_zones=decision["attack"],
                 block_zones=decision["block"],
                 ability_key=decision.get("ability"),
+                actor_dto=actor,
             )
 
     async def _process_exchange(self, id_a: int, move_a: dict, id_b: int, move_b: dict) -> None:
@@ -354,17 +363,15 @@ class CombatService:
     def _apply_regen(self, actor: CombatSessionContainerDTO, stats: dict[str, Any]) -> None:
         """
         Применяет регенерацию HP и Energy к актору.
-
-        Args:
-            actor: DTO актора, к которому применяется регенерация.
-            stats: Агрегированные статы актора, содержащие `hp_max`, `energy_max`, `hp_regen`, `energy_regen`.
+        В бою пассивная регенерация отключена.
         """
         if not actor.state or actor.state.hp_current <= 0:
             return
-        max_hp = int(stats.get("hp_max", 1.0))
-        max_en = int(stats.get("energy_max", 0.0))
-        actor.state.hp_current = min(max_hp, actor.state.hp_current + int(stats.get("hp_regen", 0.0)))
-        actor.state.energy_current = min(max_en, actor.state.energy_current + int(stats.get("energy_regen", 0.0)))
+        # Пассивная регенерация в бою отключена для ускорения PvP
+        # max_hp = int(stats.get("hp_max", 1.0))
+        # max_en = int(stats.get("energy_max", 0.0))
+        # actor.state.hp_current = min(max_hp, actor.state.hp_current + int(stats.get("hp_regen", 0.0)))
+        # actor.state.energy_current = min(max_en, actor.state.energy_current + int(stats.get("energy_regen", 0.0)))
 
     def _update_stats(self, actor: CombatSessionContainerDTO, out: dict[str, Any], inc: dict[str, Any]) -> None:
         """
@@ -410,8 +417,8 @@ class CombatService:
         combined_logs = []
         # Лог для actor_a, атакующего actor_b
         text_a = CombatLogBuilder.build_log_entry(
-            f"⚔️ {actor_a.name}",  # Атакующий с эмодзи
-            f"🛡️ {actor_b.name}",  # Защищающийся с эмодзи
+            actor_a.name,
+            actor_b.name,
             res_a,
             defender_hp=actor_b.state.hp_current,
             defender_energy=actor_b.state.energy_current,
@@ -420,8 +427,8 @@ class CombatService:
 
         # Лог для actor_b, атакующего actor_a
         text_b = CombatLogBuilder.build_log_entry(
-            f"⚔️ {actor_b.name}",  # Атакующий с эмодзи
-            f"🛡️ {actor_a.name}",  # Защищающийся с эмодзи
+            actor_b.name,
+            actor_a.name,
             res_b,
             defender_hp=actor_a.state.hp_current,
             defender_energy=actor_a.state.energy_current,

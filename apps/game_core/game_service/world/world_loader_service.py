@@ -101,15 +101,21 @@ class WorldLoaderService:
         if node.services and isinstance(node.services, list):
             for svc in node.services:
                 key = f"svc:{svc}"
-                # Простая логика кнопки
+                # Логика кнопки
                 btn_name = "Войти"
+                desc_room = "Вход в Сервис"
                 if "portal" in svc:
                     btn_name = "К Порталу"
+                    desc_room = "Войти в Портал"
                 elif "tavern" in svc:
                     btn_name = "В Таверну"
+                    desc_room = "Войти в Таверну"
+                elif "arena" in svc:
+                    btn_name = "На Арену"
+                    desc_room = "Выйти на Арену"
 
                 exits[key] = {
-                    "desc_next_room": f"Вход в {btn_name}",
+                    "desc_next_room": desc_room,
                     "time_duration": 0.0,
                     "text_button": btn_name,
                     "type": "service",

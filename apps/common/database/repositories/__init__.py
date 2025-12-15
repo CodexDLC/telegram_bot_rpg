@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.common.database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
 from apps.common.database.db_contract.i_inventory_repo import IInventoryRepo
 from apps.common.database.db_contract.i_leaderboard_repo import ILeaderboardRepo
+from apps.common.database.db_contract.i_monster_repository import IMonsterRepository
 from apps.common.database.db_contract.i_skill_repo import ISkillProgressRepo, ISkillRateRepo
 from apps.common.database.db_contract.i_symbiote_repo import ISymbioteRepo
 from apps.common.database.db_contract.i_users_repo import IUserRepo
@@ -14,6 +15,7 @@ from apps.common.database.db_contract.i_world_repo import IWorldRepo
 from apps.common.database.repositories.ORM.characters_repo_orm import CharactersRepoORM, CharacterStatsRepoORM
 from apps.common.database.repositories.ORM.inventory_repo import InventoryRepo
 from apps.common.database.repositories.ORM.leaderboard_repo import LeaderboardRepoORM
+from apps.common.database.repositories.ORM.monster_repository import MonsterRepository
 from apps.common.database.repositories.ORM.skill_repo import SkillProgressRepo, SkillRateRepo
 from apps.common.database.repositories.ORM.symbiote_repo import SymbioteRepoORM
 from apps.common.database.repositories.ORM.users_repo_orm import UsersRepoORM
@@ -103,3 +105,10 @@ def get_world_repo(session: AsyncSession) -> IWorldRepo:
     Возвращает репозиторий для работы с Миром.
     """
     return WorldRepoORM(session=session)
+
+
+def get_monster_repo(session: AsyncSession) -> IMonsterRepository:
+    """
+    Единственное место, которое знает, какую реализацию IMonsterRepository мы используем.
+    """
+    return MonsterRepository(session=session)

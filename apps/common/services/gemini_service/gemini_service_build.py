@@ -83,8 +83,9 @@ def build_dungeon_gemini(
 BUILDERS_GEMINI: dict[ChatMode, GeminiBuilder] = {
     "dungeon_generator": build_dungeon_gemini,
     "item_description": build_simple_gemini,
-    # Добавлен явный кейс для batch_location_desc, использующий простой билдер
+    "npc_dialogue": build_simple_gemini,
     "batch_location_desc": build_simple_gemini,
+    "clan_generation": build_simple_gemini,
 }
 
 log.debug(f"GeminiBuilder | status=registered count={len(BUILDERS_GEMINI)}")

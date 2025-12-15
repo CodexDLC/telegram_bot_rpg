@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 from apps.common.schemas_dto.user_dto import UserDTO, UserUpsertDTO
 
@@ -51,5 +52,13 @@ class IUserRepo(ABC):
         Returns:
             Список DTO `UserDTO` всех пользователей.
             Если пользователей нет, возвращает пустой список.
+        """
+        pass
+
+    @abstractmethod
+    async def get_users_with_pagination(self, offset: int, limit: int) -> tuple[list[Any], int]:
+        """
+        Возвращает страницу пользователей и общее их количество.
+        Возвращает ORM-объекты (или расширенные DTO), чтобы был доступ к characters.
         """
         pass
