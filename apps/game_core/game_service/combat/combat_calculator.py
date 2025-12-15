@@ -68,7 +68,6 @@ class CombatCalculator:
                 ctx["is_parried"] = True
                 ctx["tokens_gained_def"]["parry"] = 1
                 log.debug(f"CalculateHit | result=parry chance={parry_chance:.2f}")
-                ctx["thorns_damage"] = CombatCalculator._check_thorns(stats_def)
                 return CombatCalculator._finalize_log(ctx, 0, 0, attack_zones, block_zones)
 
         if not flags.get("ignore_dodge"):
@@ -85,7 +84,6 @@ class CombatCalculator:
                     ctx["tokens_gained_def"]["counter"] = 1
                     log.debug(f"CalculateHit | sub_event=counter_attack chance={counter_chance:.2f}")
                 log.debug(f"CalculateHit | result=dodge chance={final_dodge:.2f}")
-                ctx["thorns_damage"] = CombatCalculator._check_thorns(stats_def)
                 return CombatCalculator._finalize_log(ctx, 0, 0, attack_zones, block_zones)
 
         # --- Этап 2: Частичное избегание урона (Block) ---
@@ -109,6 +107,7 @@ class CombatCalculator:
         is_geo_block = CombatCalculator._check_geo_block(attack_zones, block_zones)
         if is_geo_block:
             ctx["is_blocked"], ctx["block_type"] = True, "geo"
+            ctx["thorns_damage"] = CombatCalculator._check_thorns(stats_def)
             log.debug("CalculateHit | event=geo_block")
 
         # --- Этап 3: Расчет полного урона и его снижение ---

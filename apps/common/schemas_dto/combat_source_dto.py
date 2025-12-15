@@ -46,6 +46,7 @@ class FighterStateDTO(BaseModel):
     xp_buffer: dict[str, int] = Field(default_factory=dict)  # Буфер накопленного опыта для навыков.
     consumable_used_this_round: bool = False  # Блокировка предмета до размена
     item_cooldowns: dict[int, int] = Field(default_factory=dict)  # {inventory_id: exchange_count_ready}
+    afk_penalty_level: int = 0  # Уровень штрафа за бездействие (AFK).
 
 
 class StatSourceData(BaseModel):

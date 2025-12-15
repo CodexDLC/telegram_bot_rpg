@@ -8,7 +8,14 @@ from loguru import logger as log
 from apps.common.schemas_dto import CombatSessionContainerDTO
 from apps.common.services.core_service import CombatManager
 
-TURN_TIMEOUT = 60
+BASE_TURN_TIMEOUT = 60
+AFK_PENALTY_TIMEOUTS = {
+    0: BASE_TURN_TIMEOUT,
+    1: 50,
+    2: 40,
+    3: 30,
+    4: 20,
+}
 VALID_BLOCK_PAIRS = [
     ["head", "chest"],
     ["chest", "belly"],
@@ -34,7 +41,7 @@ class CombatTurnManager:
         """
         self.session_id = session_id
         self.combat_manager = combat_manager
-        log.debug(f"CombatTurnManager | status=initialized session_id='{session_id}'")
+        log.debug(f"CombatTurnManager | status=initialized session_id='{self.session_id}'")
 
     async def register_move_request(
         self,
@@ -43,6 +50,7 @@ class CombatTurnManager:
         attack_zones: list[str] | None,
         block_zones: list[str] | None,
         ability_key: str | None,
+        actor_dto: CombatSessionContainerDTO,
     ) -> dict[str, Any] | None:
         """
         Регистрирует запрос на ход актора.
@@ -57,6 +65,7 @@ class CombatTurnManager:
             attack_zones: Список зон, по которым актор атакует.
             block_zones: Список зон, которые актор блокирует.
             ability_key: Ключ способности, используемой актором.
+            actor_dto: DTO актора, совершающего ход.
 
         Returns:
             Словарь, содержащий `my_move` и `enemy_move` (данные ходов обоих акторов),
@@ -73,7 +82,16 @@ class CombatTurnManager:
             block_zones = random.choice(VALID_BLOCK_PAIRS)
             log.trace(f"CombatTurnManager | action=autofill_block_zones actor_id={actor_id}")
 
-        deadline = int(time.time() + TURN_TIMEOUT)
+        # Сброс штрафа за АФК при успешном ходе
+        if actor_dto.state and actor_dto.state.afk_penalty_level > 0:
+            actor_dto.state.afk_penalty_level = 0
+            log.debug(f"CombatTurnManager | afk_penalty_reset actor_id={actor_id}")
+
+        # Установка таймаута на основе уровня штрафа
+        afk_level = actor_dto.state.afk_penalty_level if actor_dto.state else 0
+        timeout = AFK_PENALTY_TIMEOUTS.get(afk_level, 20)  # 20 сек по умолчанию для высоких уровней штрафа
+
+        deadline = int(time.time() + timeout)
         move_data = {
             "target_id": target_id,
             "attack": attack_zones,
@@ -84,9 +102,9 @@ class CombatTurnManager:
         }
 
         move_json = json.dumps(move_data)
-        await self.combat_manager.set_pending_move(self.session_id, actor_id, target_id, move_json)
+        await self.combat_manager.set_pending_move(self.session_id, actor_id, target_id, move_json, timeout)
         log.debug(
-            f"CombatTurnManager | event=pending_move_set actor_id={actor_id} target_id={target_id} session_id='{self.session_id}'"
+            f"CombatTurnManager | event=pending_move_set actor_id={actor_id} target_id={target_id} session_id='{self.session_id}' timeout={timeout}s"
         )
 
         counter_move_json = await self.combat_manager.get_pending_move(self.session_id, target_id, actor_id)
@@ -117,6 +135,7 @@ class CombatTurnManager:
     async def check_expired_deadlines(self, actors_map: dict[int, CombatSessionContainerDTO]) -> list[tuple[int, int]]:
         """
         Проверяет все ожидающие ходы на предмет истечения таймера.
+        При нахождении просроченного хода, увеличивает `afk_penalty_level` у "ленивого" игрока.
 
         Args:
             actors_map: Словарь, где ключ — ID актора, а значение — его DTO.
@@ -142,9 +161,19 @@ class CombatTurnManager:
                 try:
                     data = json.loads(pending_json)
                     if 0 < data.get("deadline", 0) < now:
-                        expired_pairs.append((target_id, actor_id))
+                        lazy_actor_id = target_id
+                        expired_pairs.append((lazy_actor_id, actor_id))
+
+                        # Наказание за АФК
+                        lazy_actor_dto = actors_map.get(lazy_actor_id)
+                        if lazy_actor_dto and lazy_actor_dto.state:
+                            lazy_actor_dto.state.afk_penalty_level = min(4, lazy_actor_dto.state.afk_penalty_level + 1)
+                            log.warning(
+                                f"CombatTurnManager | afk_penalty_increase lazy_actor={lazy_actor_id} new_level={lazy_actor_dto.state.afk_penalty_level}"
+                            )
+
                         log.warning(
-                            f"CombatTurnManager | event=deadline_expired lazy_actor={target_id} waiting_actor={actor_id} session_id='{self.session_id}'"
+                            f"CombatTurnManager | event=deadline_expired lazy_actor={lazy_actor_id} waiting_actor={actor_id} session_id='{self.session_id}'"
                         )
                 except json.JSONDecodeError:
                     log.exception(

@@ -89,7 +89,9 @@ class CombatManager:
         key = Rk.get_combat_actor_key(session_id, char_id)
         return await self.redis_service.get_value(key)
 
-    async def set_pending_move(self, session_id: str, actor_id: int, target_id: int, move_data: str) -> None:
+    async def set_pending_move(
+        self, session_id: str, actor_id: int, target_id: int, move_data: str, timeout: int
+    ) -> None:
         """
         Сохраняет данные ожидающего хода актора против цели в боевой сессии.
 
@@ -98,9 +100,10 @@ class CombatManager:
             actor_id: Идентификатор актора, совершающего ход.
             target_id: Идентификатор цели хода.
             move_data: Строка с данными хода.
+            timeout: Время жизни ключа в секундах.
         """
         key = Rk.get_combat_pending_move_key(session_id, actor_id, target_id)
-        await self.redis_service.set_value(key, move_data)
+        await self.redis_service.set_value(key, move_data, ttl=timeout)
 
     async def get_pending_move(self, session_id: str, actor_id: int, target_id: int) -> str | None:
         """

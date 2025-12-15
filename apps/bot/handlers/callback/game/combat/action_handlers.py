@@ -167,13 +167,16 @@ async def submit_turn_handler(
                 return "TurnComplete"
             return None
 
-        result = await anim_service.animate_polling(
-            base_text=wait_text, check_func=check_turn_done, steps=10, step_delay=2.0
-        )
-        if not result:
-            return
+        # Ждем завершения хода (60 сек)
+        await anim_service.animate_polling(base_text=wait_text, check_func=check_turn_done, steps=20, step_delay=3.0)
+        # Даже если результат None (таймаут), мы все равно пробуем обновить UI,
+        # чтобы показать актуальное состояние (возможно, сработал дедлайн на сервере)
 
     await await_min_delay(time.monotonic(), min_delay=0.5)
+
+    # Принудительно обновляем состояние боя перед рендером
+    await combat_service.process_turn_updates()
+
     text, kb = await ui_service.render_dashboard(current_selection={})
     with suppress(TelegramAPIError):
         if msg_menu := session_context.get("message_menu"):

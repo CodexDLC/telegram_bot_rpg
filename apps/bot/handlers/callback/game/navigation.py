@@ -7,6 +7,7 @@ from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.callback_data import NavigationCallback
@@ -14,9 +15,11 @@ from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.helpers_ui.ui_animation_service import UIAnimationService
 from apps.bot.ui_service.helpers_ui.ui_tools import await_min_delay
+from apps.bot.ui_service.hub_entry_service import HubEntryService
 from apps.bot.ui_service.navigation_service import NavigationService
 from apps.common.schemas_dto import SessionDataDTO
 from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.common.services.core_service.manager.arena_manager import ArenaManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
 from apps.common.services.core_service.manager.world_manager import WorldManager
 from apps.game_core.game_service.world.game_world_service import GameWorldService
@@ -129,6 +132,64 @@ async def navigation_move_handler(
         log.info(f"Navigation | event=move_end status=success user_id={user_id} target_loc='{target_loc_id}'")
     except TelegramAPIError as e:
         log.error(f"UIRender | component=navigation status=failed user_id={user_id} error='{e}'")
+
+
+@router.callback_query(InGame.navigation, F.data.startswith("svc:"))
+async def navigation_service_handler(
+    call: CallbackQuery,
+    state: FSMContext,
+    bot: Bot,
+    session: AsyncSession,
+    account_manager: AccountManager,
+    arena_manager: ArenaManager,
+    combat_manager: CombatManager,
+):
+    """Обрабатывает нажатие на кнопки сервисов (Арена, Таверна и т.д.)."""
+    if not call.data or not call.from_user:
+        await call.answer()
+        return
+
+    service_id = call.data.split(":")[-1]
+    user_id = call.from_user.id
+    log.info(f"Navigation | event=service_enter user_id={user_id} service_id='{service_id}'")
+    await call.answer()
+
+    state_data = await state.get_data()
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    char_id = session_context.get("char_id")
+    message_content = session_context.get("message_content")
+
+    if not char_id or not message_content:
+        log.error(f"Navigation | status=failed reason='char_id or message_content missing' user_id={user_id}")
+        await Err.generic_error(call)
+        return
+
+    hub_entry_service = HubEntryService(
+        char_id=char_id,
+        target_loc=service_id,
+        state_data=state_data,
+        session=session,
+        account_manager=account_manager,
+        arena_manager=arena_manager,
+        combat_manager=combat_manager,
+    )
+
+    text, kb, new_fsm_state = await hub_entry_service.render_hub_menu()
+
+    if not text:
+        await call.answer("Сервис временно недоступен.", show_alert=True)
+        return
+
+    await state.set_state(new_fsm_state)
+    log.debug(f"FSM | user_id={user_id} state={new_fsm_state}")
+
+    await bot.edit_message_text(
+        chat_id=message_content["chat_id"],
+        message_id=message_content["message_id"],
+        text=text,
+        reply_markup=kb,
+        parse_mode="HTML",
+    )
 
 
 @router.callback_query(InGame.navigation, F.data.startswith("nav:action:"))

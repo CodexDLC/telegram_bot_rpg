@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import cast
 
 # --- Адаптация под структуру проекта ---
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -38,7 +39,7 @@ def validate_world_config():
     existing_biomes = set(BIOME_DEFINITIONS.keys())
 
     for biome_name, terrains in BIOME_DEFINITIONS.items():
-        total_weight = 0
+        total_weight = 0.0
 
         if not terrains:
             print(f"🔴 [Structure Error] Биом '{biome_name}' пуст (нет типов местности).")
@@ -47,14 +48,21 @@ def validate_world_config():
 
         for terrain_key, meta in terrains.items():
             # Проверка наличия ключей и типов
-            for key, expected_types in required_keys.items():
+            for key, value in meta.items():
+                if key in required_keys:
+                    expected_types = required_keys[key]
+                    if not isinstance(value, expected_types):
+                        print(
+                            f"🔴 [Type Error] {biome_name} -> {terrain_key}: Ключ '{key}' имеет неверный тип {type(value)}, ожидалось {expected_types}."
+                        )
+                        errors_found = True
+                else:
+                    print(f"🟠 [Key Warning] {biome_name} -> {terrain_key}: Обнаружен неопределенный ключ '{key}'.")
+                    warnings_found = True
+
+            for key in required_keys:
                 if key not in meta:
                     print(f"🔴 [Key Error] {biome_name} -> {terrain_key}: Отсутствует обязательный ключ '{key}'.")
-                    errors_found = True
-                elif not isinstance(meta[key], expected_types):  # type: ignore[literal-required]
-                    print(
-                        f"🔴 [Type Error] {biome_name} -> {terrain_key}: Ключ '{key}' имеет неверный тип {type(meta[key])}, ожидалось {expected_types}."
-                    )  # type: ignore[literal-required]
                     errors_found = True
 
             # Проверка логики значений
@@ -65,7 +73,7 @@ def validate_world_config():
                 errors_found = True
 
             if "spawn_weight" in meta:
-                weight = meta["spawn_weight"]
+                weight = cast(float, meta["spawn_weight"])
                 if weight < 0:
                     print(f"🔴 [Logic Error] {biome_name} -> {terrain_key}: Отрицательный вес спавна.")
                     errors_found = True
