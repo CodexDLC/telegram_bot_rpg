@@ -26,6 +26,13 @@ class IWorldRepo(ABC):
         """
         pass
 
+    @abstractmethod
+    async def get_all_regions(self) -> list[WorldRegion]:
+        """
+        Получает список всех регионов.
+        """
+        pass
+
     # --- ЗОНЫ (5x5) - NEW ---
 
     @abstractmethod
@@ -60,6 +67,13 @@ class IWorldRepo(ABC):
         pass
 
     @abstractmethod
+    async def get_nodes_by_zone(self, zone_id: str) -> list[WorldGrid]:
+        """
+        Получает все клетки для указанной зоны.
+        """
+        pass
+
+    @abstractmethod
     async def create_or_update_node(
         self,
         x: int,
@@ -77,6 +91,13 @@ class IWorldRepo(ABC):
             zone_id: Ссылка на таблицу WorldZone (D4_1_1).
             terrain_type: Ключ типа местности (thicket, edge, road).
             services: Список ключей сервисов.
+        """
+        pass
+
+    @abstractmethod
+    async def bulk_upsert_nodes(self, nodes_data: list[dict]) -> None:
+        """
+        Массовая вставка или обновление нод.
         """
         pass
 
@@ -102,7 +123,7 @@ class IWorldRepo(ABC):
         pass
 
     @abstractmethod
-    async def get_nodes_in_rect(self, x_start: int, y_start: int, width: int, height: int) -> list[WorldGrid]:
+    async def get_nodes_in_rect(self, x: int, y: int, width: int, height: int) -> list[WorldGrid]:
         """
         Возвращает все клетки в прямоугольнике (для чанков).
         """

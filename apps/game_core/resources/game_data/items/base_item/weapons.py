@@ -37,10 +37,9 @@ WEAPONS_DB = {
             "base_durability": 40,
             "narrative_tags": ["dagger", "swift", "stealth"],
             "implicit_bonuses": {
-                "dodge_chance": 0.05,
-                "physical_crit_chance": 0.20,
-                "physical_crit_power_float": 1.0,
-                "physical_accuracy": 0.15,
+                "physical_crit_chance": 0.15,  # Частые криты
+                "physical_pierce_chance": 0.15,  # Шанс игнора брони (убийца танков)
+                "physical_accuracy": 0.10,  # Точность
             },
         },
         "hatchet": {
@@ -56,8 +55,8 @@ WEAPONS_DB = {
             "base_durability": 50,
             "narrative_tags": ["axe", "light", "chop"],
             "implicit_bonuses": {
-                "physical_crit_chance": 0.15,
-                "physical_crit_power_float": 0.60,
+                "physical_crit_power_float": 0.50,  # Сильные криты
+                "bleed_damage_bonus": 0.15,  # Кровотечение
             },
         },
         "wakizashi": {
@@ -73,8 +72,9 @@ WEAPONS_DB = {
             "base_durability": 55,
             "narrative_tags": ["wakizashi", "samurai", "blade"],
             "implicit_bonuses": {
-                "bleed_damage_bonus": 0.1,
-                "physical_accuracy": 0.10,
+                "physical_accuracy": 0.15,  # Высокая точность
+                "parry_chance": 0.10,  # Защита
+                "counter_attack_chance": 0.05,  # Шанс контратаки
             },
         },
     },
@@ -94,8 +94,8 @@ WEAPONS_DB = {
             "base_durability": 60,
             "narrative_tags": ["sword", "balanced", "blade"],
             "implicit_bonuses": {
-                "physical_accuracy": 0.10,
-                "parry_chance": 0.05,
+                "physical_accuracy": 0.10,  # Баланс точности
+                "parry_chance": 0.10,  # Баланс защиты
             },
         },
         "battle_axe": {
@@ -110,9 +110,8 @@ WEAPONS_DB = {
             "base_durability": 50,
             "narrative_tags": ["axe", "brutal", "chop"],
             "implicit_bonuses": {
-                "physical_accuracy": -0.05,
-                "physical_crit_chance": 0.25,
-                "physical_crit_power_float": 0.80,
+                "physical_crit_power_float": 0.60,  # Очень сильные криты
+                "physical_damage_bonus": 0.05,  # Бонус к урону
             },
         },
         "mace": {
@@ -126,7 +125,10 @@ WEAPONS_DB = {
             "damage_spread": 0.2,
             "base_durability": 80,
             "narrative_tags": ["mace", "crushing", "blunt"],
-            "implicit_bonuses": {"physical_penetration": 0.20},
+            "implicit_bonuses": {
+                "physical_penetration": 0.25,  # Пробивание брони
+                "shock_resistance": 0.10,  # Устойчивость к шоку (твердость)
+            },
         },
         "rapier": {
             "id": "rapier",
@@ -140,8 +142,9 @@ WEAPONS_DB = {
             "base_durability": 45,
             "narrative_tags": ["rapier", "fencing", "piercing"],
             "implicit_bonuses": {
-                "physical_penetration": 0.30,
-                "physical_accuracy": 0.15,
+                "physical_accuracy": 0.20,  # Снайперская точность в ближнем бою
+                "physical_pierce_chance": 0.10,  # Укол в уязвимое место
+                "parry_chance": 0.05,
             },
         },
     },
@@ -161,8 +164,8 @@ WEAPONS_DB = {
             "base_durability": 70,
             "narrative_tags": ["greatsword", "massive", "cleave"],
             "implicit_bonuses": {
-                "parry_chance": 0.15,
-                "physical_damage_bonus": 0.10,
+                "parry_chance": 0.15,  # Большим мечом удобно парировать
+                "physical_damage_bonus": 0.15,  # Огромный урон
             },
         },
         "warhammer": {
@@ -177,8 +180,8 @@ WEAPONS_DB = {
             "base_durability": 90,
             "narrative_tags": ["hammer", "smash", "heavy"],
             "implicit_bonuses": {
-                "physical_penetration": 0.40,
-                "dodge_chance": -0.15,
+                "physical_penetration": 0.40,  # Крушит любую броню
+                "dodge_chance": -0.10,  # Тяжелый, мешает уворачиваться
             },
         },
         "spear": {
@@ -193,8 +196,9 @@ WEAPONS_DB = {
             "base_durability": 50,
             "narrative_tags": ["spear", "reach", "piercing"],
             "implicit_bonuses": {
-                "counter_attack_chance": 0.20,
+                "counter_attack_chance": 0.20,  # Длина позволяет бить на опережение
                 "physical_accuracy": 0.10,
+                "physical_pierce_chance": 0.05,
             },
         },
         "katana": {
@@ -209,9 +213,9 @@ WEAPONS_DB = {
             "base_durability": 65,
             "narrative_tags": ["katana", "samurai", "fast_blade"],
             "implicit_bonuses": {
-                "physical_crit_chance": 0.15,
-                "bleed_damage_bonus": 0.15,
-                "parry_chance": 0.10,
+                "physical_crit_chance": 0.15,  # Острота
+                "bleed_damage_bonus": 0.20,  # Режущие раны
+                "physical_accuracy": 0.10,
             },
         },
         "quarterstaff": {
@@ -226,8 +230,9 @@ WEAPONS_DB = {
             "base_durability": 100,
             "narrative_tags": ["staff", "monk", "defensive"],
             "implicit_bonuses": {
-                "parry_chance": 0.25,
-                "dodge_chance": 0.05,
+                "parry_chance": 0.20,  # Отличная защита
+                "dodge_chance": 0.10,  # Помогает двигаться
+                "counter_attack_chance": 0.10,
             },
         },
     },
@@ -246,7 +251,10 @@ WEAPONS_DB = {
             "damage_spread": 0.1,
             "base_durability": 40,
             "narrative_tags": ["bow", "ranger", "fast"],
-            "implicit_bonuses": {"physical_accuracy": 0.20},
+            "implicit_bonuses": {
+                "physical_accuracy": 0.15,
+                "dodge_chance": 0.05,  # Мобильность
+            },
         },
         "longbow": {
             "id": "longbow",
@@ -260,8 +268,9 @@ WEAPONS_DB = {
             "base_durability": 35,
             "narrative_tags": ["bow", "long_range", "sniper"],
             "implicit_bonuses": {
-                "physical_damage_bonus": 0.15,
+                "physical_damage_bonus": 0.15,  # Сила натяжения
                 "physical_accuracy": 0.10,
+                "physical_pierce_chance": 0.05,
             },
         },
         "crossbow": {
@@ -276,8 +285,8 @@ WEAPONS_DB = {
             "base_durability": 60,
             "narrative_tags": ["crossbow", "heavy", "slow"],
             "implicit_bonuses": {
-                "physical_penetration": 0.50,
-                "physical_crit_power_float": 1.0,
+                "physical_penetration": 0.40,  # Пробивает латы
+                "physical_crit_power_float": 0.50,
             },
         },
     },
@@ -297,8 +306,8 @@ WEAPONS_DB = {
             "damage_spread": 0.0,
             "narrative_tags": ["shield", "block", "protection"],
             "implicit_bonuses": {
-                "shield_block_chance": 0.20,
-                "shield_block_power": 0.30,
+                "shield_block_chance": 0.20,  # Шанс блока
+                "shield_block_power": 0.30,  # Сила блока
             },
         },
         "buckler": {
@@ -313,7 +322,8 @@ WEAPONS_DB = {
             "damage_spread": 0.0,
             "narrative_tags": ["buckler", "parry", "small_shield"],
             "implicit_bonuses": {
-                "parry_chance": 0.15,
+                "parry_chance": 0.15,  # Парирование вместо блока
+                "counter_attack_chance": 0.10,  # Возможность контратаки
                 "shield_block_chance": 0.05,
             },
         },

@@ -2,20 +2,20 @@
 # Основной фреймворк бота, как и в вашем текущем проекте
 aiogram~=3.22.0
 # валидация данных
-pydantic
-pydantic_settings
+pydantic~=2.11.10
+pydantic_settings~=2.12.0
 
 
 # --- База данных (SQLite) ---
 # Асинхронный драйвер для нашей основной БД (игроки, подземелья)
 aiosqlite
 # ORM для SQLAlchemy
-sqlalchemy
+sqlalchemy~=2.0.44
 
 # --- Хранилище состояний (Redis) ---
 # Асинхронный драйвер для Redis.
 # Aiogram будет использовать его для FSM (хранения состояний игрока)
-redis
+redis~=7.0.1
 
 # --- LLM Провайдеры ---
 # Клиент для API Google (Gemini)
@@ -23,7 +23,12 @@ google-genai
 
 # --- Конфигурация и Логи ---
 # Для загрузки токенов из .env файла
-python-dotenv
+python-dotenv~=1.2.1
 # Для красивых логов в консоли, как у вас сейчас
 
-loguru
+loguru~=0.7.3
+
+protobuf~=6.33.2
+pytest~=8.4.2
+streamlit~=1.52.1
+pandas~=2.3.3

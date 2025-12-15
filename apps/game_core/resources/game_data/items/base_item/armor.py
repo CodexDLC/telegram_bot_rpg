@@ -8,16 +8,14 @@
 ---------------
 - slot: 'head_armor', 'chest_armor', 'arms_armor', 'legs_armor', 'feet_armor'.
 - defense_type: 'physical' (для основной брони) или 'magical' (для брони магов).
-- base_power: Показатель защиты (Armor Value).
-- implicit_bonuses:
-    - Heavy: Штрафы к увороту ('dodge_chance': -0.1), бонусы к сопротивлениям.
-    - Medium: Небольшие бонусы к увороту или точности.
-    - Light: Бонусы к магии ('magical_resistance', 'energy_regen').
+- base_power: Показатель защиты (идет в damage_reduction_flat).
+- implicit_bonuses: Врожденные бонусы (резисты, уворот, реген и т.д.).
 """
 
 ARMOR_DB = {
     # ==========================================
-    # Тяжелая Броня
+    # Тяжелая Броня (Plate)
+    # Философия: "Танк". Максимум защиты, штрафы к мобильности.
     # ==========================================
     "heavy_armor": {
         "helmet": {
@@ -27,11 +25,14 @@ ARMOR_DB = {
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["ingots"],
-            "base_power": 5,
+            "base_power": 4,
             "base_durability": 60,
             "damage_spread": 0.0,
             "narrative_tags": ["helmet", "visor", "protection"],
-            "implicit_bonuses": {"anti_crit_chance": 0.05},
+            "implicit_bonuses": {
+                "anti_crit_chance": 0.10,  # Защита головы от критов
+                "physical_resistance": 0.02,
+            },
         },
         "plate_chest": {
             "id": "plate_chest",
@@ -40,11 +41,15 @@ ARMOR_DB = {
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["ingots"],
-            "base_power": 15,
+            "base_power": 10,
             "base_durability": 100,
             "damage_spread": 0.0,
             "narrative_tags": ["plate", "heavy", "metal"],
-            "implicit_bonuses": {"dodge_chance": -0.10, "physical_resistance": 0.05},
+            "implicit_bonuses": {
+                "physical_resistance": 0.10,  # Основная броня
+                "dodge_chance": -0.15,  # Тяжелая
+                "thorns_damage_flat": 2.0,  # Шипы
+            },
         },
         "gauntlets": {
             "id": "gauntlets",
@@ -53,11 +58,14 @@ ARMOR_DB = {
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["ingots"],
-            "base_power": 4,
+            "base_power": 3,
             "base_durability": 70,
             "damage_spread": 0.0,
             "narrative_tags": ["gauntlets", "heavy", "fist"],
-            "implicit_bonuses": {"physical_damage_bonus": 0.02},
+            "implicit_bonuses": {
+                "physical_damage_bonus": 0.05,  # Утяжеление удара
+                "physical_resistance": 0.02,
+            },
         },
         "greaves": {
             "id": "greaves",
@@ -66,11 +74,14 @@ ARMOR_DB = {
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["ingots"],
-            "base_power": 6,
+            "base_power": 5,
             "base_durability": 80,
             "damage_spread": 0.0,
             "narrative_tags": ["greaves", "shin_guard"],
-            "implicit_bonuses": {"dodge_chance": -0.05},
+            "implicit_bonuses": {
+                "physical_resistance": 0.05,
+                "dodge_chance": -0.05,
+            },
         },
         "sabatons": {
             "id": "sabatons",
@@ -79,15 +90,19 @@ ARMOR_DB = {
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["ingots"],
-            "base_power": 4,
+            "base_power": 3,
             "base_durability": 70,
             "damage_spread": 0.0,
             "narrative_tags": ["sabatons", "heavy_boots"],
-            "implicit_bonuses": {"physical_resistance": 0.02},
+            "implicit_bonuses": {
+                "shock_resistance": 0.20,  # Устойчивость
+                "physical_resistance": 0.02,
+            },
         },
     },
     # ==========================================
-    # Средняя Броня
+    # Средняя Броня (Leather / Chain)
+    # Философия: "Баланс". Защита + Точность/Крит.
     # ==========================================
     "medium_armor": {
         "leather_cap": {
@@ -97,11 +112,14 @@ ARMOR_DB = {
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["leathers"],
-            "base_power": 3,
+            "base_power": 2,
             "base_durability": 40,
             "damage_spread": 0.0,
             "narrative_tags": ["cap", "leather"],
-            "implicit_bonuses": {},
+            "implicit_bonuses": {
+                "physical_accuracy": 0.05,  # Не мешает обзору
+                "perception": 1.0,
+            },
         },
         "jerkin": {
             "id": "jerkin",
@@ -110,11 +128,15 @@ ARMOR_DB = {
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["leathers"],
-            "base_power": 8,
+            "base_power": 6,
             "base_durability": 60,
             "damage_spread": 0.0,
             "narrative_tags": ["jacket", "vest", "scout"],
-            "implicit_bonuses": {"dodge_chance": 0.02},
+            "implicit_bonuses": {
+                "dodge_chance": 0.05,  # Мобильность
+                "physical_crit_chance": 0.05,  # Свобода движений
+                "bleed_resistance": 0.10,
+            },
         },
         "bracers": {
             "id": "bracers",
@@ -127,7 +149,10 @@ ARMOR_DB = {
             "base_durability": 45,
             "damage_spread": 0.0,
             "narrative_tags": ["bracers", "wrist_guard"],
-            "implicit_bonuses": {"physical_accuracy": 0.02},
+            "implicit_bonuses": {
+                "physical_accuracy": 0.05,
+                "parry_chance": 0.05,  # Удобно парировать
+            },
         },
         "breeches": {
             "id": "breeches",
@@ -136,11 +161,14 @@ ARMOR_DB = {
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["leathers"],
-            "base_power": 4,
+            "base_power": 3,
             "base_durability": 50,
             "damage_spread": 0.0,
             "narrative_tags": ["pants", "leather"],
-            "implicit_bonuses": {},
+            "implicit_bonuses": {
+                "dodge_chance": 0.03,
+                "inventory_slots_bonus": 1,  # Карманы
+            },
         },
         "boots": {
             "id": "boots",
@@ -149,15 +177,19 @@ ARMOR_DB = {
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["leathers"],
-            "base_power": 3,
+            "base_power": 2,
             "base_durability": 50,
             "damage_spread": 0.0,
             "narrative_tags": ["boots", "travel"],
-            "implicit_bonuses": {"dodge_chance": 0.03},
+            "implicit_bonuses": {
+                "dodge_chance": 0.05,
+                "counter_attack_chance": 0.05,  # Работа ног
+            },
         },
     },
     # ==========================================
-    # Легкая Броня
+    # Легкая Броня (Cloth)
+    # Философия: "Магия и Уворот". Реген, Маг. защита, Спецэффекты.
     # ==========================================
     "light_armor": {
         "hood": {
@@ -171,7 +203,10 @@ ARMOR_DB = {
             "base_durability": 30,
             "damage_spread": 0.0,
             "narrative_tags": ["hood", "mage_hat"],
-            "implicit_bonuses": {"magical_resistance": 0.05},
+            "implicit_bonuses": {
+                "magical_resistance": 0.05,
+                "debuff_avoidance": 0.05,  # Мистическая защита
+            },
         },
         "robe": {
             "id": "robe",
@@ -180,11 +215,15 @@ ARMOR_DB = {
             "damage_type": None,
             "defense_type": "magical",
             "allowed_materials": ["cloths"],
-            "base_power": 4,
+            "base_power": 2,
             "base_durability": 40,
             "damage_spread": 0.0,
             "narrative_tags": ["robe", "wizard", "cloth"],
-            "implicit_bonuses": {"magical_resistance": 0.10, "energy_regen": 1.0},
+            "implicit_bonuses": {
+                "magical_resistance": 0.10,
+                "energy_regen": 1.5,  # Концентрация
+                "dodge_chance": 0.05,
+            },
         },
         "wraps": {
             "id": "wraps",
@@ -197,7 +236,10 @@ ARMOR_DB = {
             "base_durability": 25,
             "damage_spread": 0.0,
             "narrative_tags": ["wraps", "bandages"],
-            "implicit_bonuses": {"energy_regen": 0.2},
+            "implicit_bonuses": {
+                "healing_power": 0.05,  # Бонус к лечению
+                "magical_accuracy": 0.05,
+            },
         },
         "leggings": {
             "id": "leggings",
@@ -206,11 +248,14 @@ ARMOR_DB = {
             "damage_type": None,
             "defense_type": "magical",
             "allowed_materials": ["cloths"],
-            "base_power": 2,
+            "base_power": 1,
             "base_durability": 30,
             "damage_spread": 0.0,
             "narrative_tags": ["leggings", "cloth"],
-            "implicit_bonuses": {"magical_resistance": 0.03},
+            "implicit_bonuses": {
+                "magical_resistance": 0.05,
+                "dodge_chance": 0.05,
+            },
         },
         "sandals": {
             "id": "sandals",
@@ -223,7 +268,10 @@ ARMOR_DB = {
             "base_durability": 25,
             "damage_spread": 0.0,
             "narrative_tags": ["sandals", "light_footwear"],
-            "implicit_bonuses": {"dodge_chance": 0.01},
+            "implicit_bonuses": {
+                "energy_regen": 0.5,
+                "dodge_chance": 0.05,
+            },
         },
     },
 }

@@ -1,4 +1,5 @@
 from loguru import logger as log
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.database.repositories import get_character_stats_repo, get_inventory_repo
@@ -19,79 +20,83 @@ class CombatAggregator:
     """
     Сервис для сбора и агрегации всех данных о персонаже, необходимых для боевой сессии.
 
-    Собирает базовые характеристики, бонусы от экипировки и производные модификаторы
-    в единый `CombatSessionContainerDTO`.
+    Собирает базовые статы, бонусы от экипировки, рассчитывает производные
+    модификаторы и упаковывает все в `CombatSessionContainerDTO`.
     """
 
     def __init__(self, session: AsyncSession, account_manager: AccountManager):
         """
-        Инициализирует CombatAggregator.
+        Инициализирует сервис.
 
         Args:
-            session: Асинхронная сессия SQLAlchemy.
-            account_manager: Менеджер аккаунтов.
+            session: Сессия БД.
+            account_manager: Менеджер аккаунта.
         """
         self.session = session
         self.account_manager = account_manager
         self.stats_repo = get_character_stats_repo(session)
         self.inv_repo = get_inventory_repo(session)
-        log.debug("CombatAggregator | status=initialized")
+        log.debug("CombatAggregatorInit")
 
     async def collect_session_container(self, char_id: int) -> CombatSessionContainerDTO:
         """
         Собирает полный контейнер данных для боевой сессии персонажа.
+
+        Args:
+            char_id: ID персонажа.
+
+        Returns:
+            Заполненный `CombatSessionContainerDTO`.
         """
-        log.info(f"CombatAggregator | event=collect_container char_id={char_id}")
+        log.info(f"CollectSessionContainer | event=start char_id={char_id}")
         container = CombatSessionContainerDTO(char_id=char_id, team="none", name="Unknown")
 
-        base_stats = await self.stats_repo.get_stats(char_id)
-        equipped_items = await self.inv_repo.get_items_by_location(char_id, "equipped")
-        inventory_items = await self.inv_repo.get_items_by_location(char_id, "inventory")
+        try:
+            base_stats = await self.stats_repo.get_stats(char_id)
+            if not base_stats:
+                log.warning(f"CollectSessionContainerFail | reason=no_base_stats char_id={char_id}")
+                # Возвращаем пустой контейнер, чтобы не крашить вызывающий код
+                return container
 
-        if base_stats:
-            for field, val in base_stats.model_dump().items():
-                if isinstance(val, (int, float)):
-                    self._add_stat(container, field, float(val), "base")
+            equipped_items = await self.inv_repo.get_items_by_location(char_id, "equipped")
+            inventory_items = await self.inv_repo.get_items_by_location(char_id, "inventory")
+        except SQLAlchemyError:
+            log.exception(f"CollectSessionContainerError | reason=db_error char_id={char_id}")
+            return container
 
-            derived = ModifiersCalculatorService.calculate_all_modifiers_for_stats(base_stats)
-            for field, val in derived.model_dump().items():
-                if isinstance(val, (int, float)):
-                    self._add_stat(container, field, float(val), "base")
-            log.debug(f"CombatAggregator | event=base_stats_processed char_id={char_id}")
+        # --- Слой 1: Базовые статы и производные от них ---
+        for field, val in base_stats.model_dump().items():
+            if isinstance(val, (int, float)):
+                self._add_stat(container, field, float(val), "base")
 
-        has_weapon = self._process_equipment_bonuses(container, equipped_items)
-        log.debug(f"CombatAggregator | event=equipment_processed char_id={char_id}")
+        derived = ModifiersCalculatorService.calculate_all_modifiers_for_stats(base_stats)
+        for field, val in derived.model_dump().items():
+            if isinstance(val, (int, float)):
+                self._add_stat(container, field, float(val), "base")
+        log.debug(f"CollectSessionContainer | event=base_stats_processed char_id={char_id}")
 
-        if not has_weapon:
-            self._calculate_unarmed_damage(container)
+        # --- Слой 2: Бонусы от экипировки ---
+        self._process_equipment_bonuses(container, equipped_items)
+        log.debug(f"CollectSessionContainer | event=equipment_processed char_id={char_id}")
 
         container.equipped_items = equipped_items
 
-        # Собираем предметы с пояса
+        # --- Слой 3: Предметы на поясе ---
         belt_items = [i for i in inventory_items if i.quick_slot_position]
         if belt_items:
             belt_items.sort(key=lambda x: x.quick_slot_position or "")
         container.belt_items = belt_items
 
-        # Получаем лимит слотов
         inv_service = InventoryService(self.session, char_id, self.account_manager)
         container.quick_slot_limit = await inv_service.get_quick_slot_limit()
 
-        log.info(f"CombatAggregator | status=success char_id={char_id} final_stats_count={len(container.stats)}")
+        log.info(f"CollectSessionContainer | event=success char_id={char_id} stats_count={len(container.stats)}")
         return container
 
-    def _process_equipment_bonuses(self, container: CombatSessionContainerDTO, items: list[InventoryItemDTO]) -> bool:
-        """
-        Обрабатывает бонусы от экипированных предметов и добавляет их в контейнер.
-        """
-        has_weapon = False
+    def _process_equipment_bonuses(self, container: CombatSessionContainerDTO, items: list[InventoryItemDTO]) -> None:
+        """Обрабатывает бонусы от экипированных предметов и добавляет их в контейнер."""
         for item in items:
-            if item.item_type in (ItemType.RESOURCE, ItemType.CURRENCY, ItemType.CONSUMABLE):
-                continue
-            else:
-                if item.item_type == ItemType.WEAPON:
-                    has_weapon = True
-
+            if item.item_type not in (ItemType.RESOURCE, ItemType.CURRENCY, ItemType.CONSUMABLE):
                 if item.data.bonuses:
                     for stat_k, stat_v in item.data.bonuses.items():
                         self._add_stat(container, stat_k, float(stat_v), "equipment")
@@ -102,27 +107,6 @@ class CombatAggregator:
 
                 if item.item_type == ItemType.ARMOR:
                     self._add_stat(container, "damage_reduction_flat", float(item.data.protection), "equipment")
-        return has_weapon
-
-    def _calculate_unarmed_damage(self, container: CombatSessionContainerDTO) -> None:
-        """
-        Рассчитывает и добавляет урон от кулачного боя в контейнер, если оружие отсутствует.
-        """
-        str_data = container.stats.get("strength")
-        strength_val = str_data.base if str_data else 0.0
-
-        base_min, base_max = 1, 3
-        added_max = strength_val * 1.0
-        added_min = strength_val // 3
-        final_min = int(base_min + added_min)
-        final_max = int(base_max + added_max)
-
-        self._add_stat(container, "physical_damage_min", float(final_min), "equipment")
-        self._add_stat(container, "physical_damage_max", float(final_max), "equipment")
-
-        log.debug(
-            f"CombatAggregator | event=unarmed_damage_calculated char_id={container.char_id} strength={strength_val} damage_min={final_min} damage_max={final_max}"
-        )
 
     def _add_stat(
         self,

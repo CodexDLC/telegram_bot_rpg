@@ -36,6 +36,7 @@ class CharacterModifiersSaveDto(BaseModel):
     physical_crit_chance: float = 0.0  # Шанс нанести критический удар (0.0 до 1.0).
     physical_crit_power_float: float = 1.5  # Множитель урона при крите. 1.5 = 150% урона.
     physical_pierce_chance: float = 0.0  # Шанс, что атака полностью проигнорирует броню.
+    physical_pierce_cap: float = 0.30  # Максимальный шанс пронзания (игнора брони).
     physical_crit_cap: float = 0.75  # Максимально возможный шанс крита.
 
     # ==========================================================================
@@ -92,14 +93,17 @@ class CharacterModifiersSaveDto(BaseModel):
     poison_efficiency: float = 0.0  # Увеличивает длительность или шанс наложения яда.
     bleed_damage_bonus: float = 0.0  # Усиливает урон от кровотечения.
     bleed_resistance: float = 0.0  # Снижает входящий урон от кровотечения.
-    thorns_damage_reflect: float = 0.0  # % от полученного урона, который возвращается атакующему.
+    thorns_damage_flat: float = 0.0  # Фиксированный урон, который возвращается атакующему.
 
     # ==========================================================================
     # 6. ✨ СПЕЦИАЛЬНЫЕ БОЕВЫЕ (Special)
     # ==========================================================================
     counter_attack_chance: float = 0.0  # Шанс провести контратаку после успешного уворота или парирования.
+    counter_attack_cap: float = 0.50  # Максимальный шанс контратаки.
     vampiric_power: float = 0.0  # % от нанесенного урона, который превращается в здоровье.
+    vampiric_power_cap: float = 0.50  # Максимальный % отхила от урона.
     vampiric_trigger_chance: float = 0.0  # Шанс срабатывания вампиризма при атаке.
+    vampiric_trigger_cap: float = 1.0  # Максимальный шанс срабатывания вампиризма.
     healing_power: float = 0.0  # % бонус к силе исходящего лечения.
     received_healing_bonus: float = 0.0  # % бонус к силе входящего лечения.
     pet_damage_bonus: float = 0.0  # % бонус к урону питомцев.

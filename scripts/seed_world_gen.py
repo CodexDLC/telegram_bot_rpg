@@ -1,370 +1,481 @@
 import asyncio
+import math
 import os
 import random
 import sys
-from typing import Any, TypedDict, cast
+from typing import cast
 
 from loguru import logger as log
-from sqlalchemy import text
 
-from apps.common.database.model_orm import Base
+from apps.common.database.model_orm.base import Base
 from apps.common.database.model_orm.world import WorldRegion, WorldZone
+from apps.common.database.repositories.ORM.world_repo import WorldRepoORM
+from apps.common.database.session import async_engine, async_session_factory
+from apps.game_core.game_service.monster.clan_factory import ClanFactory
+from apps.game_core.game_service.world.content_gen_service import ContentGenerationService
 from apps.game_core.game_service.world.gen_utils.path_finder import PathFinder
 from apps.game_core.game_service.world.zone_orchestrator import ZoneOrchestrator
-from apps.game_core.resources.game_data.graf_data_world.start_vilage import (
-    STATIC_LOCATIONS,
+from apps.game_core.resources.game_data.graf_data_world.start_vilage import STATIC_LOCATIONS
+from apps.game_core.resources.game_data.graf_data_world.world_config import (
+    ANCHORS,
+    BIOME_DEFINITIONS,
+    HUB_CENTER,
+    REGION_ROWS,
+    REGION_SIZE,
+    WORLD_HEIGHT,
+    WORLD_WIDTH,
+    ZONE_SIZE,
+    TerrainMeta,
 )
-from apps.game_core.resources.game_data.graf_data_world.world_config import TerrainMeta
 
-# ==============================================================================
-# НАСТРОЙКИ ОКРУЖЕНИЯ
-# ==============================================================================
-current_dir = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(current_dir)
-os.chdir(PROJECT_ROOT)
-if PROJECT_ROOT not in sys.path:
-    sys.path.append(PROJECT_ROOT)
-
-data_dir = os.path.join(PROJECT_ROOT, "data")
-if not os.path.exists(data_dir):
-    os.makedirs(data_dir, exist_ok=True)
+# --- Адаптация под структуру проекта ---
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 
-# ==============================================================================
-# ИМПОРТЫ
-# ==============================================================================
+class WorldGenerator:
+    """
+    Генератор игрового мира v3.0 (Noise Biomes + Regional POIs).
+    """
 
+    def __init__(self, session):
+        self.session = session
+        self.world_repo = WorldRepoORM(session)
+        self.clan_factory = ClanFactory(session)
+        self.content_service = ContentGenerationService(self.world_repo)
+        self.zone_orchestrator = ZoneOrchestrator(session, self.world_repo, self.content_service)
+        self.regional_pois = []  # Список ключевых точек для дорог
+        log.debug("WorldGeneratorInit")
 
-class CellData(TypedDict):
-    zone_id: str
-    biome_id: str
-    terrain_key: str
-    tags: list[str]
-    flags: dict[str, Any]
-    content: dict[str, Any]
-    services: list[str]
-
-
-@log.catch
-async def seed_world_final(mode: str = "test"):
-    from apps.common.database.repositories import get_world_repo
-    from apps.common.database.session import async_engine, async_session_factory
-    from apps.game_core.game_service.world.content_gen_service import ContentGenerationService
-    from apps.game_core.game_service.world.threat_service import ThreatService
-    from apps.game_core.resources.game_data.graf_data_world.world_config import (
-        ANCHORS,
-        BIOME_DEFINITIONS,
-        HUB_CENTER,
-        REGION_ROWS,
-        REGION_SIZE,
-        ROAD_TAGS,
-        WORLD_HEIGHT,
-        WORLD_WIDTH,
-        ZONE_SIZE,
-    )
-
-    def get_region_id(x: int, y: int) -> str:
-        col = (x // REGION_SIZE) + 1
-        row_idx = y // REGION_SIZE
-        row_idx = min(row_idx, len(REGION_ROWS) - 1)
-        row_char = REGION_ROWS[row_idx]
-        return f"{row_char}{col}"
-
-    def get_zone_id(x: int, y: int) -> str:
-        reg_id = get_region_id(x, y)
-        local_x = x % REGION_SIZE
-        local_y = y % REGION_SIZE
-        zone_x = local_x // ZONE_SIZE
-        zone_y = local_y // ZONE_SIZE
-        return f"{reg_id}_{zone_x}_{zone_y}"
-
-    log.info(f"🚀 World Seeding Pipeline V17.0 (Lore & Tech Fix) Started. Mode: {mode}")
-
-    if mode != "content_only":
-        async with async_engine.begin() as conn:
-            # Сброс базы для чистоты (новые биомы требуют пересоздания)
-            await conn.run_sync(Base.metadata.drop_all)
-            await conn.run_sync(Base.metadata.create_all)
-
-    async with async_session_factory() as session:
-        repo = get_world_repo(session)
+    async def run(self, mode: str = "test") -> None:
+        log.info(f"WorldGen | event=start mode={mode}")
 
         if mode != "content_only":
-            # ======================================================================
-            # STAGE 1: СТРУКТУРА (РЕГИОНЫ И ЗОНЫ)
-            # ======================================================================
-            log.info("🔹 Stage 1: Defining Regions & Zones")
-            coord_to_zone: dict[tuple[int, int], str] = {}
-            zone_biome_map: dict[str, str] = {}
-            all_biomes = list(BIOME_DEFINITIONS.keys())
+            # 1. Структура (Регионы и Зоны)
+            log.info("WorldGen | step=1_create_structure")
+            await self._create_regions_and_zones()
 
-            for _, row_char in enumerate(REGION_ROWS):
-                for col_idx in range(1, 8):
-                    reg_id = f"{row_char}{col_idx}"
-                    await repo.upsert_region(WorldRegion(id=reg_id, climate_tags=[]))
+            # 2. Матрица в памяти
+            log.info("WorldGen | step=2_generate_matrix_ram")
+            world_matrix = self._generate_world_matrix()
 
-                    is_d4_region = reg_id == "D4"
+            # 3. Скелет мира (Стены, Оплоты, Дороги)
+            world_matrix = self._build_world_skeleton(world_matrix)
 
-                    for zx in range(3):
-                        for zy in range(3):
-                            zone_id = f"{reg_id}_{zx}_{zy}"
+            # 4. Сохранение (BULK)
+            log.info(f"WorldGen | step=3_bulk_save items={len(world_matrix)}")
+            await self._save_matrix_bulk(world_matrix)
 
-                            # === ЛОРНЫЙ ФИКС: ВЕСЬ D4 - ЭТО РУИНЫ ГОРОДА ===
-                            biome = "city_ruins" if is_d4_region else random.choice(all_biomes)
-                            # ===============================================
+            await self.session.commit()
+            log.info("WorldGen | event=structure_committed")
 
-                            await repo.upsert_zone(WorldZone(id=zone_id, region_id=reg_id, biome_id=biome))
-                            zone_biome_map[zone_id] = biome
+        # 5. Контент (LLM)
+        log.info("WorldGen | step=4_spawn_content")
+        await self._spawn_content(mode)
+        await self.session.commit()
+        log.info("WorldGen | event=complete")
 
-            for x in range(WORLD_WIDTH):
-                for y in range(WORLD_HEIGHT):
-                    coord_to_zone[(x, y)] = get_zone_id(x, y)
-            await session.flush()
+    async def _create_regions_and_zones(self) -> None:
+        """Создает регионы и зоны. D4 — особый случай."""
+        for row_char in REGION_ROWS:
+            for col_idx in range(1, 8):
+                reg_id = f"{row_char}{col_idx}"
+                await self.world_repo.upsert_region(WorldRegion(id=reg_id, climate_tags=[]))
 
-            # ======================================================================
-            # STAGE 2: МАТРИЦА
-            # ======================================================================
-            log.info("🔹 Stage 2: Generating World Matrix")
-            world_matrix: dict[tuple[int, int], CellData] = {}
+                for zx in range(3):
+                    for zy in range(3):
+                        zone_id = f"{reg_id}_{zx}_{zy}"
+                        reg_row_idx = REGION_ROWS.index(row_char)
 
-            for wx in range(WORLD_WIDTH):
-                for wy in range(WORLD_HEIGHT):
-                    z_id = coord_to_zone.get((wx, wy), "")
-                    biome_id = zone_biome_map.get(z_id, "wasteland")
-                    biome_config: dict[str, Any] = BIOME_DEFINITIONS.get(biome_id, {})
+                        # Абсолютные координаты центра зоны
+                        center_x = (col_idx - 1) * REGION_SIZE + zx * ZONE_SIZE + ZONE_SIZE // 2
+                        center_y = reg_row_idx * REGION_SIZE + zy * ZONE_SIZE + ZONE_SIZE // 2
 
-                    # Фон
-                    backgrounds = [k for k, v in biome_config.items() if v.get("role") == "background"]
-                    if not backgrounds:
-                        backgrounds = ["flat"]
-                    bg_weights = [biome_config.get(k, {}).get("spawn_weight", 10) for k in backgrounds]
-                    try:
-                        t_key = random.choices(backgrounds, weights=bg_weights, k=1)[0]
-                    except IndexError:
-                        t_key = "flat"
+                        flags = {}
 
-                    t_config_raw = biome_config.get(t_key) or {
-                        "spawn_weight": 0,
-                        "travel_cost": 1.0,
-                        "is_passable": True,
-                        "visual_tags": [],
-                        "danger_mod": 1.0,
-                        "role": "background",
-                        "narrative_hint": "",
-                    }
-                    t_config = cast(TerrainMeta, t_config_raw)
-                    threat_val = ThreatService.calculate_threat(wx, wy)
+                        # --- ЛОГИКА D4 (Цитадель) ---
+                        if reg_id == "D4":
+                            if zx == 1 and zy == 1:
+                                # ЦЕНТР ХАБА
+                                biome_id = "hub_district"
+                                tier = 0
+                                # 🔥 ГЛАВНОЕ: Ставим флаг безопасности явно
+                                flags = {"is_safe_zone": True, "is_passable": True}
+                            else:
+                                # ОКРАИНЫ (Руины)
+                                biome_id = "city_ruins"
+                                tier = 0  # <--- БЫЛО 1, СТАВЬ 0
+                                flags = {"is_safe_zone": False, "is_passable": True}
+                        else:
+                            # --- ВНЕШНИЙ МИР (Шум) ---
+                            biome_id = self._get_biome_noise(center_x, center_y)
 
-                    influence_tags = ThreatService.get_narrative_tags(wx, wy)
-                    visual_tags = t_config.get("visual_tags", [])
-                    final_tags = list(set(visual_tags + influence_tags))
+                            # Тир зависит от дальности от Хаба
+                            dist = math.sqrt((center_x - 52) ** 2 + (center_y - 52) ** 2)
+                            tier = min(7, int(dist / 15) + 1)
 
-                    cell: CellData = {
-                        "zone_id": z_id,
-                        "biome_id": biome_id,
-                        "terrain_key": t_key,
-                        "tags": final_tags,
-                        "flags": {
-                            "is_active": False,
-                            "threat_val": round(threat_val, 3),
-                            "threat_tier": ThreatService.get_tier_from_threat(threat_val),
-                            "danger_mod": t_config.get("danger_mod", 1.0),
-                            "is_safe_zone": (threat_val < 0.1),
-                            "has_road": False,
-                            "is_poi": False,
-                            "is_gate": False,
-                            "is_passable": t_config.get("is_passable", True),
-                        },
-                        "content": {"title": None, "description": None, "environment_tags": final_tags},
-                        "services": [],
-                    }
-
-                    # --- СТЕНЫ ВНЕШНЕГО ПЕРИМЕТРА (ГРАНИЦА РЕГИОНА D4) ---
-                    if z_id.startswith("D4"):
-                        d4_min, d4_max = 45, 59
-                        is_edge_x = wx in (d4_min, d4_max)
-                        is_edge_y = wy in (d4_min, d4_max)
-
-                        if is_edge_x or is_edge_y:
-                            cell["terrain_key"] = "monolithic_wall"
-                            cell["flags"]["is_passable"] = False
-                            cell["tags"].append("outer_wall")
-
-                    # --- СТАТИКА (ЦИТАДЕЛЬ) ---
-                    if (wx, wy) in STATIC_LOCATIONS:
-                        static_data = STATIC_LOCATIONS[(wx, wy)]
-                        content = dict(static_data["content"]).copy()
-                        if "environment_tags" not in content:
-                            content["environment_tags"] = []
-                        cell.update(
-                            {
-                                "terrain_key": "static_structure",
-                                "tags": cast(list[str], content["environment_tags"]),
-                                "flags": static_data["flags"],
-                                "content": content,
-                                "services": static_data.get("services", []),
-                            }
+                        await self.world_repo.upsert_zone(
+                            WorldZone(id=zone_id, region_id=reg_id, biome_id=biome_id, tier=tier, flags=flags)
                         )
+        await self.session.flush()
 
-                    world_matrix[(wx, wy)] = cell
+    def _get_biome_noise(self, x: int, y: int) -> str:
+        """
+        Генерирует "пятна" биомов с помощью синусоидного шума.
+        Никакой привязки к Якорям. Чистый хаос.
+        """
+        natural_biomes = ["forest", "swamp", "mountains", "wasteland", "canyon", "jungle", "badlands", "grassland"]
 
-            # ======================================================================
-            # STAGE 3: ДОРОГИ И ВОРОТА
-            # ======================================================================
-            log.info("🔹 Stage 3: Building Road Network")
-            graph_nodes = [(HUB_CENTER["x"], HUB_CENTER["y"])]
-            graph_nodes.extend((anchor["x"], anchor["y"]) for anchor in ANCHORS)
-            for (x, y), cell in world_matrix.items():
-                if cell["flags"].get("is_gate") or cell["flags"].get("is_poi"):
-                    graph_nodes.append((x, y))
-            graph_nodes = list(set(graph_nodes))
+        # Масштаб шума (меньше = крупнее пятна)
+        scale = 0.12
+        # Сдвиг, чтобы не было зеркальности
+        val = math.sin(x * scale) + math.cos(y * scale * 0.8) + math.sin((x + y) * 0.05)
 
-            path_finder = PathFinder(zone_biome_map, coord_to_zone)
-            road_cells_set = path_finder.build_road_network(graph_nodes)
+        # Нормализация (-3..3 -> 0..1)
+        normalized = (val + 3) / 6
+        idx = int(normalized * len(natural_biomes))
+        idx = max(0, min(idx, len(natural_biomes) - 1))
 
-            log.info(f"   ...Processing {len(road_cells_set)} road cells...")
-            for rx, ry in road_cells_set:
-                if (rx, ry) in world_matrix and not world_matrix[(rx, ry)]["services"]:
-                    cell = world_matrix[(rx, ry)]
-                    cell["flags"]["has_road"] = True
+        return natural_biomes[idx]
 
-                    # === ТЕХНИЧЕСКИЙ ФИКС: ВОРОТА ВМЕСТО СНОСА СТЕН ===
-                    if cell["terrain_key"] == "monolithic_wall":
-                        cell["terrain_key"] = "city_gate_outer"
-                        cell["flags"]["is_gate"] = True
-                        cell["flags"]["is_poi"] = True
-                        cell["flags"]["is_passable"] = True
-                        cell["tags"].append("massive_gate")
-                        cell["content"]["environment_tags"].append("massive_gate")
-                        continue  # Не меняем на обычную дорогу
-                    # ==================================================
+    def _generate_world_matrix(self) -> dict:
+        """Базовая заливка террейна с учетом ВЕСОВ (Spawn Weight)."""
+        matrix = {}
+        for wx in range(WORLD_WIDTH):
+            for wy in range(WORLD_HEIGHT):
+                # ID Зоны
+                col = (wx // REGION_SIZE) + 1
+                row_idx = min(wy // REGION_SIZE, len(REGION_ROWS) - 1)
+                row_char = REGION_ROWS[row_idx]
+                reg_id = f"{row_char}{col}"
 
-                    biome_conf = BIOME_DEFINITIONS.get(cell["biome_id"], {})
-                    road_key = "road"
-                    found = False
-                    for k in biome_conf:
-                        if k in ROAD_TAGS:
-                            road_key = k
-                            found = True
-                            break
-                    if not found:
-                        for k in biome_conf:
-                            if "road" in k or "path" in k:
-                                road_key = k
-                                found = True
-                                break
+                local_x = wx % REGION_SIZE
+                local_y = wy % REGION_SIZE
+                zone_x = local_x // ZONE_SIZE
+                zone_y = local_y // ZONE_SIZE
+                zone_id = f"{reg_id}_{zone_x}_{zone_y}"
 
-                    # Fallback для City Ruins (если конфиг не нашел)
-                    if not found and cell["biome_id"] == "city_ruins":
-                        road_key = "ruin_road_main"
+                # Биом
+                biome_id = "city_ruins" if reg_id == "D4" else self._get_biome_noise(wx, wy)
 
-                    if road_key in biome_conf:
-                        road_conf = biome_conf[road_key]
-                        road_tags = road_conf.get("visual_tags", ["road"])
-                        cell["tags"].extend(road_tags)
-                        cell["content"]["environment_tags"].extend(road_tags)
-                        if not cell["flags"].get("is_poi") and not cell["flags"].get("is_gate"):
-                            cell["terrain_key"] = road_key
+                # --- ИСПРАВЛЕНИЕ: ВЗВЕШЕННЫЙ ВЫБОР ТАЙЛА ---
+                biome_config = BIOME_DEFINITIONS.get(biome_id, {})
+                t_key = "flat"
 
-            # ======================================================================
-            # STAGE 4: ЗАПИСЬ В БД
-            # ======================================================================
-            log.info("🔹 Stage 4: Dumping Matrix to DB")
-            for (x, y), cell in world_matrix.items():
-                cell["content"]["environment_tags"] = list(set(cell["content"]["environment_tags"]))
-                cell["tags"] = list(set(cell["tags"]))
-                await repo.create_or_update_node(
-                    x=x,
-                    y=y,
-                    zone_id=cell["zone_id"],
-                    terrain_type=cell["terrain_key"],
-                    is_active=cell["flags"].get("is_active", False),
-                    flags=cell["flags"],
-                    content=cell["content"],
-                    services=cell["services"],
-                )
-            await session.commit()
-            log.info("✅ World Matrix Saved to DB.")
-        else:
-            log.info("⏩ Skipping Stages 1-4 (Content Only Mode)")
+                if biome_config:
+                    population = []
+                    weights = []
 
-        # ======================================================================
-        # STAGE 5: АКТИВАЦИЯ И ГЕНЕРАЦИЯ (С SQL ФИКСОМ)
-        # ======================================================================
-        log.info("🔹 Stage 5: Activating Region D4")
-        content_service = ContentGenerationService(repo)
-        orchestrator = ZoneOrchestrator(repo, content_service)
+                    for key, data in biome_config.items():
+                        # Фильтруем только фон
+                        if data.get("role") != "background":
+                            continue
 
-        # === ФУНКЦИЯ ДЛЯ ПРАВИЛЬНОЙ АКТИВАЦИИ ===
-        async def force_activate_cell(sess, cx, cy):
-            # Обновляем напрямую через SQL, чтобы обойти баг ORM/Repo
-            await sess.execute(
-                text(
-                    """
-                UPDATE world_grid 
-                SET is_active = 1, 
-                    flags = json_patch(flags, '{"is_active": true}')
-                WHERE x = :x AND y = :y
-            """
-                ),
-                {"x": cx, "y": cy},
-            )
+                        # БЕРЕМ ВЕС ИЗ КОНФИГА
+                        w = data.get("spawn_weight", 0)
 
-        # ==========================================
+                        # Если вес > 0, добавляем в рулетку
+                        if w > 0:
+                            population.append(key)
+                            weights.append(w)
 
-        # 1. Активируем ХАБ
-        hub_center_x, hub_center_y = 52, 52
-        log.info("   Activating STATIC CITADEL zone...")
-        for dx in range(-2, 3):
-            for dy in range(-2, 3):
-                await force_activate_cell(session, hub_center_x + dx, hub_center_y + dy)
+                    if population:
+                        # random.choices уважает веса (шанс 40 будет падать чаще, чем 10)
+                        t_key = random.choices(population, weights=weights, k=1)[0]
+                    else:
+                        # Если конфиг пустой или везде вес 0 — берем первый попавшийся
+                        # (или дефолтный flat, чтобы не крашнулось)
+                        t_key = next(iter(biome_config.keys()), "flat")
 
-        # 2. Обрабатываем соседей
-        region_d4_centers = []
-        start_x = 45
-        start_y = 45
-        for zx in range(3):
-            for zy in range(3):
-                cx = start_x + zx * 5 + 2
-                cy = start_y + zy * 5 + 2
-                if cx == 52 and cy == 52:
+                # ---------------------------------------------
+
+                terrain_meta: TerrainMeta = cast(TerrainMeta, biome_config.get(t_key, {}))
+                env_tags = terrain_meta.get("visual_tags", []) + [biome_id]
+
+                matrix[(wx, wy)] = {
+                    "x": wx,
+                    "y": wy,
+                    "zone_id": zone_id,
+                    "terrain_type": t_key,
+                    "tags": list(set(env_tags)),
+                    "flags": {"is_passable": terrain_meta.get("is_passable", True)},
+                    "content": {"title": t_key, "description": "", "environment_tags": list(set(env_tags))},
+                    "services": [],
+                }
+        return matrix
+
+    def _build_world_skeleton(self, matrix: dict) -> dict:
+        """
+        Главный архитектор: Статика -> Стена -> Оплоты -> Дороги.
+        """
+        # 1. Статика (Хаб)
+        for (wx, wy), static_data in STATIC_LOCATIONS.items():
+            if (wx, wy) in matrix:
+                cell = matrix[(wx, wy)]
+                cell["terrain_type"] = "static_structure"
+                cell["flags"].update(static_data["flags"])
+                cell["content"] = dict(static_data["content"])
+                cell["services"] = static_data.get("services", [])
+                if "environment_tags" in cell["content"]:
+                    cell["tags"] = cell["content"]["environment_tags"]
+
+        # 2. Стена D4 (Периметр)
+        d4_min, d4_max = 45, 59
+        gates = []
+
+        for x in range(d4_min, d4_max + 1):
+            for y in range(d4_min, d4_max + 1):
+                is_border = x in (d4_min, d4_max) or y in (d4_min, d4_max)
+                if is_border:
+                    mid = (d4_min + d4_max) // 2
+                    is_gate = x == mid or y == mid
+
+                    if is_gate:
+                        matrix[(x, y)]["terrain_type"] = "city_gate_outer"
+                        matrix[(x, y)]["tags"].append("gate")
+                        matrix[(x, y)]["flags"]["is_passable"] = True
+                        gates.append((x, y))
+                    else:
+                        matrix[(x, y)]["terrain_type"] = "monolithic_wall"
+                        matrix[(x, y)]["tags"].append("wall")
+                        matrix[(x, y)]["flags"]["is_passable"] = False
+
+        # 3. Региональные Оплоты (POI)
+        self.regional_pois = []
+
+        for row_char in REGION_ROWS:
+            for col_idx in range(1, 8):
+                reg_id = f"{row_char}{col_idx}"
+                if reg_id == "D4":
                     continue
-                region_d4_centers.append((cx, cy))
 
-        log.info(f"   Processing {len(region_d4_centers)} procedural zones...")
+                cx = (col_idx - 1) * REGION_SIZE + REGION_SIZE // 2
+                cy = REGION_ROWS.index(row_char) * REGION_SIZE + REGION_SIZE // 2
 
-        for i, (cx, cy) in enumerate(region_d4_centers, 1):
-            zone_id = get_zone_id(cx, cy)
-            log.info(f"   [{i}] Generating & Activating zone {zone_id}...")
+                if (cx, cy) in matrix:
+                    matrix[(cx, cy)]["terrain_type"] = "ancient_ruin_poi"
+                    matrix[(cx, cy)]["tags"].append("poi")
+                    matrix[(cx, cy)]["flags"]["is_poi"] = True
+                    self.regional_pois.append((cx, cy))
 
-            # А. Генерируем описание (ИИ)
-            await orchestrator.generate_chunk(cx, cy)
+        # 4. Дороги (Лабиринт)
+        matrix = self._generate_roads_graph(matrix, gates)
 
-            # Б. Включаем рубильник активности для всей зоны
-            for dx in range(-2, 3):
-                for dy in range(-2, 3):
-                    await force_activate_cell(session, cx + dx, cy + dy)
+        return matrix
 
-            log.info(f"       -> Zone {zone_id} is now ACTIVE.")
+    def _calculate_costs_for_pathfinding(self, matrix: dict) -> None:
+        """
+        [DATA-DRIVEN]
+        Пробегает по всей матрице и проставляет flags['travel_cost'] на основе КОНФИГА (BIOME_DEFINITIONS).
+        """
+        terrain_props_cache = {}
 
-            if mode == "test":
-                log.warning("   TEST MODE: Stopping after first procedural zone.")
-                break
+        for _biome_key, terrains in BIOME_DEFINITIONS.items():
+            for t_key, t_data in terrains.items():
+                terrain_props_cache[t_key] = {
+                    "cost": t_data.get("travel_cost", 1.0),
+                    "is_passable": t_data.get("is_passable", True),
+                }
 
-        await session.commit()
-        log.info("🎉 World Seeding COMPLETED.")
+        terrain_props_cache["static_structure"] = {"cost": 999.0, "is_passable": False}
+
+        for cell in matrix.values():
+            t_type = cell["terrain_type"]
+            flags = cell["flags"]
+
+            props = terrain_props_cache.get(t_type)
+
+            if props:
+                base_cost = props["cost"]
+                conf_passable = props["is_passable"]
+            else:
+                base_cost = 1.0
+                conf_passable = True
+
+            if not conf_passable or not flags.get("is_passable", True) or base_cost <= 0.01:
+                final_cost = 999.0
+            else:
+                final_cost = base_cost
+
+            if "road" in cell["tags"]:
+                final_cost = min(final_cost, 0.5)
+
+            cell["flags"]["travel_cost"] = final_cost
+
+    def _generate_roads_graph(self, matrix: dict, gates: list) -> dict:
+        """
+        Строит дороги, используя матрицу с расчитанными ценами.
+        """
+        log.info("PathFinder | Pre-calculating travel costs...")
+
+        self._calculate_costs_for_pathfinding(matrix)
+
+        path_finder = PathFinder(matrix)
+
+        road_cells = set()
+
+        poi_grid = {}
+        for px, py in self.regional_pois:
+            col_idx = px // REGION_SIZE
+            row_idx = py // REGION_SIZE
+            poi_grid[(row_idx, col_idx)] = (px, py)
+
+        hub_idx = (3, 3)
+        connected_pairs = set()
+
+        hub_pt = (HUB_CENTER["x"], HUB_CENTER["y"])
+        for gate in gates:
+            path = path_finder.get_path(hub_pt, gate)
+            if path:
+                road_cells.update(path)
+
+        for gate in gates:
+            if not self.regional_pois:
+                continue
+            closest_poi = min(self.regional_pois, key=lambda p: abs(p[0] - gate[0]) + abs(p[1] - gate[1]))
+            path = path_finder.get_path(gate, closest_poi)
+            if path:
+                road_cells.update(path)
+
+        for r in range(7):
+            for c in range(7):
+                if (r, c) == hub_idx:
+                    continue
+                if (r, c) not in poi_grid:
+                    continue
+
+                current_poi = poi_grid[(r, c)]
+
+                neighbors = [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+                neighbors.sort(key=lambda n: abs(n[0] - 3) + abs(n[1] - 3))
+
+                connected_to_hubward = False
+
+                for nr, nc in neighbors:
+                    if (nr, nc) == hub_idx:
+                        continue
+                    if not (0 <= nr < 7 and 0 <= nc < 7):
+                        continue
+
+                    neighbor_poi = poi_grid.get((nr, nc))
+                    if not neighbor_poi:
+                        continue
+
+                    pair_id = tuple(sorted(((r, c), (nr, nc))))
+
+                    is_closer_to_hub = (abs(nr - 3) + abs(nc - 3)) < (abs(r - 3) + abs(c - 3))
+                    should_connect = False
+
+                    if is_closer_to_hub and not connected_to_hubward:
+                        should_connect = True
+                        connected_to_hubward = True
+                    elif pair_id not in connected_pairs and random.random() < 0.15:
+                        should_connect = True
+
+                    if should_connect:
+                        path = path_finder.get_path(current_poi, neighbor_poi)
+                        if path:
+                            road_cells.update(path)
+                            connected_pairs.add(pair_id)
+
+        anchor_points = [(a["x"], a["y"]) for a in ANCHORS]
+        for anchor in anchor_points:
+            if not self.regional_pois:
+                continue
+            closest_poi = min(self.regional_pois, key=lambda p: abs(p[0] - anchor[0]) + abs(p[1] - anchor[1]))
+            path = path_finder.get_path(closest_poi, anchor)
+            if path:
+                road_cells.update(path)
+
+        for rx, ry in road_cells:
+            if (rx, ry) not in matrix:
+                continue
+            cell = matrix[(rx, ry)]
+
+            if cell["terrain_type"] in ["static_structure", "monolithic_wall"]:
+                continue
+
+            cell["flags"]["is_passable"] = True
+            cell["flags"]["has_road"] = True
+
+            road_tag = "dirt_path"
+            if "D4" in cell["zone_id"]:
+                road_tag = "ancient_highway"
+                cell["terrain_type"] = "ruin_road_main"
+            else:
+                road_tag = "road"
+                cell["terrain_type"] = "road"
+
+            if road_tag not in cell["tags"]:
+                cell["tags"].append(road_tag)
+
+            cell["content"]["environment_tags"] = cell["tags"]
+
+        return matrix
+
+    async def _save_matrix_bulk(self, world_matrix: dict) -> None:
+        payload = []
+        for cell in world_matrix.values():
+            clean_node = {
+                "x": cell["x"],
+                "y": cell["y"],
+                "zone_id": cell["zone_id"],
+                "terrain_type": cell["terrain_type"],
+                "content": cell["content"],
+                "flags": cell["flags"],
+                "services": cell.get("services", []),
+                "is_active": cell["flags"].get("is_active", False),
+            }
+            payload.append(clean_node)
+
+        chunk_size = 500
+        for i in range(0, len(payload), chunk_size):
+            chunk = payload[i : i + chunk_size]
+            await self.world_repo.bulk_upsert_nodes(chunk)
+            await asyncio.sleep(0.01)
+
+    async def _spawn_content(self, mode: str) -> None:
+        hub_x, hub_y = HUB_CENTER["x"], HUB_CENTER["y"]
+        await self.zone_orchestrator.generate_chunk(hub_x, hub_y)
+
+        if mode != "test":
+            for i in range(-1, 2):
+                for j in range(-1, 2):
+                    if i == 0 and j == 0:
+                        continue
+                    cx = hub_x + (j * 5)
+                    cy = hub_y + (i * 5)
+                    if 0 <= cx < WORLD_WIDTH and 0 <= cy < WORLD_HEIGHT:
+                        log.info(f"ContentSpawn | Neighbors Chunk ({cx}, {cy})")
+                        await self.zone_orchestrator.generate_chunk(cx, cy)
+
+
+async def seed_world_final(mode: str = "test"):
+    if mode != "content_only":
+        log.warning("!!! DROPPING DATABASE SCHEMA !!!")
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+        log.info("Schema recreated.")
+
+    async with async_session_factory() as session:
+        generator = WorldGenerator(session)
+        await generator.run(mode)
 
 
 if __name__ == "__main__":
-    print("Выберите режим запуска:")
-    print("1. Тестовый режим (генерация мира + 1 активная зона D4)")
-    print("2. Полный режим (генерация мира + все 8 активных зон D4)")
-    print("3. Content Only (только Stage 5: пере-активация)")
-    choice = input("Введите 1, 2 или 3: ")
-    run_mode = "test" if choice == "1" else "content_only" if choice == "3" else "full"
-    try:
-        if sys.platform == "win32":
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        asyncio.run(seed_world_final(mode=run_mode))
-    except (KeyboardInterrupt, SystemExit):
-        log.info("Seeding interrupted.")
+    log.remove()
+    log.add(sys.stderr, level="INFO")
+
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    print("=== WORLD GENERATOR v3.0 (Noise + POI + Walls) ===")
+    print("1. TEST Mode (Hub + Walls)")
+    print("2. FULL Mode (Hub + Neighbors)")
+    print("3. CONTENT ONLY")
+
+    choice = input("Select mode: ").strip()
+    mode = "full" if choice == "2" else "content_only" if choice == "3" else "test"
+
+    asyncio.run(seed_world_final(mode))

@@ -4,6 +4,8 @@ from types import FrameType
 
 from loguru import logger
 
+from .settings import settings  # <-- Импортируем наш объект настроек
+
 
 class InterceptHandler(logging.Handler):
     """
@@ -31,17 +33,14 @@ class InterceptHandler(logging.Handler):
 
 def setup_loguru() -> None:
     """
-    Настраивает loguru для проекта.
-
-    - Устанавливает обработчики для вывода в консоль, debug-файл и JSON-файл с ошибками.
-    - Перехватывает логи стандартного модуля `logging` для унифицированного вывода.
+    Настраивает loguru для проекта, используя переменные из settings.
     """
     logger.remove()
 
     # Консольный вывод
     logger.add(
         sink=sys.stdout,
-        level="DEBUG",
+        level=settings.log_level_console.upper(),  # <-- Используем настройки
         colorize=True,
         format=(
             "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
@@ -53,19 +52,19 @@ def setup_loguru() -> None:
 
     # Файл для всех логов уровня DEBUG и выше
     logger.add(
-        sink="logs/debug.log",
-        level="DEBUG",
-        rotation="10 MB",
+        sink=settings.log_file_debug,  # <-- Используем настройки
+        level=settings.log_level_file.upper(),  # <-- Используем настройки
+        rotation=settings.log_rotation,  # <-- Используем настройки
         compression="zip",
         format="{time} | {level: <8} | {name}:{function}:{line} - {message}",
     )
 
     # JSON-файл для логов уровня ERROR и выше
     logger.add(
-        sink="logs/errors.json",
+        sink=settings.log_file_errors,  # <-- Используем настройки
         level="ERROR",
-        serialize=True,  # Включает JSON-формат
-        rotation="10 MB",
+        serialize=True,
+        rotation=settings.log_rotation,  # <-- Используем настройки
         compression="zip",
     )
 

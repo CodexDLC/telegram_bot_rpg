@@ -3,29 +3,34 @@
 =====================================
 
 Этот файл содержит шаблоны для бижутерии и поясов.
+Это "болванки" предметов. Все магические свойства (бонусы) добавляются
+через эссенции (аффиксы) во время крафта.
 
 КЛЮЧЕВЫЕ ПОЛЯ:
 ---------------
 - slot: 'ring_1', 'ring_2', 'amulet', 'earring', 'belt_accessory'.
 - base_power: Обычно 0, так как основная сила в бонусах.
-- implicit_bonuses:
-    - Кольца/Амулеты: Могут давать любые бонусы к статам.
-    - Пояса: 'quick_slot_capacity' определяет БАЗОВОЕ кол-во слотов (для тира 0).
+- implicit_bonuses: Врожденные бонусы. Для аксессуаров они обычно пустые,
+  кроме особых случаев (например, пояс дает слоты).
 """
 
 ACCESSORIES_DB = {
     "accessories": {
+        # ==========================================
+        # БАЗОВЫЕ ПРЕДМЕТЫ (Тир 0)
+        # ==========================================
         "ring": {
             "id": "ring",
             "name_ru": "Кольцо",
             "slot": "ring_1",
+            "extra_slots": ["ring_2"],
             "damage_type": None,
-            "defense_type": "magical",
+            "defense_type": None,
             "allowed_materials": ["ingots"],
             "base_power": 0,
             "base_durability": 100,
             "damage_spread": 0.0,
-            "narrative_tags": ["ring", "jewelry"],
+            "narrative_tags": ["ring", "jewelry", "band"],
             "implicit_bonuses": {},
         },
         "amulet": {
@@ -33,26 +38,26 @@ ACCESSORIES_DB = {
             "name_ru": "Амулет",
             "slot": "amulet",
             "damage_type": None,
-            "defense_type": "magical",
-            "allowed_materials": ["ingots", "essences"],
+            "defense_type": None,
+            "allowed_materials": ["ingots", "woods"],
             "base_power": 0,
             "base_durability": 100,
             "damage_spread": 0.0,
-            "narrative_tags": ["amulet", "necklace"],
-            "implicit_bonuses": {"magical_resistance": 0.05},
+            "narrative_tags": ["amulet", "necklace", "pendant"],
+            "implicit_bonuses": {},
         },
         "earring": {
             "id": "earring",
             "name_ru": "Серьга",
             "slot": "earring",
             "damage_type": None,
-            "defense_type": "magical",
-            "allowed_materials": ["ingots", "essences"],
+            "defense_type": None,
+            "allowed_materials": ["ingots"],
             "base_power": 0,
             "base_durability": 100,
             "damage_spread": 0.0,
-            "narrative_tags": ["earring", "jewelry"],
-            "implicit_bonuses": {"control_resistance": 0.05},
+            "narrative_tags": ["earring", "jewelry", "stud"],
+            "implicit_bonuses": {},
         },
         # --- ЕДИНЫЙ БАЗОВЫЙ ПОЯС ---
         "belt": {
@@ -65,8 +70,10 @@ ACCESSORIES_DB = {
             "base_power": 1,
             "base_durability": 40,
             "damage_spread": 0.0,
-            "narrative_tags": ["belt", "waist"],
-            "implicit_bonuses": {"quick_slot_capacity": 1.0},
+            "narrative_tags": ["belt", "waist", "strap"],
+            "implicit_bonuses": {
+                "quick_slot_capacity": 1.0  # Пояс всегда дает хотя бы 1 слот
+            },
         },
     },
 }

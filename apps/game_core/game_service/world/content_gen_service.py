@@ -35,7 +35,6 @@ class ContentGenerationService:
             if not node:
                 continue
 
-            # ИСПРАВЛЕНО: Берем теги из content, а не из flags
             my_tags = []
             if node.content and isinstance(node.content, dict):
                 my_tags = node.content.get("environment_tags", [])
@@ -54,12 +53,16 @@ class ContentGenerationService:
 
         response_text = ""
         try:
-            log.debug(f"ContentGen | batch={batch_id} action=sending_request items={len(payload)}")
+            user_text = json.dumps(payload, ensure_ascii=False)
+            log.debug(
+                f"ContentGen | batch={batch_id} action=sending_request items={len(payload)} payload_preview:\n{user_text[:500]}"
+            )
             response_text = await gemini_answer(
                 mode="batch_location_desc",
-                user_text=json.dumps(payload, ensure_ascii=False),
+                user_text=user_text,
                 max_tokens=4000,
             )
+            log.debug(f"ContentGen | batch={batch_id} action=received_response raw_response:\n{response_text}")
             clean_json = response_text.replace("```json", "").replace("```", "").strip()
             if not clean_json:
                 raise ValueError("Empty response from LLM")
@@ -73,13 +76,11 @@ class ContentGenerationService:
             return
 
         saved_count = 0
-        # ИСПРАВЛЕНО: Ожидаем другой формат ответа
         for loc_id, data in result_map.items():
             try:
                 content = data.get("content", {})
                 x, y = map(int, loc_id.split("_"))
 
-                # Получаем оригинальные теги, чтобы они не потерялись
                 original_item = next((i for i in payload if i["id"] == loc_id), None)
                 tags = original_item["internal_tags"] if original_item else []
 
@@ -89,7 +90,6 @@ class ContentGenerationService:
                     "environment_tags": tags,
                 }
 
-                # Обновляем только content, сохраняя остальные поля
                 await self.repo.update_content(x, y, final_content)
                 saved_count += 1
 
@@ -107,7 +107,6 @@ class ContentGenerationService:
             node = await self.repo.get_node(nx, ny)
 
             if node:
-                # ИСПРАВЛЕНО: Берем теги из content
                 tags = []
                 if node.content and isinstance(node.content, dict):
                     tags = node.content.get("environment_tags", [])
@@ -131,17 +130,20 @@ class ContentGenerationService:
 
         response_text = ""
         try:
-            log.debug(f"ContentGen | orchestrator_mode action=sending_request items={len(payload_items)}")
+            user_text = json.dumps(payload_items, ensure_ascii=False)
+            log.debug(
+                f"ContentGen | orchestrator_mode action=sending_request items={len(payload_items)} payload_preview:\n{user_text[:500]}"
+            )
             response_text = await gemini_answer(
                 mode="batch_location_desc",
-                user_text=json.dumps(payload_items, ensure_ascii=False),
+                user_text=user_text,
                 max_tokens=4000,
             )
+            log.debug(f"ContentGen | orchestrator_mode action=received_response raw_response:\n{response_text}")
             clean_json = response_text.replace("```json", "").replace("```", "").strip()
             if not clean_json:
                 raise ValueError("Empty response from LLM")
 
-            # Ожидаемый формат ответа: {"id_1": {"title": "...", "description": "..."}, ...}
             result_map = json.loads(clean_json)
             return result_map
 

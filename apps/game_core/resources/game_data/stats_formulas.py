@@ -8,39 +8,92 @@
 """
 
 MODIFIER_RULES = {
-    "physical_damage_bonus": {"strength": 0.025},
-    "physical_penetration": {"strength": 0.01},
-    "physical_crit_chance": {"agility": 0.01},
-    "dodge_chance": {"agility": 0.01},
-    "anti_dodge_chance": {"agility": 0.01},
-    "shield_block_chance": {"agility": 0.01},
-    "magical_damage_bonus": {"intelligence": 0.025},
-    "magical_penetration": {"intelligence": 0.01},
-    "spell_land_chance": {"intelligence": 0.01},
-    "magical_crit_chance": {"wisdom": 0.015},
-    "magical_accuracy": {"wisdom": 0.015},
-    "debuff_avoidance": {"wisdom": 0.015},
-    "hp_max": {"endurance": 15},
-    "physical_resistance": {"endurance": 0.01},
-    "shock_resistance": {"endurance": 0.01},
+    # ==========================================================================
+    # ⚔️ 1. БАЗОВАЯ БОЕВКА (Combats Style)
+    # ==========================================================================
+    "physical_damage_min": {"strength": 1.0},
+    "physical_damage_max": {"strength": 1.5},
+    "physical_damage_bonus": {"strength": 0.01},  # +1% урона за 1 стр
+    # Точность vs Уворот
+    "dodge_chance": {"agility": 0.02},  # 2% за стат
+    "physical_accuracy": {"perception": 0.02, "agility": 0.005},
+    # Крит vs Анти-Крит
+    "physical_crit_chance": {"luck": 0.02},
+    "anti_crit_chance": {"endurance": 0.015, "luck": 0.005},
+    # Пробивание брони (Монстры с высоким Per будут пробивать танков)
+    "physical_penetration": {"perception": 0.01},
+    # ==========================================================================
+    # 🛡️ 2. ВЫЖИВАНИЕ И ТЕЛО (Body & Status)
+    # ==========================================================================
+    "hp_max": {"endurance": 10, "strength": 3},
+    "hp_regen": {"endurance": 0.1},
+    "physical_resistance": {"endurance": 0.005},  # Базовая броня шкуры
+    # Защита от статусов (Монстр с высокой Выносливостью иммунен к ядам)
+    "poison_resistance": {"endurance": 0.02},
+    "bleed_resistance": {"endurance": 0.02},
+    "shock_resistance": {"endurance": 0.02},  # Жирдяев трудно оглушить
+    # ==========================================================================
+    # 🔮 3. МАГИЯ И СТИХИИ (Magic & Elements)
+    # ==========================================================================
+    # Атака
+    "magical_damage_power": {"intelligence": 1.0},
+    "magical_damage_bonus": {"intelligence": 0.01},  # Весь маг урон
+    "magical_accuracy": {"wisdom": 0.02},  # Чтобы пробивать резист игрока
+    # Элементальный урон (Если монстр маг - он бьет всем сильнее)
+    "fire_damage_bonus": {"intelligence": 0.005},
+    "water_damage_bonus": {"intelligence": 0.005},
+    "air_damage_bonus": {"intelligence": 0.005},
+    "earth_damage_bonus": {"intelligence": 0.005},
+    "light_damage_bonus": {"intelligence": 0.005},
+    "dark_damage_bonus": {"intelligence": 0.005},
+    # Магическая защита (Wisdom - универсальный щит)
+    "magical_resistance": {"wisdom": 0.01, "men": 0.005},
+    # Резисты к стихиям (Высокая мудрость = понимание магии = защита)
+    "fire_resistance": {"wisdom": 0.01},
+    "water_resistance": {"wisdom": 0.01},
+    "air_resistance": {"wisdom": 0.01},
+    "earth_resistance": {"wisdom": 0.01},
+    "light_resistance": {"wisdom": 0.01},
+    "dark_resistance": {"wisdom": 0.01},
+    # ==========================================================================
+    # 💀 4. МИСТИКА И СПЕЦ-ЭФФЕКТЫ (Special)
+    # ==========================================================================
+    # Дух (Men) отвечает за ментальную силу и жизненную энергию
+    "control_resistance": {"men": 0.02},  # Анти-стан, анти-фир
+    "debuff_avoidance": {"men": 0.015},
+    "healing_power": {"men": 0.02},  # Сила хила для пристов
+    # Реген маны
     "energy_max": {"men": 10},
-    "energy_regen": {"men": 0.05},
-    "magical_resistance": {"men": 0.01},
-    "control_resistance": {"men": 0.015},
-    "trade_discount": {"luck": 0.015},
-    "find_loot_chance": {"luck": 0.015},
-    "crafting_critical_chance": {"luck": 0.01},
-    "crafting_success_chance": {"luck": 0.015},
-    "skill_gain_bonus": {"luck": 0.02},
-    "pet_damage_bonus": {"luck": 0.025, "charisma": 0.01},
+    "energy_regen": {"men": 0.2},
+    # Отражение урона (Шипы) - теперь плоский урон от Выносливости
+    "thorns_damage_flat": {"endurance": 0.5},
+    # ==========================================================================
+    # 💰 5. УТИЛИТЫ (Монстрам пофиг, но игрокам надо)
+    # ==========================================================================
     "inventory_slots_bonus": {"perception": 1},
+    "weight_limit_bonus": {"strength": 2.0},
+    "trade_discount": {"charisma": 0.01},
+    # Харизма - Владение питомцами (Pet Mastery)
+    "pet_damage_bonus": {"charisma": 0.03},
+    "pet_health_bonus": {"charisma": 0.03},
+    "find_loot_chance": {"luck": 0.02},
 }
 
 DEFAULT_VALUES = {
+    # Капы (Предельные значения)
     "physical_crit_cap": 0.75,
+    "magical_crit_cap": 0.50,
+    "dodge_cap": 0.75,
+    "resistance_cap": 0.85,
+    "shield_block_cap": 0.75,
+    "parry_cap": 0.50,
+    "counter_attack_cap": 0.50,
+    "vampiric_power_cap": 0.50,
+    "vampiric_trigger_cap": 1.0,
+    "physical_pierce_cap": 0.30,
+    # Базовые множители
     "physical_crit_power_float": 1.5,
-    "magical_crit_cap": 0.75,
-    "magical_crit_power_float": 1.5,
+    "magical_crit_power_float": 3.0,
     "spell_land_chance": 1.0,
     "shield_block_power": 0.0,
 }
