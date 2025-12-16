@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from loguru import logger as log
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Определяем корень проекта
@@ -22,7 +23,9 @@ class Settings(BaseSettings):
     redis_timeout: int = 5
 
     # --- БЛОК 2: База Данных ---
-    database_url: str = "sqlite+aiosqlite:///./game.db"
+    database_url: str  # Убрали дефолт, теперь URL обязателен в .env
+    # Флаг для SSL подключения к БД (True для Neon/Cloud, False для локального Docker)
+    db_ssl_require: bool = True
 
     # --- БЛОК 3: Логирование ---
     log_level_console: str = "DEBUG"
@@ -46,13 +49,14 @@ class Settings(BaseSettings):
     # --- Свойства и Валидаторы ---
 
     @property
-    def get_admin_ids(self) -> list[int]:
+    def admin_ids_list(self) -> list[int]:
         """Парсит строку '123,456' в список чисел."""
         if not self.admin_ids:
             return []
         try:
             return [int(x.strip()) for x in self.admin_ids.split(",") if x.strip()]
         except ValueError:
+            log.warning(f"Settings | Failed to parse ADMIN_IDS='{self.admin_ids}'. Check .env format.")
             return []
 
     @property

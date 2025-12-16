@@ -15,11 +15,13 @@ from apps.common.core.settings import settings
 from apps.common.database.model_orm import Base
 
 # --- 1. Получаем URL из настроек ---
-# settings.sqlalchemy_database_url уже содержит правильный префикс (postgresql+asyncpg://)
 database_url = settings.sqlalchemy_database_url
 
 # --- 2. Настраиваем аргументы для Postgres ---
-connect_args: dict[str, Any] = {"ssl": "require"}
+connect_args: dict[str, Any] = {}
+if settings.db_ssl_require:
+    connect_args["ssl"] = "require"
+
 pool_settings: dict[str, Any] = {
     "pool_size": 20,
     "max_overflow": 10,
@@ -43,6 +45,11 @@ async_session_factory = async_sessionmaker(
 
 @asynccontextmanager
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Предоставляет сессию с автоматическим управлением транзакцией.
+    При успешном завершении блока - commit.
+    При ошибке - rollback.
+    """
     session: AsyncSession = async_session_factory()
     try:
         yield session
