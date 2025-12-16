@@ -1,6 +1,5 @@
 import json
 import math
-from contextlib import suppress
 
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
@@ -94,8 +93,10 @@ class ZoneOrchestrator:
 
                 if self._check_incoming_roads(x, y, node_map) and "road" not in narrative_tags:
                     narrative_tags.append("road")
-                    with suppress(SQLAlchemyError):
+                    try:
                         await self.repo.update_flags(x, y, {"has_road": True})
+                    except SQLAlchemyError as e:
+                        log.warning(f"Failed to update road flag for ({x},{y}): {e}")
 
                 payload_items.append({"id": f"{x}_{y}", "tags": narrative_tags, "context": context_hints})
 
