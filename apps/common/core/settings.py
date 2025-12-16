@@ -1,4 +1,11 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Определяем корень проекта
+# settings.py -> core -> common -> apps -> ROOT
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
+ENV_FILE_PATH = ROOT_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -71,7 +78,7 @@ class Settings(BaseSettings):
         return f"{self.log_dir}/errors.json"
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=ENV_FILE_PATH,
         env_file_encoding="utf-8",
         extra="ignore",
     )

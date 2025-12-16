@@ -3,8 +3,6 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from loguru import logger as log
-from sqlalchemy import event
-from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -20,22 +18,12 @@ from apps.common.database.model_orm import Base
 # settings.sqlalchemy_database_url уже содержит правильный префикс (postgresql+asyncpg://)
 database_url = settings.sqlalchemy_database_url
 
-# Определяем тип базы для аргументов
-is_sqlite = "sqlite" in database_url
-
-# --- 2. Настраиваем аргументы ---
-connect_args: dict[str, Any] = {}
-pool_settings: dict[str, Any] = {}
-
-if is_sqlite:
-    connect_args = {"check_same_thread": False}
-else:
-    # Postgres (Neon)
-    connect_args = {"ssl": "require"}
-    pool_settings = {
-        "pool_size": 20,
-        "max_overflow": 10,
-    }
+# --- 2. Настраиваем аргументы для Postgres ---
+connect_args: dict[str, Any] = {"ssl": "require"}
+pool_settings: dict[str, Any] = {
+    "pool_size": 20,
+    "max_overflow": 10,
+}
 
 # --- 3. Создаем движок ---
 async_engine = create_async_engine(
@@ -45,22 +33,7 @@ async_engine = create_async_engine(
     **pool_settings,
 )
 
-# --- 4. SQLite Fix (только если SQLite) ---
-if is_sqlite:
-
-    @event.listens_for(Engine, "connect")
-    def set_sqlite_pragma(dbapi_connection, connection_record):
-        cursor = dbapi_connection.cursor()
-        try:
-            cursor.execute("PRAGMA foreign_keys = ON")
-            cursor.execute("PRAGMA journal_mode = WAL")
-            cursor.execute("PRAGMA busy_timeout = 5000")
-            cursor.close()
-        except SQLAlchemyError:
-            log.exception("SQLitePragma | status=failed")
-
-
-# --- 5. Фабрика и Сессия (как было) ---
+# --- 4. Фабрика и Сессия ---
 async_session_factory = async_sessionmaker(
     bind=async_engine,
     expire_on_commit=False,

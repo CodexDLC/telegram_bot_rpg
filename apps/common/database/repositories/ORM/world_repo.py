@@ -2,7 +2,7 @@ from typing import Any
 
 from loguru import logger as log
 from sqlalchemy import select, update
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -84,8 +84,8 @@ class WorldRepoORM(IWorldRepo):
         if not nodes_data:
             return
 
-        # 1. Готовим стейтмент для INSERT
-        stmt = sqlite_insert(WorldGrid).values(nodes_data)
+        # 1. Готовим стейтмент для INSERT (Postgres)
+        stmt = pg_insert(WorldGrid).values(nodes_data)
 
         # 2. Готовим стейтмент для ON CONFLICT UPDATE
         # Мы обновляем все поля, кроме первичных ключей (x, y)

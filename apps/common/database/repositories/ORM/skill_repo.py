@@ -2,7 +2,7 @@ from typing import Any
 
 from loguru import logger as log
 from sqlalchemy import select, update
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,7 +34,7 @@ class SkillRateRepo(ISkillRateRepo):
         """
         Массово создает или обновляет ставки опыта для навыков персонажа.
 
-        Использует UPSERT для атомарной операции.
+        Использует Postgres UPSERT для атомарной операции.
 
         Args:
             rates_data: Список словарей с данными для UPSERT.
@@ -46,7 +46,7 @@ class SkillRateRepo(ISkillRateRepo):
         char_id = rates_data[0].get("character_id")
         log.debug(f"SkillRateRepo | action=upsert_skill_rates count={len(rates_data)} char_id={char_id}")
 
-        stmt = sqlite_insert(CharacterSkillRate).values(rates_data)
+        stmt = pg_insert(CharacterSkillRate).values(rates_data)
         stmt = stmt.on_conflict_do_update(
             index_elements=[CharacterSkillRate.character_id, CharacterSkillRate.skill_key],
             set_={"xp_per_tick": stmt.excluded.xp_per_tick},
@@ -119,7 +119,7 @@ class SkillProgressRepo(ISkillProgressRepo):
             )
             return
 
-        stmt = sqlite_insert(CharacterSkillProgress).values(base_skills)
+        stmt = pg_insert(CharacterSkillProgress).values(base_skills)
         stmt = stmt.on_conflict_do_nothing(
             index_elements=[CharacterSkillProgress.character_id, CharacterSkillProgress.skill_key]
         )
