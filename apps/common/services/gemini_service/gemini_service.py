@@ -5,7 +5,7 @@ from google.auth import exceptions
 from google.genai import errors, types
 from loguru import logger as log
 
-from apps.common.core.config import GEMINI_TOKEN
+from apps.common.core.settings import settings
 from apps.common.resources.llm_data.mode_preset import MODE_PRESETS, ChatMode
 from apps.common.services.gemini_service.gemini_service_build import (
     BUILDERS_GEMINI as BUILDERS,
@@ -22,11 +22,11 @@ GEMINI_MODEL_ALIASES = {
 DEFAULT_MODEL_NAME = GEMINI_MODEL_ALIASES["fast"]
 
 _client: genai.Client | None = None
-if not GEMINI_TOKEN:
+if not settings.gemini_token:
     log.critical("GeminiClient | status=failed reason='GEMINI_TOKEN not provided'")
 else:
     try:
-        _client = genai.Client(api_key=GEMINI_TOKEN)
+        _client = genai.Client(api_key=settings.gemini_token)
         log.info("GeminiClient | status=initialized")
     except (errors.ClientError, ValueError) as e:
         log.exception(f"GeminiClient | status=failed reason='Initialization error' error='{e}'")

@@ -3,10 +3,10 @@ import asyncio
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from apps.common.core.config import DB_URL_SQLALCHEMY
 from apps.common.core.container import AppContainer
+from apps.common.core.settings import settings
 
-TEST_DB_URL = DB_URL_SQLALCHEMY
+TEST_DB_URL = settings.sqlalchemy_database_url
 
 
 # 1. Принудительно задаем Scope сессии для Event Loop

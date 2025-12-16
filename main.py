@@ -5,7 +5,6 @@ from loguru import logger as log
 from apps.bot.handlers import router as main_router
 from apps.bot.middlewares.container_middleware import ContainerMiddleware
 from apps.common.core.bot_factory import build_app
-from apps.common.core.config import BOT_TOKEN, REDIS_URL  # Используются для проверки
 from apps.common.core.container import AppContainer
 from apps.common.core.loguru_setup import setup_loguru
 
@@ -22,13 +21,10 @@ async def main() -> None:
     Основная асинхронная функция для запуска приложения.
     """
 
-    if BOT_TOKEN is None:
-        log.critical("Токен бота не найден. Убедитесь, что он задан в .env файле.")
-        return
-
-    if REDIS_URL is None:
-        log.critical("URL Redis не найден. Убедитесь, что он задан в .env файле.")
-        return
+    # Pydantic уже проверил наличие токена при инициализации settings
+    # if settings.bot_token is None:
+    #     log.critical("Токен бота не найден. Убедитесь, что он задан в .env файле.")
+    #     return
 
     # 1. Создаем контейнер, где теперь настроены Redis и SQLAlchemy
     container = AppContainer()
@@ -48,7 +44,7 @@ async def main() -> None:
         return
 
     # Создаем экземпляры бота и диспетчера с помощью фабрики.
-    bot, dp = await build_app(container.redis_client)
+    bot, dp = await build_app(container)
     log.info("Экземпляры бота и диспетчера созданы.")
 
     # Подключаем middleware

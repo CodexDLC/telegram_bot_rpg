@@ -6,7 +6,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.core.config import SYSTEM_CHAR_ID
+from apps.common.core.settings import settings
 from apps.common.database.db_contract.i_inventory_repo import IInventoryRepo
 from apps.common.database.model_orm.inventory import InventoryItem
 from apps.common.schemas_dto.item_dto import (
@@ -63,7 +63,7 @@ class InventoryRepo(IInventoryRepo):
             f"InventoryRepo | action=get_system_item_for_reuse type='{item_type}' rarity='{rarity}' subtype='{subtype}'"
         )
         query = select(InventoryItem).where(
-            InventoryItem.character_id == SYSTEM_CHAR_ID,
+            InventoryItem.character_id == settings.system_char_id,
             InventoryItem.item_type == item_type,
             InventoryItem.rarity == rarity,
         )

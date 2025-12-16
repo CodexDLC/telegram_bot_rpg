@@ -1,7 +1,7 @@
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.core.config import SYSTEM_CHAR_ID
+from apps.common.core.settings import settings
 from apps.common.database.repositories import get_inventory_repo
 from apps.common.schemas_dto import InventoryItemDTO
 from apps.game_core.game_service.Item.item_assembler import ItemAssembler
@@ -30,7 +30,7 @@ class ItemDistributionService:
             )
 
             item_id = await self.inventory_repo.create_item(
-                character_id=SYSTEM_CHAR_ID,
+                character_id=settings.system_char_id,
                 item_type=item_type,
                 subtype=item_subtype,
                 rarity=rarity_enum,
@@ -60,7 +60,7 @@ class ItemDistributionService:
             )
 
             item_id = await self.inventory_repo.create_item(
-                character_id=SYSTEM_CHAR_ID,
+                character_id=settings.system_char_id,
                 item_type=item_type,
                 subtype=item_subtype,
                 rarity=rarity_enum,
@@ -87,7 +87,7 @@ class ItemDistributionService:
             log.error(f"ItemDistribution | Item {item_id} not found")
             return False
 
-        if item.character_id != SYSTEM_CHAR_ID:
+        if item.character_id != settings.system_char_id:
             log.warning(
                 f"ItemDistribution | Security Warning: Item {item_id} is not owned by SYSTEM (owner={item.character_id})"
             )
