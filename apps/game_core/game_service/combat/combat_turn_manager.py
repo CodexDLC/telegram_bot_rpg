@@ -171,6 +171,9 @@ class CombatTurnManager:
                             log.warning(
                                 f"CombatTurnManager | afk_penalty_increase lazy_actor={lazy_actor_id} new_level={lazy_actor_dto.state.afk_penalty_level}"
                             )
+                            await self.combat_manager.save_actor_json(
+                                self.session_id, lazy_actor_id, lazy_actor_dto.model_dump_json()
+                            )
 
                         log.warning(
                             f"CombatTurnManager | event=deadline_expired lazy_actor={lazy_actor_id} waiting_actor={actor_id} session_id='{self.session_id}'"

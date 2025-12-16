@@ -42,7 +42,7 @@ if not DB_NAME:
 # 🔥 FIX: Используем абсолютный путь к БД, чтобы скрипты работали из любой папки
 # 1. Находим корень проекта (поднимаемся на 4 уровня вверх от этого файла)
 # apps/common/core/config.py -> apps/common/core -> apps/common -> apps -> ROOT
-BASE_DIR = Path(__file__).parent.parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parents[3]
 
 # 2. Строим полный путь к файлу БД
 DB_PATH = BASE_DIR / DB_NAME
