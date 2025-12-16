@@ -1,5 +1,5 @@
 from loguru import logger as log
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,7 +31,7 @@ class LeaderboardRepoORM(ILeaderboardRepo):
         """
         Создает новую запись или обновляет существующие показатели персонажа в таблице лидеров.
 
-        Использует UPSERT для атомарной операции. Обновляются только те поля,
+        Использует Postgres UPSERT для атомарной операции. Обновляются только те поля,
         для которых переданы значения (не None).
 
         Args:
@@ -55,7 +55,7 @@ class LeaderboardRepoORM(ILeaderboardRepo):
             log.warning(f"LeaderboardRepoORM | action=update_score reason='No values to update' char_id={character_id}")
             return
 
-        stmt = sqlite_insert(Leaderboard).values(character_id=character_id, **values)
+        stmt = pg_insert(Leaderboard).values(character_id=character_id, **values)
         stmt = stmt.on_conflict_do_update(index_elements=[Leaderboard.character_id], set_=values)
         try:
             await self.session.execute(stmt)

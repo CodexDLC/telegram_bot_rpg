@@ -3,7 +3,6 @@ from typing import Any
 
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
-from loguru import logger as log
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 
@@ -22,26 +21,10 @@ class DbSessionMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         """
-        Создает сессию для каждого события, передает ее в хэндлер и закрывает.
+        Создает сессию для каждого события и передает ее в хэндлер.
+        Управление транзакциями (commit/rollback) должно происходить
+        внутри сервисов или Unit of Work, а не в middleware.
         """
-        event_id = event.update_id if hasattr(event, "update_id") else "N/A"
-
-        # Исправление: безопасное получение user_id
-        user_id = "N/A"
-        event_from_user = data.get("event_from_user")
-        if event_from_user and hasattr(event_from_user, "id"):
-            user_id = event_from_user.id
-
-        log_context = f"event_id={event_id} user_id={user_id}"
-
         async with self.session_pool() as session:
             data["session"] = session
-            try:
-                result = await handler(event, data)
-                await session.commit()
-                log.trace(f"DbSession | status=committed {log_context}")
-                return result
-            except Exception:
-                log.error(f"DbSession | status=rollback {log_context}", exc_info=True)
-                await session.rollback()
-                raise
+            return await handler(event, data)
