@@ -2,7 +2,7 @@ from aiogram.filters import BaseFilter
 from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 
-from apps.common.core.config import ADMIN_IDS
+from apps.common.core.settings import settings
 
 
 class IsAdmin(BaseFilter):
@@ -16,6 +16,6 @@ class IsAdmin(BaseFilter):
             log.debug("AdminCheck | result=false reason='user not found in event'")
             return False
 
-        is_admin = user.id in ADMIN_IDS
+        is_admin = user.id in settings.get_admin_ids
         log.debug(f"AdminCheck | user_id={user.id} result={is_admin}")
         return is_admin

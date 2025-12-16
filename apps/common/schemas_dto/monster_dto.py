@@ -9,9 +9,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # --- 1. ENUMS (Чтобы не писать строки руками) ---
-MonsterRole = Literal["minion", "elite", "boss"]
+MonsterRole = Literal["minion", "veteran", "elite", "boss"]
 MonsterArchetype = Literal["humanoid", "beast", "undead", "construct", "demon", "unknown"]
-OrganizationType = Literal["clan", "swarm", "solitary", "pack"]
+OrganizationType = Literal["solitary", "pack", "gang", "clan", "legion", "horde", "swarm"]
 
 
 # --- 2. КОМПОНЕНТЫ ---
@@ -55,8 +55,8 @@ class MonsterVariantDTO(BaseModel):
     # Авто-фикс: если в конфиге нет поля, будет пустой список
     extra_tags: list[str] = Field(default_factory=list)
 
-    min_tier: int = Field(ge=0, le=10)
-    max_tier: int = Field(ge=0, le=10)
+    min_tier: int = Field(ge=0, le=11)
+    max_tier: int = Field(ge=0, le=11)
 
     base_stats: MonsterStatsDTO
     # Авто-фикс: если нет лодаута, будет пустой объект
@@ -75,6 +75,7 @@ class MonsterVariantDTO(BaseModel):
 # --- 4. СЕМЬЯ ---
 class FamilyHierarchyDTO(BaseModel):
     minions: list[str] = Field(default_factory=list)
+    veterans: list[str] = Field(default_factory=list)
     elites: list[str] = Field(default_factory=list)
     boss: list[str] = Field(default_factory=list)
 
@@ -97,6 +98,7 @@ class MonsterFamilyDTO(BaseModel):
         # Собираем все ID из иерархии
         hierarchy_ids = set()
         hierarchy_ids.update(self.hierarchy.minions)
+        hierarchy_ids.update(self.hierarchy.veterans)
         hierarchy_ids.update(self.hierarchy.elites)
         hierarchy_ids.update(self.hierarchy.boss)
 

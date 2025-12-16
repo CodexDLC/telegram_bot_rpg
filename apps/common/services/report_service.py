@@ -3,7 +3,7 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from loguru import logger as log
 
-from apps.common.core.config import BUG_REPORT_CHANNEL_ID  # <--- ID канала
+from apps.common.core.settings import settings
 
 
 class ReportService:
@@ -12,7 +12,7 @@ class ReportService:
         """
         Отправить форматированный отчет в административный канал.
         """
-        if not BUG_REPORT_CHANNEL_ID:
+        if not settings.bug_report_channel_id:
             log.warning("Отчет не отправлен: BUG_REPORT_CHANNEL_ID не задан.")
             return False
 
@@ -27,9 +27,12 @@ class ReportService:
         )
 
         try:
-            await bot.send_message(chat_id=BUG_REPORT_CHANNEL_ID, text=message_text, parse_mode="HTML")
+            await bot.send_message(chat_id=settings.bug_report_channel_id, text=message_text, parse_mode="HTML")
             log.info(f"Отчет от {user_id} ({report_type}) успешно отправлен в канал.")
             return True
         except TelegramAPIError as e:
-            log.error(f"Критическая ошибка при отправке отчета в канал {BUG_REPORT_CHANNEL_ID}: {e}", exc_info=True)
+            log.error(
+                f"Критическая ошибка при отправке отчета в канал {settings.bug_report_channel_id}: {e}",
+                exc_info=True,
+            )
             return False

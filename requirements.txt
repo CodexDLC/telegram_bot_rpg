@@ -9,6 +9,7 @@ pydantic_settings~=2.12.0
 # --- База данных (SQLite) ---
 # Асинхронный драйвер для нашей основной БД (игроки, подземелья)
 aiosqlite
+asyncpg
 # ORM для SQLAlchemy
 sqlalchemy~=2.0.44
 

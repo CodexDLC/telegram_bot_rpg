@@ -1,9 +1,8 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from loguru import logger as log
-from sqlalchemy import event
-from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -11,38 +10,30 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from apps.common.core.config import DB_URL_SQLALCHEMY
+# Импортируем наш обновленный объект настроек
+from apps.common.core.settings import settings
 from apps.common.database.model_orm import Base
 
+# --- 1. Получаем URL из настроек ---
+# settings.sqlalchemy_database_url уже содержит правильный префикс (postgresql+asyncpg://)
+database_url = settings.sqlalchemy_database_url
 
-@event.listens_for(Engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    """
-    Настраивает SQLite для работы в асинхронном режиме.
+# --- 2. Настраиваем аргументы для Postgres ---
+connect_args: dict[str, Any] = {"ssl": "require"}
+pool_settings: dict[str, Any] = {
+    "pool_size": 20,
+    "max_overflow": 10,
+}
 
-    Включает поддержку внешних ключей, режим WAL (Write-Ahead Logging)
-    для конкурентности и устанавливает таймаут ожидания блокировки.
-
-    Args:
-        dbapi_connection: Объект соединения DBAPI.
-        connection_record: Запись соединения.
-    """
-    cursor = dbapi_connection.cursor()
-    try:
-        cursor.execute("PRAGMA foreign_keys = ON")
-        cursor.execute("PRAGMA journal_mode = WAL")
-        cursor.execute("PRAGMA busy_timeout = 5000")
-        cursor.close()
-        log.debug("SQLitePragma | status=configured foreign_keys=ON journal_mode=WAL busy_timeout=5000")
-    except SQLAlchemyError:
-        log.exception("SQLitePragma | status=failed reason='Error configuring SQLite PRAGMA'")
-
-
+# --- 3. Создаем движок ---
 async_engine = create_async_engine(
-    DB_URL_SQLALCHEMY,
+    database_url,
     echo=False,
+    connect_args=connect_args,
+    **pool_settings,
 )
 
+# --- 4. Фабрика и Сессия ---
 async_session_factory = async_sessionmaker(
     bind=async_engine,
     expire_on_commit=False,
@@ -52,54 +43,22 @@ async_session_factory = async_sessionmaker(
 
 @asynccontextmanager
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Предоставляет асинхронный контекстный менеджер для управления сессией SQLAlchemy.
-
-    Гарантирует корректное открытие, коммит, откат и закрытие сессии.
-
-    Yields:
-        Экземпляр `AsyncSession`.
-
-    Raises:
-        SQLAlchemyError: Если произошла ошибка SQLAlchemy во время транзакции.
-        Exception: Для любых других неожиданных ошибок.
-    """
     session: AsyncSession = async_session_factory()
     try:
         yield session
         await session.commit()
-        log.debug("SQLAlchemySession | event=commit status=success")
-    except SQLAlchemyError:
-        log.exception("SQLAlchemySession | event=rollback status=failed reason='SQLAlchemy error'")
-        await session.rollback()
-        raise
     except Exception:
-        log.exception("SQLAlchemySession | event=rollback status=failed reason='Unexpected error'")
         await session.rollback()
         raise
     finally:
         await session.close()
-        log.debug("SQLAlchemySession | event=close status=success")
 
 
 async def create_db_tables() -> None:
-    """
-    Создает все таблицы в базе данных, определенные в `Base.metadata`.
-
-    Если таблицы уже существуют, они не будут пересозданы.
-
-    Raises:
-        SQLAlchemyError: Если произошла ошибка SQLAlchemy при создании таблиц.
-        Exception: Для любых других неожиданных ошибок.
-    """
-    log.info("DatabaseTables | event=create_tables_check")
+    """Создает таблицы (если не используешь Alembic)"""
     try:
         async with async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        log.info("DatabaseTables | status=success message='Tables created or already exist'")
-    except SQLAlchemyError:
-        log.exception("DatabaseTables | status=failed reason='SQLAlchemy error during table creation'")
-        raise
-    except Exception:
-        log.exception("DatabaseTables | status=failed reason='Unexpected error during table creation'")
-        raise
+        log.info("Tables created successfully")
+    except SQLAlchemyError as e:
+        log.error(f"Error creating tables: {e}")
