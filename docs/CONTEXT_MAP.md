@@ -4,6 +4,50 @@
 
 ---
 
+## ⚔️ Задача: Рефакторинг финализации боя (Refactor_Combat_Finalization)
+**Суть:** Разделить логику завершения боя (награды, последствия) в зависимости от режима игры (PvE, PvP, Tutorial) с помощью `CombatMode` enum.
+
+**Файлы для контекста:**
+1.  `docs/tusk/Refactor_Combat_Finalization.md` (Основной таск)
+2.  `apps/common/schemas_dto/combat_source_dto.py` (Для добавления `CombatMode` enum)
+3.  `apps/game_core/game_service/combat/combat_lifecycle_service.py` (Основной сервис, где будет `match/case` логика)
+4.  `apps/common/services/core_service/manager/combat_manager.py` (Для получения метаданных сессии)
+5.  `apps/game_core/game_service/arena/arena_manager.py` (Место вызова `create_battle` с `CombatMode.ARENA`)
+6.  `apps/game_core/game_service/exploration/encounter_service.py` (Место вызова `create_battle` с `CombatMode.ADVENTURE`)
+7.  `apps/game_core/game_service/tutorial/tutorial_service.py` (Место вызова `create_battle` с `CombatMode.TUTORIAL`)
+
+---
+
+## 🎓 Задача: Рефакторинг системы обучения (Refactor_Tutorial_System)
+**Суть:** Заменить старый, хардкодный туториал на полноценный игровой сценарий, использующий реальные игровые сервисы и `CombatMode.TUTORIAL`.
+
+**Файлы для контекста:**
+1.  `docs/tusk/Refactor_Tutorial_System.md` (Основной таск)
+2.  `apps/game_core/game_service/tutorial/tutorial_service.py` (Новый сервис-оркестратор)
+3.  `apps/bot/handlers/callback/tutorial/` (Папка со старыми хэндлерами, которые нужно переписать)
+4.  `apps/game_core/game_service/inventory/inventory_service.py` (Для выдачи стартового лута)
+5.  `apps/game_core/game_service/skill/skill_service.py` (Для разблокировки стартового навыка)
+6.  `apps/game_core/game_service/combat/combat_lifecycle_service.py` (Для инициации и завершения тренировочного боя)
+7.  `apps/game_core/resources/game_data/tutorial/` (Папка для конфигов мобов и предметов туториала)
+
+---
+
+## 🎲 Задача: Реализация системы Риска и Награды (Task_Risk_Reward_Implementation)
+**Суть:** Внедрение механики "незащищенного" лута и опыта, которые можно потерять при смерти в опасных зонах (Рифтах).
+
+**Файлы для контекста:**
+1.  `docs/tusk/Task_Risk_Reward_Implementation.md` (Основной таск)
+2.  `apps/common/database/model_orm/inventory.py` (Добавление флага `is_secured` в модель `InventoryItem`)
+3.  `apps/common/database/model_orm/character.py` (Добавление `secured_xp` в модель `CharacterStats`)
+4.  `apps/game_core/game_service/inventory/inventory_service.py` (Изменение `add_item` и добавление `secure_all_items`)
+5.  `apps/bot/ui_service/navigation_service.py` (Добавление триггеров сохранения в безопасных зонах)
+6.  `apps/game_core/game_service/combat/combat_xp_manager.py` (Разделение логики `add_xp` и `checkpoint_xp`)
+7.  `apps/game_core/game_service/combat/combat_lifecycle_service.py` (Логика потери лута в `_finalize_adventure`)
+8.  `apps/common/services/core_service/manager/world_manager.py` (Для реализации системы "трупов" в Redis)
+9.  `apps/bot/ui_service/helpers_ui/formatters/inventory_formatter.py` (Для визуального отображения `is_secured`)
+
+---
+
 ## 🌲 Задача: Группа навыков Survival (Refined)
 **Суть:** Реализация навыков выживания, влияющих на взаимодействие с миром, а не прямую боевую мощь.
 
@@ -71,15 +115,17 @@
 ---
 
 ## 💀 Задача: Энкаунтеры (JRPG Loop)
-**Суть:** Реализация перехвата управления при перемещении. Игрок нажимает "Север" -> Бот кидает кубик -> Если успех, вызывает Бой вместо перемещения.
+**Суть:** Реализация перехвата управления при перемещении. Игрок нажимает "Север" -> Оркестратор проверяет вероятность -> Если успех, вызывает Бой или Событие вместо перемещения.
 **Файлы для контекста:**
-1.  `docs/dis_docs/01_Core_Mechanics/01_Game_Modes_Loop.md` (ТЗ: Игровой цикл)
-2.  `apps/game_core/game_service/world/threat_service.py` (Расчет опасности зоны / Tier)
-3.  `apps/bot/ui_service/navigation_service.py` (Тут нужно вклинить проверку на энкаунтер)
-4.  `apps/game_core/resources/game_data/monsters/spawn_config.py` (Конфиги спавна мобов)
-5.  `apps/game_core/resources/game_data/monsters/encounter_config.py` (Правила формирования групп)
-6.  `apps/common/services/core_service/manager/combat_manager.py` (Инициализация боя)
-7.  *New File Suggestion:* `apps/game_core/game_service/exploration/encounter_service.py` (Новый сервис для логики шансов)
+1.  `docs/tusk/Exploration_and_Encounters.md` (Основной дизайн-документ)
+2.  `apps/bot/ui_service/navigation_service.py` (Интеграция с Оркестратором)
+3.  `apps/game_core/game_service/world/threat_service.py` (Расчет опасности зоны / Tier)
+4.  `apps/game_core/game_service/skill/skill_service.py` (Получение навыка Survival для модификаторов)
+5.  `apps/common/services/core_service/manager/world_manager.py` (Работа с Redis для защиты от абуза)
+6.  `apps/game_core/resources/game_data/monsters/spawn_config.py` (Конфиги спавна мобов)
+7.  `apps/common/services/core_service/manager/combat_manager.py` (Инициализация боя)
+8.  *New File:* `apps/game_core/game_service/exploration/exploration_orchestrator.py` (Фасад для управления потоком)
+9.  *New File:* `apps/game_core/game_service/exploration/encounter_service.py` (Логика шансов и типов встреч)
 
 ---
 
