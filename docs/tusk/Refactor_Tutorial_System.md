@@ -59,7 +59,7 @@
 *   **Лор:** "Из тени выходит Искаженная Крыса. Бежать некуда."
 *   **Техника:**
     1.  **Spawn:** `TutorialService` берет конфиг моба `tutorial_rat`.
-    2.  **Init:** Вызов `CombatLifecycleService.create_battle(mode="tutorial")`.
+    2.  **Init:** Вызов `CombatLifecycleService.create_battle(mode=CombatMode.TUTORIAL)`.
     3.  **Add:** Добавляет игрока и крысу в бой.
     4.  **Flow:** Игрок нажимает кнопки боя. `CombatManager` считает реальный урон.
     5.  **Hint:** Если игрок тупит, бот шлет подсказку: "Используй 'Удар', чтобы атаковать!".
@@ -67,7 +67,7 @@
 ### Шаг 4: Завершение и Хаб
 *   **Лор:** Крыса повержена. Мир вокруг начинает таять. Ты просыпаешься в Городе (Хаб).
 *   **Техника:**
-    *   `CombatLifecycleService.finish_battle` определяет, что `mode="tutorial"`.
+    *   `CombatLifecycleService.finish_battle` определяет, что `mode=CombatMode.TUTORIAL`.
     *   `CombatXPManager` начисляет опыт (Level Up -> 2).
     *   `NavigationService` переносит игрока в `hub_center`.
     *   FSM сбрасывается в `GameState:World`.
@@ -112,7 +112,7 @@ class TutorialService:
         pass
 
     async def start_training_fight(self):
-        # Вызов combat_lifecycle.create_battle(mode="tutorial")
+        # Вызов combat_lifecycle.create_battle(mode=CombatMode.TUTORIAL)
         pass
     
     async def complete_training_fight(self):
@@ -125,28 +125,34 @@ class TutorialService:
 *   Вместо простыни текста — вызовы `await tutorial_service.step_X()`.
 
 ### 4.4. Обработка Завершения Боя (Combat Outcome)
-Необходимо модифицировать `CombatLifecycleService.finish_battle`.
+Необходимо модифицировать `CombatLifecycleService.finish_battle`. Эта логика должна быть консистентна с `Refactor_Combat_Finalization.md`.
 
-1.  **При создании боя** в `TutorialService` мы передаем `mode="tutorial"`.
+1.  **При создании боя** в `TutorialService` мы передаем `mode=CombatMode.TUTORIAL`.
 2.  **При завершении боя** `finish_battle` читает этот `mode` из метаданных сессии.
 3.  **Логика ветвления:**
     ```python
     # В CombatLifecycleService.finish_battle
+    # (предполагается, что CombatMode импортирован)
     async def finish_battle(self, session_id: str, winner_team: str):
         meta = await self.combat_manager.get_session_meta(session_id)
-        combat_mode = meta.get("mode", "world")
+        combat_mode = meta.get("mode", CombatMode.ADVENTURE)
 
         match combat_mode:
-            case "world" | "rift":
+            case CombatMode.ADVENTURE | CombatMode.RIFT:
                 # Выдать лут, опыт и т.д.
                 await self.loot_service.distribute_loot(...)
-            case "arena":
+            case CombatMode.ARENA:
                 # Обновить PvP рейтинг
                 await self.arena_service.update_rating(...)
-            case "tutorial":
+            case CombatMode.TUTORIAL:
                 # Просто завершить бой и передать управление
                 log.info("Tutorial combat finished.")
                 # Вызывающий код (TutorialService) сам решит, что делать дальше
+            case CombatMode.DUEL:
+                log.info("Duel finished. No consequences.")
+                pass
+            case _:
+                log.warning(f"Unknown combat mode: {combat_mode}")
     ```
 
 ---
