@@ -1,7 +1,8 @@
 # app/services/ui_service/helpers_ui/combat_formatters.py
 from loguru import logger as log
 
-from apps.common.schemas_dto import CombatSessionContainerDTO, InventoryItemDTO
+from apps.common.schemas_dto import InventoryItemDTO
+from apps.common.schemas_dto.combat_source_dto import ActorSnapshotDTO
 
 
 class CombatFormatter:
@@ -120,8 +121,8 @@ class CombatFormatter:
         return "\n".join(lines)
 
     @staticmethod
-    def format_results(player_dto: CombatSessionContainerDTO, winner_team: str, duration: int) -> str:
-        is_winner = player_dto.team == winner_team
+    def format_results(player_snap: ActorSnapshotDTO, winner_team: str, duration: int, rewards: dict) -> str:
+        is_winner = player_snap.team == winner_team
         if is_winner:
             header = "🏆 <b>ПОБЕДА!</b>"
             flavor = "<i>Враг повержен. Вы вытираете кровь с клинка...</i>"
@@ -129,24 +130,10 @@ class CombatFormatter:
             header = "💀 <b>ПОРАЖЕНИЕ...</b>"
             flavor = "<i>Тьма сгущается перед глазами. Вы пали в бою.</i>"
 
-        s = player_dto.state.stats if player_dto.state else None
-        total_xp = 0
-        if player_dto.state and player_dto.state.xp_buffer:
-            total_xp = sum(player_dto.state.xp_buffer.values())
+        total_xp = rewards.get("xp", 0)
+        gold = rewards.get("gold", 0)
 
-        stats_text = ""
-        if s:
-            stats_text = (
-                f"<b>📊 Ваша эффективность:</b>\n"
-                f"<code>"
-                f"⚔️ Урон:    {s.damage_dealt}\n"
-                f"🛡 Блок:    {s.blocks_success}\n"
-                f"🏃 Уворот:  {s.dodges_success}\n"
-                f"💔 Получено: {s.damage_taken}\n"
-                f"💥 Критов:   {s.crits_landed}"
-                f"</code>\n\n"
-                f"📈 <b>Получено опыта:</b> +{total_xp} XP"
-            )
+        stats_text = f"📈 <b>Получено опыта:</b> +{total_xp} XP\n💰 <b>Золото:</b> +{gold} G"
 
         return f"{header}\n⏱ <i>Время боя: {duration} сек.</i>\n\n{flavor}\n\n{stats_text}"
 

@@ -33,14 +33,14 @@ async def start_tutorial_handler(call: CallbackQuery, state: FSMContext, bot: Bo
 
     if not isinstance(char_id, int):
         log.warning(f"TutorialStats | status=failed reason='Invalid char_id in FSM' user_id={user_id}")
-        await Err.invalid_id(call=call)
+        await Err.char_id_not_found_in_fsm(call=call)
         return
 
     tut_service = TutorialServiceStats(char_id=char_id, bonus_dict={})
     next_step_data = tut_service.get_next_step()
     if next_step_data is None:
         log.error(f"TutorialStats | status=failed reason='get_next_step returned None on first step' char_id={char_id}")
-        await Err.callback_data_missing(call)
+        await Err.generic_error(call)
         return
 
     text, kb = next_step_data
@@ -80,7 +80,7 @@ async def tutorial_event_stats_handler(call: CallbackQuery, state: FSMContext, b
     char_id = session_context.get("char_id")
     if not isinstance(char_id, int):
         log.warning(f"TutorialStats | status=failed reason='Invalid char_id in FSM' user_id={user_id}")
-        await Err.invalid_id(call=call)
+        await Err.char_id_not_found_in_fsm(call=call)
         return
 
     session_dto = SessionDataDTO(**session_context)
@@ -153,7 +153,7 @@ async def tutorial_confirmation_handler(
 
     if not isinstance(char_id, int) or not isinstance(message_content, dict):
         log.warning(f"TutorialConfirm | status=failed reason='Invalid FSM data' user_id={user_id}")
-        await Err.invalid_id(call)
+        await Err.char_id_not_found_in_fsm(call)
         return
 
     tut_service = TutorialServiceStats(
@@ -182,7 +182,7 @@ async def tutorial_confirmation_handler(
             log.warning(
                 f"TutorialConfirm | action=continue status=failed reason='bonus_dict not found' user_id={user_id}"
             )
-            await Err.invalid_id(call)
+            await Err.char_id_not_found_in_fsm(call)
             return
 
         await await_min_delay(start_time, min_delay=2.0)
@@ -198,4 +198,4 @@ async def tutorial_confirmation_handler(
         )
     else:
         log.error(f"TutorialConfirm | status=failed reason='Unknown callback' data='{call.data}' user_id={user_id}")
-        await Err.callback_data_missing(call)
+        await Err.generic_error(call)

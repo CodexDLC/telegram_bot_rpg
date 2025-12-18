@@ -455,6 +455,29 @@ class RedisService:
         except RedisError:
             log.exception(f"RedisList | action=push status=failed reason='Redis error' key='{key}'")
 
+    async def pop_from_list_left(self, key: str) -> str | None:
+        """
+        Удаляет и возвращает первый элемент списка Redis (LPOP).
+
+        Args:
+            key: Ключ списка Redis.
+
+        Returns:
+            Строковое значение элемента или None, если список пуст.
+
+        Raises:
+            RedisError: Если произошла ошибка при взаимодействии с Redis.
+        """
+        try:
+            value = await self.redis_client.lpop(key)  # type: ignore
+            if value:
+                log.debug(f"RedisList | action=lpop status=success key='{key}'")
+                return str(value)
+            return None
+        except RedisError:
+            log.exception(f"RedisList | action=lpop status=failed reason='Redis error' key='{key}'")
+            return None
+
     async def get_list_range(self, key: str, start: int = 0, end: int = -1) -> list[str]:
         """
         Возвращает диапазон элементов из списка Redis.
@@ -479,6 +502,24 @@ class RedisService:
         except RedisError:
             log.exception(f"RedisList | action=get_range status=failed reason='Redis error' key='{key}'")
             return []
+
+    async def get_list_length(self, key: str) -> int:
+        """
+        Возвращает длину списка Redis.
+
+        Args:
+            key: Ключ списка Redis.
+
+        Returns:
+            Длина списка. Возвращает 0 в случае ошибки или если ключ не существует.
+        """
+        try:
+            count = await self.redis_client.llen(key)  # type: ignore
+            log.debug(f"RedisList | action=len status=success key='{key}' count={count}")
+            return int(count)
+        except RedisError:
+            log.exception(f"RedisList | action=len status=failed reason='Redis error' key='{key}'")
+            return 0
 
     async def delete_by_pattern(self, pattern: str) -> int:
         """

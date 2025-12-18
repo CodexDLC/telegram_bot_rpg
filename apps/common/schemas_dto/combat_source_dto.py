@@ -49,6 +49,19 @@ class FighterStateDTO(BaseModel):
     afk_penalty_level: int = 0  # Уровень штрафа за бездействие (AFK).
 
 
+class CombatMoveDTO(BaseModel):
+    """
+    "Пуля" - заявка на ход от одного бойца.
+    Хранится в Redis до момента обработки обмена.
+    """
+
+    target_id: int
+    attack_zones: list[str]
+    block_zones: list[str]
+    ability_key: str | None = None
+    execute_at: int  # Timestamp, когда ход станет "просроченным"
+
+
 class StatSourceData(BaseModel):
     """
     Представляет данные о значении характеристики из различных источников.
@@ -79,3 +92,35 @@ class CombatSessionContainerDTO(BaseModel):
     quick_slot_limit: int = 0  # Максимальное количество быстрых слотов.
     state: FighterStateDTO | None = None  # Динамическое состояние бойца в текущем раунде.
     stats: dict[str, StatSourceData] = Field(default_factory=dict)  # Агрегированные характеристики бойца.
+
+
+class ActorSnapshotDTO(BaseModel):
+    """Облегченный снимок состояния участника боя для UI."""
+
+    char_id: int
+    name: str
+    hp_current: int
+    hp_max: int
+    energy_current: int
+    energy_max: int
+    team: str
+    is_dead: bool
+    effects: list[str] = []  # Названия активных эффектов/иконок
+    tokens: dict[str, int] = {}  # Текущие боевые токены
+
+
+class CombatDashboardDTO(BaseModel):
+    """Полный снимок (Snapshot) состояния боевого экрана."""
+
+    session_id: str
+    status: str  # "active", "waiting", "finished"
+    player: ActorSnapshotDTO
+    current_target: ActorSnapshotDTO | None = None
+    enemies: list[ActorSnapshotDTO] = []
+    allies: list[ActorSnapshotDTO] = []
+    queue_count: int = 0
+    switch_charges: int = 0
+    belt_items: list[dict] = []
+    last_logs: list[str] = []
+    winner_team: str | None = None
+    rewards: dict = {}

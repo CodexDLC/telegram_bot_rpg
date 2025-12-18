@@ -94,7 +94,7 @@ async def start_login_handler(
         char_id = await lobby_service.create_and_get_character_id(session)
         if not char_id:
             log.error(f"CharacterCreation | status=failed reason='Could not create character shell' user_id={user_id}")
-            await Err.invalid_id(call=call)
+            await Err.char_id_not_found_in_fsm(call=call)
             return
 
         await start_creation_handler(
@@ -134,7 +134,7 @@ async def create_character_handler(
     char_id = await lobby_service.create_and_get_character_id(session)
     if not char_id:
         log.error(f"CharacterCreation | status=failed reason='Could not create character shell' user_id={user_id}")
-        await Err.invalid_id(call=call)
+        await Err.char_id_not_found_in_fsm(call=call)
         return
 
     await start_creation_handler(

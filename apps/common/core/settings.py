@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # Системные константы (Hardcoded values)
     system_user_id: int = 2_000_000_000
 
+    # Таймаут для поиска матча на арене в секундах
+    arena_matchmaking_timeout: int = 30
+
     @property
     def system_char_id(self) -> int:
         return self.system_user_id

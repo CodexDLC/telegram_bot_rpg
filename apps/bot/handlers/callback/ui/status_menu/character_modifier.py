@@ -112,7 +112,7 @@ async def character_modifier_detail_handler(
             group_key = state_data.get("group_key")
             if not group_key:
                 log.warning(f"ModifierMenu | status=failed reason='group_key not found in FSM' user_id={user_id}")
-                await Err.callback_data_missing(call=call)
+                await Err.generic_error(call=call)
                 return None, None, None
 
             modifier_service = CharacterModifierUIService(char_id=char_id, key=key, state_data=state_data)
