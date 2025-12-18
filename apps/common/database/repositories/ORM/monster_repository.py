@@ -35,8 +35,16 @@ class MonsterRepository(IMonsterRepository):
         return list(result.scalars().all())
 
     async def get_monster_by_id(self, monster_id: UUID | str) -> GeneratedMonsterORM | None:
-        real_uuid = UUID(monster_id) if isinstance(monster_id, str) else monster_id
-        query = select(GeneratedMonsterORM).where(GeneratedMonsterORM.id == real_uuid)
+        try:
+            real_uuid = UUID(monster_id) if isinstance(monster_id, str) else monster_id
+        except ValueError:
+            log.warning(f"GetMonsterByIdFail | reason=invalid_uuid monster_id='{monster_id}'")
+            return None
+        query = (
+            select(GeneratedMonsterORM)
+            .where(GeneratedMonsterORM.id == real_uuid)
+            .options(selectinload(GeneratedMonsterORM.clan))
+        )
         result = await self.session.execute(query)
         return result.scalars().first()
 
