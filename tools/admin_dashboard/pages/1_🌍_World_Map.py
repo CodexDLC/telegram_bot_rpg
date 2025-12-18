@@ -278,9 +278,8 @@ def render_clans_list(clans_data: list):
                 st.json({"flavor": clan.flavor_content, "tags": clan.raw_tags})
 
 
-# --- Основная логика ---
+# 1. Создаем одну асинхронную функцию для всей логики страницы
 async def run_async_app():
-    """Запускает асинхронную часть Streamlit приложения."""
     if st.session_state.selected_region is None:
         regions = await load_region_list()
         render_regions_grid(regions)
@@ -288,14 +287,19 @@ async def run_async_app():
         zones = await load_zone_data(st.session_state.selected_region)
         render_zones_grid(st.session_state.selected_region, zones)
     else:
+        # Важно: await здесь заменяет loop.run_until_complete
         cells, zone_biome, clans = await load_cells_and_clans_data(st.session_state.selected_zone)
         render_zone_details(st.session_state.selected_zone, cells, zone_biome, clans)
 
 
+# 2. Основная точка входа
 def main():
     """Основная точка входа для запуска приложения."""
+    # ОБЯЗАТЕЛЬНО для Windows и asyncpg
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    # Запускаем всё приложение в одном чистом цикле событий
     asyncio.run(run_async_app())
 
 

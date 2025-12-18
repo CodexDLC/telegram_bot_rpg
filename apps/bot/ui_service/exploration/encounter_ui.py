@@ -1,0 +1,62 @@
+# apps/bot/ui_service/exploration/encounter_ui.py
+
+from aiogram.types import InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+from apps.bot.resources.keyboards.callback_data import EncounterCallback
+from apps.common.schemas_dto.exploration_dto import DetectionStatus, EncounterDTO
+
+
+class EncounterUI:
+    """
+    UI-компонент для отображения случайных встреч.
+    """
+
+    @staticmethod
+    def render_combat_preview(dto: EncounterDTO) -> tuple[str, InlineKeyboardMarkup | None]:
+        """
+        Отрисовка превью боя в зависимости от статуса обнаружения.
+        """
+        if dto.status == DetectionStatus.DETECTED:
+            text = f"👁 <b>УГРОЗА ОБНАРУЖЕНА</b>\n\nВпереди вы замечаете: <b>{dto.name}</b>.\n<i>{dto.description}</i>"
+            kb = EncounterUI._get_detected_kb(dto.encounter_id)
+
+        elif dto.status == DetectionStatus.AMBUSH:
+            text = f"⚔️ <b>ЗАСАДА!</b>\n\n<i>{dto.description}</i>\nБой неизбежен."
+            kb = EncounterUI._get_ambush_kb(dto.encounter_id)
+
+        else:
+            text = f"Вы столкнулись с {dto.name}."
+            kb = None
+
+        return text, kb
+
+    @staticmethod
+    def render_narrative(dto: EncounterDTO) -> tuple[str, InlineKeyboardMarkup | None]:
+        text = f"📜 <b>{dto.name.upper()}</b>\n\n{dto.description}"
+        kb = EncounterUI._get_narrative_kb(dto.encounter_id)
+        return text, kb
+
+    @staticmethod
+    def _get_detected_kb(target_id: str) -> InlineKeyboardMarkup:
+        builder = InlineKeyboardBuilder()
+        builder.button(text="⚔️ Атаковать", callback_data=EncounterCallback(action="attack", target_id=target_id).pack())
+        builder.button(text="👣 Обойти", callback_data=EncounterCallback(action="bypass", target_id=target_id).pack())
+        builder.adjust(2)
+        return builder.as_markup()
+
+    @staticmethod
+    def _get_ambush_kb(target_id: str) -> InlineKeyboardMarkup:
+        builder = InlineKeyboardBuilder()
+        builder.button(text="🛡 В бой!", callback_data=EncounterCallback(action="attack", target_id=target_id).pack())
+        return builder.as_markup()
+
+    @staticmethod
+    def _get_narrative_kb(target_id: str) -> InlineKeyboardMarkup:
+        builder = InlineKeyboardBuilder()
+        builder.button(
+            text="🔍 Осмотреть", callback_data=EncounterCallback(action="inspect", target_id=target_id).pack()
+        )
+        builder.button(text="➡️ Уйти", callback_data=EncounterCallback(action="bypass", target_id=target_id).pack())
+        builder.adjust(2)
+        return builder.as_markup()

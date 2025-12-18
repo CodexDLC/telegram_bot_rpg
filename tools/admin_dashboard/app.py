@@ -9,14 +9,15 @@ from loguru import logger as log
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from apps.common.core.loguru_setup import setup_loguru
-from apps.common.database.session import async_session_factory
-from tools.admin_dashboard.ui_core import apply_global_styles, render_header
-
 # --- 1. Настройка путей ---
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+
+
+from apps.common.core.loguru_setup import setup_loguru  # noqa: E402
+from apps.common.database.session import async_session_factory  # noqa: E402
+from tools.admin_dashboard.ui_core import apply_global_styles, render_header  # noqa: E402
 
 # --- 2. Инициализация ---
 setup_loguru()

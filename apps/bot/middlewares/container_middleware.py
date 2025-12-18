@@ -17,10 +17,16 @@ class ContainerMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        # Старые зависимости
         data["account_manager"] = self.container.account_manager
         data["arena_manager"] = self.container.arena_manager
         data["combat_manager"] = self.container.combat_manager
         data["world_manager"] = self.container.world_manager
         data["redis_service"] = self.container.redis_service
         data["game_world_service"] = self.container.game_world_service
+
+        # Новая зависимость
+        if "session" in data:
+            data["exploration_ui_service"] = self.container.get_exploration_ui_service(data["session"])
+
         return await handler(event, data)

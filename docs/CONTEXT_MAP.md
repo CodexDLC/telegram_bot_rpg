@@ -118,14 +118,17 @@
 **Суть:** Реализация перехвата управления при перемещении. Игрок нажимает "Север" -> Оркестратор проверяет вероятность -> Если успех, вызывает Бой или Событие вместо перемещения.
 **Файлы для контекста:**
 1.  `docs/tusk/Exploration_and_Encounters.md` (Основной дизайн-документ)
-2.  `apps/bot/ui_service/navigation_service.py` (Интеграция с Оркестратором)
-3.  `apps/game_core/game_service/world/threat_service.py` (Расчет опасности зоны / Tier)
-4.  `apps/game_core/game_service/skill/skill_service.py` (Получение навыка Survival для модификаторов)
-5.  `apps/common/services/core_service/manager/world_manager.py` (Работа с Redis для защиты от абуза)
-6.  `apps/game_core/resources/game_data/monsters/spawn_config.py` (Конфиги спавна мобов)
-7.  `apps/common/services/core_service/manager/combat_manager.py` (Инициализация боя)
-8.  *New File:* `apps/game_core/game_service/exploration/exploration_orchestrator.py` (Фасад для управления потоком)
-9.  *New File:* `apps/game_core/game_service/exploration/encounter_service.py` (Логика шансов и типов встреч)
+2.  `apps/common/schemas_dto/exploration_dto.py` (DTO и Enums для энкаунтеров)
+3.  `apps/bot/ui_service/navigation_service.py` (Интеграция с Оркестратором)
+4.  `apps/game_core/game_service/world/threat_service.py` (Расчет опасности зоны / Tier)
+5.  `apps/game_core/game_service/world/game_world_service.py` (Преобразование координат и навигация)
+6.  `apps/game_core/game_service/skill/skill_service.py` (Сервис навыков)
+7.  `apps/common/database/db_contract/i_skill_repo.py` (Интерфейс репо для получения уровня навыка)
+8.  `apps/common/services/core_service/manager/world_manager.py` (Работа с Redis для защиты от абуза)
+9.  `apps/game_core/resources/game_data/monsters/spawn_config.py` (Конфиги спавна мобов)
+10. `apps/common/services/core_service/manager/combat_manager.py` (Инициализация боя)
+11. *New File:* `apps/game_core/game_service/exploration/exploration_orchestrator.py` (Фасад для управления потоком)
+12. *New File:* `apps/game_core/game_service/exploration/encounter_service.py` (Логика шансов и типов встреч)
 
 ---
 
