@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.database.db_contract.i_world_repo import IWorldRepo
 from apps.common.database.model_orm.world import WorldGrid, WorldRegion, WorldZone
+from apps.common.database.session import get_async_session
 
 
 class WorldRepoORM(IWorldRepo):
@@ -33,20 +34,22 @@ class WorldRepoORM(IWorldRepo):
             raise
 
     async def get_node(self, x: int, y: int) -> WorldGrid | None:
-        stmt = select(WorldGrid).where(WorldGrid.x == x, WorldGrid.y == y)
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        async with get_async_session() as session:
+            stmt = select(WorldGrid).where(WorldGrid.x == x, WorldGrid.y == y)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
 
     async def get_nodes_in_rect(self, x: int, y: int, width: int, height: int) -> list[WorldGrid]:
-        stmt = select(WorldGrid).where(
-            WorldGrid.x >= x, WorldGrid.x < x + width, WorldGrid.y >= y, WorldGrid.y < y + height
-        )
-        try:
-            result = await self.session.execute(stmt)
-            return list(result.scalars().all())
-        except SQLAlchemyError as e:
-            log.error(f"WorldRepo | get_nodes_in_rect failed x={x} y={y} error={e}")
-            return []
+        async with get_async_session() as session:
+            stmt = select(WorldGrid).where(
+                WorldGrid.x >= x, WorldGrid.x < x + width, WorldGrid.y >= y, WorldGrid.y < y + height
+            )
+            try:
+                result = await session.execute(stmt)
+                return list(result.scalars().all())
+            except SQLAlchemyError as e:
+                log.error(f"WorldRepo | get_nodes_in_rect failed x={x} y={y} error={e}")
+                return []
 
     async def create_or_update_node(
         self,
@@ -139,33 +142,39 @@ class WorldRepoORM(IWorldRepo):
             return False
 
     async def get_region(self, region_id: str) -> WorldRegion | None:
-        stmt = select(WorldRegion).where(WorldRegion.id == region_id)
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        async with get_async_session() as session:
+            stmt = select(WorldRegion).where(WorldRegion.id == region_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
 
     async def get_all_regions(self) -> list[WorldRegion]:
-        stmt = select(WorldRegion).order_by(WorldRegion.id)
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        async with get_async_session() as session:
+            stmt = select(WorldRegion).order_by(WorldRegion.id)
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
 
     async def get_zone(self, zone_id: str) -> WorldZone | None:
-        stmt = select(WorldZone).where(WorldZone.id == zone_id)
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        async with get_async_session() as session:
+            stmt = select(WorldZone).where(WorldZone.id == zone_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
 
     async def get_zones_by_region(self, region_id: str) -> list[WorldZone]:
-        stmt = select(WorldZone).where(WorldZone.region_id == region_id)
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        async with get_async_session() as session:
+            stmt = select(WorldZone).where(WorldZone.region_id == region_id)
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
 
     async def get_nodes_by_zone(self, zone_id: str) -> list[WorldGrid]:
-        stmt = select(WorldGrid).where(WorldGrid.zone_id == zone_id).order_by(WorldGrid.y, WorldGrid.x)
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        async with get_async_session() as session:
+            stmt = select(WorldGrid).where(WorldGrid.zone_id == zone_id).order_by(WorldGrid.y, WorldGrid.x)
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
 
     async def get_active_nodes(self) -> list[WorldGrid]:
         from sqlalchemy.orm import joinedload
 
-        stmt = select(WorldGrid).options(joinedload(WorldGrid.zone)).where(WorldGrid.is_active)
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        async with get_async_session() as session:
+            stmt = select(WorldGrid).options(joinedload(WorldGrid.zone)).where(WorldGrid.is_active)
+            result = await session.execute(stmt)
+            return list(result.scalars().all())

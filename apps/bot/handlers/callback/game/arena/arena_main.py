@@ -1,3 +1,4 @@
+# apps/bot/handlers/callback/game/arena/arena_main.py
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -7,14 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.bot.resources.fsm_states.states import ArenaState, InGame
 from apps.bot.resources.keyboards.callback_data import ArenaQueueCallback
 from apps.bot.ui_service.arena_ui_service.arena_ui_service import ArenaUIService
+from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService  # ИЗМЕНЕНО
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.bot.ui_service.navigation_service import NavigationService
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
-from apps.common.services.core_service.manager.world_manager import WorldManager
-from apps.game_core.game_service.world.game_world_service import GameWorldService
 
 router = Router(name="arena_main_router")
 
@@ -30,21 +29,16 @@ async def arena_render_main_menu_handler(
     arena_manager: ArenaManager,
     combat_manager: CombatManager,
 ) -> None:
-    """Отображает главное меню Арены."""
     if not call.from_user:
         return
-
     char_id = callback_data.char_id
     user_id = call.from_user.id
     log.info(f"Arena | event=view_main_menu user_id={user_id} char_id={char_id}")
-
     state_data = await state.get_data()
     ui = ArenaUIService(char_id, state_data, session, account_manager, arena_manager, combat_manager)
     text, kb = await ui.view_main_menu()
-
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     message_content = session_context.get("message_content")
-
     if message_content and text and kb:
         await bot.edit_message_text(
             chat_id=message_content["chat_id"],
@@ -65,36 +59,25 @@ async def arena_exit_service_handler(
     callback_data: ArenaQueueCallback,
     state: FSMContext,
     bot: Bot,
-    account_manager: AccountManager,
-    world_manager: WorldManager,
-    game_world_service: GameWorldService,
-    combat_manager: CombatManager,
+    exploration_ui_service: ExplorationUIService,  # ИЗМЕНЕНО
 ) -> None:
-    """Обрабатывает выход из Арены и возврат в мир."""
     if not call.from_user:
         return
-
     user_id = call.from_user.id
     char_id = callback_data.char_id
     log.info(f"Arena | event=exit_service user_id={user_id} char_id={char_id}")
     await call.answer("Вы покидаете Полигон.")
-
     await state.set_state(InGame.navigation)
     log.info(f"FSM | state=InGame.navigation user_id={user_id}")
-
     state_data = await state.get_data()
-    nav_service = NavigationService(
-        char_id=char_id,
-        state_data=state_data,
-        account_manager=account_manager,
-        world_manager=world_manager,
-        game_world_service=game_world_service,
-        combat_manager=combat_manager,
-    )
-    text, kb = await nav_service.reload_current_ui()
-
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     message_content = session_context.get("message_content")
+    actor_name = session_context.get("symbiote_name", "Симбиот")
+
+    # Вызываем новый сервис
+    text, kb = await exploration_ui_service.render_map(  # ИЗМЕНЕНО
+        char_id=char_id, actor_name=actor_name
+    )
 
     if message_content and text and kb:
         await bot.edit_message_text(
@@ -119,23 +102,18 @@ async def arena_universal_cancel_handler(
     arena_manager: ArenaManager,
     combat_manager: CombatManager,
 ) -> None:
-    """Обрабатывает отмену поиска матча на Арене."""
     if not call.from_user:
         return
-
     char_id = callback_data.char_id
     user_id = call.from_user.id
     mode = callback_data.match_type
     log.info(f"Arena | event=cancel_queue user_id={user_id} char_id={char_id} mode='{mode}'")
-
     state_data = await state.get_data()
     ui = ArenaUIService(char_id, state_data, session, account_manager, arena_manager, combat_manager)
     await ui.action_cancel_queue(mode)
     await state.set_state(ArenaState.menu)
     log.info(f"FSM | state=ArenaState.menu user_id={user_id}")
-
     text, kb = await ui.view_mode_menu(mode)
-
     if text and kb and isinstance(call.message, Message):
         await call.message.edit_text(text=text, reply_markup=kb, parse_mode="HTML")
         await call.answer("Поиск отменен.")

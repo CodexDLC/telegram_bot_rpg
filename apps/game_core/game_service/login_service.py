@@ -4,8 +4,8 @@ from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.texts.buttons_callback import GameStage
 from apps.common.database.repositories import get_character_repo
+from apps.common.schemas_dto.auth_dto import GameStage
 from apps.common.services.core_service.manager.account_manager import AccountManager
 
 

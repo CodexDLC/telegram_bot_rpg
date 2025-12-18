@@ -3,16 +3,20 @@ from typing import Any
 
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
-from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from apps.common.database.session import get_async_session
 
 
 class DbSessionMiddleware(BaseMiddleware):
     """
     Middleware для внедрения сессии SQLAlchemy в обработчики событий.
+    Использует get_async_session для автоматического управления транзакциями (commit/rollback).
     """
 
-    def __init__(self, session_pool: async_sessionmaker):
-        self.session_pool = session_pool
+    def __init__(self, session_pool):
+        # session_pool здесь не используется напрямую, так как мы берем get_async_session,
+        # но оставим его в __init__ для совместимости с DI, если он там передается.
+        pass
 
     async def __call__(
         self,
@@ -20,11 +24,6 @@ class DbSessionMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        """
-        Создает сессию для каждого события и передает ее в хэндлер.
-        Управление транзакциями (commit/rollback) должно происходить
-        внутри сервисов или Unit of Work, а не в middleware.
-        """
-        async with self.session_pool() as session:
+        async with get_async_session() as session:
             data["session"] = session
             return await handler(event, data)

@@ -1,8 +1,4 @@
-# TODO [ARCH-DEBT]: Legacy Handler. Требует рефакторинга для работы через API Gateway (убрать прямые импорты game_core).
-"""
-Обработчики основных действий в бою: подтверждение хода, выход, обновление.
-"""
-
+# apps/bot/handlers/callback/game/combat/action_handlers.py
 import time
 from contextlib import suppress
 from typing import Any
@@ -18,19 +14,17 @@ from apps.bot.resources.fsm_states.states import ArenaState, InGame
 from apps.bot.resources.keyboards.combat_callback import CombatActionCallback
 from apps.bot.ui_service.arena_ui_service.arena_ui_service import ArenaUIService
 from apps.bot.ui_service.combat.combat_ui_service import CombatUIService
+from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService  # ИЗМЕНЕНО
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.helpers_ui.ui_animation_service import UIAnimationService
 from apps.bot.ui_service.helpers_ui.ui_tools import await_min_delay
 from apps.bot.ui_service.menu_service import MenuService
-from apps.bot.ui_service.navigation_service import NavigationService
 from apps.common.schemas_dto import SessionDataDTO
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
-from apps.common.services.core_service.manager.world_manager import WorldManager
 from apps.game_core.game_service.combat.combat_service import CombatService
-from apps.game_core.game_service.world.game_world_service import GameWorldService
 
 action_router = Router(name="combat_actions")
 
@@ -42,26 +36,21 @@ async def leave_combat_handler(
     session: AsyncSession,
     combat_manager: CombatManager,
     account_manager: AccountManager,
-    world_manager: WorldManager,
     arena_manager: ArenaManager,
-    game_world_service: GameWorldService,
+    exploration_ui_service: ExplorationUIService,  # ИЗМЕНЕНО
 ):
     if not call.from_user or not call.message or not call.bot:
         return
-
     state_data = await state.get_data()
     session_context: dict[str, Any] = state_data.get(FSM_CONTEXT_KEY, {})
     char_id = session_context.get("char_id")
     user_id = call.from_user.id
     session_id = session_context.get("combat_session_id")
-
     if not char_id or not session_id:
         return
-
     meta = await combat_manager.get_session_meta(str(session_id))
     mode = meta.get("mode", "world") if meta else "world"
     log.info(f"Combat | action=leave user_id={user_id} char_id={char_id} mode='{mode}'")
-
     content_text, content_kb = None, None
     if mode == "arena":
         await state.set_state(ArenaState.menu)
@@ -69,16 +58,10 @@ async def leave_combat_handler(
         content_text, content_kb = await arena_ui.view_main_menu()
     else:
         await state.set_state(InGame.navigation)
-        nav_service = NavigationService(
-            char_id=char_id,
-            state_data=state_data,
-            account_manager=account_manager,
-            world_manager=world_manager,
-            game_world_service=game_world_service,
-            combat_manager=combat_manager,
+        actor_name = session_context.get("symbiote_name", "Симбиот")
+        content_text, content_kb = await exploration_ui_service.render_map(  # ИЗМЕНЕНО
+            char_id=char_id, actor_name=actor_name
         )
-        content_text, content_kb = await nav_service.reload_current_ui()
-
     if msg_menu := session_context.get("message_menu"):
         ms = MenuService(game_stage="in_game", state_data=state_data, session=session, account_manager=account_manager)
         menu_text, menu_kb = await ms.get_data_menu()
@@ -90,7 +73,6 @@ async def leave_combat_handler(
                 reply_markup=menu_kb,
                 parse_mode="HTML",
             )
-
     if (msg_content := session_context.get("message_content")) and content_text:
         with suppress(TelegramAPIError):
             await call.bot.edit_message_text(
@@ -113,38 +95,30 @@ async def submit_turn_handler(
 ):
     if not call.from_user or not call.message:
         return
-
     await call.answer("Ход зафиксирован.")
     state_data = await state.get_data()
     session_context: dict[str, Any] = state_data.get(FSM_CONTEXT_KEY, {})
     char_id = session_context.get("char_id")
     user_id = call.from_user.id
     session_id = str(session_context.get("combat_session_id"))
-
     if not char_id or not session_id:
         return
-
     selection: dict[str, list[str]] = state_data.get("combat_selection", {})
     atk_zones = selection.get("atk", [])
     def_zones_raw = selection.get("def", [])
     real_def_zones = def_zones_raw[0].split("_") if def_zones_raw else []
-
     combat_service = CombatService(session_id, combat_manager, account_manager)
     all_participants = await combat_manager.get_session_participants(session_id)
     target_id = next((int(pid) for pid in all_participants if int(pid) != char_id), None)
-
     if target_id is None:
         await Err.generic_error(call)
         return
-
     await combat_service.register_move(
         actor_id=char_id, target_id=target_id, attack_zones=atk_zones or None, block_zones=real_def_zones or None
     )
     await state.update_data(combat_selection={"atk": [], "def": []})
-
     is_pending_move = await combat_manager.get_pending_move(session_id, char_id, target_id)
     ui_service = CombatUIService(user_id, char_id, session_id, state_data, combat_manager, account_manager)
-
     if is_pending_move:
         log.info(f"Combat | status=waiting_opponent char_id={char_id} target_id={target_id}")
         wait_text, wait_kb = await ui_service.render_waiting_screen()
@@ -167,16 +141,9 @@ async def submit_turn_handler(
                 return "TurnComplete"
             return None
 
-        # Ждем завершения хода (60 сек)
         await anim_service.animate_polling(base_text=wait_text, check_func=check_turn_done, steps=20, step_delay=3.0)
-        # Даже если результат None (таймаут), мы все равно пробуем обновить UI,
-        # чтобы показать актуальное состояние (возможно, сработал дедлайн на сервере)
-
     await await_min_delay(time.monotonic(), min_delay=0.5)
-
-    # Принудительно обновляем состояние боя перед рендером
     await combat_service.process_turn_updates()
-
     text, kb = await ui_service.render_dashboard(current_selection={})
     with suppress(TelegramAPIError):
         if msg_menu := session_context.get("message_menu"):
@@ -209,21 +176,17 @@ async def refresh_combat_handler(
 ):
     if not call.from_user or not call.message:
         return
-
     state_data = await state.get_data()
     session_context: dict[str, Any] = state_data.get(FSM_CONTEXT_KEY, {})
     char_id = session_context.get("char_id")
     user_id = call.from_user.id
     session_id = str(session_context.get("combat_session_id"))
-
     if not char_id or not session_id:
         return
-
     log.debug(f"Combat | action=refresh user_id={user_id}")
     combat_service = CombatService(session_id, combat_manager, account_manager)
     await combat_service.process_turn_updates()
     ui_service = CombatUIService(user_id, char_id, session_id, state_data, combat_manager, account_manager)
-
     with suppress(TelegramAPIError):
         if msg_menu := session_context.get("message_menu"):
             log_text, log_kb = await ui_service.render_combat_log(page=0)
@@ -234,16 +197,13 @@ async def refresh_combat_handler(
                 reply_markup=log_kb,
                 parse_mode="HTML",
             )
-
     all_participants = await combat_manager.get_session_participants(session_id)
     target_id = next((int(pid) for pid in all_participants if int(pid) != char_id), None)
     is_pending = bool(await combat_manager.get_pending_move(session_id, char_id, target_id)) if target_id else False
-
     if is_pending:
         text, kb = await ui_service.render_waiting_screen()
     else:
         text, kb = await ui_service.render_dashboard(current_selection={})
-
     if msg_content := session_context.get("message_content"):
         with suppress(TelegramAPIError):
             await bot.edit_message_text(

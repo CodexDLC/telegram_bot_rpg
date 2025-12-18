@@ -8,13 +8,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.bot.resources.keyboards.callback_data import LobbySelectionCallback, TutorialQuestCallback
-from apps.bot.resources.texts.buttons_callback import GameStage
 from apps.bot.resources.texts.game_messages.tutorial_messages_skill import (
     TUTORIAL_PHASE_SKILL,
     TUTORIAL_SKILL_EVENTS,
     TUTORIAL_SKILL_FINALE,
 )
 from apps.common.database.repositories import CharactersRepoORM, SkillProgressRepo
+from apps.common.schemas_dto.auth_dto import GameStage
 
 
 class TutorialServiceSkills:
