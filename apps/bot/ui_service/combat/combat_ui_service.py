@@ -24,15 +24,12 @@ class CombatUIService(BaseUIService):
     """
 
     def __init__(self, state_data: dict[str, Any], char_id: int):
-        # Больше никаких менеджеров в __init__
         super().__init__(state_data=state_data, char_id=char_id)
         self.fmt = CombatFormatter
         log.debug(f"CombatUIService (Thin) init: char={char_id}")
 
     async def render_dashboard(self, snapshot: CombatDashboardDTO, selection: dict) -> tuple[str, InlineKeyboardMarkup]:
         """Отрисовка основного экрана боя."""
-        # Данные уже посчитаны в Ядре.
-        # Формируем словари состояний для форматера
         player_dict = snapshot.player.model_dump()
         player_dict["switch_charges"] = snapshot.switch_charges
 
@@ -43,11 +40,8 @@ class CombatUIService(BaseUIService):
             allies_list=[a.model_dump() for a in snapshot.allies],
             timer_text="⏳ <i>Ваш ход...</i>",
         )
-
-        # Кнопка смены цели доступна, если есть заряды и врагов больше одного
         can_switch = snapshot.switch_charges > 0 and len(snapshot.enemies) > 1
         kb = self._kb_combat_grid(selection, can_switch=can_switch)
-
         return text, kb
 
     async def render_waiting_screen(self, snapshot: CombatDashboardDTO) -> tuple[str, InlineKeyboardMarkup]:
@@ -57,7 +51,6 @@ class CombatUIService(BaseUIService):
             "⏳ <i>Ожидание ответного действия...</i>\n"
             f"<i>Целей в очереди: {snapshot.queue_count}</i>"
         )
-        # В RBC обновление идет через оркестратор, кнопки обычно не нужны
         return text, InlineKeyboardBuilder().as_markup()
 
     async def render_spectator_mode(self, snapshot: CombatDashboardDTO) -> tuple[str, InlineKeyboardMarkup]:
@@ -84,17 +77,14 @@ class CombatUIService(BaseUIService):
 
     async def render_results(self, snapshot: CombatDashboardDTO) -> tuple[str, InlineKeyboardMarkup]:
         """Экран итогов боя."""
-        # Все данные (победитель, опыт, статы) Ядро упаковывает в snapshot.rewards
         winner = snapshot.winner_team or "none"
         rewards = snapshot.rewards or {}
-
         text = self.fmt.format_results(
             player_snap=snapshot.player,
             winner_team=winner,
-            duration=0,  # Можно добавить в DTO если нужно
+            duration=0,
             rewards=rewards,
         )
-
         kb = InlineKeyboardBuilder()
         cb_leave = CombatActionCallback(action="leave").pack()
         kb.row(InlineKeyboardButton(text="🔙 Выйти в Хаб", callback_data=cb_leave))
@@ -102,8 +92,7 @@ class CombatUIService(BaseUIService):
 
     async def render_skills_menu(self, snapshot: CombatDashboardDTO) -> tuple[str, InlineKeyboardMarkup]:
         """Меню активных умений."""
-        # Умения берем из данных игрока в Snapshot
-        active_skills = snapshot.player.effects  # Или добавить поле abilities в Snapshot
+        active_skills = snapshot.player.effects
         text = "⚡ <b>Выберите умение:</b>"
         kb = self._kb_skills_menu(active_skills)
         return text, kb
@@ -117,23 +106,18 @@ class CombatUIService(BaseUIService):
 
     async def render_combat_log(self, snapshot: CombatDashboardDTO, page: int) -> tuple[str, InlineKeyboardMarkup]:
         """Отрисовка лога боя."""
-        # Логи приходят как список строк JSON
         parsed_logs = []
         for log_json in snapshot.last_logs:
             try:
                 parsed_logs.append(json.loads(log_json))
             except json.JSONDecodeError:
                 continue
-
         text = self.fmt.format_log(parsed_logs, page, 5)
         kb = self._kb_log_pagination(snapshot.last_logs, page, 5)
         return text, kb
 
-    # --- Клавиатуры (используют переданные данные) ---
-
     def _kb_combat_grid(self, selection: dict, can_switch: bool) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()
-        # Логика отрисовки зон остается прежней
         sel_atk = selection.get("atk", [])
         sel_def = selection.get("def", [])
         rows = [
@@ -153,13 +137,15 @@ class CombatUIService(BaseUIService):
                 InlineKeyboardButton(text=txt_def, callback_data=cb_def),
             )
 
+        # Кнопка "В атаку" должна быть всегда
+        cb_submit = CombatActionCallback(action="submit").pack()
+        kb.row(InlineKeyboardButton(text="🔥 В атаку!", callback_data=cb_submit))
+
         cb_skills = CombatActionCallback(action="menu").pack()
         kb.row(InlineKeyboardButton(text="⚡ Умения / 🎒 Предметы", callback_data=cb_skills))
-
         if can_switch:
             cb_switch = CombatActionCallback(action="switch_target").pack()
             kb.row(InlineKeyboardButton(text="🔄 Сменить цель (-1 тактика)", callback_data=cb_switch))
-
         return kb.as_markup()
 
     def _kb_skills_menu(self, active_skills: list[str]) -> InlineKeyboardMarkup:
@@ -183,19 +169,14 @@ class CombatUIService(BaseUIService):
     def _kb_log_pagination(self, all_logs: list[str], page: int, page_size: int) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()
         total_pages = (len(all_logs) + page_size - 1) // page_size
-
         prev_page = page - 1
         next_page = page + 1
-
         buttons = []
         if prev_page >= 0:
             buttons.append(InlineKeyboardButton(text="⬅️", callback_data=CombatLogCallback(page=prev_page).pack()))
-
         buttons.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
-
         if next_page < total_pages:
             buttons.append(InlineKeyboardButton(text="➡️", callback_data=CombatLogCallback(page=next_page).pack()))
-
         kb.row(*buttons)
         kb.row(InlineKeyboardButton(text="🔙 Назад", callback_data=CombatActionCallback(action="refresh").pack()))
         return kb.as_markup()

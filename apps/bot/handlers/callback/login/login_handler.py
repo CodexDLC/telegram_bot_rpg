@@ -9,11 +9,13 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.bot.handlers.callback.login.char_creation import start_creation_handler
 from apps.bot.resources.fsm_states.states import InGame, StartTutorial
 from apps.bot.resources.keyboards.callback_data import LobbySelectionCallback
 from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.combat.combat_bot_orchestrator import CombatBotOrchestrator
+from apps.bot.ui_service.combat.combat_ui_service import CombatUIService
 from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY, fsm_clean_core_state
@@ -25,6 +27,7 @@ from apps.common.database.repositories import get_character_repo, get_symbiote_r
 from apps.common.schemas_dto import SessionDataDTO
 from apps.common.schemas_dto.auth_dto import GameStage
 from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.common.services.core_service.manager.combat_manager import CombatManager
 from apps.game_core.game_service.game_sync_service import GameSyncService
 from apps.game_core.game_service.login_service import LoginService
 
@@ -85,8 +88,9 @@ async def _handle_combat_restore(
     state_data: dict,
     session_context: dict,
     call: CallbackQuery,
+    session: AsyncSession,
     account_manager: AccountManager,
-    orchestrator: CombatBotOrchestrator,
+    combat_manager: CombatManager,
 ) -> None:
     log.debug(f"SessionRestore | type=combat user_id={user_id} char_id={char_id}")
     ac_data = await account_manager.get_account_data(char_id)
@@ -99,8 +103,15 @@ async def _handle_combat_restore(
         return
     session_context["combat_session_id"] = combat_session_id
     await state.update_data({FSM_CONTEXT_KEY: session_context})
-    log_text, log_kb = await orchestrator.get_log_view(combat_session_id, char_id, 0)
-    dash_text, dash_kb = await orchestrator.get_dashboard_view(combat_session_id, char_id, {})
+
+    # --- Создаем зависимости прямо здесь ---
+    client = CombatRBCClient(session, combat_manager, account_manager)
+    ui = CombatUIService(state_data, char_id)
+    orchestrator = CombatBotOrchestrator(client, ui)
+    # ------------------------------------
+
+    (dash_text, dash_kb), (log_text, log_kb) = await orchestrator.get_dashboard_view(combat_session_id, char_id, {})
+
     msg_menu = session_context.get("message_menu")
     msg_content = session_context.get("message_content")
     if isinstance(msg_menu, dict):
@@ -188,7 +199,7 @@ async def start_logging_handler(
     bot: Bot,
     session: AsyncSession,
     account_manager: AccountManager,
-    orchestrator: CombatBotOrchestrator,
+    combat_manager: CombatManager,
     exploration_ui_service: ExplorationUIService,
 ) -> None:
     if not call.from_user:
@@ -253,14 +264,32 @@ async def start_logging_handler(
                 await start_creation_handler(call, state, bot, user_id, char_id, message_menu, session, account_manager)
         elif game_stage == "combat":
             await _handle_combat_restore(
-                user_id, char_id, state, bot, state_data, session_context, call, account_manager, orchestrator
+                user_id,
+                char_id,
+                state,
+                bot,
+                state_data,
+                session_context,
+                call,
+                session,
+                account_manager,
+                combat_manager,
             )
         else:
             await Err.generic_error(call)
     elif isinstance(login_result, tuple):
         if login_result[0] == "combat":
             await _handle_combat_restore(
-                user_id, char_id, state, bot, state_data, session_context, call, account_manager, orchestrator
+                user_id,
+                char_id,
+                state,
+                bot,
+                state_data,
+                session_context,
+                call,
+                session,
+                account_manager,
+                combat_manager,
             )
         else:
             await _handle_in_game_login(

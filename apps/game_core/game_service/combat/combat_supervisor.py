@@ -7,6 +7,7 @@ from loguru import logger as log
 from pydantic import ValidationError
 
 from apps.common.schemas_dto.combat_source_dto import CombatMoveDTO
+from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
 from apps.game_core.game_service.combat.combat_service import CombatService
 
@@ -16,9 +17,10 @@ class CombatSupervisor:
     Актер-надсмотрщик (Supervisor) для системы RBC.
     """
 
-    def __init__(self, session_id: str, combat_manager: CombatManager):
+    def __init__(self, session_id: str, combat_manager: CombatManager, account_manager: AccountManager):
         self.session_id = session_id
         self.combat_manager = combat_manager
+        self.account_manager = account_manager
         self._is_running = True
 
     async def run(self) -> NoReturn:
@@ -114,8 +116,7 @@ class CombatSupervisor:
             log.error(f"Move from {actor_a_id} to {actor_b_id} disappeared.")
             return
 
-        # account_manager не нужен для расчета, передаем None
-        combat_service = CombatService(self.session_id, self.combat_manager, account_manager=None)  # type: ignore
+        combat_service = CombatService(self.session_id, self.combat_manager, self.account_manager)
 
         move_a_data = move_a_dto.model_dump()
 
