@@ -3,10 +3,11 @@ import random
 from typing import Any
 
 from loguru import logger as log
+from pydantic import ValidationError
 
 from apps.common.schemas_dto import CombatSessionContainerDTO
 from apps.common.services.core_service import CombatManager
-from apps.game_core.game_service.combat.ability_service import AbilityService
+from apps.game_core.game_service.combat.mechanics.combat_ability_service import AbilityService
 
 
 class CombatAIService:
@@ -23,6 +24,7 @@ class CombatAIService:
         self,
         actor_dto: CombatSessionContainerDTO,
         session_id: str,
+        target_id: int | None = None,
     ) -> dict[str, Any]:
         """
         Принимает решение за NPC: кого атаковать, какую способность использовать,
@@ -31,6 +33,7 @@ class CombatAIService:
         Args:
             actor_dto: DTO актора, для которого принимается решение.
             session_id: Идентификатор текущей боевой сессии.
+            target_id: Если цель уже известна (например, ответный удар), можно передать её ID.
 
         Returns:
             Словарь, содержащий решение AI:
@@ -44,47 +47,44 @@ class CombatAIService:
         my_team = actor_dto.team
         log.debug(f"CombatAIService | action=calculate_action actor_id={char_id} session_id='{session_id}'")
 
-        all_ids = await self.combat_manager.get_session_participants(session_id)
-        enemies: list[int] = []
-        threats: list[int] = []
+        # Если цель не передана, ищем её
+        if target_id is None:
+            all_actors_json = await self.combat_manager.get_rbc_all_actors_json(session_id)
+            if not all_actors_json:
+                return {}
 
-        for pid in all_ids:
-            pid_int = int(pid)
-            if pid_int == char_id:
-                continue
+            enemies: list[int] = []
+            threats: list[int] = []
 
-            raw_target = await self.combat_manager.get_actor_json(session_id, pid_int)
-            if not raw_target:
-                continue
+            for pid_str, raw_json in all_actors_json.items():
+                pid_int = int(pid_str)
+                if pid_int == char_id:
+                    continue
 
-            try:
-                target_obj = json.loads(raw_target)
-            except json.JSONDecodeError:
-                log.error(
-                    f"CombatAIService | status=failed reason='JSON decode error for target' target_id={pid_int} session_id='{session_id}'",
-                    exc_info=True,
+                try:
+                    target_obj = CombatSessionContainerDTO.model_validate_json(raw_json)
+                except (ValidationError, json.JSONDecodeError):
+                    continue
+
+                hp = target_obj.state.hp_current if target_obj.state else 0
+                if target_obj.team != my_team and hp > 0:
+                    enemies.append(pid_int)
+                    # Проверяем, сделал ли этот враг ход против нас
+                    moves = await self.combat_manager.get_rbc_moves(session_id, pid_int)
+                    if moves and str(char_id) in moves:
+                        threats.append(pid_int)
+
+            if threats:
+                target_id = random.choice(threats)
+                log.debug(f"CombatAIService | target_strategy=threat actor_id={char_id} target_id={target_id}")
+            elif enemies:
+                target_id = random.choice(enemies)
+                log.debug(f"CombatAIService | target_strategy=random_enemy actor_id={char_id} target_id={target_id}")
+            else:
+                log.warning(
+                    f"CombatAIService | status=failed reason='No target found' actor_id={char_id} session_id='{session_id}'"
                 )
-                continue
-
-            hp = target_obj.get("state", {}).get("hp_current", 0)
-            if target_obj.get("team") != my_team and hp > 0:
-                enemies.append(pid_int)
-                pending = await self.combat_manager.get_pending_move(session_id, pid_int, char_id)
-                if pending:
-                    threats.append(pid_int)
-
-        target_id: int | None = None
-        if threats:
-            target_id = random.choice(threats)
-            log.debug(f"CombatAIService | target_strategy=threat actor_id={char_id} target_id={target_id}")
-        elif enemies:
-            target_id = random.choice(enemies)
-            log.debug(f"CombatAIService | target_strategy=random_enemy actor_id={char_id} target_id={target_id}")
-        else:
-            log.warning(
-                f"CombatAIService | status=failed reason='No target found' actor_id={char_id} session_id='{session_id}'"
-            )
-            return {}
+                return {}
 
         selected_ability: str | None = None
         if actor_dto.active_abilities:

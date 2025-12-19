@@ -7,7 +7,8 @@ from apps.common.schemas_dto.combat_source_dto import CombatDashboardDTO, Combat
 
 # Определяем новый тип для возвращаемых данных, чтобы было понятнее
 ViewResult = tuple[str, InlineKeyboardMarkup]
-FullViewResult = tuple[ViewResult, ViewResult]
+# (target_id, content_view, log_view)
+FullViewResult = tuple[int | None, ViewResult, ViewResult]
 
 
 class CombatBotOrchestrator:
@@ -24,18 +25,46 @@ class CombatBotOrchestrator:
         content_view = await self._render_by_status(snapshot, selection)
         # Второе сообщение в бою — это всегда лог (страница 0 при обновлении)
         log_view = await self.ui.render_combat_log(snapshot, page=0)
-        return content_view, log_view
+
+        target_id = snapshot.current_target.char_id if snapshot.current_target else None
+        return target_id, content_view, log_view
 
     async def handle_submit(self, session_id: str, char_id: int, move: CombatMoveDTO) -> FullViewResult:
         """
         Логика подтверждения хода.
-        Возвращает данные для ДВУХ сообщений: контент и ЛОГ БОЯ.
+        Просто отправляет ход и возвращает текущее состояние (скорее всего 'waiting').
         """
-        new_snapshot = await self.client.register_move(session_id, char_id, move.target_id, move.model_dump())
-        content_view = await self._render_by_status(new_snapshot, selection={})
-        # После хода обновляем лог (страница 0)
-        log_view = await self.ui.render_combat_log(new_snapshot, page=0)
-        return content_view, log_view
+        # 1. Регистрируем ход
+        await self.client.register_move(session_id, char_id, move.target_id, move.model_dump())
+
+        # 2. Сразу получаем снапшот (без ожидания)
+        snapshot = await self.client.get_snapshot(session_id, char_id)
+
+        # 3. Рендерим результат
+        content_view = await self._render_by_status(snapshot, selection={})
+        log_view = await self.ui.render_combat_log(snapshot, page=0)
+
+        target_id = snapshot.current_target.char_id if snapshot.current_target else None
+        return target_id, content_view, log_view
+
+    async def check_combat_status(self, session_id: str, char_id: int) -> FullViewResult | None:
+        """
+        Метод для поллинга. Проверяет, изменилось ли состояние боя.
+        Возвращает None, если мы все еще ждем (status == 'waiting').
+        Возвращает FullViewResult, если ход перешел к игроку или бой завершен.
+        """
+        snapshot = await self.client.get_snapshot(session_id, char_id)
+
+        # Если мы все еще ждем хода противника (или поиска)
+        if snapshot.status == "waiting":
+            return None
+
+        # Если статус сменился (active, finished и т.д.) - возвращаем результат
+        content_view = await self._render_by_status(snapshot, {})
+        log_view = await self.ui.render_combat_log(snapshot, page=0)
+        target_id = snapshot.current_target.char_id if snapshot.current_target else None
+
+        return target_id, content_view, log_view
 
     async def get_menu_view(self, session_id: str, char_id: int, menu_type: str) -> tuple[str, InlineKeyboardMarkup]:
         """Отрисовка подменю (скиллы/вещи). Это для одного сообщения."""
@@ -49,11 +78,15 @@ class CombatBotOrchestrator:
         snapshot = await self.client.get_snapshot(session_id, char_id)
         return await self.ui.render_combat_log(snapshot, page)
 
-    async def start_new_battle(self, players: list[int], enemies: list[int]) -> tuple[str, str, InlineKeyboardMarkup]:
+    async def start_new_battle(
+        self, players: list[int], enemies: list[int]
+    ) -> tuple[str, int | None, str, InlineKeyboardMarkup]:
         """Начинает новый бой и возвращает начальный дашборд."""
         snapshot = await self.client.start_battle(players, enemies)
         text, kb = await self._render_by_status(snapshot, {})
-        return snapshot.session_id, text, kb
+
+        target_id = snapshot.current_target.char_id if snapshot.current_target else None
+        return snapshot.session_id, target_id, text, kb
 
     async def _render_by_status(self, snapshot: CombatDashboardDTO, selection: dict) -> ViewResult:
         """

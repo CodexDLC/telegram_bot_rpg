@@ -3,6 +3,7 @@ import asyncio
 import contextlib
 import random
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -149,23 +150,25 @@ class UIAnimationService:
     async def animate_polling(
         self,
         base_text: str,
-        check_func: Callable[[int], Awaitable[str | None]],  # 🔥 ИСПРАВЛЕНО: Принимает int (номер шага)
+        check_func: Callable[
+            [int], Awaitable[Any]
+        ],  # 🔥 ИСПРАВЛЕНО: Возвращает Any, так как результат зависит от вызывающего
         steps: int = 6,
         step_delay: float = 5.0,
         fixed_duration: bool = False,
-    ) -> str | None:
+    ) -> Any | None:
         """
         Универсальный цикл ожидания с анимацией.
 
         Args:
             base_text: Текст сообщения (например, "🔎 Поиск противника").
-            check_func: Асинхронная функция, принимающая номер попытки (int) и возвращающая session_id или None.
+            check_func: Асинхронная функция, принимающая номер попытки (int) и возвращающая результат или None.
             steps: Количество итераций.
             step_delay: Задержка между шагами.
             fixed_duration: Если True, цикл не прервется раньше времени.
 
         Returns:
-            str: session_id (если найден) или None (если таймаут).
+            Any: Результат check_func (если найден) или None (если таймаут).
         """
 
         found_result = None

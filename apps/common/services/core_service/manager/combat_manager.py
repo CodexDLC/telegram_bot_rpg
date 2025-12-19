@@ -1,5 +1,7 @@
 from typing import Any
 
+from loguru import logger as log
+
 from apps.common.services.core_service.redis_key import RedisKeys as Rk
 from apps.common.services.core_service.redis_service import RedisService
 
@@ -59,6 +61,78 @@ class CombatManager:
         """RBC: Добавляет противника в конец очереди обменов."""
         key = Rk.get_combat_exchanges_key(session_id, char_id)
         await self.redis_service.push_to_list(key, str(target_id))
+
+    async def create_rbc_session_meta(self, session_id: str, data: dict[str, Any]) -> None:
+        """RBC: Создает или обновляет метаданные сессии."""
+        key = Rk.get_rbc_meta_key(session_id)
+        await self.redis_service.set_hash_fields(key, data)
+
+    async def get_rbc_session_meta(self, session_id: str) -> dict[str, str] | None:
+        """RBC: Получает метаданные сессии."""
+        key = Rk.get_rbc_meta_key(session_id)
+        return await self.redis_service.get_all_hash(key)
+
+    async def cleanup_rbc_session(self, session_id: str, history_ttl: int = 86400) -> None:
+        """
+        RBC: Очищает оперативные данные сессии и выставляет TTL для исторических данных.
+
+        Args:
+            session_id: ID сессии.
+            history_ttl: Время жизни истории (мета, логи, акторы) в секундах (по умолчанию 24 часа).
+        """
+        log.info(f"CombatManager | action=cleanup_rbc_session session_id='{session_id}'")
+
+        # 1. Получаем всех участников для очистки их очередей и пуль
+        # Теперь берем их из ключей хеша actors
+        actors_data = await self.get_rbc_all_actors_json(session_id)
+
+        if actors_data:
+            for pid_str in actors_data:
+                try:
+                    pid = int(pid_str)
+                    # Удаляем очереди обменов (они больше не нужны)
+                    await self.redis_service.delete_key(Rk.get_combat_exchanges_key(session_id, pid))
+                    # Удаляем пули (они больше не нужны)
+                    await self.redis_service.delete_key(Rk.get_combat_moves_key(session_id, pid))
+                except ValueError:
+                    continue
+
+        # 2. Выставляем TTL для данных, которые нужны для просмотра результатов (история)
+        # Метаданные
+        await self.redis_service.expire(Rk.get_rbc_meta_key(session_id), history_ttl)
+        # Состояния акторов (для рендера итогов)
+        await self.redis_service.expire(Rk.get_combat_actors_key(session_id), history_ttl)
+        # Логи боя
+        await self.redis_service.expire(Rk.get_combat_log_key(session_id), history_ttl)
+
+    async def get_all_active_session_ids(self) -> list[str]:
+        """
+        RBC: Сканирует Redis и возвращает список ID всех активных сессий.
+        Используется для восстановления работы воркеров после перезагрузки.
+        """
+        active_sessions = []
+        # Паттерн для поиска всех мета-ключей RBC
+        pattern = "combat:rbc:*:meta"
+
+        # Используем scan_iter для безопасного перебора ключей
+        async for key in self.redis_service.redis_client.scan_iter(match=pattern):
+            # Извлекаем session_id из ключа (combat:rbc:{UUID}:meta)
+            try:
+                # key.split(":") -> ['combat', 'rbc', '{UUID}', 'meta']
+                parts = key.split(":")
+                if len(parts) != 4:
+                    continue
+                session_id = parts[2]
+
+                # Проверяем флаг active
+                is_active = await self.redis_service.get_hash_field(key, "active")
+                if is_active == "1":
+                    active_sessions.append(session_id)
+            except Exception as e:  # noqa: BLE001
+                log.error(f"CombatManager | Error scanning session key {key}: {e}")
+                continue
+
+        return active_sessions
 
     # --- Legacy Methods ---
 

@@ -3,6 +3,7 @@ import time
 import uuid
 from typing import Any
 
+from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.schemas_dto.combat_source_dto import (
@@ -15,12 +16,11 @@ from apps.common.schemas_dto.combat_source_dto import (
 )
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
-from apps.common.services.core_service.redis_key import RedisKeys as Rk
-from apps.game_core.game_service.combat.combat_lifecycle_service import CombatLifecycleService
-from apps.game_core.game_service.combat.combat_service import CombatService
-from apps.game_core.game_service.combat.combat_supervisor import CombatSupervisor
-from apps.game_core.game_service.combat.stats_calculator import StatsCalculator
-from apps.game_core.game_service.combat.supervisor_manager import add_supervisor_task
+from apps.game_core.game_service.combat.core.combat_stats_calculator import StatsCalculator
+from apps.game_core.game_service.combat.mechanics.combat_service import CombatService
+from apps.game_core.game_service.combat.session.combat_lifecycle_service import CombatLifecycleService
+from apps.game_core.game_service.combat.supervisor.combat_supervisor import CombatSupervisor
+from apps.game_core.game_service.combat.supervisor.combat_supervisor_manager import add_supervisor_task
 
 
 class CombatOrchestratorRBC:
@@ -43,38 +43,91 @@ class CombatOrchestratorRBC:
         self.account_manager = account_manager
         self.lifecycle_service = CombatLifecycleService(combat_manager, account_manager)
 
-    async def start_battle(self, players: list[int], enemies: list[int]) -> CombatDashboardDTO:
+    async def start_battle(
+        self, players: list[int], enemies: list[int] | None = None, config: dict[str, Any] | None = None
+    ) -> CombatDashboardDTO:
         """
-        Создает боевую сессию, запускает Supervisor'а и возвращает стартовый Snapshot.
+        Единая точка входа для создания ЛЮБОГО боя.
+        config['battle_type'] может быть: 'pvp', 'pve', 'arena_shadow'
         """
         session_id = str(uuid.uuid4())
+        config = config or {}
+        battle_type = config.get("battle_type", "pve")
+        mode = config.get("mode", "exploration")
+        enemies = enemies or []
 
-        # 1. Инициализация участников
-        participants = {char_id: "blue" for char_id in players}
-        participants.update({char_id: "red" for char_id in enemies})
+        # 1. Формируем полный конфиг для Lifecycle
+        battle_config = {
+            "mode": mode,
+            "battle_type": battle_type,
+            "is_pve": "0" if battle_type == "pvp" else "1",
+            **config,  # Добавляем любые доп. параметры
+        }
 
-        for char_id, team in participants.items():
-            await self.lifecycle_service.add_participant(self.session, session_id, char_id, team, f"Fighter {char_id}")
+        # 2. Создаем сессию через Lifecycle (пишет полную мету)
+        await self.lifecycle_service.create_battle(session_id, battle_config)
 
+        # 3. Добавляем союзников (Игроков)
+        for p_id in players:
+            await self.lifecycle_service.add_participant(self.session, session_id, p_id, "blue", f"Player {p_id}")
+
+        # 4. ЛОГИКА ЗАПОЛНЕНИЯ ПРОТИВНИКОВ (Factory Logic)
+        if battle_type == "arena_shadow":
+            if players:
+                await self.lifecycle_service.create_shadow_copy(session_id, players[0])
+
+        elif battle_type == "pvp":
+            for e_id in enemies:
+                await self.lifecycle_service.add_participant(self.session, session_id, e_id, "red", f"Player {e_id}")
+
+        elif battle_type == "pve":
+            for m_id in enemies:
+                await self._setup_monster_participant(session_id, m_id)
+
+        # 5. Финализация: рассчитываем инициативу, статы, создаем FighterStateDTO
         await self.lifecycle_service.initialize_battle_state(session_id)
 
-        # 2. Наполнение очереди обменов через ключи из RedisKeys
-        for player_id in players:
-            queue_key = Rk.get_combat_exchanges_key(session_id, player_id)
-            await self.combat_manager.redis_service.push_to_list(queue_key, *[str(eid) for eid in enemies])
+        # 6. Наполнение очереди обменов
+        await self.lifecycle_service.initialize_exchange_queues(session_id, players)
 
-        # 3. Создание метаданных (ставим active=1)
-        await self.combat_manager.create_session_meta(
-            session_id, {"start_time": str(time.time()), "active": "1", "mode": "rbc"}
-        )
-
-        # 4. Запуск Supervisor
+        # 7. Запуск Supervisor
         supervisor = CombatSupervisor(session_id, self.combat_manager, self.account_manager)
         task = asyncio.create_task(supervisor.run())
         add_supervisor_task(session_id, task)
 
-        # 5. Возвращаем Snapshot для инициатора (первого в списке)
+        # 8. Возвращаем начальный снимок боя
         return await self.get_dashboard_snapshot(session_id, players[0])
+
+    async def restore_active_battles(self):
+        """
+        Сканирует Redis на наличие активных боев и запускает для них Supervisor.
+        Вызывается один раз при старте приложения.
+        """
+        # 1. Получаем список всех session_id, где meta['active'] == 1
+        active_sessions = await self.combat_manager.get_all_active_session_ids()
+
+        if not active_sessions:
+            log.info("CombatOrchestrator | No active combat sessions found to restore.")
+            return
+
+        log.info(f"CombatOrchestrator | Found {len(active_sessions)} active sessions: {active_sessions}. Restoring...")
+
+        for session_id in active_sessions:
+            # 2. Создаем экземпляр Supervisor для каждой сессии
+            supervisor = CombatSupervisor(session_id, self.combat_manager, self.account_manager)
+            # 3. Запускаем задачу в фоне
+            task = asyncio.create_task(supervisor.run())
+
+            # 4. Регистрируем в менеджере задач, чтобы бот мог ими управлять
+            add_supervisor_task(session_id, task)
+
+        log.info(f"CombatOrchestrator | Successfully restored {len(active_sessions)} active combat sessions.")
+
+    async def _setup_monster_participant(self, session_id: str, monster_id: int):
+        """
+        Внутренний метод для создания монстра.
+        """
+        await self.lifecycle_service.add_dummy_participant(session_id, monster_id, 100, 50, f"Mob {monster_id}")
 
     async def register_move(
         self, session_id: str, char_id: int, target_id: int, move_data: dict[str, Any]
@@ -83,9 +136,16 @@ class CombatOrchestratorRBC:
         actor_state_json = await self.combat_manager.get_rbc_actor_state_json(session_id, char_id)
 
         if actor_state_json:
-            actor_state = FighterStateDTO.model_validate_json(actor_state_json)
+            # ВАЖНО: Здесь мы десериализуем CombatSessionContainerDTO, а не FighterStateDTO напрямую
+            # потому что в Redis хранится полный контейнер
+            container = CombatSessionContainerDTO.model_validate_json(actor_state_json)
 
-            penalty = getattr(actor_state, "penalty_timer", 60)
+            # Берем состояние из контейнера
+            if not container.state:
+                # Если состояния нет, создаем дефолтное (хотя такого быть не должно)
+                container.state = FighterStateDTO(hp_current=0, energy_current=0)
+
+            penalty = getattr(container.state, "penalty_timer", 60)
             execute_at = int(time.time()) + penalty
 
             move_dto = CombatMoveDTO(
@@ -133,11 +193,15 @@ class CombatOrchestratorRBC:
         if not target_state_json:
             return None
 
-        target_state = FighterStateDTO.model_validate_json(target_state_json)
+        # Здесь тоже нужно десериализовать контейнер
+        target_container = CombatSessionContainerDTO.model_validate_json(target_state_json)
+
+        if not target_container.state:
+            return None
 
         return {
             "char_id": target_id,
-            "hp_current": target_state.hp_current,
+            "hp_current": target_container.state.hp_current,
         }
 
     async def get_full_state(self, session_id: str, char_id: int) -> dict[str, Any]:
@@ -152,12 +216,16 @@ class CombatOrchestratorRBC:
         if all_actors_json:
             for actor_id_str, actor_json in all_actors_json.items():
                 actor_id = int(actor_id_str)
-                state = FighterStateDTO.model_validate_json(actor_json)
+                # И здесь контейнер
+                container = CombatSessionContainerDTO.model_validate_json(actor_json)
+
+                if not container.state:
+                    continue
 
                 if actor_id == char_id:
-                    player_state = state
+                    player_state = container.state
                 else:
-                    enemies_state.append(state)
+                    enemies_state.append(container.state)
 
         return {
             "session_id": session_id,
@@ -184,7 +252,8 @@ class CombatOrchestratorRBC:
         Это единственный метод, который Бот будет дергать для получения состояния.
         """
         # 1. Метаданные (активен ли бой)
-        meta = await self.combat_manager.get_session_meta(session_id)
+        # RBC: Читаем из новой меты
+        meta = await self.combat_manager.get_rbc_session_meta(session_id)
         if not meta:
             raise ValueError(f"Session meta not found for session {session_id}")
         is_active = int(meta.get("active", 1)) == 1

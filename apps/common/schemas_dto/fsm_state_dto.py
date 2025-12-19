@@ -21,3 +21,7 @@ class SessionDataDTO(BaseModel):
     message_content: dict[str, int] | None = None  # Словарь с chat_id и message_id для контентного сообщения (нижнего).
     char_name: str | None = None  # Имя активного персонажа.
     symbiote_name: str | None = None  # Имя симбиота (NPC-помощника).
+
+    # Добавляем поле для хранения предыдущего состояния
+    # Это нужно, чтобы знать, куда возвращаться из боя (Арена, Навигация и т.д.)
+    previous_state: str | None = None

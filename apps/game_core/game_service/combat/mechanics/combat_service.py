@@ -8,14 +8,13 @@ from pydantic import ValidationError
 from apps.common.schemas_dto import CombatSessionContainerDTO
 from apps.common.services.core_service import CombatManager
 from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.game_core.game_service.combat.ability_service import AbilityService
-from apps.game_core.game_service.combat.combat_calculator import CombatCalculator
-from apps.game_core.game_service.combat.combat_lifecycle_service import CombatLifecycleService
-from apps.game_core.game_service.combat.combat_log_builder import CombatLogBuilder
-from apps.game_core.game_service.combat.combat_xp_manager import CombatXPManager
-from apps.game_core.game_service.combat.consumable_service import ConsumableService
-from apps.game_core.game_service.combat.stats_calculator import StatsCalculator
-from apps.game_core.game_service.combat.victory_checker import VictoryChecker
+from apps.game_core.game_service.combat.core.combat_calculator import CombatCalculator
+from apps.game_core.game_service.combat.core.combat_log_builder import CombatLogBuilder
+from apps.game_core.game_service.combat.core.combat_stats_calculator import StatsCalculator
+from apps.game_core.game_service.combat.core.combat_xp_manager import CombatXPManager
+from apps.game_core.game_service.combat.mechanics.combat_ability_service import AbilityService
+from apps.game_core.game_service.combat.mechanics.combat_consumable_service import ConsumableService
+from apps.game_core.game_service.combat.session.combat_lifecycle_service import CombatLifecycleService
 
 
 class CombatService:
@@ -89,11 +88,17 @@ class CombatService:
         AbilityService.execute_pre_calc(stats_a, flags_a, pipe_a)
         AbilityService.execute_pre_calc(stats_b, flags_b, pipe_b)
 
+        # Используем правильные ключи из CombatMoveDTO
+        attack_a = move_a.get("attack_zones", [])
+        block_b = move_b.get("block_zones", [])
+        attack_b = move_b.get("attack_zones", [])
+        block_a = move_a.get("block_zones", [])
+
         res_a = CombatCalculator.calculate_hit(
-            stats_a, stats_b, actor_b.state.energy_current, move_a["attack"], move_b["block"], flags=flags_a
+            stats_a, stats_b, actor_b.state.energy_current, attack_a, block_b, flags=flags_a
         )
         res_b = CombatCalculator.calculate_hit(
-            stats_b, stats_a, actor_a.state.energy_current, move_b["attack"], move_a["block"], flags=flags_b
+            stats_b, stats_a, actor_a.state.energy_current, attack_b, block_a, flags=flags_b
         )
 
         AbilityService.execute_post_calc(res_a, actor_a, actor_b, pipe_a)
@@ -129,8 +134,67 @@ class CombatService:
         # Ротация очереди после боя
         await self._rotate_queues(actor_a, actor_b)
 
-        if await self._check_battle_end():
+        # --- ЛОГИКА СМЕРТИ И ПОБЕДЫ ---
+        # Проверяем, умер ли кто-то в этом раунде
+        new_dead_ids = []
+        if actor_a.state.hp_current <= 0:
+            new_dead_ids.append(actor_a.char_id)
+        if actor_b.state.hp_current <= 0:
+            new_dead_ids.append(actor_b.char_id)
+
+        # Если есть жертвы, запускаем процедуру обновления меты и проверки победы
+        if new_dead_ids:
+            await self._handle_casualties(new_dead_ids)
+
+    async def _handle_casualties(self, new_dead_ids: list[int]):
+        """
+        Обрабатывает смерти: обновляет список dead_actors в мете и проверяет условие победы.
+        """
+        # 1. Читаем мету (Single Source of Truth)
+        meta = await self.combat_manager.get_rbc_session_meta(self.session_id)
+        if not meta:
             return
+
+        try:
+            teams = json.loads(meta.get("teams", "{}"))
+            # Получаем текущий список мертвых и добавляем новых
+            dead_actors = set(json.loads(meta.get("dead_actors", "[]")))
+            dead_actors.update(new_dead_ids)
+        except json.JSONDecodeError:
+            log.error(f"CombatService | Meta parse error session_id='{self.session_id}'")
+            return
+
+        # 2. Проверяем условие победы
+        alive_teams = []
+        for team_name, members in teams.items():
+            # Команда жива, если хотя бы один участник НЕ в списке мертвых
+            if any(m for m in members if m not in dead_actors):
+                alive_teams.append(team_name)
+
+        # 3. Принимаем решение
+        if len(alive_teams) <= 1:
+            # ПОБЕДА: Завершаем бой (ставит active=0)
+            winner = alive_teams[0] if alive_teams else "draw"
+            log.info(f"CombatService | Victory! session_id='{self.session_id}' winner='{winner}' dead={new_dead_ids}")
+
+            # Важно: Сначала обновляем список мертвых в мете, чтобы finish_battle мог (если нужно) его использовать,
+            # или просто для консистентности перед закрытием.
+            # Но finish_battle перезапишет мету. Поэтому передаем управление туда.
+            # Однако, чтобы в истории остались правильные dead_actors, лучше обновить их сейчас.
+            # Но так как finish_battle делает active=0, это главное.
+
+            # Обновляем dead_actors перед финишем (опционально, но полезно для UI/логов)
+            await self.combat_manager.create_rbc_session_meta(
+                self.session_id, {"dead_actors": json.dumps(list(dead_actors))}
+            )
+
+            await self.lifecycle_service.finish_battle(self.session_id, winner)
+        else:
+            # БОЙ ПРОДОЛЖАЕТСЯ: Просто обновляем список трупов
+            log.info(f"CombatService | Casualty update session_id='{self.session_id}' new_dead={new_dead_ids}")
+            await self.combat_manager.create_rbc_session_meta(
+                self.session_id, {"dead_actors": json.dumps(list(dead_actors))}
+            )
 
     async def _rotate_queues(self, actor_a: CombatSessionContainerDTO, actor_b: CombatSessionContainerDTO):
         """Возвращает противников в конец очереди, если они живы."""
@@ -204,21 +268,9 @@ class CombatService:
         }
         await self.combat_manager.push_combat_log(self.session_id, json.dumps(log_entry))
 
-    async def _check_battle_end(self) -> bool:
-        p_ids = await self.combat_manager.get_session_participants(self.session_id)
-        actors_with_none = {int(pid): await self._get_actor(int(pid)) for pid in p_ids}
-        actors = {k: v for k, v in actors_with_none.items() if v is not None}
-        winner = VictoryChecker.check_battle_end(actors)
-        if winner:
-            log.info(f"CombatService | event=battle_ended session_id='{self.session_id}' winner_team='{winner}'")
-            await self.lifecycle_service.finish_battle(self.session_id, winner)
-            return True
-        return False
-
     async def _get_actor(self, char_id: int) -> CombatSessionContainerDTO | None:
+        # Убрали fallback на старый get_actor_json
         data = await self.combat_manager.get_rbc_actor_state_json(self.session_id, char_id)
-        if not data:
-            data = await self.combat_manager.get_actor_json(self.session_id, char_id)
         if data:
             try:
                 return CombatSessionContainerDTO.model_validate_json(data)
@@ -247,11 +299,28 @@ class CombatService:
     @staticmethod
     def _register_xp_events(actor: CombatSessionContainerDTO, outgoing: dict, incoming: dict) -> None:
         outcome = CombatService._determine_xp_outcome(outgoing)
-        CombatXPManager.register_action(actor, "sword", outcome)
+
+        # 1. Оружие (или кулаки)
+        # Пытаемся найти оружие в экипировке
+        weapon_subtype = None
+        for item in actor.equipped_items:
+            if item.item_type.value == "weapon":
+                weapon_subtype = item.subtype
+                break
+
+        # Если оружия нет - считаем как "unarmed"
+        if not weapon_subtype:
+            weapon_subtype = "unarmed"
+
+        CombatXPManager.register_action(actor, weapon_subtype, outcome)
+
+        # 2. Броня (при получении урона)
         if incoming["damage_total"] > 0:
             armor_subtype = CombatService._get_item_subtype_by_type(actor, "armor")
             if armor_subtype:
                 CombatXPManager.register_action(actor, armor_subtype, "success")
+
+        # 3. Щит (при блоке)
         if incoming["is_blocked"]:
             shield_subtype = CombatService._get_item_subtype_by_type(actor, "shield")
             if shield_subtype == "shield" or incoming["block_type"] == "passive":

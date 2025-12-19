@@ -339,7 +339,7 @@ class AbilityService:
         elif action == "heal":
             value = params.get("value", 0)
             if value > 0:
-                from apps.game_core.game_service.combat.stats_calculator import StatsCalculator
+                from apps.game_core.game_service.combat.core.combat_stats_calculator import StatsCalculator
 
                 aggregated_stats = StatsCalculator.aggregate_all(target.stats)
                 max_hp = int(aggregated_stats.get("hp_max", state.hp_current))
