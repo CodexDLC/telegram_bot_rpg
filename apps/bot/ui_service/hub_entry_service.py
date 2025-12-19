@@ -72,6 +72,7 @@ class HubEntryService(BaseUIService):
                 "arena_manager": self.arena_manager,
                 "combat_manager": self.combat_manager,
                 "actor_name": self.state_data.get(FSM_CONTEXT_KEY, {}).get("symbiote_name", "Симбиот"),
+                "title": config.get("title", "Хаб"),  # <-- Добавляем title из конфига
             }
 
             # 2. Получаем список требуемых зависимостей из конфига

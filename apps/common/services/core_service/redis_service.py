@@ -24,6 +24,25 @@ class RedisService:
         self.redis_client = client
         log.debug(f"RedisService | status=initialized client={client}")
 
+    async def expire(self, key: str, time: int) -> bool:
+        """
+        Устанавливает время жизни (TTL) для ключа.
+
+        Args:
+            key: Ключ Redis.
+            time: Время жизни в секундах.
+
+        Returns:
+            True, если тайм-аут был установлен, иначе False.
+        """
+        try:
+            result = await self.redis_client.expire(key, time)  # type: ignore
+            log.debug(f"RedisKey | action=expire status=success key='{key}' ttl={time}")
+            return bool(result)
+        except RedisError:
+            log.exception(f"RedisKey | action=expire status=failed reason='Redis error' key='{key}'")
+            return False
+
     async def set_hash_json(self, key: str, field: str, data: dict[str, Any]) -> None:
         """
         Сериализует словарь в JSON-строку и сохраняет её в указанное поле хеша Redis.

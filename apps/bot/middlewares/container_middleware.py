@@ -5,6 +5,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
 from apps.bot.core_client.arena_client import ArenaClient
+from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.common.core.container import AppContainer
 
 
@@ -29,6 +30,7 @@ class ContainerMiddleware(BaseMiddleware):
         # Новые зависимости
         if "session" in data:
             data["exploration_ui_service"] = self.container.get_exploration_ui_service(data["session"])
+
             # Создаем и передаем ArenaClient
             data["arena_client"] = ArenaClient(
                 session=data["session"],
@@ -36,5 +38,16 @@ class ContainerMiddleware(BaseMiddleware):
                 arena_manager=self.container.arena_manager,
                 combat_manager=self.container.combat_manager,
             )
+
+            # Создаем и передаем CombatRBCClient
+            data["combat_rbc_client"] = CombatRBCClient(
+                session=data["session"],
+                account_manager=self.container.account_manager,
+                combat_manager=self.container.combat_manager,
+            )
+
+            # Создаем и передаем ExplorationClient
+            # Используем фабричный метод контейнера, так как ExplorationClient требует сложной инициализации (Orchestrator и т.д.)
+            data["exploration_client"] = self.container.get_exploration_client(data["session"])
 
         return await handler(event, data)

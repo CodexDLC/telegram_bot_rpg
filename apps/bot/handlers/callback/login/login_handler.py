@@ -105,12 +105,19 @@ async def _handle_combat_restore(
     await state.update_data({FSM_CONTEXT_KEY: session_context})
 
     # --- Создаем зависимости прямо здесь ---
-    client = CombatRBCClient(session, combat_manager, account_manager)
+    client = CombatRBCClient(session, account_manager, combat_manager)
     ui = CombatUIService(state_data, char_id)
     orchestrator = CombatBotOrchestrator(client, ui)
     # ------------------------------------
 
-    (dash_text, dash_kb), (log_text, log_kb) = await orchestrator.get_dashboard_view(combat_session_id, char_id, {})
+    # Оркестратор возвращает два кортежа, нам нужен только первый (контент)
+    new_target_id, (dash_text, dash_kb), (log_text, log_kb) = await orchestrator.get_dashboard_view(
+        combat_session_id, char_id, {}
+    )
+
+    # Обновляем target_id в FSM, если он изменился
+    if new_target_id is not None:
+        await state.update_data(combat_target_id=new_target_id)
 
     msg_menu = session_context.get("message_menu")
     msg_content = session_context.get("message_content")

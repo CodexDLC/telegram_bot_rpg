@@ -51,7 +51,11 @@ class CombatUIService(BaseUIService):
             "⏳ <i>Ожидание ответного действия...</i>\n"
             f"<i>Целей в очереди: {snapshot.queue_count}</i>"
         )
-        return text, InlineKeyboardBuilder().as_markup()
+        # Кнопка обновления должна быть, чтобы игрок мог проверить статус
+        kb = InlineKeyboardBuilder()
+        cb_refresh = CombatActionCallback(action="refresh").pack()
+        kb.row(InlineKeyboardButton(text="🔄 Обновить", callback_data=cb_refresh))
+        return text, kb.as_markup()
 
     async def render_spectator_mode(self, snapshot: CombatDashboardDTO) -> tuple[str, InlineKeyboardMarkup]:
         """Экран наблюдателя, если игрок пал."""
@@ -178,5 +182,9 @@ class CombatUIService(BaseUIService):
         if next_page < total_pages:
             buttons.append(InlineKeyboardButton(text="➡️", callback_data=CombatLogCallback(page=next_page).pack()))
         kb.row(*buttons)
-        kb.row(InlineKeyboardButton(text="🔙 Назад", callback_data=CombatActionCallback(action="refresh").pack()))
+
+        # Заменили кнопку "Назад" на "Обновить лог"
+        cb_refresh = CombatActionCallback(action="refresh").pack()
+        kb.row(InlineKeyboardButton(text="🔄 Обновить лог", callback_data=cb_refresh))
+
         return kb.as_markup()

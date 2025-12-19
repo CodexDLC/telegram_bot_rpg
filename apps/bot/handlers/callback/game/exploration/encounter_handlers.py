@@ -58,11 +58,15 @@ async def handle_encounter_action(
             await call.answer("Ошибка ID цели", show_alert=True)
             return
 
-        session_id, text, kb = await orchestrator.start_new_battle(players=[char_id], enemies=[enemy_id])
+        session_id, new_target_id, text, kb = await orchestrator.start_new_battle(players=[char_id], enemies=[enemy_id])
 
         await state.set_state(InGame.combat)
         session_context["combat_session_id"] = session_id
         await state.update_data({FSM_CONTEXT_KEY: session_context})
+
+        # Сохраняем target_id в FSM
+        if new_target_id is not None:
+            await state.update_data(combat_target_id=new_target_id)
 
         await bot.edit_message_text(
             chat_id=message_content["chat_id"],

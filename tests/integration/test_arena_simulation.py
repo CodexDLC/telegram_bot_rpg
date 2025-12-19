@@ -15,10 +15,10 @@ from apps.common.services.core_service.manager.arena_manager import ArenaManager
 
 # Импортируем "боевые" части приложения
 from apps.game_core.game_service.arena.service_1v1 import Arena1v1Service
+from apps.game_core.game_service.combat.combat_orchestrator_rbc import CombatOrchestratorRBC
 
 # 🔥 ИМПОРТИРУЕМ LIFECYCLE ДЛЯ ПРИНУДИТЕЛЬНОГО ЗАВЕРШЕНИЯ
-from apps.game_core.game_service.combat.combat_lifecycle_service import CombatLifecycleService
-from apps.game_core.game_service.combat.combat_orchestrator_rbc import CombatOrchestratorRBC
+from apps.game_core.game_service.combat.session.combat_lifecycle_service import CombatLifecycleService
 
 # Настройка отдельного логгера
 logger.add("logs/test_battle_report.log", level="INFO", rotation="1 MB", format="{message}")

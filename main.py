@@ -2,6 +2,7 @@ import asyncio
 
 from loguru import logger as log
 
+from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.bot.handlers import router as main_router
 from apps.bot.middlewares.container_middleware import ContainerMiddleware
 from apps.common.core.bot_factory import build_app
@@ -54,6 +55,24 @@ async def main() -> None:
     # Подключаем все роутеры
     dp.include_router(main_router)
     log.info("Роутеры подключены.")
+
+    # --- ВОССТАНОВЛЕНИЕ АКТИВНЫХ БОЕВ ---
+    log.info("Восстановление активных боевых сессий...")
+    try:
+        # Нам нужен доступ к сессии БД для инициализации оркестратора,
+        # но для restore_active_battles сессия не используется напрямую,
+        # так как он работает только с Redis.
+        # Однако конструктор требует session. Создадим временную.
+        async with container.db_session_factory() as session:
+            # Создаем клиент RBC (он внутри создает оркестратор)
+            client = CombatRBCClient(session, container.account_manager, container.combat_manager)
+            # Достаем оркестратор из клиента (хак, но допустимый для main.py)
+            orchestrator = client._orchestrator
+
+            await orchestrator.restore_active_battles()
+    except Exception as e:  # noqa: BLE001
+        log.error(f"Ошибка при восстановлении боев: {e}")
+    # ------------------------------------
 
     log.info("Бот запускается...")
     try:

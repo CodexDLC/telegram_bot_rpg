@@ -7,8 +7,9 @@
 
 from typing import Any, TypedDict
 
-from apps.bot.resources.fsm_states import ArenaState
+from apps.bot.resources.fsm_states import ArenaState, InGame
 from apps.bot.ui_service.arena_ui_service.arena_ui_service import ArenaUIService
+from apps.bot.ui_service.stub_service import StubUIService
 
 
 class HubConfig(TypedDict):
@@ -29,6 +30,46 @@ HUB_CONFIGS: dict[str, HubConfig] = {
         "fsm_state": ArenaState.menu,
         "ui_builder_class": ArenaUIService,
         "render_method_name": "view_main_menu",
-        "required_dependencies": ["char_id", "actor_name"],  # <-- Указываем зависимости
-    }
+        "required_dependencies": ["char_id", "actor_name"],
+    },
+    "svc_town_hall_hub": {
+        "title": "Ратуша",
+        "intro_text": "",
+        "fsm_state": InGame.navigation,
+        "ui_builder_class": StubUIService,
+        "render_method_name": "render_stub",
+        "required_dependencies": ["title", "char_id"],
+    },
+    "svc_blacksmith_repair": {
+        "title": "Кузница",
+        "intro_text": "",
+        "fsm_state": InGame.navigation,
+        "ui_builder_class": StubUIService,
+        "render_method_name": "render_stub",
+        "required_dependencies": ["title", "char_id"],
+    },
+    "svc_market_hub": {
+        "title": "Рынок",
+        "intro_text": "",
+        "fsm_state": InGame.navigation,
+        "ui_builder_class": StubUIService,
+        "render_method_name": "render_stub",
+        "required_dependencies": ["title", "char_id"],
+    },
+    "svc_portal_hub": {
+        "title": "Портал",
+        "intro_text": "",
+        "fsm_state": InGame.navigation,
+        "ui_builder_class": StubUIService,
+        "render_method_name": "render_stub",
+        "required_dependencies": ["title", "char_id"],
+    },
+    "svc_tavern_hub": {
+        "title": "Таверна",
+        "intro_text": "",
+        "fsm_state": InGame.navigation,
+        "ui_builder_class": StubUIService,
+        "render_method_name": "render_stub",
+        "required_dependencies": ["title", "char_id"],
+    },
 }

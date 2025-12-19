@@ -31,6 +31,20 @@ class RedisKeys:
         """
         return f"combat:rbc:{session_id}:exchanges:{char_id}"
 
+    @staticmethod
+    def get_rbc_meta_key(session_id: str) -> str:
+        """
+        RBC: Генерирует ключ для HASH, хранящего метаданные сессии (active, winner, mode).
+        """
+        return f"combat:rbc:{session_id}:meta"
+
+    @staticmethod
+    def get_combat_log_key(session_id: str) -> str:
+        """
+        RBC: Генерирует ключ для хранения логов боевой сессии (тип LIST).
+        """
+        return f"combat:rbc:{session_id}:logs"
+
     # --- Legacy Keys ---
 
     @staticmethod
@@ -90,23 +104,16 @@ class RedisKeys:
         return f"combat:sess:{session_id}:pending:{actor_id}:*"
 
     @staticmethod
-    def get_combat_log_key(session_id: str) -> str:
-        """
-        Генерирует ключ для хранения логов боевой сессии (тип LIST).
-        """
-        return f"combat:sess:{session_id}:logs"
-
-    @staticmethod
     def get_combat_meta_key(session_id: str) -> str:
         """
-        Генерирует ключ для хранения метаданных боевой сессии (тип HASH).
+        (Legacy) Генерирует ключ для хранения метаданных боевой сессии (тип HASH).
         """
         return f"combat:sess:{session_id}:meta"
 
     @staticmethod
     def get_combat_participants_key(session_id: str) -> str:
         """
-        Генерирует ключ для хранения идентификаторов всех участников боевой сессии (тип SET).
+        (Legacy) Генерирует ключ для хранения идентификаторов всех участников боевой сессии (тип SET).
         """
         return f"combat:sess:{session_id}:participants"
 

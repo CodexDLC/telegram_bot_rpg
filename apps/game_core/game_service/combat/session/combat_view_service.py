@@ -5,7 +5,7 @@ from typing import Any
 from apps.common.schemas_dto import CombatSessionContainerDTO, StatSourceData
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
-from apps.game_core.game_service.combat.stats_calculator import StatsCalculator
+from apps.game_core.game_service.combat.core.combat_stats_calculator import StatsCalculator
 
 
 class CombatViewService:

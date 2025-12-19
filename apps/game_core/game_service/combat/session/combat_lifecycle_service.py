@@ -1,7 +1,6 @@
 import asyncio
 import json
 import time
-import uuid
 from datetime import date
 from typing import Any
 
@@ -24,8 +23,9 @@ from apps.common.schemas_dto import (
 from apps.common.services.analytics_service import analytics_service
 from apps.common.services.core_service import CombatManager
 from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.game_core.game_service.combat.combat_aggregator import CombatAggregator
-from apps.game_core.game_service.combat.stats_calculator import StatsCalculator
+from apps.common.services.core_service.redis_key import RedisKeys as Rk
+from apps.game_core.game_service.combat.core.combat_stats_calculator import StatsCalculator
+from apps.game_core.game_service.combat.session.combat_aggregator import CombatAggregator
 from apps.game_core.game_service.skill.skill_service import CharacterSkillsService
 
 SWITCH_CHARGES_BASE = 1
@@ -53,27 +53,25 @@ class CombatLifecycleService:
         self.account_manager = account_manager
         log.debug("CombatLifecycleServiceInit")
 
-    async def create_battle(self, is_pve: bool = True, mode: str = "world") -> str:
+    async def create_battle(self, session_id: str, config: dict[str, Any]) -> None:
         """
-        Создает новую боевую сессию в Redis.
+        Создает новую боевую сессию в Redis с полными метаданными.
 
         Args:
-            is_pve: Является ли бой PvE.
-            mode: Режим боя ('world', 'arena'), влияет на логику выхода.
-
-        Returns:
-            Уникальный ID созданной сессии.
+            session_id: Уникальный ID сессии.
+            config: Словарь с параметрами боя (battle_type, mode, is_pve и т.д.).
         """
-        session_id = str(uuid.uuid4())
-        meta_data: dict[str, Any] = {
+        meta_data = {
             "start_time": int(time.time()),
-            "is_pve": int(is_pve),
             "active": 1,
-            "mode": mode,
+            "teams": json.dumps({}),  # Инициализируем пустые команды
+            "actors_info": json.dumps({}),  # Инициализируем пустые роли
+            "dead_actors": json.dumps([]),  # Инициализируем пустой список мертвых
+            **config,  # Распаковываем весь конфиг сразу
         }
-        await self.combat_manager.create_session_meta(session_id, meta_data)
-        log.info(f"BattleCreate | session_id='{session_id}' is_pve={is_pve} mode='{mode}'")
-        return session_id
+        # RBC: Пишем в новую мету
+        await self.combat_manager.create_rbc_session_meta(session_id, meta_data)
+        log.info(f"BattleCreate | session_id='{session_id}' config={config}")
 
     async def add_participant(
         self, session: AsyncSession, session_id: str, char_id: int, team: str, name: str, is_ai: bool = False
@@ -102,8 +100,13 @@ class CombatLifecycleService:
                 xp_buffer={},
             )
 
-            await self.combat_manager.add_participant_id(session_id, char_id)
-            await self.combat_manager.save_actor_json(session_id, char_id, container.model_dump_json())
+            # RBC: Пишем ТОЛЬКО в Hash акторов
+            await self.combat_manager.set_rbc_actor_state_json(session_id, char_id, container.model_dump_json())
+
+            # ВАЖНО: Привязываем сессию к аккаунту игрока (Mapping)
+            if not is_ai:
+                await self.account_manager.update_account_fields(char_id, {"combat_session_id": session_id})
+
             log.debug(f"AddParticipant | event=success session_id='{session_id}' char_id={char_id}")
         except (SQLAlchemyError, ValidationError, json.JSONDecodeError) as e:
             log.exception(f"AddParticipantError | session_id='{session_id}' char_id={char_id} error='{e}'")
@@ -121,31 +124,100 @@ class CombatLifecycleService:
         container.stats["energy_max"] = StatSourceData(base=float(energy))
         container.stats["hp_regen"] = StatSourceData(base=0.0)
 
-        await self.combat_manager.add_participant_id(session_id, char_id)
-        await self.combat_manager.save_actor_json(session_id, char_id, container.model_dump_json())
+        # RBC: Пишем ТОЛЬКО в Hash акторов
+        await self.combat_manager.set_rbc_actor_state_json(session_id, char_id, container.model_dump_json())
         log.debug(f"AddDummy | event=success session_id='{session_id}' char_id={char_id}")
+
+    async def create_shadow_copy(self, session_id: str, original_char_id: int) -> None:
+        """
+        Создает теневую копию участника (клон) для режима arena_shadow.
+        """
+        player_json = await self.combat_manager.get_rbc_actor_state_json(session_id, original_char_id)
+
+        if not player_json:
+            log.warning(
+                f"CreateShadowCopy | reason=original_not_found session_id='{session_id}' original_id={original_char_id}"
+            )
+            return
+
+        try:
+            player_data = CombatSessionContainerDTO.model_validate_json(player_json)
+            shadow_id = -original_char_id
+
+            # Клонируем данные
+            shadow_data = player_data.model_copy(deep=True)
+            shadow_data.char_id = shadow_id
+            shadow_data.name = f"👥 Тень ({player_data.name})"
+            shadow_data.team = "red"
+            shadow_data.is_ai = True
+
+            # RBC: Пишем ТОЛЬКО в Hash акторов
+            await self.combat_manager.set_rbc_actor_state_json(session_id, shadow_id, shadow_data.model_dump_json())
+            log.info(f"CreateShadowCopy | event=success session_id='{session_id}' shadow_id={shadow_id}")
+        except (ValidationError, json.JSONDecodeError) as e:
+            log.exception(f"CreateShadowCopyError | session_id='{session_id}' error='{e}'")
+
+    async def initialize_exchange_queues(self, session_id: str, players: list[int]) -> None:
+        """
+        Наполняет очереди обменов для игроков.
+        """
+        actors_data = await self.combat_manager.get_rbc_all_actors_json(session_id)
+        actors_teams = {}
+        if actors_data:
+            for aid, data in actors_data.items():
+                container = CombatSessionContainerDTO.model_validate_json(data)
+                actors_teams[int(aid)] = container.team
+
+        for p_id in players:
+            queue_key = Rk.get_combat_exchanges_key(session_id, p_id)
+            player_team = actors_teams.get(p_id)
+            enemies_ids = [str(aid) for aid, team in actors_teams.items() if team != player_team]
+
+            if enemies_ids:
+                await self.combat_manager.redis_service.push_to_list(queue_key, *enemies_ids)
+        log.debug(f"InitializeExchangeQueues | session_id='{session_id}' players={players}")
 
     async def initialize_battle_state(self, session_id: str) -> None:
         """
         Выполняет финальную настройку состояния боя перед его началом.
 
         Рассчитывает цели для каждого участника и инициализирует заряды тактики.
+        Также обновляет метаданные сессии (teams, actors_info).
         """
         log.info(f"InitializeBattle | session_id='{session_id}'")
-        participants = await self.combat_manager.get_session_participants(session_id)
-        actors_cache: dict[int, CombatSessionContainerDTO] = {}
+        # Теперь читаем всех актеров сразу из RBC хэша
+        actors_data = await self.combat_manager.get_rbc_all_actors_json(session_id)
 
-        for pid_str in participants:
-            pid = int(pid_str)
+        if not actors_data:
+            log.warning(f"InitializeBattle | status=empty session_id='{session_id}'")
+            return
+
+        actors_cache: dict[int, CombatSessionContainerDTO] = {}
+        teams_map: dict[str, list[int]] = {}
+        actors_info: dict[str, str] = {}
+
+        for aid_str, data in actors_data.items():
+            pid = int(aid_str)
             try:
-                data = await self.combat_manager.get_actor_json(session_id, pid)
-                if data:
-                    actors_cache[pid] = CombatSessionContainerDTO.model_validate_json(data)
+                actor = CombatSessionContainerDTO.model_validate_json(data)
+                actors_cache[pid] = actor
+
+                # Заполняем teams и actors_info
+                if actor.team not in teams_map:
+                    teams_map[actor.team] = []
+                teams_map[actor.team].append(pid)
+
+                actors_info[str(pid)] = "ai" if actor.is_ai else "player"
+
             except (json.JSONDecodeError, ValidationError) as e:
                 log.exception(
                     f"InitializeBattleError | reason=actor_parse_fail session_id='{session_id}' pid={pid} error='{e}'"
                 )
                 continue
+
+        # Обновляем метаданные сессии
+        meta_update = {"teams": json.dumps(teams_map), "actors_info": json.dumps(actors_info)}
+        await self.combat_manager.create_rbc_session_meta(session_id, meta_update)
 
         for pid, actor in actors_cache.items():
             if not actor.state:
@@ -167,11 +239,12 @@ class CombatLifecycleService:
             actor.state.switch_charges = final_charges
             actor.state.max_switch_charges = cap
 
-            await self.combat_manager.save_actor_json(session_id, pid, actor.model_dump_json())
+            # Сохраняем обратно в RBC ключ
+            await self.combat_manager.set_rbc_actor_state_json(session_id, pid, actor.model_dump_json())
             log.debug(
                 f"InitializeBattle | event=actor_state_init session_id='{session_id}' actor_id={pid} targets={enemies} charges={final_charges}"
             )
-        log.info(f"InitializeBattle | event=success session_id='{session_id}' participants={len(participants)}")
+        log.info(f"InitializeBattle | event=success session_id='{session_id}' participants={len(actors_cache)}")
 
     async def finish_battle(self, session_id: str, winner_team: str) -> None:
         """
@@ -179,14 +252,21 @@ class CombatLifecycleService:
         """
         log.info(f"FinishBattle | session_id='{session_id}' winner_team='{winner_team}'")
         end_time = int(time.time())
-        meta = await self.combat_manager.get_session_meta(session_id)
+        # RBC: Читаем из новой меты
+        meta = await self.combat_manager.get_rbc_session_meta(session_id)
         start_time = int(meta.get("start_time", end_time)) if meta else end_time
         duration = max(0, end_time - start_time)
 
-        new_meta = {"active": 0, "winner": winner_team, "end_time": end_time}
-        await self.combat_manager.create_session_meta(session_id, new_meta)
+        # Читаем участников из RBC хэша
+        actors_data = await self.combat_manager.get_rbc_all_actors_json(session_id)
+        if not actors_data:
+            log.warning(f"FinishBattle | reason=no_actors_found session_id='{session_id}'")
+            return
 
-        participants_ids = await self.combat_manager.get_session_participants(session_id)
+        # Собираем награды (rewards) для каждого игрока
+        # В будущем здесь может быть логика лута, пока только опыт
+        rewards_map = {}
+
         stats_payload: dict[str, Any] = {
             "timestamp": end_time,
             "date_iso": date.today().isoformat(),
@@ -206,13 +286,9 @@ class CombatLifecycleService:
                 skill_service = CharacterSkillsService(stats_repo, rate_repo, prog_repo)
 
                 p_counter = 1
-                for pid_str in participants_ids:
+                for pid_str, data in actors_data.items():
                     pid = int(pid_str)
                     try:
-                        data = await self.combat_manager.get_actor_json(session_id, pid)
-                        if not data:
-                            log.warning(f"FinishBattle | reason=actor_not_found session_id='{session_id}' pid={pid}")
-                            continue
                         actor = CombatSessionContainerDTO.model_validate_json(data)
                         if not actor.state:
                             log.warning(
@@ -243,19 +319,33 @@ class CombatLifecycleService:
                             )
                             p_counter += 1
 
+                        # Обработка опыта
+                        xp_gained = 0
                         if not actor.is_ai and actor.state.xp_buffer:
                             log.info(
                                 f"FinishBattle | event=saving_xp char_id={pid} xp_count={len(actor.state.xp_buffer)}"
                             )
+                            # Суммируем опыт для отображения в UI
+                            xp_gained = sum(actor.state.xp_buffer.values())
                             await skill_service.apply_combat_xp_batch(pid, actor.state.xp_buffer)
 
+                        # Формируем структуру наград для UI
+                        rewards_map[str(pid)] = {
+                            "xp": xp_gained,
+                            "gold": 0,  # Пока заглушка
+                            "items": [],
+                        }
+
                         if pid > 0:
+                            # ВАЖНО: Очищаем combat_session_id у игрока
+                            # Используем пустую строку вместо None, чтобы Redis не ругался
                             await self.account_manager.update_account_fields(
                                 pid,
                                 {
                                     "hp_current": actor.state.hp_current,
                                     "energy_current": actor.state.energy_current,
                                     "last_update": time.time(),
+                                    "combat_session_id": "",  # <--- ИСПРАВЛЕНО: Пустая строка вместо None
                                 },
                             )
                             log.info(
@@ -270,6 +360,19 @@ class CombatLifecycleService:
                 await session.commit()
         except SQLAlchemyError as e:
             log.exception(f"FinishBattleError | reason=db_error session_id='{session_id}' error='{e}'")
+
+        # Сохраняем rewards в метаданные сессии, чтобы UI мог их прочитать
+        new_meta = {
+            "active": 0,
+            "winner": winner_team,
+            "end_time": end_time,
+            "rewards": json.dumps(rewards_map),  # <--- Добавили сохранение наград
+        }
+        # RBC: Обновляем новую мету
+        await self.combat_manager.create_rbc_session_meta(session_id, new_meta)
+
+        # RBC: Очистка сессии (удаление очередей, пуль и установка TTL на историю)
+        await self.combat_manager.cleanup_rbc_session(session_id)
 
         asyncio.create_task(analytics_service.log_combat_result(stats_payload))
         log.info(f"FinishBattle | event=analytics_task_created session_id='{session_id}'")
