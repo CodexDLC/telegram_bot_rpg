@@ -99,8 +99,10 @@ async def _handle_combat_restore(
         return
     session_context["combat_session_id"] = combat_session_id
     await state.update_data({FSM_CONTEXT_KEY: session_context})
-    log_text, log_kb = await orchestrator.get_log_view(combat_session_id, char_id, 0)
-    dash_text, dash_kb = await orchestrator.get_dashboard_view(combat_session_id, char_id, {})
+
+    # Получаем оба view одним вызовом
+    (dash_text, dash_kb), (log_text, log_kb) = await orchestrator.get_dashboard_view(combat_session_id, char_id, {})
+
     msg_menu = session_context.get("message_menu")
     msg_content = session_context.get("message_content")
     if isinstance(msg_menu, dict):

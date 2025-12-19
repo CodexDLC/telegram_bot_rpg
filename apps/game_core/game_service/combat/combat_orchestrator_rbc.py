@@ -69,7 +69,7 @@ class CombatOrchestratorRBC:
         )
 
         # 4. Запуск Supervisor
-        supervisor = CombatSupervisor(session_id, self.combat_manager)
+        supervisor = CombatSupervisor(session_id, self.combat_manager, self.account_manager)
         task = asyncio.create_task(supervisor.run())
         add_supervisor_task(session_id, task)
 

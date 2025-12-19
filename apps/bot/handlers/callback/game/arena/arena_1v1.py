@@ -158,7 +158,8 @@ async def arena_start_battle_handler(
 
     log.info(f"Arena | Starting battle for user_id={user_id}, session_id={session_id}")
 
-    text, kb = await orchestrator.get_dashboard_view(session_id, char_id, {})
+    # Оркестратор возвращает два кортежа, нам нужен только первый (контент)
+    (text, kb), _ = await orchestrator.get_dashboard_view(session_id, char_id, {})
 
     # Редактируем то самое НОВОЕ сообщение, которое мы отправили в poll_for_match
     await call.message.edit_text(text=text, reply_markup=kb, parse_mode="HTML")

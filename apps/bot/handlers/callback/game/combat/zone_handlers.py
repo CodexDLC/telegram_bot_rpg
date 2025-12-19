@@ -36,11 +36,13 @@ async def combat_zone_toggle_handler(
     selection: dict[str, list[str]] = state_data.get("combat_selection", {"atk": [], "def": []})
     current_list = selection.get(layer, [])
 
+    # --- ИСПРАВЛЕНИЕ: Логика "только один выбор" ---
     if zone_id in current_list:
+        # Если нажать на уже выбранную зону, снимаем выбор
         current_list.remove(zone_id)
     else:
-        if layer == "def":
-            current_list.clear()
+        # Если выбрана новая зона, очищаем список и добавляем ее
+        current_list.clear()
         current_list.append(zone_id)
 
     selection[layer] = current_list
@@ -53,7 +55,8 @@ async def combat_zone_toggle_handler(
         await Err.generic_error(call)
         return
 
-    text, kb = await orchestrator.get_dashboard_view(session_id, char_id, selection)
+    # Оркестратор возвращает два кортежа, нам нужен только первый (контент)
+    (text, kb), _ = await orchestrator.get_dashboard_view(session_id, char_id, selection)
 
     try:
         await call.message.edit_text(text=text, reply_markup=kb, parse_mode="HTML")
