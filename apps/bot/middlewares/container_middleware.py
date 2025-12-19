@@ -4,6 +4,7 @@ from typing import Any
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
+from apps.bot.core_client.arena_client import ArenaClient
 from apps.common.core.container import AppContainer
 
 
@@ -25,8 +26,15 @@ class ContainerMiddleware(BaseMiddleware):
         data["redis_service"] = self.container.redis_service
         data["game_world_service"] = self.container.game_world_service
 
-        # Новая зависимость
+        # Новые зависимости
         if "session" in data:
             data["exploration_ui_service"] = self.container.get_exploration_ui_service(data["session"])
+            # Создаем и передаем ArenaClient
+            data["arena_client"] = ArenaClient(
+                session=data["session"],
+                account_manager=self.container.account_manager,
+                arena_manager=self.container.arena_manager,
+                combat_manager=self.container.combat_manager,
+            )
 
         return await handler(event, data)

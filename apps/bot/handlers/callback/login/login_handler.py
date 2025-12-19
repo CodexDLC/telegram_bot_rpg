@@ -13,8 +13,8 @@ from apps.bot.handlers.callback.login.char_creation import start_creation_handle
 from apps.bot.resources.fsm_states.states import InGame, StartTutorial
 from apps.bot.resources.keyboards.callback_data import LobbySelectionCallback
 from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
-from apps.bot.ui_service.combat.combat_ui_service import CombatUIService
-from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService  # ИЗМЕНЕНО
+from apps.bot.ui_service.combat.combat_bot_orchestrator import CombatBotOrchestrator
+from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY, fsm_clean_core_state
 from apps.bot.ui_service.helpers_ui.ui_animation_service import UIAnimationService
@@ -25,7 +25,6 @@ from apps.common.database.repositories import get_character_repo, get_symbiote_r
 from apps.common.schemas_dto import SessionDataDTO
 from apps.common.schemas_dto.auth_dto import GameStage
 from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.manager.combat_manager import CombatManager
 from apps.game_core.game_service.game_sync_service import GameSyncService
 from apps.game_core.game_service.login_service import LoginService
 
@@ -87,7 +86,7 @@ async def _handle_combat_restore(
     session_context: dict,
     call: CallbackQuery,
     account_manager: AccountManager,
-    combat_manager: CombatManager,
+    orchestrator: CombatBotOrchestrator,
 ) -> None:
     log.debug(f"SessionRestore | type=combat user_id={user_id} char_id={char_id}")
     ac_data = await account_manager.get_account_data(char_id)
@@ -100,9 +99,8 @@ async def _handle_combat_restore(
         return
     session_context["combat_session_id"] = combat_session_id
     await state.update_data({FSM_CONTEXT_KEY: session_context})
-    combat_ui = CombatUIService(user_id, char_id, str(combat_session_id), state_data, combat_manager, account_manager)
-    log_text, log_kb = await combat_ui.render_combat_log(page=0)
-    dash_text, dash_kb = await combat_ui.render_dashboard(current_selection={})
+    log_text, log_kb = await orchestrator.get_log_view(combat_session_id, char_id, 0)
+    dash_text, dash_kb = await orchestrator.get_dashboard_view(combat_session_id, char_id, {})
     msg_menu = session_context.get("message_menu")
     msg_content = session_context.get("message_content")
     if isinstance(msg_menu, dict):
@@ -142,13 +140,13 @@ async def _handle_in_game_login(
     call: CallbackQuery,
     session: AsyncSession,
     account_manager: AccountManager,
-    exploration_ui_service: ExplorationUIService,  # ИЗМЕНЕНО
+    exploration_ui_service: ExplorationUIService,
 ) -> None:
     log.debug(f"Login | event=in_game user_id={user_id} char_id={char_id}")
     sync_service = GameSyncService(session, account_manager)
     await sync_service.synchronize_player_state(char_id)
     actor_name = session_context.get("symbiote_name", "Симбиот")
-    nav_text, nav_kb = await exploration_ui_service.render_map(char_id=char_id, actor_name=actor_name)  # ИЗМЕНЕНО
+    nav_text, nav_kb = await exploration_ui_service.render_map(char_id=char_id, actor_name=actor_name)
     menu_service = MenuService(
         game_stage="in_game", state_data=state_data, session=session, account_manager=account_manager
     )
@@ -190,8 +188,8 @@ async def start_logging_handler(
     bot: Bot,
     session: AsyncSession,
     account_manager: AccountManager,
-    combat_manager: CombatManager,
-    exploration_ui_service: ExplorationUIService,  # ИЗМЕНЕНО
+    orchestrator: CombatBotOrchestrator,
+    exploration_ui_service: ExplorationUIService,
 ) -> None:
     if not call.from_user:
         return
@@ -255,14 +253,14 @@ async def start_logging_handler(
                 await start_creation_handler(call, state, bot, user_id, char_id, message_menu, session, account_manager)
         elif game_stage == "combat":
             await _handle_combat_restore(
-                user_id, char_id, state, bot, state_data, session_context, call, account_manager, combat_manager
+                user_id, char_id, state, bot, state_data, session_context, call, account_manager, orchestrator
             )
         else:
             await Err.generic_error(call)
     elif isinstance(login_result, tuple):
         if login_result[0] == "combat":
             await _handle_combat_restore(
-                user_id, char_id, state, bot, state_data, session_context, call, account_manager, combat_manager
+                user_id, char_id, state, bot, state_data, session_context, call, account_manager, orchestrator
             )
         else:
             await _handle_in_game_login(
@@ -275,5 +273,5 @@ async def start_logging_handler(
                 call,
                 session,
                 account_manager,
-                exploration_ui_service,  # ИЗМЕНЕНО
+                exploration_ui_service,
             )

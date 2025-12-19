@@ -4,6 +4,7 @@ from aiogram.types import InlineKeyboardMarkup
 from loguru import logger as log
 
 from apps.bot.core_client.exploration import ExplorationClient
+from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.exploration.encounter_ui import EncounterUI
 from apps.bot.ui_service.exploration.navigation_ui import NavigationUI
 from apps.common.schemas_dto.exploration_dto import EncounterDTO, EncounterType, WorldNavigationDTO
@@ -46,7 +47,9 @@ class ExplorationUIService:
         log.warning(f"ExplorationUI | Move confirm returned None for char_id={char_id}")
         return ("🚫 <b>Путь заблокирован</b> или локация недоступна.", None)
 
-    async def render_map(self, char_id: int, actor_name: str = "Симбиот") -> tuple[str, InlineKeyboardMarkup | None]:
+    async def render_map(
+        self, char_id: int, actor_name: str = DEFAULT_ACTOR_NAME
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
         """
         Просто отрисовывает карту текущей локации (без перемещения).
         Используется при входе в игру, возврате из меню/боя.

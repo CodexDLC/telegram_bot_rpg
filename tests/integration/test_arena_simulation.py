@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.database.model_orm import Character
+from apps.common.schemas_dto.combat_source_dto import CombatSessionContainerDTO
 from apps.common.services.core_service import CombatManager
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
@@ -17,7 +18,7 @@ from apps.game_core.game_service.arena.service_1v1 import Arena1v1Service
 
 # 🔥 ИМПОРТИРУЕМ LIFECYCLE ДЛЯ ПРИНУДИТЕЛЬНОГО ЗАВЕРШЕНИЯ
 from apps.game_core.game_service.combat.combat_lifecycle_service import CombatLifecycleService
-from apps.game_core.game_service.combat.combat_service import CombatService
+from apps.game_core.game_service.combat.combat_orchestrator_rbc import CombatOrchestratorRBC
 
 # Настройка отдельного логгера
 logger.add("logs/test_battle_report.log", level="INFO", rotation="1 MB", format="{message}")
@@ -69,7 +70,7 @@ async def test_full_arena_cycle(get_async_session, app_container):
         logger.info(f"🎉 БОЙ НАЧАЛСЯ! Session: {session_id}")
 
         # 3. COMBAT LOOP
-        combat = CombatService(session_id, combat_manager, account_manager)
+        orchestrator = CombatOrchestratorRBC(session, combat_manager, account_manager)
         round_counter = 0
 
         logger.info("\n⚔️ --- ХРОНИКА БОЯ --- ⚔️")
@@ -78,8 +79,8 @@ async def test_full_arena_cycle(get_async_session, app_container):
             round_counter += 1
 
             # --- ХОД (Exchange) ---
-            await combat.register_move(char_a_id, char_b_id, None, None)
-            await combat.register_move(char_b_id, char_a_id, None, None)
+            await orchestrator.register_move(session_id, char_a_id, char_b_id, {})
+            await orchestrator.register_move(session_id, char_b_id, char_a_id, {})
 
             # --- ЛОГИ (Reading Log) ---
             logs = await combat_manager.get_combat_log_list(session_id)
@@ -94,8 +95,10 @@ async def test_full_arena_cycle(get_async_session, app_container):
                     logger.info(f"    {clean_line}")
 
             # --- 🔥 ОБНОВЛЕНИЕ СОСТОЯНИЯ (State Refresh) ---
-            actor_a = await combat._get_actor(char_a_id)
-            actor_b = await combat._get_actor(char_b_id)
+            actor_a_json = await combat_manager.get_rbc_actor_state_json(session_id, char_a_id)
+            actor_b_json = await combat_manager.get_rbc_actor_state_json(session_id, char_b_id)
+            actor_a = CombatSessionContainerDTO.model_validate_json(actor_a_json) if actor_a_json else None
+            actor_b = CombatSessionContainerDTO.model_validate_json(actor_b_json) if actor_b_json else None
 
             assert actor_a is not None and actor_a.state is not None
             assert actor_b is not None and actor_b.state is not None

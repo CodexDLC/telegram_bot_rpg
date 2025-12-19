@@ -11,21 +11,12 @@ class UIErrorHandler:
     """
     Класс-утилита для отправки стандартизированных сообщений об ошибках
     пользователю в ответ на CallbackQuery.
-
-    Все методы статические, что исключает необходимость инициализации класса.
     """
 
     @staticmethod
     async def _error_msg_default(call: CallbackQuery, message_text: str) -> None:
         """
         Приватный базовый метод для отправки стандартизированного сообщения об ошибке.
-
-        Пытается ответить на callback, чтобы убрать "часики" на кнопке,
-        и отправляет новое сообщение в чат с текстом ошибки и клавиатурой восстановления.
-
-        Args:
-            call: Объект CallbackQuery, вызвавший ошибку.
-            message_text: Текст сообщения об ошибке для пользователя.
         """
         if not call or not call.from_user:
             log.error(
@@ -35,7 +26,9 @@ class UIErrorHandler:
 
         user_id = call.from_user.id
         log.warning(f"UIErrorHandler | event=sending_error_message user_id={user_id} message='{message_text}'")
+
         try:
+            # Убираем "часики" с кнопки
             await call.answer(text="Произошла ошибка", show_alert=True)
         except TelegramBadRequest as e:
             log.warning(
@@ -44,6 +37,7 @@ class UIErrorHandler:
 
         try:
             if call.message:
+                # Отправляем новое сообщение с кнопкой восстановления (Рестарт)
                 await call.message.answer(
                     f"⚠️ {message_text}\n\nПожалуйста, попробуйте начать заново с команды /start или кнопки 'Рестарт'.",
                     reply_markup=get_error_recovery_kb(),
@@ -57,86 +51,42 @@ class UIErrorHandler:
             )
 
     @staticmethod
-    async def handle_exception(call: CallbackQuery, error_text: str = "Произошла непредвиденная ошибка.") -> None:
+    async def report_and_restart(call: CallbackQuery, message_text: str) -> None:
         """
-        Универсальный обработчик исключений, использующий `_error_msg_default`.
+        Метод для критических ошибок в бою/навигации.
+        Логирует проблему и предлагает пользователю восстановить сессию (Рестарт).
+        """
+        await UIErrorHandler._error_msg_default(call, message_text=message_text)
 
-        Args:
-            call: Объект CallbackQuery.
-            error_text: Описание ошибки для пользователя.
-        """
+    @staticmethod
+    async def handle_exception(call: CallbackQuery, error_text: str = "Произошла непредвиденная ошибка.") -> None:
+        """Универсальный обработчик исключений."""
         await UIErrorHandler._error_msg_default(call, message_text=error_text)
 
     @staticmethod
     async def generic_error(call: CallbackQuery) -> None:
-        """
-        Отправляет общее сообщение об ошибке "Что-то пошло не так".
-
-        Args:
-            call: Объект CallbackQuery.
-        """
+        """Общая ошибка 'Данные не найдены'."""
         await UIErrorHandler._error_msg_default(call, message_text="Что-то пошло не так. Данные не найдены.")
 
     @staticmethod
-    async def invalid_id(call: CallbackQuery) -> None:
-        """
-        Отправляет сообщение об ошибке, связанной с неверным идентификатором.
-
-        Args:
-            call: Объект CallbackQuery.
-        """
-        await UIErrorHandler._error_msg_default(call, message_text="Произошел сбой. ID персонажа не прошел валидацию.")
-
-    @staticmethod
     async def char_id_not_found_in_fsm(call: CallbackQuery) -> None:
-        """
-        Отправляет сообщение об ошибке, когда `char_id` не найден в FSM.
-
-        Args:
-            call: Объект CallbackQuery.
-        """
+        """Ошибка отсутствия char_id в FSM."""
         await UIErrorHandler._error_msg_default(
             call, message_text="Что-то пошло не так. Данные о персонаже утеряны из памяти (FSM)."
         )
 
     @staticmethod
     async def message_content_not_found_in_fsm(call: CallbackQuery) -> None:
-        """
-        Отправляет сообщение об ошибке, когда `message_content` не найден в FSM.
-
-        Args:
-            call: Объект CallbackQuery.
-        """
+        """Ошибка отсутствия данных о сообщении в FSM."""
         await UIErrorHandler._error_msg_default(
             call, message_text="Что-то пошло не так. Не удалось найти сообщение для редактирования."
         )
 
     @staticmethod
-    async def callback_data_missing(call: CallbackQuery) -> None:
-        """
-        Отправляет сообщение об ошибке, когда ожидаемые данные из callback не получены.
-
-        Args:
-            call: Объект CallbackQuery.
-        """
-        await UIErrorHandler._error_msg_default(
-            call, message_text="Произошел сбой. Данные (callback data) не были получены."
-        )
-
-    @staticmethod
     async def access_denied(call: CallbackQuery) -> None:
-        """
-        Отправляет сообщение об отказе в доступе, когда пользователь пытается
-        взаимодействовать с чужим UI.
-
-        Args:
-            call: Объект CallbackQuery.
-        """
+        """Отказ в доступе (чужой интерфейс)."""
         if not call.from_user:
-            log.warning("UIErrorHandler | status=failed reason='Access denied called without from_user'")
             return
-
         log.info(f"UIErrorHandler | event=access_denied user_id={call.from_user.id}")
-
         with suppress(TelegramAPIError):
             await call.answer("⛔ Это не твой интерфейс!", show_alert=True)

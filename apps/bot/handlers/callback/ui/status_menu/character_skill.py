@@ -104,13 +104,13 @@ async def character_skill_detail_handler(
     state_data = await state.get_data()
     if not state_data:
         log.warning(f"SkillMenu | status=failed reason='State data missing' user_id={user_id}")
-        await Err.callback_data_missing(call=call)
+        await Err.generic_error(call=call)
         return
 
     group_key = state_data.get("group_key")
     if not group_key:
         log.warning(f"SkillMenu | status=failed reason='group_key missing in state' user_id={user_id}")
-        await Err.callback_data_missing(call=call)
+        await Err.generic_error(call=call)
         return
 
     try:
