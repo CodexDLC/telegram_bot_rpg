@@ -19,6 +19,7 @@ class HubConfig(TypedDict):
     fsm_state: Any
     ui_builder_class: type[Any]
     render_method_name: str
+    required_dependencies: list[str]  # <-- Новое поле
 
 
 HUB_CONFIGS: dict[str, HubConfig] = {
@@ -28,5 +29,6 @@ HUB_CONFIGS: dict[str, HubConfig] = {
         "fsm_state": ArenaState.menu,
         "ui_builder_class": ArenaUIService,
         "render_method_name": "view_main_menu",
+        "required_dependencies": ["char_id", "actor_name"],  # <-- Указываем зависимости
     }
 }

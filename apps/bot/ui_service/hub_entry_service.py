@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.hub_config import HUB_CONFIGS
 from apps.bot.ui_service.base_service import BaseUIService
+from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
@@ -29,18 +30,6 @@ class HubEntryService(BaseUIService):
         arena_manager: ArenaManager,
         combat_manager: CombatManager,
     ):
-        """
-        Инициализирует HubEntryService.
-
-        Args:
-            char_id: Уникальный идентификатор персонажа.
-            target_loc: Идентификатор целевой локации/хаба.
-            state_data: Текущие данные FSM-состояния.
-            session: Асинхронная сессия базы данных.
-            account_manager: Менеджер аккаунтов.
-            arena_manager: Менеджер арены.
-            combat_manager: Менеджер боя.
-        """
         super().__init__(char_id=char_id, state_data=state_data)
         self.target_loc = target_loc
         self.session = session
@@ -53,16 +42,6 @@ class HubEntryService(BaseUIService):
         """
         Извлекает конфигурацию хаба, динамически создает и вызывает UI-билдер,
         возвращая готовый контент и новое FSM-состояние.
-
-        Returns:
-            Кортеж, содержащий:
-            - text: Текст для отображения в меню хаба.
-            - keyboard: Клавиатура для меню хаба, или None.
-            - new_fsm_state: Новое FSM-состояние, в которое должен перейти бот.
-
-        Raises:
-            AttributeError: Если указанный метод рендеринга не найден в UI-билдере.
-            TypeError: Если UI-билдер или его метод вызываются с некорректными аргументами.
         """
         config = HUB_CONFIGS.get(self.target_loc)
         default_fsm_state = InGame.navigation
@@ -75,24 +54,40 @@ class HubEntryService(BaseUIService):
         new_fsm_state = config.get("fsm_state", default_fsm_state)
 
         try:
-            method_name = config.get("render_method_name", "render_menu")
             builder_class = config.get("ui_builder_class")
-
             if not builder_class:
                 log.error(
                     f"HubEntryService | status=failed reason='ui_builder_class missing in config' target_loc='{self.target_loc}'"
                 )
                 return "Ошибка конфигурации: отсутствует билдер UI.", None, new_fsm_state
 
-            # Передаем все необходимые зависимости в конструктор
-            ui_builder = builder_class(
-                char_id=self.char_id,
-                session=self.session,
-                state_data=self.state_data,
-                account_manager=self.account_manager,
-                arena_manager=self.arena_manager,
-                combat_manager=self.combat_manager,
-            )
+            # --- НОВАЯ ЛОГИКА: Динамическое создание зависимостей ---
+
+            # 1. Определяем все возможные зависимости, которые может предоставить этот сервис
+            all_dependencies = {
+                "char_id": self.char_id,
+                "session": self.session,
+                "state_data": self.state_data,
+                "account_manager": self.account_manager,
+                "arena_manager": self.arena_manager,
+                "combat_manager": self.combat_manager,
+                "actor_name": self.state_data.get(FSM_CONTEXT_KEY, {}).get("symbiote_name", "Симбиот"),
+            }
+
+            # 2. Получаем список требуемых зависимостей из конфига
+            required_deps_names = config.get("required_dependencies", [])
+
+            # 3. Собираем словарь аргументов только для нужных зависимостей
+            builder_kwargs = {
+                dep_name: all_dependencies[dep_name] for dep_name in required_deps_names if dep_name in all_dependencies
+            }
+
+            # 4. Создаем экземпляр с нужными аргументами
+            ui_builder = builder_class(**builder_kwargs)
+
+            # --- КОНЕЦ НОВОЙ ЛОГИКИ ---
+
+            method_name = config.get("render_method_name", "render_menu")
             render_method = getattr(ui_builder, method_name, None)
 
             if render_method is None:
@@ -104,7 +99,7 @@ class HubEntryService(BaseUIService):
             text, kb = await render_method()
             return text, kb, new_fsm_state
 
-        except (AttributeError, TypeError) as e:
+        except (AttributeError, TypeError, KeyError) as e:
             log.exception(
                 f"HubEntryService | status=failed reason='Dynamic UI builder call error' target_loc='{self.target_loc}' error='{e}'"
             )
