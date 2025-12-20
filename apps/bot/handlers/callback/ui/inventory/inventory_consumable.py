@@ -77,7 +77,7 @@ async def inventory_fill_slot_handler(
     orchestrator = container.get_inventory_bot_orchestrator(session)
 
     # Мы передали "assign_to_quick_slot_1" в поле filter_type
-    # target_slot = callback_data.filter_type # Удалено: не используется
+    target_slot = callback_data.filter_type
 
     # Теперь открываем ОБЫЧНЫЙ СПИСОК, но с особым filter_type
     result_dto = await orchestrator.get_item_list(
@@ -87,17 +87,8 @@ async def inventory_fill_slot_handler(
         category="all",
         page=callback_data.page,
         state_data=state_data,
-        # filter_type нужно передать в get_item_list, но в текущей сигнатуре его нет.
-        # В InventoryBotOrchestrator.get_item_list нет аргумента filter_type.
-        # Нужно добавить.
+        filter_type=target_slot,  # Это важно! UI списка поймет, что мы выбираем предмет для слота
     )
-
-    # ВАЖНО: get_item_list в оркестраторе не принимает filter_type.
-    # Но InventoryListUI.render принимает.
-    # Нужно обновить оркестратор.
-
-    # Пока используем хак: передаем filter_type через category? Нет.
-    # Нужно обновить оркестратор.
 
     # Обновляем сообщение через координаты
     if result_dto.content and (coords := orchestrator.get_content_coords(state_data, user_id)):

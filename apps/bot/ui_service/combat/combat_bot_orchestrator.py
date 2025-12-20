@@ -109,7 +109,7 @@ class CombatBotOrchestrator:
 
         menu_view = await ui.render_items_menu(snapshot)
 
-        return CombatViewDTO(menu=menu_view)
+        return CombatViewDTO(menu=menu_view, alert_text=msg)
 
     async def toggle_zone(
         self, session_id: str, char_id: int, layer: str, zone_id: str, state_data: dict

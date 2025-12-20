@@ -95,6 +95,10 @@ class StatusBotOrchestrator:
         )
         return results[1] or StatusViewDTO()
 
+    async def change_skill_mode(self, char_id: int, skill_key: str, new_mode: str) -> bool:
+        """Изменяет режим прокачки навыка."""
+        return await self._client.update_skill_state(char_id, skill_key, new_mode)
+
     async def get_modifier_view(
         self, char_id: int, level: str, key: str, state_data: dict[str, Any], bot: Bot
     ) -> StatusViewDTO:

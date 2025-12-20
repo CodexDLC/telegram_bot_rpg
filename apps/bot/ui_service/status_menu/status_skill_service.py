@@ -162,7 +162,7 @@ class CharacterSkillStatusService(BaseUIService):
             }
             # current_state = skill_dto.progress_state # В DTO пока нет progress_state, нужно добавить или заглушку
             # Предположим PAUSE
-            current_state = SkillProgressState.PAUSE
+            current_state = skill_dto.progress_state
 
             for state_enum in [SkillProgressState.PLUS, SkillProgressState.PAUSE, SkillProgressState.MINUS]:
                 if state_enum != current_state:

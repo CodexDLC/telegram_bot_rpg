@@ -63,6 +63,8 @@ class InventoryDetailsUI(BaseUIService):
         """
         Форматирует блок сравнения на основе данных.
         """
+        # FIXME [ARCH-DEBT]: Перенести расчет дельты характеристик в CoreOrchestrator.
+        # UI не должен знать формулы. Он должен получить от бэкенда готовое: {"atk": {"old": 10, "new": 15, "diff": 5}}.
         if not comparison_data:
             return ""
 
