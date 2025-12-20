@@ -38,7 +38,9 @@ async def show_status_tab_logic(
     orchestrator = container.get_status_bot_orchestrator(session)
     state_data = await state.get_data()
 
-    result = await orchestrator.get_status_view(char_id, key, state_data)
+    # Mypy error: Missing positional argument "bot" in call to "get_status_view" of "StatusBotOrchestrator"
+    # Добавляем bot в вызов
+    result = await orchestrator.get_status_view(char_id, key, state_data, bot)
 
     if result.content:
         # Лобби ожидает обновления сообщения, в котором была нажата кнопка

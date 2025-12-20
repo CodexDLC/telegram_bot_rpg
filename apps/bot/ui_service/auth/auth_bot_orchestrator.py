@@ -92,16 +92,21 @@ class AuthBotOrchestrator:
         if game_stage == GameStage.TUTORIAL_STATS:
             tut_stats_service = TutorialServiceStats(char_id=char_id)
             text, kb = tut_stats_service.get_restart_stats()
-            result.content = ViewResultDTO(text=text, kb=kb)
-            result.new_state = "StartTutorial:start"
-            result.fsm_update = {"bonus_dict": {}, "event_pool": None, "sim_text_count": 0}
+
+            if text and kb:
+                result.content = ViewResultDTO(text=text, kb=kb)
+                result.new_state = "StartTutorial:start"
+                result.fsm_update = {"bonus_dict": {}, "event_pool": None, "sim_text_count": 0}
+            else:
+                # Fallback, если что-то пошло не так
+                result.content = ViewResultDTO(text="Ошибка загрузки туториала.", kb=None)
 
         elif game_stage == GameStage.TUTORIAL_SKILL:
             skill_choices_list: list[str] = []
             tut_skill_service = TutorialServiceSkills(skills_db=skill_choices_list)
-            text, kb = tut_skill_service.get_start_data()
-            if text and kb:
-                result.content = ViewResultDTO(text=text, kb=kb)
+            skill_text, skill_kb = tut_skill_service.get_start_data()
+            if skill_text and skill_kb:
+                result.content = ViewResultDTO(text=skill_text, kb=skill_kb)
                 result.new_state = "StartTutorial:in_skills_progres"
                 result.fsm_update = {"skill_choices_list": skill_choices_list}
 
