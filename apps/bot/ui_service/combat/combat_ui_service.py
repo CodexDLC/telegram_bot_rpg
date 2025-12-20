@@ -14,7 +14,7 @@ from apps.bot.resources.keyboards.combat_callback import (
 )
 from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.combat.formatters.combat_formatters import CombatFormatter
-from apps.bot.ui_service.ui_common_dto import ViewResultDTO
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 from apps.common.schemas_dto.combat_source_dto import CombatDashboardDTO
 
 

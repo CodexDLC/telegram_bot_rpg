@@ -15,7 +15,7 @@ from apps.bot.ui_service.exploration.exploration_bot_orchestrator import Explora
 from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService
 from apps.bot.ui_service.inventory.inventory_bot_orchestrator import InventoryBotOrchestrator
 from apps.bot.ui_service.lobby.lobby_bot_orchestrator import LobbyBotOrchestrator
-from apps.bot.ui_service.status.status_bot_orchestrator import StatusBotOrchestrator
+from apps.bot.ui_service.status_menu.status_bot_orchestrator import StatusBotOrchestrator
 from apps.common.core.settings import settings
 from apps.common.database.repositories.ORM.users_repo_orm import UsersRepoORM
 from apps.common.database.session import async_engine, async_session_factory

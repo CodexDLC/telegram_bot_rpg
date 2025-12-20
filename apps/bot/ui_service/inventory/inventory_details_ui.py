@@ -8,7 +8,7 @@ from loguru import logger as log
 from apps.bot.resources.keyboards.inventory_callback import InventoryCallback
 from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
-from apps.bot.ui_service.helpers_ui.formatters.inventory_formatters import InventoryFormatter
+from apps.bot.ui_service.inventory.formatters.inventory_formatters import InventoryFormatter
 from apps.common.schemas_dto import InventoryItemDTO, ItemType
 
 SECTION_TYPE_MAP = {

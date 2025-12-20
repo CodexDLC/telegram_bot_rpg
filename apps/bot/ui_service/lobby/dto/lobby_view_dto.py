@@ -1,5 +1,6 @@
-from apps.bot.ui_service.ui_common_dto import ViewResultDTO
 from pydantic import BaseModel
+
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 
 
 class LobbyViewDTO(BaseModel):

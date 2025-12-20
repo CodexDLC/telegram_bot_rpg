@@ -14,7 +14,7 @@ from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.callback_data import MeinMenuCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.bot.ui_service.menu_service import MenuService
+from apps.bot.ui_service.mesage_menu.menu_service import MenuService
 from apps.game_core.game_service.game_sync_service import GameSyncService
 
 if TYPE_CHECKING:

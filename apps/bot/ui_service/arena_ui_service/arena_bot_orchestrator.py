@@ -2,8 +2,8 @@ from apps.bot.core_client.arena_client import ArenaClient
 from apps.bot.core_client.exploration import ExplorationClient
 from apps.bot.ui_service.arena_ui_service.arena_ui_service import ArenaUIService
 from apps.bot.ui_service.arena_ui_service.dto.arena_view_dto import ArenaViewDTO
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.bot.ui_service.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 
 
 class ArenaBotOrchestratorError(Exception):
