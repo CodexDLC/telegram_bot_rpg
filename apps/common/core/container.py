@@ -2,8 +2,20 @@
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.bot.core_client.arena_client import ArenaClient
+from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.bot.core_client.exploration import ExplorationClient
+from apps.bot.core_client.inventory_client import InventoryClient
+from apps.bot.core_client.lobby_client import LobbyClient
+from apps.bot.core_client.status_client import StatusClient
+from apps.bot.ui_service.arena_ui_service.arena_bot_orchestrator import ArenaBotOrchestrator
+from apps.bot.ui_service.auth.auth_bot_orchestrator import AuthBotOrchestrator
+from apps.bot.ui_service.combat.combat_bot_orchestrator import CombatBotOrchestrator
+from apps.bot.ui_service.exploration.exploration_bot_orchestrator import ExplorationBotOrchestrator
 from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService
+from apps.bot.ui_service.inventory.inventory_bot_orchestrator import InventoryBotOrchestrator
+from apps.bot.ui_service.lobby.lobby_bot_orchestrator import LobbyBotOrchestrator
+from apps.bot.ui_service.status.status_bot_orchestrator import StatusBotOrchestrator
 from apps.common.core.settings import settings
 from apps.common.database.repositories.ORM.users_repo_orm import UsersRepoORM
 from apps.common.database.session import async_engine, async_session_factory
@@ -79,5 +91,76 @@ class AppContainer:
         return ExplorationClient(orchestrator=exploration_orchestrator)
 
     def get_exploration_ui_service(self, session: AsyncSession) -> ExplorationUIService:
-        exploration_client = self.get_exploration_client(session)
-        return ExplorationUIService(exploration_client=exploration_client)
+        return ExplorationUIService(state_data={})
+
+    def get_combat_client(self, session: AsyncSession) -> CombatRBCClient:
+        """Создает клиент ядра для боя."""
+        return CombatRBCClient(
+            session=session, account_manager=self.account_manager, combat_manager=self.combat_manager
+        )
+
+    def get_combat_bot_orchestrator(self, session: AsyncSession) -> CombatBotOrchestrator:
+        """Создает UI-оркестратор для бота."""
+        client = self.get_combat_client(session)
+        expl_client = self.get_exploration_client(session)
+
+        return CombatBotOrchestrator(
+            client=client,
+            account_manager=self.account_manager,
+            exploration_client=expl_client,
+            arena_manager=self.arena_manager,
+            combat_manager=self.combat_manager,
+            world_manager=self.world_manager,
+        )
+
+    def get_arena_client(self, session: AsyncSession) -> ArenaClient:
+        return ArenaClient(
+            session=session,
+            account_manager=self.account_manager,
+            arena_manager=self.arena_manager,
+            combat_manager=self.combat_manager,
+        )
+
+    def get_arena_bot_orchestrator(self, session: AsyncSession) -> ArenaBotOrchestrator:
+        client = self.get_arena_client(session)
+        expl_client = self.get_exploration_client(session)
+        return ArenaBotOrchestrator(arena_client=client, exploration_client=expl_client)
+
+    def get_exploration_bot_orchestrator(self, session: AsyncSession) -> ExplorationBotOrchestrator:
+        expl_client = self.get_exploration_client(session)
+        combat_client = self.get_combat_client(session)
+        return ExplorationBotOrchestrator(exploration_client=expl_client, combat_client=combat_client)
+
+    def get_inventory_client(self, session: AsyncSession) -> InventoryClient:
+        return InventoryClient(session=session, account_manager=self.account_manager)
+
+    def get_inventory_bot_orchestrator(self, session: AsyncSession) -> InventoryBotOrchestrator:
+        client = self.get_inventory_client(session)
+        return InventoryBotOrchestrator(inventory_client=client)
+
+    def get_status_client(self, session: AsyncSession) -> StatusClient:
+        return StatusClient(session=session)
+
+    def get_status_bot_orchestrator(self, session: AsyncSession) -> StatusBotOrchestrator:
+        client = self.get_status_client(session)
+        return StatusBotOrchestrator(status_client=client)
+
+    def get_lobby_client(self, session: AsyncSession) -> LobbyClient:
+        return LobbyClient(session=session)
+
+    def get_lobby_bot_orchestrator(self, session: AsyncSession) -> LobbyBotOrchestrator:
+        client = self.get_lobby_client(session)
+        return LobbyBotOrchestrator(lobby_client=client)
+
+    def get_auth_bot_orchestrator(self, session: AsyncSession) -> AuthBotOrchestrator:
+        expl_client = self.get_exploration_client(session)
+        combat_client = self.get_combat_client(session)
+        return AuthBotOrchestrator(
+            session=session,
+            account_manager=self.account_manager,
+            combat_manager=self.combat_manager,
+            arena_manager=self.arena_manager,
+            world_manager=self.world_manager,
+            exploration_client=expl_client,
+            combat_client=combat_client,
+        )

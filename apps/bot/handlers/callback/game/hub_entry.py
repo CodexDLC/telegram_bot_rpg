@@ -9,11 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.callback_data import ServiceEntryCallback
-from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.helpers_ui.ui_animation_service import UIAnimationService
 from apps.bot.ui_service.hub_entry_service import HubEntryService
+from apps.common.core.container import AppContainer
 from apps.common.schemas_dto import SessionDataDTO
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
@@ -28,6 +28,7 @@ async def service_hub_entry_handler(
     callback_data: ServiceEntryCallback,
     state: FSMContext,
     bot: Bot,
+    container: AppContainer,
     session: AsyncSession,
     account_manager: AccountManager,
     arena_manager: ArenaManager,
@@ -53,6 +54,9 @@ async def service_hub_entry_handler(
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     session_dto = SessionDataDTO(**session_context)
     anim_service = UIAnimationService(bot=bot, message_data=session_dto)
+
+    # Создаем оркестратор для получения координат (мы еще в навигации)
+    orchestrator = container.get_exploration_bot_orchestrator(session)
 
     async def run_logic():
         hub_service = HubEntryService(
@@ -82,19 +86,16 @@ async def service_hub_entry_handler(
         await Err.generic_error(call)
         return
 
-    base_ui_service = BaseUIService(state_data=state_data)
-    message_data = base_ui_service.get_message_content_data()
-    if not message_data:
+    # Используем оркестратор для получения координат
+    if coords := orchestrator.get_content_coords(state_data):
+        try:
+            await bot.edit_message_text(
+                chat_id=coords.chat_id, message_id=coords.message_id, text=text, parse_mode="html", reply_markup=kb
+            )
+            log.debug(f"UIRender | component=hub_menu status=success user_id={user_id} hub='{target_loc}'")
+        except TelegramAPIError:
+            log.exception(f"UIRender | component=hub_menu status=failed user_id={user_id} hub='{target_loc}'")
+            await Err.generic_error(call)
+    else:
         log.error(f"HubEntry | status=failed reason='message_content not found in FSM' user_id={user_id}")
         await Err.message_content_not_found_in_fsm(call)
-        return
-
-    chat_id, message_id = message_data
-    try:
-        await bot.edit_message_text(
-            chat_id=chat_id, message_id=message_id, text=text, parse_mode="html", reply_markup=kb
-        )
-        log.debug(f"UIRender | component=hub_menu status=success user_id={user_id} hub='{target_loc}'")
-    except TelegramAPIError:
-        log.exception(f"UIRender | component=hub_menu status=failed user_id={user_id} hub='{target_loc}'")
-        await Err.generic_error(call)

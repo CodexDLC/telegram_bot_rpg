@@ -8,8 +8,7 @@ from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.inventory_callback import InventoryCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.bot.ui_service.inventory.inventory_ui_service import InventoryUIService
-from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.common.core.container import AppContainer
 
 router = Router(name="inventory_resource_router")
 
@@ -24,7 +23,7 @@ async def inventory_resource_list_handler(
     state: FSMContext,
     session: AsyncSession,
     bot: Bot,
-    account_manager: AccountManager,
+    container: AppContainer,
 ) -> None:
     """Обрабатывает список ресурсов, фильтры и пагинацию."""
     user_id = call.from_user.id
@@ -44,22 +43,27 @@ async def inventory_resource_list_handler(
         await Err.char_id_not_found_in_fsm(call)
         return
 
-    service = InventoryUIService(
-        char_id=char_id, user_id=user_id, session=session, state_data=state_data, account_manager=account_manager
-    )
-    text, kb = await service.render_item_list(
-        section="resource", category=callback_data.category, page=callback_data.page
+    # Создаем оркестратор через контейнер
+    orchestrator = container.get_inventory_bot_orchestrator(session)
+
+    # Получаем список предметов
+    result_dto = await orchestrator.get_item_list(
+        char_id, user_id, "resource", callback_data.category, callback_data.page, state_data
     )
 
-    message_data = service.get_message_content_data()
-    if not message_data:
+    # Обновляем сообщение через координаты
+    if result_dto.content and (coords := orchestrator.get_content_coords(state_data, user_id)):
+        await bot.edit_message_text(
+            chat_id=coords.chat_id,
+            message_id=coords.message_id,
+            text=result_dto.content.text,
+            reply_markup=result_dto.content.kb,
+            parse_mode="HTML",
+        )
+        await call.answer()
+        log.info(
+            f"InventoryResource | event=list_rendered user_id={user_id} char_id={char_id} category='{callback_data.category}' page={callback_data.page}"
+        )
+    else:
         log.error(f"InventoryResource | status=failed reason='message_content not found' user_id={user_id}")
         await Err.generic_error(call)
-        return
-
-    chat_id, message_id = message_data
-    await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML")
-    await call.answer()
-    log.info(
-        f"InventoryResource | event=list_rendered user_id={user_id} char_id={char_id} category='{callback_data.category}' page={callback_data.page}"
-    )

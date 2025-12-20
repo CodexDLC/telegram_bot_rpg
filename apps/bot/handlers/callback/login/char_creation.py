@@ -19,7 +19,7 @@ from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.helpers_ui.game_validator import validate_character_name
 from apps.bot.ui_service.helpers_ui.ui_animation_service import UIAnimationService
 from apps.bot.ui_service.helpers_ui.ui_tools import await_min_delay
-from apps.bot.ui_service.menu_service import MenuService
+from apps.bot.ui_service.mesage_menu.menu_service import MenuService
 from apps.bot.ui_service.new_character.onboarding_service import OnboardingService
 from apps.common.schemas_dto import CharacterOnboardingUpdateDTO, SessionDataDTO
 from apps.common.services.core_service.manager.account_manager import AccountManager

@@ -19,6 +19,9 @@ class ContainerMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        # Пробрасываем сам контейнер
+        data["container"] = self.container
+
         # Старые зависимости
         data["account_manager"] = self.container.account_manager
         data["arena_manager"] = self.container.arena_manager

@@ -20,7 +20,10 @@ from apps.game_core.game_service.combat.core.combat_stats_calculator import Stat
 from apps.game_core.game_service.combat.mechanics.combat_service import CombatService
 from apps.game_core.game_service.combat.session.combat_lifecycle_service import CombatLifecycleService
 from apps.game_core.game_service.combat.supervisor.combat_supervisor import CombatSupervisor
-from apps.game_core.game_service.combat.supervisor.combat_supervisor_manager import add_supervisor_task
+from apps.game_core.game_service.combat.supervisor.combat_supervisor_manager import (
+    add_supervisor_task,
+    get_supervisor_task,
+)
 
 
 class CombatOrchestratorRBC:
@@ -42,6 +45,14 @@ class CombatOrchestratorRBC:
         self.combat_manager = combat_manager
         self.account_manager = account_manager
         self.lifecycle_service = CombatLifecycleService(combat_manager, account_manager)
+
+    async def _ensure_supervisor_running(self, session_id: str):
+        """Проверяет, запущен ли воркер для сессии. Если нет — запускает."""
+        if not get_supervisor_task(session_id):
+            log.info(f"Core | Activating supervisor for session {session_id}")
+            supervisor = CombatSupervisor(session_id, self.combat_manager, self.account_manager)
+            task = asyncio.create_task(supervisor.run())
+            add_supervisor_task(session_id, task)
 
     async def start_battle(
         self, players: list[int], enemies: list[int] | None = None, config: dict[str, Any] | None = None
@@ -90,10 +101,8 @@ class CombatOrchestratorRBC:
         # 6. Наполнение очереди обменов
         await self.lifecycle_service.initialize_exchange_queues(session_id, players)
 
-        # 7. Запуск Supervisor
-        supervisor = CombatSupervisor(session_id, self.combat_manager, self.account_manager)
-        task = asyncio.create_task(supervisor.run())
-        add_supervisor_task(session_id, task)
+        # 7. Supervisor НЕ запускаем здесь (Ленивая активация)
+        # Он запустится при первом запросе get_dashboard_snapshot
 
         # 8. Возвращаем начальный снимок боя
         return await self.get_dashboard_snapshot(session_id, players[0])
@@ -113,13 +122,8 @@ class CombatOrchestratorRBC:
         log.info(f"CombatOrchestrator | Found {len(active_sessions)} active sessions: {active_sessions}. Restoring...")
 
         for session_id in active_sessions:
-            # 2. Создаем экземпляр Supervisor для каждой сессии
-            supervisor = CombatSupervisor(session_id, self.combat_manager, self.account_manager)
-            # 3. Запускаем задачу в фоне
-            task = asyncio.create_task(supervisor.run())
-
-            # 4. Регистрируем в менеджере задач, чтобы бот мог ими управлять
-            add_supervisor_task(session_id, task)
+            # Используем ленивую активацию (просто проверяем и запускаем)
+            await self._ensure_supervisor_running(session_id)
 
         log.info(f"CombatOrchestrator | Successfully restored {len(active_sessions)} active combat sessions.")
 
@@ -133,6 +137,9 @@ class CombatOrchestratorRBC:
         self, session_id: str, char_id: int, target_id: int, move_data: dict[str, Any]
     ) -> CombatDashboardDTO:
         """Регистрирует ход и возвращает Snapshot (уже со следующей целью из очереди)."""
+        # Ленивая активация: на случай если ход прилетел раньше запроса снапшота
+        await self._ensure_supervisor_running(session_id)
+
         actor_state_json = await self.combat_manager.get_rbc_actor_state_json(session_id, char_id)
 
         if actor_state_json:
@@ -251,6 +258,9 @@ class CombatOrchestratorRBC:
         Собирает облегченный Snapshot данных для Бота.
         Это единственный метод, который Бот будет дергать для получения состояния.
         """
+        # Ленивая активация: ПЕРЕД тем как отдать данные игроку, проверяем запуск воркера
+        await self._ensure_supervisor_running(session_id)
+
         # 1. Метаданные (активен ли бой)
         # RBC: Читаем из новой меты
         meta = await self.combat_manager.get_rbc_session_meta(session_id)

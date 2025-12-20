@@ -9,7 +9,7 @@ from typing import Any, TypedDict
 
 from apps.bot.resources.fsm_states import ArenaState, InGame
 from apps.bot.ui_service.arena_ui_service.arena_ui_service import ArenaUIService
-from apps.bot.ui_service.stub_service import StubUIService
+from apps.bot.ui_service.helpers_ui.stub_service import StubUIService
 
 
 class HubConfig(TypedDict):

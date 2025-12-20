@@ -2,43 +2,108 @@ from typing import Any
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from loguru import logger as log
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.bot.resources.keyboards.status_callback import StatusModifierCallback, StatusNavCallback
 from apps.bot.resources.status_menu.modifer_group_data import MODIFIER_HIERARCHY
 from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.base_service import BaseUIService
-from apps.bot.ui_service.helpers_ui.formatters.status_modiier_formatters import ModifierFormatters as ModifierF
-from apps.game_core.game_service.stats_aggregation_service import StatsAggregationService
+from apps.bot.ui_service.status_menu.formatters.status_modiier_formatters import ModifierFormatters as ModifierF
+from apps.common.schemas_dto.status_dto import FullCharacterDataDTO
 
 
 class CharacterModifierUIService(BaseUIService):
     def __init__(
         self,
-        char_id: int,
-        key: str,
+        callback_data: StatusNavCallback | StatusModifierCallback,
         state_data: dict[str, Any],
         syb_name: str | None = None,
     ):
-        super().__init__(char_id=char_id, state_data=state_data)
+        super().__init__(char_id=callback_data.char_id, state_data=state_data)
         self.actor_name = syb_name or DEFAULT_ACTOR_NAME
         self.data_skills = MODIFIER_HIERARCHY
-        self.data_group: dict[str, Any] | None = self.data_skills.get(key)
-        self.key = key
+        self.key = callback_data.key
+
+        if isinstance(callback_data, StatusModifierCallback):
+            self.level = callback_data.level
+        else:
+            self.level = "root"
+
+        if self.level == "group":
+            self.data_group = self.data_skills.get(self.key)
+        elif self.level == "detail":
+            # Для деталей нам нужно найти группу.
+            # Пока заглушка.
+            self.data_group = None
+        else:
+            self.data_group = None
+
+    async def render_modifier_menu(self, data: FullCharacterDataDTO) -> tuple[str, InlineKeyboardMarkup]:
+        """
+        Рендерит меню модификаторов.
+        """
+
+        # Создаем обертку для доступа к статам через getattr
+        class AggregatedDataWrapper:
+            def __init__(self, total_stats):
+                self._data = {}
+                # total_stats: {key: {base: X, bonus: Y, total: Z}}
+                # Нам нужно {key: total}
+                if total_stats:
+                    # Разделяем stats и modifiers, если они смешаны, или просто берем total
+                    # В FullCharacterDataDTO total_stats это dict[str, dict]
+                    for k, v in total_stats.items():
+                        if isinstance(v, dict) and "total" in v:
+                            self._data[k] = v["total"]
+                        else:
+                            self._data[k] = v  # Fallback
+
+            def __getattr__(self, item):
+                return self._data.get(item, 0)
+
+        wrapper = AggregatedDataWrapper(data.total_stats)
+
+        if self.level == "root" or self.key == "modifiers":  # "stats" в старом коде, "modifiers" в новом
+            return self._render_root_menu(wrapper)
+        elif self.level == "group":
+            return self.status_group_modifier_message(wrapper)
+        elif self.level == "detail":
+            return "Детали модификатора (WIP)", InlineKeyboardBuilder().as_markup()
+
+        return "Неизвестный контекст", InlineKeyboardBuilder().as_markup()
+
+    def _render_root_menu(self, wrapper: Any) -> tuple[str, InlineKeyboardMarkup]:
+        """Рендерит список групп модификаторов."""
+        data_stats = self.data_skills.get("stats", {})
+        items = data_stats.get("items", {}) if isinstance(data_stats, dict) else {}
+
+        char_name = "Персонаж"  # Нужно передать имя персонажа, но его нет в wrapper.
+        # Можно добавить char_name в wrapper или передать отдельно.
+        # Пока заглушка.
+
+        text = ModifierF.group_modifier(items, char_name, self.actor_name)
+
+        kb = InlineKeyboardBuilder()
+        for key, value in items.items():
+            callback_data = StatusModifierCallback(char_id=self.char_id, level="group", key=key).pack()
+            kb.button(text=value, callback_data=callback_data)
+        kb.adjust(2)
+
+        # Навигация
+        # back_callback = StatusNavCallback(char_id=self.char_id, key="bio").pack() # Удалено: не используется
+        # ...
+
+        return text or "Ошибка форматирования", kb.as_markup()
 
     def status_group_modifier_message(
         self,
-        dto_to_use: Any,  # Теперь это может быть Wrapper
-    ) -> tuple[str | None, InlineKeyboardMarkup] | tuple[str, None]:
-        log.debug(f"Формирование сообщения для группы модификаторов '{self.key}' для персонажа ID={self.char_id}.")
-
+        dto_to_use: Any,
+    ) -> tuple[str, InlineKeyboardMarkup]:
         if not self.data_group:
-            return "Группа модификаторов не найдена", None
+            return "Группа модификаторов не найдена", InlineKeyboardBuilder().as_markup()
 
         text = ModifierF.format_stats_list(data=self.data_group, dto_to_use=dto_to_use, actor_name=self.actor_name)
         kb = self._group_modifier_kb()
-        return text, kb
+        return text or "Ошибка форматирования", kb
 
     def _group_modifier_kb(self) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()
@@ -53,66 +118,3 @@ class CharacterModifierUIService(BaseUIService):
         back_callback = StatusNavCallback(char_id=self.char_id, key="stats").pack()
         kb.row(InlineKeyboardButton(text="[ ◀️ Назад к модификаторам ]", callback_data=back_callback))
         return kb.as_markup()
-
-    def status_detail_modifier_message(
-        self,
-        dto_to_use: Any,
-        group_key: str | None,
-    ) -> tuple[str | None, InlineKeyboardMarkup] | tuple[str, None]:
-        if not group_key:
-            log.warning(f"Отсутствует group_key {group_key}")
-            return "Ошибка: отсутствует ключ группы.", None
-
-        value = getattr(dto_to_use, self.key, "N/A")
-
-        if not self.data_group:
-            return "Данные о группе не найдены", None
-
-        text = ModifierF.format_modifier_detail(
-            data=self.data_group,
-            value=value,
-            key=self.key,
-            actor_name=self.actor_name,
-        )
-        kb = self._detail_modifier_kb(group_key=group_key)
-        return text, kb
-
-    def _detail_modifier_kb(self, group_key: str) -> InlineKeyboardMarkup:
-        kb = InlineKeyboardBuilder()
-        back_callback = StatusModifierCallback(
-            char_id=self.char_id,
-            level="group",
-            key=group_key,
-        ).pack()
-        kb.row(InlineKeyboardButton(text="[ ◀️ Назад к группе ]", callback_data=back_callback))
-        return kb.as_markup()
-
-    async def get_aggregated_data(self, session: AsyncSession) -> Any | None:
-        """
-        Получает полные данные (Статы + Модификаторы) через Агрегатор.
-        Возвращает объект-обертку, совместимый с getattr().
-        """
-        try:
-            agg_service = StatsAggregationService(session)
-            total_data = await agg_service.get_character_total_stats(self.char_id)
-
-            class AggregatedDataWrapper:
-                def __init__(self, stats_dict, mods_dict):
-                    self._data = {}
-                    # Распаковка {key: {total: X}} -> {key: X}
-                    for k, v in stats_dict.items():
-                        self._data[k] = v["total"]
-                    for k, v in mods_dict.items():
-                        self._data[k] = v["total"]
-
-                def __getattr__(self, item):
-                    return self._data.get(item, 0)
-
-            if not total_data:
-                return None
-
-            return AggregatedDataWrapper(total_data.get("stats", {}), total_data.get("modifiers", {}))
-
-        except (TypeError, KeyError) as e:
-            log.error(f"Ошибка агрегации данных в UI: {e}")
-            return None

@@ -1,30 +1,31 @@
 from typing import Any
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
 
 from apps.bot.resources.keyboards.callback_data import ArenaQueueCallback
+from apps.bot.ui_service.base_service import BaseUIService
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 
 
-class ArenaUIService:
+class ArenaUIService(BaseUIService):
     """
     Чистый UI-сервис для Арены.
     Отвечает только за рендеринг интерфейсов (текст + кнопки).
     Не содержит бизнес-логики и не делает вызовов к другим сервисам.
     """
 
-    def __init__(self, char_id: int, actor_name: str):
+    def __init__(self, state_data: dict[str, Any], char_id: int | None = None):
         """
         Args:
-            char_id: ID персонажа.
-            actor_name: Имя персонажа.
+            state_data: Данные состояния FSM.
+            char_id: ID персонажа (опционально, если есть в state_data).
         """
-        self.char_id = char_id
-        self.actor_name = actor_name
-        log.debug(f"ArenaUIService | Initialized for char_id={char_id}")
+        super().__init__(state_data, char_id)
+        log.debug(f"ArenaUIService | Initialized for char_id={self.char_id}")
 
-    async def view_main_menu(self) -> tuple[str, InlineKeyboardMarkup]:
+    async def view_main_menu(self) -> ViewResultDTO:
         """
         Рендерит главный экран Арены (Уровень 0).
         """
@@ -40,9 +41,9 @@ class ArenaUIService:
         cb_exit = ArenaQueueCallback(char_id=self.char_id, action="exit_service").pack()
         kb.button(text="🚪 Выйти с Полигона", callback_data=cb_exit)
         kb.adjust(1)
-        return text, kb.as_markup()
+        return ViewResultDTO(text=text, kb=kb.as_markup())
 
-    async def view_mode_menu(self, match_type: str) -> tuple[str, InlineKeyboardMarkup]:
+    async def view_mode_menu(self, match_type: str) -> ViewResultDTO:
         """
         Рендерит подменю выбранного режима.
         """
@@ -60,7 +61,7 @@ class ArenaUIService:
             cb_back = ArenaQueueCallback(char_id=self.char_id, action="menu_main").pack()
             kb.row(InlineKeyboardButton(text="🔙 Назад в меню", callback_data=cb_back))
             kb.adjust(1)
-            return text, kb.as_markup()
+            return ViewResultDTO(text=text, kb=kb.as_markup())
 
         elif match_type == "group":
             # Логика для групповых боев остается прежней
@@ -68,11 +69,11 @@ class ArenaUIService:
             kb = InlineKeyboardBuilder()
             cb_back = ArenaQueueCallback(char_id=self.char_id, action="menu_main").pack()
             kb.row(InlineKeyboardButton(text="🔙 Назад в меню", callback_data=cb_back))
-            return text, kb.as_markup()
+            return ViewResultDTO(text=text, kb=kb.as_markup())
 
-        return "Неизвестный режим.", InlineKeyboardBuilder().as_markup()
+        return ViewResultDTO(text="Неизвестный режим.", kb=InlineKeyboardBuilder().as_markup())
 
-    async def view_searching_screen(self, match_type: str, gs: int | None) -> tuple[str, InlineKeyboardMarkup]:
+    async def view_searching_screen(self, match_type: str, gs: int | None) -> ViewResultDTO:
         """
         Рендерит экран поиска матча.
         """
@@ -86,11 +87,9 @@ class ArenaUIService:
         # Кнопка отмены теперь также будет вести на toggle_queue
         cb_cancel = ArenaQueueCallback(char_id=self.char_id, action="toggle_queue", match_type=match_type).pack()
         kb.button(text="❌ Отмена", callback_data=cb_cancel)
-        return text, kb.as_markup()
+        return ViewResultDTO(text=text, kb=kb.as_markup())
 
-    async def view_match_found(
-        self, session_id: str | None, metadata: dict[str, Any]
-    ) -> tuple[str, InlineKeyboardMarkup]:
+    async def view_match_found(self, session_id: str | None, metadata: dict[str, Any]) -> ViewResultDTO:
         """
         Рендерит экран найденного матча с кнопкой начала боя.
         """
@@ -99,4 +98,4 @@ class ArenaUIService:
         kb = InlineKeyboardBuilder()
         cb_start = ArenaQueueCallback(char_id=self.char_id, action="start_battle").pack()
         kb.button(text="⚔️ В БОЙ", callback_data=cb_start)
-        return text, kb.as_markup()
+        return ViewResultDTO(text=text, kb=kb.as_markup())

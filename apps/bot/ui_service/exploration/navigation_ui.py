@@ -5,7 +5,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
 
 from apps.bot.resources.keyboards.callback_data import NavigationCallback, ServiceEntryCallback
-from apps.bot.ui_service.helpers_ui.formatters.navigation_formatter import NavigationFormatter
+from apps.bot.ui_service.exploration.formatters.navigation_formatter import NavigationFormatter
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 from apps.common.schemas_dto.exploration_dto import WorldNavigationDTO
 
 
@@ -18,7 +19,7 @@ class NavigationUI:
         self.char_id = char_id
         self.actor_name = actor_name
 
-    def render_location(self, dto: WorldNavigationDTO) -> tuple[str, InlineKeyboardMarkup]:
+    def render_location(self, dto: WorldNavigationDTO) -> ViewResultDTO:
         """
         Превращает DTO локации в текст сообщения и клавиатуру.
         """
@@ -42,7 +43,7 @@ class NavigationUI:
 
         kb = self._get_world_location_kb(dto.exits, dto.loc_id, dto.flags)
 
-        return text, kb
+        return ViewResultDTO(text=text, kb=kb)
 
     def _get_world_location_kb(self, exits_dict: dict, current_loc_id: str, flags: dict) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()

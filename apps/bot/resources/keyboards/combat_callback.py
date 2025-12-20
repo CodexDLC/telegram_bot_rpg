@@ -46,3 +46,12 @@ class CombatLogCallback(CallbackData, prefix="c_log"):
     """
 
     page: int
+
+
+class CombatAbilityCallback(CallbackData, prefix="c_abil"):
+    """
+    Callback для выбора способности.
+    """
+
+    action: str  # "select"
+    ability_id: str

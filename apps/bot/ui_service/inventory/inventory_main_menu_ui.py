@@ -7,15 +7,14 @@ from loguru import logger as log
 
 from apps.bot.resources.keyboards.inventory_callback import InventoryCallback
 from apps.bot.ui_service.base_service import BaseUIService
-from apps.bot.ui_service.helpers_ui.formatters.inventory_formatters import InventoryFormatter
-from apps.common.schemas_dto import EquippedSlot
-from apps.game_core.game_service.inventory.inventory_service import InventoryService
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
+from apps.bot.ui_service.inventory.formatters.inventory_formatters import InventoryFormatter
+from apps.common.schemas_dto import EquippedSlot, InventoryItemDTO
 
 
 class InventoryMainMenuUI(BaseUIService):
     """
     Класс-помощник для рендеринга уровня 0: Экран "Кукла персонажа".
-    Отвечает за сбор данных об экипировке и формирование главной клавиатуры.
     """
 
     def __init__(
@@ -23,29 +22,26 @@ class InventoryMainMenuUI(BaseUIService):
         char_id: int,
         user_id: int,
         state_data: dict[str, Any],
-        inventory_service: InventoryService,
     ):
         super().__init__(char_id=char_id, state_data=state_data)
         self.user_id = user_id
-        self.inventory_service = inventory_service
         self.InvF = InventoryFormatter
         log.debug(f"InventoryMainMenuUI | status=initialized char_id={char_id}")
 
-    async def render(self) -> tuple[str, InlineKeyboardMarkup]:
+    def render(self, summary: dict, equipped: list[InventoryItemDTO]) -> ViewResultDTO:
         """
         Рендерит главный экран 'Кукла персонажа'.
         """
-        # 🔥 ЧИСТЫЙ ВЫЗОВ Layer 3 (Game Service)
-        equipped = await self.inventory_service.get_items("equipped")
-        current_slots, max_slots = await self.inventory_service.get_capacity()
-        dust_amount = await self.inventory_service.get_dust_amount()
+        current_slots = summary.get("weight", 0)  # Временный маппинг, пока не поправим DTO
+        max_slots = summary.get("max_weight", 0)
+        dust_amount = summary.get("balance", {}).get("dust", 0)  # Предполагаем структуру balance
 
         text = self.InvF.format_main_menu(
             equipped=equipped, current_slots=current_slots, max_slots=max_slots, dust_amount=dust_amount
         )
 
         kb = self._kb_main_menu()
-        return text, kb
+        return ViewResultDTO(text=text, kb=kb)
 
     def _kb_main_menu(self) -> InlineKeyboardMarkup:
         """
@@ -69,7 +65,6 @@ class InventoryMainMenuUI(BaseUIService):
                 full_name = self.InvF.SLOT_NAMES.get(slot_enum.value, slot_enum.name)
                 short_text = full_name.split()[0]
 
-                # КОНТРАКТ: level=1, section='equip', category=slot_enum.value, filter_type='slot'
                 callback_data = InventoryCallback(
                     level=1,
                     user_id=self.user_id,
@@ -82,14 +77,12 @@ class InventoryMainMenuUI(BaseUIService):
                 row_buttons.append(InlineKeyboardButton(text=short_text, callback_data=callback_data))
             kb.row(*row_buttons)
 
-        # 2. Кнопки Категорий (для ресурсов и расходников)
+        # 2. Кнопки Категорий
         kb_resources = []
 
-        # Consumables (Расходники)
         cb_con = InventoryCallback(level=1, user_id=self.user_id, section="consumable", category="all").pack()
         kb_resources.append(InlineKeyboardButton(text=self.InvF.SECTION_NAMES["consumable"], callback_data=cb_con))
 
-        # Resources (Руда/Ткани и т.д. - ведет на SUB-меню)
         cb_res = InventoryCallback(level=1, user_id=self.user_id, section="resource", category="all").pack()
         kb_resources.append(InlineKeyboardButton(text=self.InvF.SECTION_NAMES["resource"], callback_data=cb_res))
 

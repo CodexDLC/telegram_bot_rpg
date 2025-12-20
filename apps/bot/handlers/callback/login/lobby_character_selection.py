@@ -8,8 +8,8 @@ from apps.bot.handlers.callback.ui.status_menu.character_status import show_stat
 from apps.bot.resources.fsm_states.states import CharacterLobby
 from apps.bot.resources.keyboards.callback_data import LobbySelectionCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
-from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY, fsm_load_auto, fsm_store
-from apps.bot.ui_service.lobby_service import LobbyService
+from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
+from apps.common.core.container import AppContainer
 
 router = Router(name="lobby_selection_router")
 
@@ -21,6 +21,7 @@ async def select_or_delete_character_handler(
     state: FSMContext,
     bot: Bot,
     session: AsyncSession,
+    container: AppContainer,
 ) -> None:
     """Обрабатывает выбор или удаление персонажа в лобби."""
     if not call.from_user:
@@ -40,14 +41,8 @@ async def select_or_delete_character_handler(
         log.debug(f"Lobby | reason='repeated_selection' user_id={user_id} char_id={char_id}")
         return
 
-    lobby_service = LobbyService(user=call.from_user, char_id=char_id, state_data=state_data)
-    characters = await fsm_load_auto(state=state, key="characters")
-
-    if characters is None:
-        log.debug(f"Lobby | cache=miss key=characters user_id={user_id}")
-        characters = await lobby_service.get_data_characters(session)
-        if characters:
-            await state.update_data(characters=await fsm_store(value=characters))
+    # Создаем оркестратор через контейнер
+    orchestrator = container.get_lobby_bot_orchestrator(session)
 
     if action == "select":
         if not char_id:
@@ -55,28 +50,28 @@ async def select_or_delete_character_handler(
             await Err.generic_error(call=call)
             return
 
-        if characters:
-            text, kb = lobby_service.get_data_lobby_start(characters)
-            message_menu = session_context.get("message_menu")
-            if message_menu:
-                await bot.edit_message_text(
-                    chat_id=message_menu.get("chat_id"),
-                    message_id=message_menu.get("message_id"),
-                    text=text,
-                    parse_mode="html",
-                    reply_markup=kb,
-                )
+        # Получаем вид лобби (список персонажей)
+        result_dto = await orchestrator.get_lobby_view(call.from_user, state_data, char_id)
 
-            fsm_data = await lobby_service.get_fsm_data(characters)
-            session_context.update({"char_id": fsm_data.get("char_id"), "user_id": fsm_data.get("user_id")})
-            await state.update_data({FSM_CONTEXT_KEY: session_context})
-            await state.update_data(characters=fsm_data.get("characters"))
-            log.debug(f"FSM | data_updated user_id={user_id} char_id={char_id}")
+        # Обновляем меню (список персонажей)
+        if result_dto.content and (coords := orchestrator.get_menu_coords(state_data)):
+            await bot.edit_message_text(
+                chat_id=coords.chat_id,
+                message_id=coords.message_id,
+                text=result_dto.content.text,
+                parse_mode="html",
+                reply_markup=result_dto.content.kb,
+            )
 
-            await show_status_tab_logic(char_id=char_id, state=state, bot=bot, call=call, key="bio", session=session)
-        else:
-            log.warning(f"Lobby | status=failed reason='characters not found after selection' user_id={user_id}")
-            await Err.generic_error(call=call)
+        # Обновляем FSM
+        session_context.update({"char_id": char_id, "user_id": user_id})
+        await state.update_data({FSM_CONTEXT_KEY: session_context})
+        log.debug(f"FSM | data_updated user_id={user_id} char_id={char_id}")
+
+        # Показываем статус персонажа (через мост)
+        await show_status_tab_logic(
+            char_id=char_id, state=state, bot=bot, call=call, key="bio", session=session, container=container
+        )
 
     elif action == "delete":
         if not char_id:
@@ -84,24 +79,19 @@ async def select_or_delete_character_handler(
             await call.answer("Сначала выберите персонажа, которого хотите удалить", show_alert=True)
             return
 
-        message_content = session_context.get("message_content")
-        if not isinstance(message_content, dict):
-            log.warning(f"Lobby | status=failed reason='message_content not found' user_id={user_id}")
-            await Err.message_content_not_found_in_fsm(call)
-            return
-
-        char_name = next((char.name for char in characters if char.character_id == char_id), "???")
-
         await state.set_state(CharacterLobby.confirm_delete)
-        text, kb = lobby_service.get_message_delete(char_name)
-        await state.update_data(char_name=char_name)
-        log.info(f"FSM | state=CharacterLobby.confirm_delete user_id={user_id} char_id={char_id}")
 
-        message_content_data = lobby_service.get_message_content_data()
-        if message_content_data:
-            chat_id, message_id = message_content_data
+        # Получаем экран подтверждения удаления
+        result_dto = await orchestrator.get_delete_confirmation(call.from_user, state_data, char_id)
+
+        # Обновляем контент (верхнее сообщение)
+        if result_dto.content and (coords := orchestrator.get_content_coords(state_data)):
             await bot.edit_message_text(
-                chat_id=chat_id, message_id=message_id, text=text, parse_mode="html", reply_markup=kb
+                chat_id=coords.chat_id,
+                message_id=coords.message_id,
+                text=result_dto.content.text,
+                parse_mode="html",
+                reply_markup=result_dto.content.kb,
             )
         else:
             await Err.message_content_not_found_in_fsm(call)
@@ -109,7 +99,12 @@ async def select_or_delete_character_handler(
 
 @router.callback_query(CharacterLobby.confirm_delete, LobbySelectionCallback.filter())
 async def confirm_delete_handler(
-    call: CallbackQuery, state: FSMContext, callback_data: LobbySelectionCallback, bot: Bot, session: AsyncSession
+    call: CallbackQuery,
+    state: FSMContext,
+    callback_data: LobbySelectionCallback,
+    bot: Bot,
+    session: AsyncSession,
+    container: AppContainer,
 ) -> None:
     """Обрабатывает подтверждение или отмену удаления персонажа."""
     if not call.from_user or not call.message:
@@ -128,30 +123,34 @@ async def confirm_delete_handler(
         await Err.generic_error(call)
         return
 
-    lobby_service = LobbyService(user=call.from_user, char_id=char_id, state_data=state_data)
+    orchestrator = container.get_lobby_bot_orchestrator(session)
 
     if action == "delete_yes":
         log.debug(f"LobbyDeleteConfirm | status=confirmed user_id={user_id} char_id={char_id}")
-        delete_success = await lobby_service.delete_character(session)
 
-        if not delete_success:
+        # Удаляем персонажа через оркестратор
+        result_dto = await orchestrator.delete_character(char_id)
+
+        if not result_dto.is_deleted:
             log.error(f"DBDelete | entity=character status=failed char_id={char_id} user_id={user_id}")
             await Err.generic_error(call)
             return
 
-        characters = await lobby_service.get_data_characters(session)
-        await state.update_data(characters=await fsm_store(value=characters))
-        log.debug(f"FSM | data_updated key=characters user_id={user_id}")
+        # Обновляем лобби (список персонажей)
+        lobby_view = await orchestrator.get_lobby_view(call.from_user, state_data)
 
-        text_lobby, kb_lobby = lobby_service.get_data_lobby_start(characters)
-        if message_menu_data := lobby_service.get_message_menu_data():
+        if lobby_view.content and (coords := orchestrator.get_menu_coords(state_data)):
             await bot.edit_message_text(
-                chat_id=message_menu_data[0], message_id=message_menu_data[1], text=text_lobby, reply_markup=kb_lobby
+                chat_id=coords.chat_id,
+                message_id=coords.message_id,
+                text=lobby_view.content.text,
+                reply_markup=lobby_view.content.kb,
             )
-        if message_content_data := lobby_service.get_message_content_data():
+
+        if coords := orchestrator.get_content_coords(state_data):
             await bot.edit_message_text(
-                chat_id=message_content_data[0],
-                message_id=message_content_data[1],
+                chat_id=coords.chat_id,
+                message_id=coords.message_id,
                 text="Персонаж удален. Выберите другого персонажа или создайте нового.",
                 reply_markup=None,
             )
@@ -164,4 +163,6 @@ async def confirm_delete_handler(
     elif action == "delete_no":
         log.debug(f"LobbyDeleteConfirm | status=cancelled user_id={user_id} char_id={char_id}")
         await state.set_state(CharacterLobby.selection)
-        await show_status_tab_logic(char_id=char_id, state=state, bot=bot, call=call, key="bio", session=session)
+        await show_status_tab_logic(
+            char_id=char_id, state=state, bot=bot, call=call, key="bio", session=session, container=container
+        )

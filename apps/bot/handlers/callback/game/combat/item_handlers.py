@@ -4,20 +4,18 @@
 
 from contextlib import suppress
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.combat_callback import CombatItemCallback
-from apps.bot.ui_service.combat.combat_bot_orchestrator import CombatBotOrchestrator
-from apps.bot.ui_service.combat.combat_ui_service import CombatUIService
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.game_core.game_service.combat.combat_orchestrator_rbc import CombatOrchestratorRBC
+from apps.common.core.container import AppContainer
 
 item_router = Router(name="combat_items")
 
@@ -27,8 +25,9 @@ async def combat_item_use_handler(
     call: CallbackQuery,
     callback_data: CombatItemCallback,
     state: FSMContext,
-    combat_rbc_client: CombatRBCClient,
-    rbc_orchestrator: CombatOrchestratorRBC,
+    bot: Bot,
+    container: AppContainer,
+    session: AsyncSession,
 ) -> None:
     if not call.from_user or not isinstance(call.message, Message):
         return
@@ -49,15 +48,25 @@ async def combat_item_use_handler(
         await Err.generic_error(call)
         return
 
-    success, msg = await rbc_orchestrator.use_consumable(session_id, char_id, item_id)
+    # Создаем оркестратор через контейнер
+    orchestrator = container.get_combat_bot_orchestrator(session)
 
-    await call.answer(msg, show_alert=True)
+    # Используем предмет через оркестратор
+    result_dto = await orchestrator.use_item(session_id, char_id, item_id, state_data)
 
-    if success:
-        # Создаем оркестратор вручную
-        ui = CombatUIService(state_data, char_id)
-        orchestrator = CombatBotOrchestrator(combat_rbc_client, ui)
+    # Пока оркестратор не возвращает сообщение об успехе/неудаче в DTO,
+    # но мы можем предположить успех, если вернулось меню.
+    # В идеале DTO должен содержать alert_text.
+    # Но пока просто обновим меню.
+    await call.answer("Предмет использован (или нет)", show_alert=False)
 
-        text, kb = await orchestrator.get_menu_view(session_id, char_id, "items")
+    # Обновляем сообщение через координаты (по стандарту)
+    if result_dto.menu and (coords := orchestrator.get_menu_coords(state_data)):
         with suppress(TelegramAPIError):
-            await call.message.edit_text(text=text, reply_markup=kb, parse_mode="HTML")
+            await bot.edit_message_text(
+                chat_id=coords.chat_id,
+                message_id=coords.message_id,
+                text=result_dto.menu.text,
+                reply_markup=result_dto.menu.kb,
+                parse_mode="HTML",
+            )

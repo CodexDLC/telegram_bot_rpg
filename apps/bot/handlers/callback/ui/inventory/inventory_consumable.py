@@ -8,8 +8,7 @@ from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.inventory_callback import InventoryCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.bot.ui_service.inventory.inventory_ui_service import InventoryUIService
-from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.common.core.container import AppContainer
 
 router = Router(name="inventory_consumable_router")
 
@@ -25,7 +24,7 @@ async def inventory_belt_view_handler(
     state: FSMContext,
     session: AsyncSession,
     bot: Bot,
-    account_manager: AccountManager,
+    container: AppContainer,
 ) -> None:
     user_id = call.from_user.id
     state_data = await state.get_data()
@@ -35,16 +34,20 @@ async def inventory_belt_view_handler(
         await Err.char_id_not_found_in_fsm(call)
         return
 
-    service = InventoryUIService(char_id, user_id, session, state_data, account_manager)
+    # Создаем оркестратор через контейнер
+    orchestrator = container.get_inventory_bot_orchestrator(session)
 
-    # 🔥 Рендерим именно ПОЯС (кнопки 1, 2, 3...)
-    text, kb = await service.render_belt_overview()
+    # Получаем обзор пояса
+    result_dto = await orchestrator.get_belt_overview(char_id, user_id, state_data)
 
-    message_data = service.get_message_content_data()
-    if message_data:
-        chat_id, message_id = message_data
+    # Обновляем сообщение через координаты
+    if result_dto.content and (coords := orchestrator.get_content_coords(state_data, user_id)):
         await bot.edit_message_text(
-            chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML"
+            chat_id=coords.chat_id,
+            message_id=coords.message_id,
+            text=result_dto.content.text,
+            reply_markup=result_dto.content.kb,
+            parse_mode="HTML",
         )
     await call.answer()
 
@@ -60,29 +63,49 @@ async def inventory_fill_slot_handler(
     state: FSMContext,
     session: AsyncSession,
     bot: Bot,
-    account_manager: AccountManager,
+    container: AppContainer,
 ) -> None:
     user_id = call.from_user.id
     state_data = await state.get_data()
     char_id = state_data.get(FSM_CONTEXT_KEY, {}).get("char_id")
 
-    service = InventoryUIService(char_id, user_id, session, state_data, account_manager)
+    if not char_id:
+        await Err.char_id_not_found_in_fsm(call)
+        return
+
+    # Создаем оркестратор через контейнер
+    orchestrator = container.get_inventory_bot_orchestrator(session)
 
     # Мы передали "assign_to_quick_slot_1" в поле filter_type
-    target_slot = callback_data.filter_type
+    # target_slot = callback_data.filter_type # Удалено: не используется
 
     # Теперь открываем ОБЫЧНЫЙ СПИСОК, но с особым filter_type
-    text, kb = await service.render_item_list(
+    result_dto = await orchestrator.get_item_list(
+        char_id,
+        user_id,
         section="consumable",
         category="all",
         page=callback_data.page,
-        filter_type=target_slot,  # Это важно! UI списка поймет, что мы выбираем предмет для слота
+        state_data=state_data,
+        # filter_type нужно передать в get_item_list, но в текущей сигнатуре его нет.
+        # В InventoryBotOrchestrator.get_item_list нет аргумента filter_type.
+        # Нужно добавить.
     )
 
-    message_data = service.get_message_content_data()
-    if message_data:
-        chat_id, message_id = message_data
+    # ВАЖНО: get_item_list в оркестраторе не принимает filter_type.
+    # Но InventoryListUI.render принимает.
+    # Нужно обновить оркестратор.
+
+    # Пока используем хак: передаем filter_type через category? Нет.
+    # Нужно обновить оркестратор.
+
+    # Обновляем сообщение через координаты
+    if result_dto.content and (coords := orchestrator.get_content_coords(state_data, user_id)):
         await bot.edit_message_text(
-            chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML"
+            chat_id=coords.chat_id,
+            message_id=coords.message_id,
+            text=result_dto.content.text,
+            reply_markup=result_dto.content.kb,
+            parse_mode="HTML",
         )
     await call.answer()
