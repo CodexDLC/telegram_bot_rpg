@@ -1,4 +1,4 @@
-# apps/bot/handlers/callback/game/navigation.py
+# apps/bot/handlers/callback/game/exploration/navigation.py
 import asyncio
 import contextlib
 
@@ -11,11 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.callback_data import NavigationCallback
-from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.helpers_ui.ui_animation_service import UIAnimationService
 from apps.bot.ui_service.hub_entry_service import HubEntryService
+from apps.common.core.container import AppContainer
 from apps.common.schemas_dto import SessionDataDTO
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
@@ -38,7 +38,8 @@ async def navigation_move_handler(
     state: FSMContext,
     bot: Bot,
     callback_data: NavigationCallback,
-    exploration_ui_service: ExplorationUIService,
+    container: AppContainer,
+    session: AsyncSession,
 ) -> None:
     """Обрабатывает перемещение с немедленной анимацией."""
     if not call.from_user:
@@ -56,13 +57,14 @@ async def navigation_move_handler(
     state_data = await state.get_data()
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     char_id = session_context.get("char_id")
-    message_content = session_context.get("message_content")
-    actor_name = session_context.get("symbiote_name", "Симбиот")
 
-    if not char_id or not message_content:
-        log.error(f"Navigation | status=failed reason='char_id or message_content missing' user_id={user_id}")
+    if not char_id:
+        log.error(f"Navigation | status=failed reason='char_id missing' user_id={user_id}")
         await Err.generic_error(call)
         return
+
+    # Создаем оркестратор через контейнер
+    orchestrator = container.get_exploration_bot_orchestrator(session)
 
     async def animate_task():
         if travel_time >= 2.0:
@@ -74,24 +76,24 @@ async def navigation_move_handler(
             await asyncio.sleep(travel_time or 0.3)
 
     async def backend_task():
-        return await exploration_ui_service.move_character(
-            char_id=char_id, target_loc_id=target_loc_id, actor_name=actor_name
-        )
+        return await orchestrator.handle_move(char_id, target_loc_id, state_data)
 
     # Запускаем обе задачи одновременно
-    _, (text, kb) = await asyncio.gather(animate_task(), backend_task())
+    _, result_dto = await asyncio.gather(animate_task(), backend_task())
 
-    try:
-        await bot.edit_message_text(
-            chat_id=message_content["chat_id"],
-            message_id=message_content["message_id"],
-            text=text,
-            reply_markup=kb,
-            parse_mode="HTML",
-        )
-        log.info(f"Navigation | event=move_end status=success user_id={user_id} target_loc='{target_loc_id}'")
-    except TelegramAPIError as e:
-        log.error(f"UIRender | component=navigation status=failed user_id={user_id} error='{e}'")
+    # Обновляем сообщение через координаты
+    if result_dto.content and (coords := orchestrator.get_content_coords(state_data)):
+        try:
+            await bot.edit_message_text(
+                chat_id=coords.chat_id,
+                message_id=coords.message_id,
+                text=result_dto.content.text,
+                reply_markup=result_dto.content.kb,
+                parse_mode="HTML",
+            )
+            log.info(f"Navigation | event=move_end status=success user_id={user_id} target_loc='{target_loc_id}'")
+        except TelegramAPIError as e:
+            log.error(f"UIRender | component=navigation status=failed user_id={user_id} error='{e}'")
 
 
 @router.callback_query(InGame.navigation, F.data.startswith("svc:"))
@@ -100,6 +102,7 @@ async def navigation_service_handler(
     state: FSMContext,
     bot: Bot,
     session: AsyncSession,
+    container: AppContainer,
     account_manager: AccountManager,
     arena_manager: ArenaManager,
     combat_manager: CombatManager,
@@ -116,12 +119,14 @@ async def navigation_service_handler(
     state_data = await state.get_data()
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     char_id = session_context.get("char_id")
-    message_content = session_context.get("message_content")
 
-    if not char_id or not message_content:
-        log.error(f"Navigation | status=failed reason='char_id or message_content missing' user_id={user_id}")
+    if not char_id:
+        log.error(f"Navigation | status=failed reason='char_id missing' user_id={user_id}")
         await Err.generic_error(call)
         return
+
+    # Используем оркестратор для получения координат
+    orchestrator = container.get_exploration_bot_orchestrator(session)
 
     hub_entry_service = HubEntryService(
         char_id=char_id,
@@ -142,21 +147,49 @@ async def navigation_service_handler(
     await state.set_state(new_fsm_state)
     log.debug(f"FSM | user_id={user_id} state={new_fsm_state}")
 
-    await bot.edit_message_text(
-        chat_id=message_content["chat_id"],
-        message_id=message_content["message_id"],
-        text=text,
-        reply_markup=kb,
-        parse_mode="HTML",
-    )
+    if coords := orchestrator.get_content_coords(state_data):
+        await bot.edit_message_text(
+            chat_id=coords.chat_id,
+            message_id=coords.message_id,
+            text=text,
+            reply_markup=kb,
+            parse_mode="HTML",
+        )
 
 
 @router.callback_query(InGame.navigation, F.data.startswith("nav:action:"))
-async def navigation_action_stub(call: CallbackQuery):
-    if not call.data:
+async def navigation_action_stub(
+    call: CallbackQuery,
+    state: FSMContext,
+    bot: Bot,
+    container: AppContainer,
+    session: AsyncSession,
+):
+    if not call.data or not call.from_user:
         await call.answer()
         return
     action = call.data.split(":")[-1]
+
+    if action == "look_around":
+        state_data = await state.get_data()
+        char_id = state_data.get(FSM_CONTEXT_KEY, {}).get("char_id")
+
+        if char_id:
+            orchestrator = container.get_exploration_bot_orchestrator(session)
+            result_dto = await orchestrator.get_current_view(char_id, state_data)
+
+            if result_dto.content and (coords := orchestrator.get_content_coords(state_data)):
+                with contextlib.suppress(TelegramAPIError):
+                    await bot.edit_message_text(
+                        chat_id=coords.chat_id,
+                        message_id=coords.message_id,
+                        text=result_dto.content.text,
+                        reply_markup=result_dto.content.kb,
+                        parse_mode="HTML",
+                    )
+
+        await call.answer("Данные обновлены.")
+        return
 
     responses = {
         "search": "🔍 Вы начинаете прочесывать сектор... (Механика в разработке)",
@@ -164,7 +197,6 @@ async def navigation_action_stub(call: CallbackQuery):
         "safe_zone": "🕊 Здесь действует Пакт о ненападении.",
         "people": "👥 Загрузка списка сталкеров... (Механика в разработке)",
         "auto": "🧭 Системы авто-навигации калибруются... (Механика в разработке)",
-        "look_around": "👁 Данные обновлены.",
         "ignore": None,
     }
 
@@ -172,10 +204,6 @@ async def navigation_action_stub(call: CallbackQuery):
 
     if action == "ignore":
         await call.answer()
-        return
-
-    if action == "look_around":
-        await call.answer("Сканирование завершено.")
         return
 
     await call.answer(text, show_alert=True)

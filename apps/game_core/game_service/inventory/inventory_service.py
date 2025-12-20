@@ -282,3 +282,26 @@ class InventoryService:
         except SQLAlchemyError as e:
             log.exception(f"QuickSlotBindError | char_id={self.char_id} item_id={item_id} error='{e}'")
             return False, "Ошибка базы данных."
+
+    async def get_wallet_balance(self) -> dict[str, int]:
+        """Возвращает баланс валют."""
+        # Заглушка, так как wallet_repo может возвращать разные форматы
+        # Предполагаем, что нам нужны золото и пыль
+        gold = await self.wallet_repo.get_resource_amount(self.char_id, "currency", "currency_gold")
+        dust = await self.wallet_repo.get_resource_amount(self.char_id, "currency", "currency_dust")
+        return {"gold": gold, "dust": dust}
+
+    async def calculate_total_weight(self) -> int:
+        """Возвращает текущий вес (или кол-во слотов)."""
+        current, _ = await self.get_capacity()
+        return current
+
+    async def get_max_weight(self) -> int:
+        """Возвращает максимальный вес (или кол-во слотов)."""
+        _, max_slots = await self.get_capacity()
+        return max_slots
+
+    async def use_item(self, item_id: int) -> tuple[bool, str]:
+        """Использование предмета (вне боя)."""
+        # Заглушка. Логика использования предметов вне боя должна быть здесь.
+        return True, "Предмет использован (WIP)"

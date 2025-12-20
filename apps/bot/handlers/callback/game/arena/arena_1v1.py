@@ -6,43 +6,48 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InaccessibleMessage
 from loguru import logger as log
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.core_client.arena_client import ArenaClient
-from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.bot.resources.fsm_states.states import ArenaState, InGame
 from apps.bot.resources.keyboards.callback_data import ArenaQueueCallback
 from apps.bot.ui_service.arena_ui_service.arena_bot_orchestrator import (
-    ArenaBotOrchestrator,
     ArenaBotOrchestratorError,
 )
-from apps.bot.ui_service.arena_ui_service.arena_ui_service import ArenaUIService
-from apps.bot.ui_service.combat.combat_bot_orchestrator import CombatBotOrchestrator
-from apps.bot.ui_service.combat.combat_ui_service import CombatUIService
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.helpers_ui.ui_animation_service import UIAnimationService
+from apps.common.core.container import AppContainer
 from apps.common.schemas_dto import SessionDataDTO
 
 router = Router(name="arena_1v1_router")
 
 
 @router.callback_query(ArenaState.menu, ArenaQueueCallback.filter(F.action == "match_menu"))
-async def arena_1v1_menu_handler(call: CallbackQuery, callback_data: ArenaQueueCallback, state: FSMContext) -> None:
+async def arena_1v1_menu_handler(
+    call: CallbackQuery,
+    callback_data: ArenaQueueCallback,
+    state: FSMContext,
+    container: AppContainer,
+    session: AsyncSession,
+    bot: Bot,
+) -> None:
     """Отображает меню выбора режима арены."""
     await call.answer()
     if not call.from_user or not call.message or isinstance(call.message, InaccessibleMessage):
         return
 
-    char_id = callback_data.char_id
+    # char_id = callback_data.char_id # Удалено: не используется
     mode = callback_data.match_type
     state_data = await state.get_data()
-    actor_name = state_data.get(FSM_CONTEXT_KEY, {}).get("symbiote_name", "Симбиот")
 
-    ui = ArenaUIService(char_id=char_id, actor_name=actor_name)
-    text, kb = await ui.view_mode_menu(mode)
+    orchestrator = container.get_arena_bot_orchestrator(session)
+    result_dto = await orchestrator.get_mode_menu(mode, state_data)
 
-    with suppress(TelegramBadRequest):
-        await call.message.edit_text(text=text, reply_markup=kb, parse_mode="HTML")
+    if result_dto.content:
+        with suppress(TelegramBadRequest):
+            await call.message.edit_text(
+                text=result_dto.content.text, reply_markup=result_dto.content.kb, parse_mode="HTML"
+            )
 
 
 @router.callback_query(
@@ -53,7 +58,8 @@ async def arena_toggle_queue_handler(
     callback_data: ArenaQueueCallback,
     state: FSMContext,
     bot: Bot,
-    arena_client: ArenaClient,
+    container: AppContainer,
+    session: AsyncSession,
 ) -> None:
     """Обрабатывает вход/выход из очереди и запускает/останавливает поиск матча."""
     await call.answer()
@@ -66,19 +72,25 @@ async def arena_toggle_queue_handler(
     mode = callback_data.match_type
     state_data = await state.get_data()
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
-    actor_name = session_context.get("symbiote_name", "Симбиот")
     message_content = session_context.get("message_content")
     message_menu = session_context.get("message_menu")
 
+    orchestrator = container.get_arena_bot_orchestrator(session)
+
     try:
-        bot_orchestrator = ArenaBotOrchestrator(arena_client, char_id, actor_name)
-        text, kb = await bot_orchestrator.handle_toggle_queue(mode, char_id)
+        result_dto = await orchestrator.handle_toggle_queue(mode, char_id, state_data)
+
+        if result_dto.content:
+            msg = await call.message.edit_text(
+                text=result_dto.content.text, reply_markup=result_dto.content.kb, parse_mode="HTML"
+            )
+        else:
+            msg = call.message  # Fallback
+
     except ArenaBotOrchestratorError as e:
         log.error(f"Arena Orchestrator failed: {e}")
         await Err.generic_error(call)
         return
-
-    msg = await call.message.edit_text(text=text, reply_markup=kb, parse_mode="HTML")
 
     current_state = await state.get_state()
     if current_state == ArenaState.menu:
@@ -96,14 +108,17 @@ async def arena_toggle_queue_handler(
             if await state.get_state() != ArenaState.waiting:
                 return "cancelled"
 
-            response = await arena_client.check_match(mode, char_id)
-            if response.status in ("found", "created_shadow"):
-                return response.session_id
+            # Используем оркестратор для проверки матча
+            res = await orchestrator.handle_check_match(mode, char_id, state_data)
+            if res and res.session_id:
+                return res.session_id
             return None
 
-        # Запускаем анимацию поиска (45 секунд: 15 шагов по 3 сек)
+        # Запускаем анимацию поиска
+        base_text = result_dto.content.text if result_dto.content else "Поиск..."
+
         result = await anim_service.animate_polling(
-            base_text=text,  # Используем текст, который вернул оркестратор (с GS и прочим)
+            base_text=base_text,
             check_func=check_match,
             steps=15,
             step_delay=3.0,
@@ -116,30 +131,23 @@ async def arena_toggle_queue_handler(
 
             # Сохраняем session_id
             session_context["combat_session_id"] = session_id
-            # Сохраняем previous_state для возврата
             session_context["previous_state"] = "ArenaState:menu"
 
             await state.update_data({FSM_CONTEXT_KEY: session_context})
-            await state.update_data(combat_session_id=session_id)
 
-            # Отрисовываем "Бой найден"
-            ui = ArenaUIService(char_id=char_id, actor_name=actor_name)
-            # Получаем метаданные матча (нужно еще раз дернуть или сохранить, но пока заглушка)
-            # В идеале check_match должен возвращать DTO, но animate_polling ждет строку.
-            # Для простоты пока без метаданных или делаем доп запрос.
-            # Но лучше просто показать кнопку "В БОЙ"
+            # Отрисовываем "Бой найден" через оркестратор
+            found_dto = await orchestrator.handle_check_match(mode, char_id, state_data)
 
-            found_text, found_kb = await ui.view_match_found(session_id=session_id, metadata={})
-
-            with suppress(TelegramBadRequest):
-                if isinstance(msg, bool):
-                    # If msg is boolean, we can't edit it. This happens if edit_text returns True/False
-                    # But aiogram Message.edit_text returns Message or True/False.
-                    # We should probably re-fetch the message or just ignore if we can't edit.
-                    # However, in this context, call.message is available.
-                    await call.message.edit_text(text=found_text, reply_markup=found_kb, parse_mode="HTML")
-                else:
-                    await msg.edit_text(text=found_text, reply_markup=found_kb, parse_mode="HTML")
+            if found_dto and found_dto.content:
+                with suppress(TelegramBadRequest):
+                    if isinstance(msg, bool):
+                        await call.message.edit_text(
+                            text=found_dto.content.text, reply_markup=found_dto.content.kb, parse_mode="HTML"
+                        )
+                    else:
+                        await msg.edit_text(
+                            text=found_dto.content.text, reply_markup=found_dto.content.kb, parse_mode="HTML"
+                        )
 
         elif result is None:
             # Таймаут
@@ -161,7 +169,8 @@ async def arena_toggle_queue_handler(
 async def arena_start_battle_handler(
     call: CallbackQuery,
     state: FSMContext,
-    combat_rbc_client: CombatRBCClient,  # Внедряется через middleware
+    container: AppContainer,
+    session: AsyncSession,
 ) -> None:
     """Запускает боевую сессию после нажатия кнопки 'В БОЙ'."""
     await call.answer("⚔️ Бой начинается!", show_alert=False)
@@ -184,19 +193,23 @@ async def arena_start_battle_handler(
 
     log.info(f"Arena | Starting battle for user_id={user_id}, session_id={session_id}")
 
-    # Создаем UI сервис и Оркестратор вручную
-    ui = CombatUIService(state_data, char_id)
-    orchestrator = CombatBotOrchestrator(combat_rbc_client, ui)
+    # Создаем оркестратор боя через контейнер
+    orchestrator = container.get_combat_bot_orchestrator(session)
 
     try:
-        # Оркестратор возвращает два кортежа, нам нужен только первый (контент)
-        new_target_id, (text, kb), _ = await orchestrator.get_dashboard_view(session_id, char_id, {})
+        # Оркестратор возвращает DTO
+        result_dto = await orchestrator.get_dashboard_view(session_id, char_id, {}, state_data)
 
         # Обновляем target_id в FSM, если он изменился
-        if new_target_id is not None:
-            await state.update_data(combat_target_id=new_target_id)
+        if result_dto.target_id is not None:
+            await state.update_data(combat_target_id=result_dto.target_id)
 
-        await call.message.edit_text(text=text, reply_markup=kb, parse_mode="HTML")
+        # Обновляем сообщение (здесь это call.message, так как мы нажали кнопку в нем)
+        if result_dto.content:
+            await call.message.edit_text(
+                text=result_dto.content.text, reply_markup=result_dto.content.kb, parse_mode="HTML"
+            )
+
         await state.set_state(InGame.combat)
         log.info(f"FSM | state=InGame.combat user_id={user_id}")
 

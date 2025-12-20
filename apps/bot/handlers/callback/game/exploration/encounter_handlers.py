@@ -1,20 +1,17 @@
 # apps/bot/handlers/callback/game/exploration/encounter_handlers.py
+from typing import Any
+
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.callback_data import EncounterCallback
-from apps.bot.ui_service.combat.combat_bot_orchestrator import CombatBotOrchestrator
-from apps.bot.ui_service.combat.combat_ui_service import CombatUIService
-from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.manager.combat_manager import CombatManager
+from apps.common.core.container import AppContainer
 
 router = Router(name="encounter_handlers_router")
 
@@ -25,10 +22,8 @@ async def handle_encounter_action(
     state: FSMContext,
     bot: Bot,
     session: AsyncSession,
+    container: AppContainer,
     callback_data: EncounterCallback,
-    exploration_ui_service: ExplorationUIService,
-    combat_manager: CombatManager,
-    account_manager: AccountManager,
 ):
     if not call.from_user:
         return
@@ -41,56 +36,67 @@ async def handle_encounter_action(
     state_data = await state.get_data()
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     char_id = session_context.get("char_id")
-    message_content = session_context.get("message_content")
 
-    if not char_id or not message_content:
+    if not char_id:
         await Err.generic_error(call)
         return
 
-    if action == "attack":
-        client = CombatRBCClient(session, account_manager, combat_manager)
-        ui_service = CombatUIService(state_data, char_id)
-        orchestrator = CombatBotOrchestrator(client, ui_service)
+    # Создаем оркестратор навигации
+    expl_orchestrator = container.get_exploration_bot_orchestrator(session)
 
-        try:
-            enemy_id = int(target_id)
-        except (ValueError, TypeError):
-            await call.answer("Ошибка ID цели", show_alert=True)
+    # Обрабатываем действие через оркестратор
+    result_dto = await expl_orchestrator.resolve_encounter(action, target_id, char_id, state_data)
+
+    # Показываем уведомление, если есть
+    if result_dto.alert_text:
+        await call.answer(result_dto.alert_text, show_alert=False)
+    else:
+        await call.answer()
+
+    # Если нужно переключить состояние (например, в бой)
+    if result_dto.new_state == "InGame.combat":
+        if not result_dto.combat_session_id:
+            await Err.generic_error(call)
             return
 
-        session_id, new_target_id, text, kb = await orchestrator.start_new_battle(players=[char_id], enemies=[enemy_id])
-
         await state.set_state(InGame.combat)
-        session_context["combat_session_id"] = session_id
-        await state.update_data({FSM_CONTEXT_KEY: session_context})
 
-        # Сохраняем target_id в FSM
-        if new_target_id is not None:
-            await state.update_data(combat_target_id=new_target_id)
+        # Атомарное обновление FSM
+        session_context["combat_session_id"] = result_dto.combat_session_id
 
-        await bot.edit_message_text(
-            chat_id=message_content["chat_id"],
-            message_id=message_content["message_id"],
-            text=text,
-            reply_markup=kb,
-            parse_mode="HTML",
+        # Явно указываем тип словаря, чтобы избежать ошибки статического анализа
+        update_data: dict[str, Any] = {FSM_CONTEXT_KEY: session_context}
+
+        if result_dto.combat_target_id is not None:
+            update_data["combat_target_id"] = result_dto.combat_target_id
+
+        await state.update_data(update_data)
+
+        # Для отрисовки боя используем CombatBotOrchestrator
+        combat_orchestrator = container.get_combat_bot_orchestrator(session)
+
+        # Получаем первый кадр боя
+        combat_view = await combat_orchestrator.get_dashboard_view(
+            result_dto.combat_session_id, char_id, {}, state_data
         )
 
-    elif action == "bypass":
-        await call.answer("Вы успешно обошли угрозу.", show_alert=True)
-        actor_name = session_context.get("symbiote_name", "Симбиот")
-        nav_text, nav_kb = await exploration_ui_service.render_map(char_id, actor_name)
-        if nav_kb:
+        # Обновляем контент (Дашборд)
+        if combat_view.content and (coords := expl_orchestrator.get_content_coords(state_data)):
             await bot.edit_message_text(
-                chat_id=message_content["chat_id"],
-                message_id=message_content["message_id"],
-                text=nav_text,
-                reply_markup=nav_kb,
+                chat_id=coords.chat_id,
+                message_id=coords.message_id,
+                text=combat_view.content.text,
+                reply_markup=combat_view.content.kb,
                 parse_mode="HTML",
             )
 
-    elif action == "inspect":
-        await call.answer("🔍 Вы осматриваете объект... (WIP)", show_alert=True)
-
     else:
-        await call.answer("Неизвестное действие.", show_alert=True)
+        # Обычное обновление (например, обход или осмотр)
+        if result_dto.content and (coords := expl_orchestrator.get_content_coords(state_data)):
+            await bot.edit_message_text(
+                chat_id=coords.chat_id,
+                message_id=coords.message_id,
+                text=result_dto.content.text,
+                reply_markup=result_dto.content.kb,
+                parse_mode="HTML",
+            )

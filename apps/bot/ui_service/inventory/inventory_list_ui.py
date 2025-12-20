@@ -7,15 +7,14 @@ from loguru import logger as log
 
 from apps.bot.resources.keyboards.inventory_callback import InventoryCallback
 from apps.bot.ui_service.base_service import BaseUIService
-from apps.bot.ui_service.helpers_ui.formatters.inventory_formatters import InventoryFormatter
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
+from apps.bot.ui_service.inventory.formatters.inventory_formatters import InventoryFormatter
 from apps.common.schemas_dto import InventoryItemDTO
-from apps.game_core.game_service.inventory.inventory_service import InventoryService
 
 
 class InventoryListUI(BaseUIService):
     """
     Класс-помощник для рендеринга уровня 1: Списки предметов.
-    Отвечает за пагинацию и формирование клавиатур с фильтрами.
     """
 
     # Размер страницы (сетка 3x3 = 9 предметов)
@@ -26,44 +25,30 @@ class InventoryListUI(BaseUIService):
         char_id: int,
         user_id: int,
         state_data: dict[str, Any],
-        inventory_service: InventoryService,
     ):
         super().__init__(char_id=char_id, state_data=state_data)
         self.user_id = user_id
-        self.inventory_service = inventory_service
         self.InvF = InventoryFormatter
         log.debug(f"InventoryListUI | status=initialized char_id={char_id}")
 
-    async def render(
-        self, section: str, category: str, page: int = 0, filter_type: str = "category"
-    ) -> tuple[str, InlineKeyboardMarkup]:
+    def render(
+        self,
+        items_on_page: list[InventoryItemDTO],
+        total_pages: int,
+        current_page: int,
+        section: str,
+        category: str,
+        filter_type: str = "category",
+    ) -> ViewResultDTO:
         """
         Рендерит экран списка предметов с фильтрами и пагинацией.
         """
-        # 1. Получаем ВСЕ предметы из инвентаря
-        all_items = await self.inventory_service.get_items("inventory")
-
-        # 2. 🔥 ЧИСТЫЙ ВЫЗОВ Layer 3: Фильтруем список в Game Service
-        filtered_items = await self.inventory_service.get_filtered_items(all_items, section, category)
-
-        # 3. Пагинация (Slicing)
-        total_items = len(filtered_items)
-        total_pages = (total_items + self.PAGE_SIZE - 1) // self.PAGE_SIZE
-        if total_pages == 0:
-            total_pages = 1
-        if page >= total_pages and total_pages > 0:
-            page = total_pages - 1
-
-        start_idx = page * self.PAGE_SIZE
-        end_idx = start_idx + self.PAGE_SIZE
-        items_on_page = filtered_items[start_idx:end_idx]
-
         # 4. Форматируем текст
         text = self.InvF.format_item_list(
             items=items_on_page,
             section=section,
             category=category,
-            page=page,
+            page=current_page,
             total_pages=total_pages,
             actor_name=self.actor_name,
         )
@@ -73,7 +58,7 @@ class InventoryListUI(BaseUIService):
             kb = self._kb_slot_filter_list(
                 section=section,
                 category=category,
-                page=page,
+                page=current_page,
                 total_pages=total_pages,
                 items_on_page=items_on_page,
                 filter_type=filter_type,
@@ -82,13 +67,13 @@ class InventoryListUI(BaseUIService):
             kb = self._kb_category_filter_list(
                 section=section,
                 category=category,
-                page=page,
+                page=current_page,
                 total_pages=total_pages,
                 items_on_page=items_on_page,
                 filter_type=filter_type,
             )
 
-        return text, kb
+        return ViewResultDTO(text=text, kb=kb)
 
     def _kb_category_filter_list(
         self,

@@ -1,4 +1,4 @@
-# app/handlers/callback/ui/inventory/inventory_item_details.py (НОВЫЙ ХЕНДЛЕР)
+# app/handlers/callback/ui/inventory/inventory_item_details.py
 
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
@@ -10,10 +10,71 @@ from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.inventory_callback import InventoryCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.bot.ui_service.inventory.inventory_ui_service import InventoryUIService
-from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.common.core.container import AppContainer
 
 router = Router(name="inventory_item_details")
+
+
+@router.callback_query(
+    InGame.inventory,
+    InventoryCallback.filter(F.level == 2),
+)
+async def inventory_item_details_handler(
+    call: CallbackQuery,
+    callback_data: InventoryCallback,
+    state: FSMContext,
+    session: AsyncSession,
+    bot: Bot,
+    container: AppContainer,
+) -> None:
+    """Обрабатывает детальный просмотр предмета."""
+    user_id = call.from_user.id
+    if user_id != callback_data.user_id:
+        log.warning(
+            f"InventoryDetails | status=access_denied user_id={user_id} callback_user_id={callback_data.user_id}"
+        )
+        await Err.access_denied(call)
+        return
+
+    state_data = await state.get_data()
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    char_id = session_context.get("char_id")
+
+    if not char_id:
+        log.error(f"InventoryDetails | status=failed reason='char_id not found in FSM' user_id={user_id}")
+        await Err.char_id_not_found_in_fsm(call)
+        return
+
+    # Создаем оркестратор через контейнер
+    orchestrator = container.get_inventory_bot_orchestrator(session)
+
+    # Получаем детали предмета
+    result_dto = await orchestrator.get_item_details(
+        char_id,
+        user_id,
+        callback_data.item_id,
+        callback_data.category,
+        callback_data.page,
+        callback_data.filter_type,
+        state_data,
+    )
+
+    # Обновляем сообщение через координаты
+    if result_dto.content and (coords := orchestrator.get_content_coords(state_data, user_id)):
+        await bot.edit_message_text(
+            chat_id=coords.chat_id,
+            message_id=coords.message_id,
+            text=result_dto.content.text,
+            reply_markup=result_dto.content.kb,
+            parse_mode="HTML",
+        )
+        await call.answer()
+        log.info(
+            f"InventoryDetails | event=details_rendered user_id={user_id} char_id={char_id} item_id={callback_data.item_id}"
+        )
+    else:
+        log.error(f"InventoryDetails | status=failed reason='message_content not found' user_id={user_id}")
+        await Err.generic_error(call)
 
 
 @router.callback_query(
@@ -26,10 +87,10 @@ async def inventory_quick_slot_handler(
     state: FSMContext,
     session: AsyncSession,
     bot: Bot,
-    account_manager: AccountManager,
+    container: AppContainer,
 ) -> None:
     """
-    Обрабатывает выбор Quick Slot. (Handler вызывает только публичные методы UI Service).
+    Обрабатывает выбор Quick Slot.
     """
     if not call.from_user:
         return
@@ -47,53 +108,54 @@ async def inventory_quick_slot_handler(
     log.info(f"InventoryQuickSlot | event=action user_id={user_id} item_id={item_id} action='{action}'")
     await call.answer()
 
-    ui_service = InventoryUIService(
-        char_id=char_id, user_id=user_id, session=session, state_data=state_data, account_manager=account_manager
-    )
-    message_data = ui_service.get_message_content_data()
-    if not message_data:
-        await Err.message_content_not_found_in_fsm(call)
-        return
+    # Создаем оркестратор через контейнер
+    orchestrator = container.get_inventory_bot_orchestrator(session)
 
-    chat_id, message_id = message_data
-
-    # --- 1. ACTION: Go to Quick Slot Selection Menu (UI Service renders buttons) ---
+    # --- 1. ACTION: Go to Quick Slot Selection Menu ---
     if action == "bind_quick_slot_menu":
         context_data = {
             "category": callback_data.category,
             "page": callback_data.page,
             "filter_type": callback_data.filter_type,
         }
-        text, kb = await ui_service.render_quick_slot_selection_menu(item_id, context_data)
-        await bot.edit_message_text(
-            chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML"
+        result_dto = await orchestrator.get_quick_slot_selection_menu(
+            char_id, user_id, item_id, context_data, state_data
         )
 
-    # --- 2. ACTION: Bind Item to Selected Slot (UI Service executes action) ---
-    elif action == "bind_quick_slot_select":
-        quick_slot_key = callback_data.section
-        success, msg = await ui_service.action_bind_quick_slot(item_id, quick_slot_key)
+        if result_dto.content and (coords := orchestrator.get_content_coords(state_data, user_id)):
+            await bot.edit_message_text(
+                chat_id=coords.chat_id,
+                message_id=coords.message_id,
+                text=result_dto.content.text,
+                reply_markup=result_dto.content.kb,
+                parse_mode="HTML",
+            )
 
-        await call.answer(msg, show_alert=True)
+    # --- 2. ACTION: Bind/Unbind Item ---
+    elif action in ("bind_quick_slot_select", "unbind_quick_slot"):
+        slot_key = callback_data.section if action == "bind_quick_slot_select" else None
+        action_key = "bind" if action == "bind_quick_slot_select" else "unbind"
 
-        # Rerender Item Details (Level 2)
-        text, kb = await ui_service.render_item_details(
-            item_id, callback_data.category, callback_data.page, callback_data.filter_type
+        await orchestrator.handle_quick_slot_action(char_id, user_id, item_id, action_key, slot_key, state_data)
+
+        # После действия возвращаемся к деталям предмета
+        result_dto = await orchestrator.get_item_details(
+            char_id,
+            user_id,
+            item_id,
+            callback_data.category,
+            callback_data.page,
+            callback_data.filter_type,
+            state_data,
         )
-        await bot.edit_message_text(
-            chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML"
-        )
 
-    # --- 3. ACTION: Unbind Item from Slot (UI Service executes action) ---
-    elif action == "unbind_quick_slot":
-        success, msg = await ui_service.action_unbind_quick_slot(item_id)
+        if result_dto.content and (coords := orchestrator.get_content_coords(state_data, user_id)):
+            await bot.edit_message_text(
+                chat_id=coords.chat_id,
+                message_id=coords.message_id,
+                text=result_dto.content.text,
+                reply_markup=result_dto.content.kb,
+                parse_mode="HTML",
+            )
 
-        await call.answer(msg, show_alert=True)
-
-        # Rerender Item Details (Level 2)
-        text, kb = await ui_service.render_item_details(
-            item_id, callback_data.category, callback_data.page, callback_data.filter_type
-        )
-        await bot.edit_message_text(
-            chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML"
-        )
+        await call.answer("Готово!", show_alert=True)

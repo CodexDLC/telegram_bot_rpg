@@ -7,15 +7,14 @@ from loguru import logger as log
 
 from apps.bot.resources.keyboards.inventory_callback import InventoryCallback
 from apps.bot.ui_service.base_service import BaseUIService
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 from apps.bot.ui_service.helpers_ui.formatters.inventory_formatters import InventoryFormatter
 from apps.common.schemas_dto import InventoryItemDTO, ItemType
-from apps.game_core.game_service.inventory.inventory_service import InventoryService
 
 SECTION_TYPE_MAP = {
     "equip": [ItemType.WEAPON, ItemType.ARMOR, ItemType.ACCESSORY],
     "resource": [ItemType.RESOURCE, ItemType.CURRENCY],
     "consumable": [ItemType.CONSUMABLE],
-    # "quest": [ItemType.QUEST]
 }
 
 
@@ -29,39 +28,28 @@ class InventoryDetailsUI(BaseUIService):
         char_id: int,
         user_id: int,
         state_data: dict[str, Any],
-        inventory_service: InventoryService,
     ):
         super().__init__(char_id=char_id, state_data=state_data)
         self.user_id = user_id
-        self.inventory_service = inventory_service
         self.InvF = InventoryFormatter
         log.debug(f"InventoryDetailsUI | status=initialized char_id={char_id}")
 
-    async def render(
-        self, item_id: int, category: str, page: int, filter_type: str
-    ) -> tuple[str, InlineKeyboardMarkup]:
+    def render(
+        self,
+        item: InventoryItemDTO,
+        comparison_data: dict | None,
+        category: str,
+        page: int,
+        filter_type: str,
+    ) -> ViewResultDTO:
         """
         Рендерит детальную карточку предмета.
-
-        Args:
-            item_id: ID предмета.
-            category: Текущая категория для кнопки "Назад".
-            page: Текущая страница для кнопки "Назад".
-            filter_type: Тип фильтра для кнопки "Назад".
         """
-        # 🔥 ЧИСТЫЙ ВЫЗОВ Layer 3 (Game Service)
-        item = await self.inventory_service.get_item_by_id(item_id)
-
-        if not item or item.character_id != self.char_id:
-            return "❌ Предмет не найден или не принадлежит вам.", self._kb_back_to_list("all", "all", 0)
-
-        # 1. Генерируем базовое описание (из Форматтера)
+        # 1. Генерируем базовое описание
         details_text = self.InvF.format_item_details(item, actor_name="📦 Инфо")
 
-        # 2. Генерируем Блок Сравнения (только для экипировки)
-        comparison_block = ""
-        if item.item_type in (ItemType.WEAPON, ItemType.ARMOR, ItemType.ACCESSORY) and item.location == "inventory":
-            comparison_block = await self._generate_comparison_block(item)
+        # 2. Генерируем Блок Сравнения
+        comparison_block = self._format_comparison_block(comparison_data)
 
         # 3. Собираем итоговый текст
         full_text = f"{details_text}\n{comparison_block}"
@@ -69,57 +57,32 @@ class InventoryDetailsUI(BaseUIService):
         # 4. Клавиатура действий
         kb = self._kb_item_details(item, category, page, filter_type)
 
-        return full_text, kb
+        return ViewResultDTO(text=full_text, kb=kb)
 
-    async def _generate_comparison_block(self, new_item: InventoryItemDTO) -> str:
+    def _format_comparison_block(self, comparison_data: dict | None) -> str:
         """
-        Математика сравнения: (Новое - Старое).
-        Возвращает отформатированный блок текста.
+        Форматирует блок сравнения на основе данных.
         """
-        if new_item.item_type in (ItemType.RESOURCE, ItemType.CURRENCY):
+        if not comparison_data:
             return ""
 
-        target_slots = getattr(new_item.data, "valid_slots", [])
-        if not target_slots:
-            return ""
-
-        equipped_items = await self.inventory_service.get_items("equipped")
-
-        old_item = None
-        for eq in equipped_items:
-            if eq.item_type in (ItemType.RESOURCE, ItemType.CURRENCY):
-                continue
-            eq_slots = getattr(eq.data, "valid_slots", [])
-            if set(target_slots).intersection(set(eq_slots)):
-                old_item = eq
-                break
-
-        if not old_item:
+        if comparison_data.get("is_empty"):
             return "\n⚖️ <b>Сравнение:</b>\n<i>Слот свободен. Чистая прибавка.</i>"
 
+        diffs = comparison_data.get("diffs", {})
+        old_name = comparison_data.get("old_item_name", "???")
+
+        if not diffs:
+            return "\n⚖️ <b>Сравнение:</b>\n<i>Характеристики идентичны.</i>"
+
         diff_lines = []
-
-        new_bonuses = new_item.data.bonuses or {}
-        old_bonuses = old_item.data.bonuses or {}
-        all_bonuses = set(new_bonuses.keys()) | set(old_bonuses.keys())
-
-        for stat in all_bonuses:
-            new_val = new_bonuses.get(stat, 0)
-            old_val = old_bonuses.get(stat, 0)
-            diff = new_val - old_val
-
-            if diff == 0:
-                continue
-
+        for stat, diff in diffs.items():
             sign = "+" if diff > 0 else ""
             icon = "🟢" if diff > 0 else "🔴"
             stat_name = stat.replace("_", " ").capitalize()
             diff_lines.append(f"{icon} {stat_name}: {sign}{diff}")
 
-        if not diff_lines:
-            return "\n⚖️ <b>Сравнение:</b>\n<i>Характеристики идентичны.</i>"
-
-        return "\n⚖️ <b>Сравнение</b> (с " + old_item.data.name + "):\n<code>" + "\n".join(diff_lines) + "</code>"
+        return "\n⚖️ <b>Сравнение</b> (с " + old_name + "):\n<code>" + "\n".join(diff_lines) + "</code>"
 
     def _kb_item_details(
         self, item: InventoryItemDTO, category: str, page: int, filter_type: str
@@ -183,11 +146,4 @@ class InventoryDetailsUI(BaseUIService):
 
         kb.row(InlineKeyboardButton(text="🔙 Назад к списку", callback_data=cb_back))
 
-        return kb.as_markup()
-
-    def _kb_back_to_list(self, section: str, category: str, page: int) -> InlineKeyboardMarkup:
-        """Хелпер для кнопки назад при ошибке"""
-        kb = InlineKeyboardBuilder()
-        cb = InventoryCallback(level=1, user_id=self.user_id, section=section, category=category, page=page).pack()
-        kb.button(text="🔙 Назад", callback_data=cb)
         return kb.as_markup()

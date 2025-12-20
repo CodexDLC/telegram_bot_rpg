@@ -4,6 +4,7 @@ from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from apps.bot.resources.keyboards.callback_data import EncounterCallback
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 from apps.common.schemas_dto.exploration_dto import DetectionStatus, EncounterDTO
 
 
@@ -13,7 +14,7 @@ class EncounterUI:
     """
 
     @staticmethod
-    def render_combat_preview(dto: EncounterDTO) -> tuple[str, InlineKeyboardMarkup | None]:
+    def render_combat_preview(dto: EncounterDTO) -> ViewResultDTO:
         """
         Отрисовка превью боя в зависимости от статуса обнаружения.
         """
@@ -29,13 +30,13 @@ class EncounterUI:
             text = f"Вы столкнулись с {dto.name}."
             kb = None
 
-        return text, kb
+        return ViewResultDTO(text=text, kb=kb)
 
     @staticmethod
-    def render_narrative(dto: EncounterDTO) -> tuple[str, InlineKeyboardMarkup | None]:
+    def render_narrative(dto: EncounterDTO) -> ViewResultDTO:
         text = f"📜 <b>{dto.name.upper()}</b>\n\n{dto.description}"
         kb = EncounterUI._get_narrative_kb(dto.encounter_id)
-        return text, kb
+        return ViewResultDTO(text=text, kb=kb)
 
     @staticmethod
     def _get_detected_kb(target_id: str) -> InlineKeyboardMarkup:

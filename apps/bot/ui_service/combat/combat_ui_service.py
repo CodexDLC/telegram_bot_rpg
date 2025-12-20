@@ -13,7 +13,8 @@ from apps.bot.resources.keyboards.combat_callback import (
     CombatZoneCallback,
 )
 from apps.bot.ui_service.base_service import BaseUIService
-from apps.bot.ui_service.helpers_ui.formatters.combat_formatters import CombatFormatter
+from apps.bot.ui_service.combat.formatters.combat_formatters import CombatFormatter
+from apps.bot.ui_service.ui_common_dto import ViewResultDTO
 from apps.common.schemas_dto.combat_source_dto import CombatDashboardDTO
 
 
@@ -28,7 +29,7 @@ class CombatUIService(BaseUIService):
         self.fmt = CombatFormatter
         log.debug(f"CombatUIService (Thin) init: char={char_id}")
 
-    async def render_dashboard(self, snapshot: CombatDashboardDTO, selection: dict) -> tuple[str, InlineKeyboardMarkup]:
+    async def render_dashboard(self, snapshot: CombatDashboardDTO, selection: dict) -> ViewResultDTO:
         """Отрисовка основного экрана боя."""
         player_dict = snapshot.player.model_dump()
         player_dict["switch_charges"] = snapshot.switch_charges
@@ -42,9 +43,9 @@ class CombatUIService(BaseUIService):
         )
         can_switch = snapshot.switch_charges > 0 and len(snapshot.enemies) > 1
         kb = self._kb_combat_grid(selection, can_switch=can_switch)
-        return text, kb
+        return ViewResultDTO(text=text, kb=kb)
 
-    async def render_waiting_screen(self, snapshot: CombatDashboardDTO) -> tuple[str, InlineKeyboardMarkup]:
+    async def render_waiting_screen(self, snapshot: CombatDashboardDTO) -> ViewResultDTO:
         """Экран ожидания просчета обмена."""
         text = (
             "<b>Ход принят.</b>\n\n"
@@ -55,9 +56,9 @@ class CombatUIService(BaseUIService):
         kb = InlineKeyboardBuilder()
         cb_refresh = CombatActionCallback(action="refresh").pack()
         kb.row(InlineKeyboardButton(text="🔄 Обновить", callback_data=cb_refresh))
-        return text, kb.as_markup()
+        return ViewResultDTO(text=text, kb=kb.as_markup())
 
-    async def render_spectator_mode(self, snapshot: CombatDashboardDTO) -> tuple[str, InlineKeyboardMarkup]:
+    async def render_spectator_mode(self, snapshot: CombatDashboardDTO) -> ViewResultDTO:
         """Экран наблюдателя, если игрок пал."""
         enemies_text = self.fmt._format_unit_list([e.model_dump() for e in snapshot.enemies], None, is_enemy=True)
         allies_text = ""
@@ -77,9 +78,9 @@ class CombatUIService(BaseUIService):
         kb = InlineKeyboardBuilder()
         cb_refresh = CombatActionCallback(action="refresh").pack()
         kb.row(InlineKeyboardButton(text="🔄 Обновить (Наблюдать)", callback_data=cb_refresh))
-        return text, kb.as_markup()
+        return ViewResultDTO(text=text, kb=kb.as_markup())
 
-    async def render_results(self, snapshot: CombatDashboardDTO) -> tuple[str, InlineKeyboardMarkup]:
+    async def render_results(self, snapshot: CombatDashboardDTO) -> ViewResultDTO:
         """Экран итогов боя."""
         winner = snapshot.winner_team or "none"
         rewards = snapshot.rewards or {}
@@ -92,23 +93,23 @@ class CombatUIService(BaseUIService):
         kb = InlineKeyboardBuilder()
         cb_leave = CombatActionCallback(action="leave").pack()
         kb.row(InlineKeyboardButton(text="🔙 Выйти в Хаб", callback_data=cb_leave))
-        return text, kb.as_markup()
+        return ViewResultDTO(text=text, kb=kb.as_markup())
 
-    async def render_skills_menu(self, snapshot: CombatDashboardDTO) -> tuple[str, InlineKeyboardMarkup]:
+    async def render_skills_menu(self, snapshot: CombatDashboardDTO) -> ViewResultDTO:
         """Меню активных умений."""
         active_skills = snapshot.player.effects
         text = "⚡ <b>Выберите умение:</b>"
         kb = self._kb_skills_menu(active_skills)
-        return text, kb
+        return ViewResultDTO(text=text, kb=kb)
 
-    async def render_items_menu(self, snapshot: CombatDashboardDTO) -> tuple[str, InlineKeyboardMarkup]:
+    async def render_items_menu(self, snapshot: CombatDashboardDTO) -> ViewResultDTO:
         """Меню предметов в поясе."""
         belt_items = snapshot.belt_items
         text = "🎒 <b>Выберите предмет:</b>"
         kb = self._kb_items_menu(belt_items)
-        return text, kb
+        return ViewResultDTO(text=text, kb=kb)
 
-    async def render_combat_log(self, snapshot: CombatDashboardDTO, page: int) -> tuple[str, InlineKeyboardMarkup]:
+    async def render_combat_log(self, snapshot: CombatDashboardDTO, page: int) -> ViewResultDTO:
         """Отрисовка лога боя."""
         parsed_logs = []
         for log_json in snapshot.last_logs:
@@ -118,7 +119,7 @@ class CombatUIService(BaseUIService):
                 continue
         text = self.fmt.format_log(parsed_logs, page, 5)
         kb = self._kb_log_pagination(snapshot.last_logs, page, 5)
-        return text, kb
+        return ViewResultDTO(text=text, kb=kb)
 
     def _kb_combat_grid(self, selection: dict, can_switch: bool) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()

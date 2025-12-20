@@ -8,11 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.callback_data import MeinMenuCallback
-from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService  # ИЗМЕНЕНО
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.bot.ui_service.inventory.inventory_ui_service import InventoryUIService
 from apps.bot.ui_service.menu_service import MenuService
+from apps.common.core.container import AppContainer
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.game_core.game_service.game_sync_service import GameSyncService
 
@@ -27,7 +26,7 @@ async def main_menu_dispatcher(
     bot: Bot,
     session: AsyncSession,
     account_manager: AccountManager,
-    exploration_ui_service: ExplorationUIService,  # ИЗМЕНЕНО
+    container: AppContainer,
 ) -> None:
     if not call.from_user:
         return
@@ -37,13 +36,17 @@ async def main_menu_dispatcher(
     char_id = callback_data.char_id
     action = callback_data.action
     log.info(f"MenuDispatch | event=action user_id={user_id} char_id={char_id} action='{action}'")
+
     sync_service = GameSyncService(session, account_manager)
     await sync_service.synchronize_player_state(char_id)
+
     state_data = await state.get_data()
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     if session_context.get("char_id") != char_id:
         await Err.generic_error(call)
         return
+
+    # --- REFRESH MENU (Нижнее сообщение) ---
     if action == "refresh_menu":
         menu_msg = session_context.get("message_menu")
         if not menu_msg:
@@ -65,36 +68,60 @@ async def main_menu_dispatcher(
         except TelegramAPIError as e:
             log.warning(f"RefreshMenu | status=edit_failed error='{e}'")
         return
-    content_msg = session_context.get("message_content")
-    if not content_msg:
-        await Err.generic_error(call)
-        return
-    chat_id = content_msg["chat_id"]
-    message_id = content_msg["message_id"]
+
+    # --- CONTENT SWITCHING (Верхнее сообщение) ---
     try:
-        text, kb = None, None
         if action == "inventory":
             await state.set_state(InGame.inventory)
-            service = InventoryUIService(
-                char_id=char_id,
-                session=session,
-                user_id=user_id,
-                state_data=state_data,
-                account_manager=account_manager,
-            )
-            text, kb = await service.render_main_menu()
+            inv_orchestrator = container.get_inventory_bot_orchestrator(session)
+            inv_result = await inv_orchestrator.get_main_menu(char_id, user_id, state_data)
+
+            if inv_result.content and (coords := inv_orchestrator.get_content_coords(state_data, user_id)):
+                await bot.edit_message_text(
+                    chat_id=coords.chat_id,
+                    message_id=coords.message_id,
+                    text=inv_result.content.text,
+                    reply_markup=inv_result.content.kb,
+                    parse_mode="HTML",
+                )
+
         elif action == "navigation":
             await state.set_state(InGame.navigation)
-            actor_name = session_context.get("symbiote_name", "Симбиот")
-            text, kb = await exploration_ui_service.render_map(  # ИЗМЕНЕНО
-                char_id=char_id, actor_name=actor_name
-            )
-        if text and kb:
-            await bot.edit_message_text(
-                chat_id=chat_id, message_id=message_id, text=text, reply_markup=kb, parse_mode="HTML"
-            )
+            expl_orchestrator = container.get_exploration_bot_orchestrator(session)
+            expl_result = await expl_orchestrator.get_current_view(char_id, state_data)
+
+            if expl_result.content and (coords := expl_orchestrator.get_content_coords(state_data)):
+                await bot.edit_message_text(
+                    chat_id=coords.chat_id,
+                    message_id=coords.message_id,
+                    text=expl_result.content.text,
+                    reply_markup=expl_result.content.kb,
+                    parse_mode="HTML",
+                )
+
+        elif action == "status":
+            # Статус не меняет стейт FSM (обычно), или меняет на InGame.status?
+            # В character_status.py стейт не меняется явно, но лучше задать контекст.
+            # Пока оставим текущий стейт или зададим InGame.status (если он есть).
+            # В states.py есть FSM_CONTEX_CHARACTER_STATUS = [InGame.navigation, InGame.inventory, InGame.combat]
+            # Значит, статус доступен из любого стейта.
+            # Но лучше переключить на InGame.navigation (как дефолт) или оставить как есть.
+
+            status_orchestrator = container.get_status_bot_orchestrator(session)
+            status_result = await status_orchestrator.get_status_view(char_id, "bio", state_data, bot)
+
+            if status_result.content and (coords := status_orchestrator.get_content_coords(state_data)):
+                await bot.edit_message_text(
+                    chat_id=coords.chat_id,
+                    message_id=coords.message_id,
+                    text=status_result.content.text,
+                    reply_markup=status_result.content.kb,
+                    parse_mode="HTML",
+                )
+
         else:
             await call.answer("Раздел недоступен.", show_alert=True)
+
     except (TelegramAPIError, ValueError) as e:
         log.exception(f"MenuDispatch | status=failed action='{action}' error='{e}'")
         await Err.generic_error(call)
