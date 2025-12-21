@@ -4,6 +4,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from apps.bot.resources.keyboards.status_callback import StatusModifierCallback, StatusNavCallback
+from apps.bot.resources.status_menu.bio_group_data import TABS_NAV_DATA
 from apps.bot.resources.status_menu.modifer_group_data import MODIFIER_HIERARCHY
 from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.base_service import BaseUIService
@@ -88,9 +89,20 @@ class CharacterModifierUIService(BaseUIService):
             kb.button(text=value, callback_data=callback_data)
         kb.adjust(2)
 
-        # Навигация
-        # back_callback = StatusNavCallback(char_id=self.char_id, key="bio").pack() # Удалено: не используется
-        # ...
+        # Добавляем табы навигации (Колесо)
+        nav_buttons = []
+        for key, value in TABS_NAV_DATA.items():
+            if key == "modifiers":  # Пропускаем текущую вкладку
+                continue
+
+            callback_data = StatusNavCallback(
+                char_id=self.char_id,
+                key=key,
+            ).pack()
+            nav_buttons.append(InlineKeyboardButton(text=value, callback_data=callback_data))
+
+        if nav_buttons:
+            kb.row(*nav_buttons)
 
         return text or "Ошибка форматирования", kb.as_markup()
 
@@ -115,6 +127,6 @@ class CharacterModifierUIService(BaseUIService):
                     kb.button(text=title, callback_data=callback_data)
         kb.adjust(2)
 
-        back_callback = StatusNavCallback(char_id=self.char_id, key="stats").pack()
+        back_callback = StatusNavCallback(char_id=self.char_id, key="modifiers").pack()
         kb.row(InlineKeyboardButton(text="[ ◀️ Назад к модификаторам ]", callback_data=back_callback))
         return kb.as_markup()

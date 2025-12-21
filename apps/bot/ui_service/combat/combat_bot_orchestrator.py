@@ -10,7 +10,7 @@ from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.hub_entry_service import HubEntryService
-from apps.bot.ui_service.menu_service import MenuService
+from apps.bot.ui_service.mesage_menu.menu_service import MenuService
 from apps.common.schemas_dto.combat_source_dto import CombatDashboardDTO, CombatMoveDTO
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager

@@ -12,6 +12,7 @@ class ButtonsTextData:
         "tutorial_stats": ["status", "logout"],
         "tutorial_skill": ["status", "navigation", "logout"],
         "in_game": ["status", "inventory", "navigation", "refresh_menu", "logout"],
+        "world": ["status", "inventory", "navigation", "refresh_menu", "logout"],  # Добавлено для стадии 'world'
     }
 
     MENU_LAYOUTS_MAIN = {
@@ -19,6 +20,7 @@ class ButtonsTextData:
         "tutorial_stats": ["status"],
         "tutorial_skill": ["status", "navigation"],
         "in_game": ["status", "inventory", "navigation", "refresh_menu"],
+        "world": ["status", "inventory", "navigation", "refresh_menu"],  # Добавлено для стадии 'world'
     }
 
     BUTTONS_MENU_FULL = {

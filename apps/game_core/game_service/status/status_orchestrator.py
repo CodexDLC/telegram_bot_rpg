@@ -43,8 +43,12 @@ class StatusCoreOrchestrator:
         symbiote_orm = await self.symbiote_repo.get_symbiote(char_id)
         symbiote_dto = None
         if symbiote_orm:
+            # Исправлено: убрано обращение к несуществующему полю level
+            # Используем gift_rank как аналог уровня, если это подразумевалось
             symbiote_dto = SymbioteReadDTO(
-                symbiote_name=symbiote_orm.symbiote_name, level=symbiote_orm.level, experience=symbiote_orm.experience
+                symbiote_name=symbiote_orm.symbiote_name,
+                level=symbiote_orm.gift_rank,  # Используем gift_rank вместо level
+                experience=symbiote_orm.gift_xp,  # Используем gift_xp вместо experience
             )
 
         # 4. Навыки

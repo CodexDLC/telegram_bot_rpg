@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.bot.resources.keyboards.status_callback import StatusNavCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
-from apps.bot.ui_service.helpers_ui.dto_helper import fsm_clean_core_state
+from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY, fsm_clean_core_state
 from apps.common.core.container import AppContainer
 
 router = Router(name="character_status_menu")
@@ -38,31 +38,45 @@ async def show_status_tab_logic(
     orchestrator = container.get_status_bot_orchestrator(session)
     state_data = await state.get_data()
 
-    # Mypy error: Missing positional argument "bot" in call to "get_status_view" of "StatusBotOrchestrator"
-    # Добавляем bot в вызов
     result = await orchestrator.get_status_view(char_id, key, state_data, bot)
 
     if result.content:
-        # Лобби ожидает обновления сообщения, в котором была нажата кнопка
-        # Или используем координаты из оркестратора, если они есть
+        # 1. Пытаемся найти координаты контента в FSM
         coords = orchestrator.get_content_coords(state_data)
 
-        chat_id = coords.chat_id if coords else (call.message.chat.id if call.message else None)
-        message_id = coords.message_id if coords else (call.message.message_id if call.message else None)
-
-        if chat_id and message_id:
+        # Если координаты есть - редактируем
+        if coords:
             try:
                 await bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=message_id,
+                    chat_id=coords.chat_id,
+                    message_id=coords.message_id,
                     text=result.content.text,
                     reply_markup=result.content.kb,
                     parse_mode="HTML",
                 )
+                return  # Успешно отредактировали, выходим
             except TelegramAPIError as e:
-                log.error(f"StatusMenu | status=failed reason='edit_message_text error' user_id={user_id} error='{e}'")
+                log.warning(f"StatusMenu | status=edit_failed reason='{e}' user_id={user_id}. Trying to send new.")
+                # Если редактирование не удалось (например, сообщение удалено), идем дальше к отправке нового
+
+        # 2. Если координат нет или редактирование не удалось - отправляем новое сообщение
+        if call.message:
+            try:
+                msg = await call.message.answer(
+                    text=result.content.text, reply_markup=result.content.kb, parse_mode="HTML"
+                )
+
+                # 3. ВАЖНО: Сохраняем координаты нового сообщения в FSM
+                session_context = state_data.get(FSM_CONTEXT_KEY, {})
+                session_context["message_content"] = {"chat_id": msg.chat.id, "message_id": msg.message_id}
+                await state.update_data({FSM_CONTEXT_KEY: session_context})
+
+                log.info(f"StatusMenu | status=sent_new_content user_id={user_id} msg_id={msg.message_id}")
+
+            except TelegramAPIError as e:
+                log.error(f"StatusMenu | status=failed reason='send_message error' user_id={user_id} error='{e}'")
         else:
-            log.error(f"StatusMenu | status=failed reason='chat_id or message_id not found' user_id={user_id}")
+            log.error(f"StatusMenu | status=failed reason='call.message not found' user_id={user_id}")
 
 
 @router.callback_query(StatusNavCallback.filter())

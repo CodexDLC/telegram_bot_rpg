@@ -20,7 +20,7 @@ def gender_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for key, value in Buttons.GENDER.items():
         # Используем GenderCallback
-        kb.button(text=value, callback_data=GenderCallback(value=key).pack())
+        kb.button(text=value, callback_data=GenderCallback(action="select", value=key).pack())
     return kb.as_markup()
 
 

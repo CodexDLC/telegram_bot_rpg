@@ -61,7 +61,7 @@ class OnboardingService:
     def _start_creation_kb(self) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()
         for key, value in self.buttons.GENDER.items():
-            kb.button(text=value, callback_data=GenderCallback(value=key).pack())
+            kb.button(text=value, callback_data=GenderCallback(action="select", value=key).pack())
         return kb.as_markup()
 
     def _tutorial_kb(self) -> InlineKeyboardMarkup:

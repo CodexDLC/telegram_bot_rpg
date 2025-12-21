@@ -51,7 +51,8 @@ class MenuService(BaseUIService):
         """
         base_text = self.data.TEXT_MENU
 
-        if self.char_id and self.gs == "in_game":
+        # ИСПРАВЛЕНО: Добавлена проверка на "world"
+        if self.char_id and self.gs in ("in_game", "world"):
             sync_service = GameSyncService(self.session, self.account_manager)
             await sync_service.synchronize_player_state(self.char_id)
 
@@ -125,7 +126,8 @@ class MenuService(BaseUIService):
             kb.button(text=display_text, callback_data=callback_data)
 
         # Выравнивание основных кнопок (например, 2x2)
-        if self.gs == "in_game":
+        # ИСПРАВЛЕНО: Добавлена проверка на "world"
+        if self.gs in ("in_game", "world"):
             # Учитывая, что сейчас 4 кнопки, это должно быть adjust(4)
             kb.adjust(4)
         elif self.gs == "tutorial_skill":

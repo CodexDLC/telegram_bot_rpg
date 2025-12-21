@@ -67,13 +67,18 @@ class AuthBotOrchestrator:
 
         result = AuthViewDTO()
 
+        if login_result is None:
+            # Обработка ошибки входа (например, персонаж не найден)
+            result.content = ViewResultDTO(text="Ошибка входа: Персонаж не найден или данные повреждены.")
+            return result
+
         # Определяем стадию игры
         if isinstance(login_result, str):
             game_stage = login_result
         elif isinstance(login_result, tuple):
             game_stage = login_result[0]
         else:
-            raise ValueError("Unknown login result format")
+            raise ValueError(f"Unknown login result format: {type(login_result)}")
 
         result.game_stage = game_stage
 
@@ -137,7 +142,10 @@ class AuthBotOrchestrator:
                 if combat_view.target_id:
                     result.fsm_update["combat_target_id"] = combat_view.target_id
 
-        elif game_stage == "in_game" or (isinstance(login_result, tuple) and login_result[0] == "in_game"):
+        # ИСПРАВЛЕНИЕ: Добавлена проверка на "world", так как LoginService может возвращать "world" вместо "in_game"
+        elif game_stage in ("in_game", "world") or (
+            isinstance(login_result, tuple) and login_result[0] in ("in_game", "world")
+        ):
             # Вход в игру (Навигация)
             sync_service = GameSyncService(self.session, self.account_manager)
             await sync_service.synchronize_player_state(char_id)
