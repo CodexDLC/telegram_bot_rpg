@@ -1,10 +1,10 @@
 from aiogram.types import User
 
 from apps.bot.core_client.lobby_client import LobbyClient
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.lobby.dto.lobby_view_dto import LobbyViewDTO
 from apps.bot.ui_service.lobby.lobby_service import LobbyService
-from apps.bot.ui_service.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.common.schemas_dto import CharacterReadDTO
 
 

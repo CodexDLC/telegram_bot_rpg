@@ -1,7 +1,8 @@
 import uuid
 
-from sqlalchemy import JSON, Column, ForeignKey, Index, Integer, String, Uuid
-from sqlalchemy.orm import relationship
+from sqlalchemy import ForeignKey, Index, Integer, String
+from sqlalchemy.dialects.postgresql import JSON, UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from apps.common.database.model_orm.base import Base
 
@@ -9,103 +10,64 @@ from apps.common.database.model_orm.base import Base
 class GeneratedClanORM(Base):
     __tablename__ = "generated_clans"
 
-    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    family_id = Column(String, nullable=False)  # "orcs_family"
-    tier = Column(Integer, nullable=False)  # 2
+    family_id: Mapped[str] = mapped_column(String, nullable=False)  # "orcs_family"
+    tier: Mapped[int] = mapped_column(Integer, nullable=False)  # 2
 
     # --- ПРИВЯЗКА К МИРУ ---
-    # ID зоны, где этот клан был создан (например, "D4_1_1")
-    # Это позволяет легко найти всех обитателей конкретной зоны.
-    zone_id = Column(String, nullable=True, index=True)
+    zone_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
 
     # --- НОВЫЕ ПОЛЯ ХЭШЕЙ ---
-
-    # 1. ХЭШ КОНТЕКСТА (ГДЕ МЫ?)
-    # Формула: md5(tier + biome + anchor_type)
-    # Пример: "forest_2_ice" -> "a1b2..."
-    # ЗАЧЕМ: Спавнер делает SELECT * WHERE context_hash = "..." и получает список (Волки, Орки, Пауки).
-    context_hash = Column(String(32), nullable=False, index=True)
-
-    # 2. УНИКАЛЬНЫЙ ХЭШ (КТО ЭТО?)
-    # Формула: md5(family_id + context_hash)
-    # Пример: "orcs_family" + "a1b2..." -> "c3d4..."
-    # ЗАЧЕМ: Фабрика проверяет, создавали ли мы уже Орков для этого места.
-    unique_hash = Column(String(32), nullable=False, unique=True, index=True)
+    context_hash: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    unique_hash: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
 
     # --- ОСТАЛЬНОЕ ---
-    raw_tags = Column(JSON, nullable=False)  # Просто для дебага
-    flavor_content = Column(JSON, nullable=False)  # Имя, описание от LLM
+    raw_tags: Mapped[dict] = mapped_column(JSON, nullable=False)
+    flavor_content: Mapped[dict] = mapped_column(JSON, nullable=False)
 
-    name_ru = Column(String, nullable=True)
-    description = Column(String, nullable=True)
+    name_ru: Mapped[str | None] = mapped_column(String, nullable=True)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    members = relationship(
+    members: Mapped[list["GeneratedMonsterORM"]] = relationship(
         "GeneratedMonsterORM", back_populates="clan", cascade="all, delete-orphan", passive_deletes=True
     )
 
-    __table_args__ = (
-        # Индекс для быстрого поиска группой (для спавнера)
-        Index("ix_clan_context_lookup", "context_hash", "tier"),
-    )
+    __table_args__ = (Index("ix_clan_context_lookup", "context_hash", "tier"),)
 
 
 class GeneratedMonsterORM(Base):
     """
     Таблица СГЕНЕРИРОВАННЫХ МОНСТРОВ (Инстансы).
-    Это конкретный "Орк Вася", который стоит в локации, со своими ХП и вещами.
     """
 
     __tablename__ = "generated_monsters"
 
     # --- ID и Связи ---
-    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    clan_id = Column(
-        Uuid(as_uuid=True), ForeignKey("generated_clans.id", ondelete="CASCADE"), nullable=False, index=True
+    clan_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("generated_clans.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # Связь с кланом (GeneratedClanORM)
-    clan = relationship("GeneratedClanORM", back_populates="members")
 
-    # --- БАЛАНС И ИДЕНТИФИКАЦИЯ (из MonsterVariant) ---
-    variant_key = Column(
-        String, nullable=False
-    )  # ex: "orc_grunt" (ИСПРАВЛЕНО: было variant_id в коде, но variant_key в фабрике)
-    # family_id дублировать не обязательно, он есть в клане, но для удобства можно оставить или убрать.
-    # В фабрике мы не заполняли family_id для монстра, только для клана.
-    # Но в ORM выше было поле family_id. Давайте проверим фабрику.
-    # Фабрика: monsters.append(GeneratedMonsterORM(..., variant_key=unit_key, ...))
-    # Поле family_id в GeneratedMonsterORM не заполнялось в фабрике!
-    # Значит, его лучше убрать или сделать nullable, или заполнять.
-    # Пока оставим как есть, но учтем, что оно может быть пустым, если фабрика его не пишет.
-    # UPD: В прошлом чтении файла фабрики я видел:
-    # monsters.append(GeneratedMonsterORM(..., variant_key=unit_key, ...))
-    # Там НЕ БЫЛО family_id.
-    # Значит, если я оставлю nullable=False, будет ошибка.
-    # Я сделаю его nullable=True или уберу. Лучше уберу, так как есть связь с кланом.
+    clan: Mapped["GeneratedClanORM"] = relationship("GeneratedClanORM", back_populates="members")
 
-    role = Column(String, nullable=False)  # "minion", "elite", "boss"
-    threat_rating = Column(Integer, nullable=False)  # ex: 50 (Уровень угрозы)
+    # --- БАЛАНС И ИДЕНТИФИКАЦИЯ ---
+    variant_key: Mapped[str] = mapped_column(String, nullable=False)
 
-    # --- НАРРАТИВ (Генерируется LLM или шаблонизатором) ---
-    name_ru = Column(String, nullable=False)  # ex: "Грязный рубака"
-    description = Column(String, nullable=True)  # ex: "От него разит помоями..."
+    role: Mapped[str] = mapped_column(String, nullable=False)  # "minion", "elite", "boss"
+    threat_rating: Mapped[int] = mapped_column(Integer, nullable=False)  # ex: 50
 
-    # --- SNAPSHOTS (Данные боя) ---
+    # --- НАРРАТИВ ---
+    name_ru: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # Полный слепок характеристик (MonsterStats), уже скалированный под уровень
-    scaled_base_stats = Column(JSON, nullable=False)
+    # --- SNAPSHOTS ---
+    scaled_base_stats: Mapped[dict] = mapped_column(JSON, nullable=False)
+    loadout_ids: Mapped[dict] = mapped_column(JSON, nullable=False)  # Обычно это список или dict
+    skills_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)  # Обычно список
+    current_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
-    # Экипировка (MonsterLoadout)
-    loadout_ids = Column(JSON, nullable=False)
-
-    # Активные навыки (MonsterVariant.skills)
-    skills_snapshot = Column(JSON, nullable=False)
-
-    # Состояние (Текущие HP/MP - если монстр сохраняется раненым)
-    current_state = Column(JSON, nullable=True)
-
-    # Индексы для ускорения выборок
     __table_args__ = (Index("ix_monster_role_threat", "role", "threat_rating"),)
 
     def __repr__(self):

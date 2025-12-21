@@ -3,11 +3,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.bot.core_client.exploration import ExplorationClient
 from apps.bot.ui_service.combat.combat_bot_orchestrator import CombatBotOrchestrator
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.bot.ui_service.menu_service import MenuService
+from apps.bot.ui_service.mesage_menu.menu_service import MenuService
 from apps.bot.ui_service.tutorial.tutorial_service import TutorialServiceStats
 from apps.bot.ui_service.tutorial.tutorial_service_skill import TutorialServiceSkills
-from apps.bot.ui_service.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.common.schemas_dto.auth_dto import GameStage
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
@@ -67,13 +67,18 @@ class AuthBotOrchestrator:
 
         result = AuthViewDTO()
 
+        if login_result is None:
+            # Обработка ошибки входа (например, персонаж не найден)
+            result.content = ViewResultDTO(text="Ошибка входа: Персонаж не найден или данные повреждены.")
+            return result
+
         # Определяем стадию игры
         if isinstance(login_result, str):
             game_stage = login_result
         elif isinstance(login_result, tuple):
             game_stage = login_result[0]
         else:
-            raise ValueError("Unknown login result format")
+            raise ValueError(f"Unknown login result format: {type(login_result)}")
 
         result.game_stage = game_stage
 
@@ -92,16 +97,21 @@ class AuthBotOrchestrator:
         if game_stage == GameStage.TUTORIAL_STATS:
             tut_stats_service = TutorialServiceStats(char_id=char_id)
             text, kb = tut_stats_service.get_restart_stats()
-            result.content = ViewResultDTO(text=text, kb=kb)
-            result.new_state = "StartTutorial:start"
-            result.fsm_update = {"bonus_dict": {}, "event_pool": None, "sim_text_count": 0}
+
+            if text and kb:
+                result.content = ViewResultDTO(text=text, kb=kb)
+                result.new_state = "StartTutorial:start"
+                result.fsm_update = {"bonus_dict": {}, "event_pool": None, "sim_text_count": 0}
+            else:
+                # Fallback, если что-то пошло не так
+                result.content = ViewResultDTO(text="Ошибка загрузки туториала.", kb=None)
 
         elif game_stage == GameStage.TUTORIAL_SKILL:
             skill_choices_list: list[str] = []
             tut_skill_service = TutorialServiceSkills(skills_db=skill_choices_list)
-            text, kb = tut_skill_service.get_start_data()
-            if text and kb:
-                result.content = ViewResultDTO(text=text, kb=kb)
+            skill_text, skill_kb = tut_skill_service.get_start_data()
+            if skill_text and skill_kb:
+                result.content = ViewResultDTO(text=skill_text, kb=skill_kb)
                 result.new_state = "StartTutorial:in_skills_progres"
                 result.fsm_update = {"skill_choices_list": skill_choices_list}
 
@@ -132,7 +142,10 @@ class AuthBotOrchestrator:
                 if combat_view.target_id:
                     result.fsm_update["combat_target_id"] = combat_view.target_id
 
-        elif game_stage == "in_game" or (isinstance(login_result, tuple) and login_result[0] == "in_game"):
+        # ИСПРАВЛЕНИЕ: Добавлена проверка на "world", так как LoginService может возвращать "world" вместо "in_game"
+        elif game_stage in ("in_game", "world") or (
+            isinstance(login_result, tuple) and login_result[0] in ("in_game", "world")
+        ):
             # Вход в игру (Навигация)
             sync_service = GameSyncService(self.session, self.account_manager)
             await sync_service.synchronize_player_state(char_id)

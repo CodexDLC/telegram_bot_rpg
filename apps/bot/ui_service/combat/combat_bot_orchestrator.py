@@ -7,10 +7,10 @@ from apps.bot.core_client.exploration import ExplorationClient
 from apps.bot.ui_service.combat.combat_ui_service import CombatUIService
 from apps.bot.ui_service.combat.dto.combat_view_dto import CombatViewDTO
 from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.hub_entry_service import HubEntryService
-from apps.bot.ui_service.menu_service import MenuService
-from apps.bot.ui_service.ui_common_dto import MessageCoordsDTO, ViewResultDTO
+from apps.bot.ui_service.mesage_menu.menu_service import MenuService
 from apps.common.schemas_dto.combat_source_dto import CombatDashboardDTO, CombatMoveDTO
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
@@ -109,7 +109,7 @@ class CombatBotOrchestrator:
 
         menu_view = await ui.render_items_menu(snapshot)
 
-        return CombatViewDTO(menu=menu_view)
+        return CombatViewDTO(menu=menu_view, alert_text=msg)
 
     async def toggle_zone(
         self, session_id: str, char_id: int, layer: str, zone_id: str, state_data: dict
@@ -220,7 +220,13 @@ class CombatBotOrchestrator:
 
         target_id = snapshot.current_target.char_id if snapshot.current_target else None
         # Здесь возвращаем кортеж, так как это фабричный метод
-        return snapshot.session_id, target_id, view.text, view.kb
+        # Mypy ругался на Optional[InlineKeyboardMarkup], но ViewResultDTO.kb может быть None.
+        # Однако, сигнатура требует InlineKeyboardMarkup.
+        # Если view.kb is None, это проблема.
+        # Но в start_battle мы ожидаем, что клавиатура будет.
+        # Если нет, вернем пустую или заглушку.
+        kb = view.kb if view.kb else InlineKeyboardMarkup(inline_keyboard=[])
+        return snapshot.session_id, target_id, view.text, kb
 
     async def _render_by_status(
         self, snapshot: CombatDashboardDTO, selection: dict, ui: CombatUIService

@@ -1,4 +1,8 @@
 # apps/bot/handlers/callback/ui/menu_dispatch.py
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from aiogram import Bot, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
@@ -10,10 +14,11 @@ from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.callback_data import MeinMenuCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.bot.ui_service.menu_service import MenuService
-from apps.common.core.container import AppContainer
-from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.bot.ui_service.mesage_menu.menu_service import MenuService
 from apps.game_core.game_service.game_sync_service import GameSyncService
+
+if TYPE_CHECKING:
+    from apps.common.core.container import AppContainer
 
 router = Router(name="ui_menu_dispatch")
 
@@ -25,7 +30,7 @@ async def main_menu_dispatcher(
     state: FSMContext,
     bot: Bot,
     session: AsyncSession,
-    account_manager: AccountManager,
+    account_manager: Any,  # AccountManager
     container: AppContainer,
 ) -> None:
     if not call.from_user:
@@ -53,6 +58,7 @@ async def main_menu_dispatcher(
             await Err.message_content_not_found_in_fsm(call)
             return
         await call.answer("🔄 Обновление данных...")
+        # XXX: Очистить диспетчер от прямых импортов UI-сервисов.
         menu_service = MenuService(
             game_stage="in_game", state_data=state_data, session=session, account_manager=account_manager
         )
@@ -70,34 +76,23 @@ async def main_menu_dispatcher(
         return
 
     # --- CONTENT SWITCHING (Верхнее сообщение) ---
+
+    # Чтобы Mypy не ругался на смену типов, объявляем переменную явно
+    result_dto: Any = None
+    active_orchestrator: Any = None
+
     try:
         if action == "inventory":
             await state.set_state(InGame.inventory)
-            inv_orchestrator = container.get_inventory_bot_orchestrator(session)
-            inv_result = await inv_orchestrator.get_main_menu(char_id, user_id, state_data)
-
-            if inv_result.content and (coords := inv_orchestrator.get_content_coords(state_data, user_id)):
-                await bot.edit_message_text(
-                    chat_id=coords.chat_id,
-                    message_id=coords.message_id,
-                    text=inv_result.content.text,
-                    reply_markup=inv_result.content.kb,
-                    parse_mode="HTML",
-                )
+            inv_orc = container.get_inventory_bot_orchestrator(session)
+            result_dto = await inv_orc.get_main_menu(char_id, user_id, state_data)
+            active_orchestrator = inv_orc
 
         elif action == "navigation":
             await state.set_state(InGame.navigation)
-            expl_orchestrator = container.get_exploration_bot_orchestrator(session)
-            expl_result = await expl_orchestrator.get_current_view(char_id, state_data)
-
-            if expl_result.content and (coords := expl_orchestrator.get_content_coords(state_data)):
-                await bot.edit_message_text(
-                    chat_id=coords.chat_id,
-                    message_id=coords.message_id,
-                    text=expl_result.content.text,
-                    reply_markup=expl_result.content.kb,
-                    parse_mode="HTML",
-                )
+            expl_orc = container.get_exploration_bot_orchestrator(session)
+            result_dto = await expl_orc.get_current_view(char_id, state_data)
+            active_orchestrator = expl_orc
 
         elif action == "status":
             # Статус не меняет стейт FSM (обычно), или меняет на InGame.status?
@@ -107,20 +102,48 @@ async def main_menu_dispatcher(
             # Значит, статус доступен из любого стейта.
             # Но лучше переключить на InGame.navigation (как дефолт) или оставить как есть.
 
-            status_orchestrator = container.get_status_bot_orchestrator(session)
-            status_result = await status_orchestrator.get_status_view(char_id, "bio", state_data, bot)
-
-            if status_result.content and (coords := status_orchestrator.get_content_coords(state_data)):
-                await bot.edit_message_text(
-                    chat_id=coords.chat_id,
-                    message_id=coords.message_id,
-                    text=status_result.content.text,
-                    reply_markup=status_result.content.kb,
-                    parse_mode="HTML",
-                )
+            stat_orc = container.get_status_bot_orchestrator(session)
+            result_dto = await stat_orc.get_status_view(char_id, "bio", state_data, bot)
+            active_orchestrator = stat_orc
 
         else:
             await call.answer("Раздел недоступен.", show_alert=True)
+            return
+
+        # Теперь общая логика отрисовки
+        if result_dto and result_dto.content and active_orchestrator:
+            # Для InventoryBotOrchestrator get_content_coords требует user_id, для других - нет (или опционально)
+            # Проверяем сигнатуру или передаем user_id, если метод его принимает.
+            # В IBotOrchestrator user_id опционален.
+            # Но InventoryBotOrchestrator.get_content_coords требует user_id.
+            # ExplorationBotOrchestrator.get_content_coords(state_data)
+            # StatusBotOrchestrator.get_content_coords(state_data, user_id=None)
+
+            # Попытаемся передать user_id, если это инвентарь, иначе без него (или с None)
+            # Но проще передать user_id всегда, если сигнатура позволяет.
+            # В InventoryBotOrchestrator: def get_content_coords(self, state_data: dict, user_id: int) -> MessageCoordsDTO | None:
+            # В ExplorationBotOrchestrator: def get_content_coords(self, state_data: dict) -> MessageCoordsDTO | None:
+            # В StatusBotOrchestrator: def get_content_coords(self, state_data: dict, user_id: int | None = None) -> MessageCoordsDTO | None:
+
+            # Приводим к общему виду или делаем проверку
+            coords = None
+            if hasattr(active_orchestrator, "get_content_coords"):
+                # Проверка на инвентарь костылем, пока не приведем к единому интерфейсу
+                # Но лучше использовать try/except TypeError или inspect, но это медленно.
+                # В InventoryBotOrchestrator user_id обязателен.
+                try:
+                    coords = active_orchestrator.get_content_coords(state_data, user_id=user_id)
+                except TypeError:
+                    coords = active_orchestrator.get_content_coords(state_data)
+
+            if coords:
+                await bot.edit_message_text(
+                    chat_id=coords.chat_id,
+                    message_id=coords.message_id,
+                    text=result_dto.content.text,
+                    reply_markup=result_dto.content.kb,
+                    parse_mode="HTML",
+                )
 
     except (TelegramAPIError, ValueError) as e:
         log.exception(f"MenuDispatch | status=failed action='{action}' error='{e}'")

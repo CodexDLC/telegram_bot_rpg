@@ -1,8 +1,8 @@
 from apps.bot.core_client.inventory_client import InventoryClient
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.inventory.dto.inventory_view_dto import InventoryViewDTO
 from apps.bot.ui_service.inventory.inventory_ui_service import InventoryUIService
-from apps.bot.ui_service.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 
 
 class InventoryBotOrchestrator:

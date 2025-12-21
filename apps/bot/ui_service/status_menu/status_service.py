@@ -42,6 +42,7 @@ class CharacterMenuUIService(BaseUIService):
         """
         Формирует текст и клавиатуру для вкладки "Биография".
         """
+        # TODO: Заменить прямые вызовы репозиториев на вызовы StatusClient.
         log.debug(f"Формирование сообщения 'Биография' для char_id={self.char_id}.")
 
         character = data.character

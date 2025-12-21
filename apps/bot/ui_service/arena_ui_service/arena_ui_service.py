@@ -16,14 +16,23 @@ class ArenaUIService(BaseUIService):
     Не содержит бизнес-логики и не делает вызовов к другим сервисам.
     """
 
-    def __init__(self, state_data: dict[str, Any], char_id: int | None = None):
+    def __init__(
+        self, state_data: dict[str, Any] | None = None, char_id: int | None = None, actor_name: str | None = None
+    ):
         """
         Args:
             state_data: Данные состояния FSM.
             char_id: ID персонажа (опционально, если есть в state_data).
+            actor_name: Имя актора (симбиота) для отображения в UI.
         """
-        super().__init__(state_data, char_id)
-        log.debug(f"ArenaUIService | Initialized for char_id={self.char_id}")
+        # Если state_data не передан, создаем пустой словарь, чтобы BaseUIService не упал
+        super().__init__(state_data or {}, char_id)
+
+        # Если actor_name передан явно, используем его, иначе пытаемся взять из BaseUIService (который берет из state_data)
+        if actor_name:
+            self.actor_name = actor_name
+
+        log.debug(f"ArenaUIService | Initialized for char_id={self.char_id}, actor_name='{self.actor_name}'")
 
     async def view_main_menu(self) -> ViewResultDTO:
         """

@@ -48,6 +48,9 @@ class InGame(StatesGroup):
     navigation = State()
     inventory = State()
     combat = State()
+    status = State()  # <-- Добавлено
+    scenario = State()  # <-- Добавлено
+    arena = State()  # <-- Добавлено (для будущего рефакторинга)
 
 
 class AdminMode(StatesGroup):
@@ -60,7 +63,7 @@ class AdminMode(StatesGroup):
 
 
 class ArenaState(StatesGroup):
-    """Состояния для Арены."""
+    """Состояния для Арены (Legacy, будет заменено на InGame.arena)."""
 
     menu = State()
     waiting = State()
@@ -74,11 +77,14 @@ FSM_CONTEX_CHARACTER_STATUS = [
     CharacterLobby.confirm_delete,
     # Основной игровой цикл
     InGame.navigation,
-    InGame.inventory,  # <-- Добавлено: чтобы работало из инвентаря
-    InGame.combat,  # <-- Добавлено: если нужно чекать статы в бою
-    # Арена
-    ArenaState.menu,  # <-- Добавлено: чтобы работало в ангаре арены
-    ArenaState.waiting,  # <-- Добавлено: чтобы работало в очереди
+    InGame.inventory,
+    InGame.combat,
+    InGame.status,  # <-- Добавлено
+    InGame.scenario,  # <-- Добавлено
+    InGame.arena,  # <-- Добавлено
+    # Арена (Legacy)
+    ArenaState.menu,
+    ArenaState.waiting,
 ]
 
 GARBAGE_TEXT_STATES = [

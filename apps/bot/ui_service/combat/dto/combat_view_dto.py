@@ -14,6 +14,7 @@ class CombatViewDTO(BaseModel):
     content: ViewResultDTO | None = None
     menu: ViewResultDTO | None = None
     new_state: str | None = None  # Куда переключить FSM (для выхода из боя)
+    alert_text: str | None = None  # Текст для всплывающего уведомления (call.answer)
 
     # Данные для обновления FSM (например, новый selection или выбранная способность)
     fsm_update: dict | None = None

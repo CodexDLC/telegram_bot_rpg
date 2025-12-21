@@ -37,7 +37,7 @@ async def arena_1v1_menu_handler(
         return
 
     # char_id = callback_data.char_id # Удалено: не используется
-    mode = callback_data.match_type
+    mode = str(callback_data.match_type)
     state_data = await state.get_data()
 
     orchestrator = container.get_arena_bot_orchestrator(session)
@@ -69,7 +69,7 @@ async def arena_toggle_queue_handler(
 
     char_id = callback_data.char_id
     user_id = call.from_user.id
-    mode = callback_data.match_type
+    mode = str(callback_data.match_type)
     state_data = await state.get_data()
     session_context = state_data.get(FSM_CONTEXT_KEY, {})
     message_content = session_context.get("message_content")

@@ -46,8 +46,8 @@ async def navigation_move_handler(
         return
 
     user_id = call.from_user.id
-    target_loc_id = callback_data.target_id
-    travel_time = callback_data.t
+    target_loc_id = str(callback_data.target_id)
+    travel_time = callback_data.t if callback_data.t is not None else 0.0
 
     log.info(f"Navigation | event=move_start user_id={user_id} target='{target_loc_id}' travel_time={travel_time}s")
 

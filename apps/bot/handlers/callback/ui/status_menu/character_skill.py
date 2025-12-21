@@ -109,16 +109,16 @@ async def character_skill_mode_handler(
         f"SkillMenu | event=mode_change user_id={user_id} skill='{callback_data.skill_key}' new_mode='{callback_data.new_mode}'"
     )
 
+    orchestrator = container.get_status_bot_orchestrator(session)
+
+    # Вызываем метод оркестратора для смены режима
+    await orchestrator.change_skill_mode(
+        char_id=callback_data.char_id, skill_key=callback_data.skill_key, new_mode=callback_data.new_mode
+    )
+
     await call.answer(f"Режим изменен на: {callback_data.new_mode}")
 
-    # TODO: Реализовать смену режима через оркестратор (метод set_skill_mode)
-    # Пока просто обновляем UI (как будто режим сменился)
-    # Но оркестратор должен уметь менять режим.
-    # Добавим метод set_skill_mode в оркестратор позже.
-    # Сейчас просто перезагрузим детали навыка.
-
     state_data = await state.get_data()
-    orchestrator = container.get_status_bot_orchestrator(session)
 
     result = await orchestrator.get_skill_view(
         char_id=callback_data.char_id, level="detail", key=callback_data.skill_key, state_data=state_data, bot=bot

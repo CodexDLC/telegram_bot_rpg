@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.hub_config import HUB_CONFIGS
 from apps.bot.ui_service.base_service import BaseUIService
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
@@ -97,8 +98,16 @@ class HubEntryService(BaseUIService):
                 )
                 return "Ошибка: нарушен контракт метода.", None, new_fsm_state
 
-            text, kb = await render_method()
-            return text, kb, new_fsm_state
+            # ИСПРАВЛЕНИЕ: Обработка ViewResultDTO
+            result = await render_method()
+
+            if isinstance(result, ViewResultDTO):
+                return result.text, result.kb, new_fsm_state
+            elif isinstance(result, tuple) and len(result) == 2:
+                return result[0], result[1], new_fsm_state
+            else:
+                log.error(f"HubEntryService | status=failed reason='Unexpected return type' type='{type(result)}'")
+                return "Ошибка: некорректный ответ от UI-сервиса.", None, new_fsm_state
 
         except (AttributeError, TypeError, KeyError) as e:
             log.exception(

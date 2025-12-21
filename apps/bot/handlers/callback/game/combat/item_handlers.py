@@ -54,11 +54,9 @@ async def combat_item_use_handler(
     # Используем предмет через оркестратор
     result_dto = await orchestrator.use_item(session_id, char_id, item_id, state_data)
 
-    # Пока оркестратор не возвращает сообщение об успехе/неудаче в DTO,
-    # но мы можем предположить успех, если вернулось меню.
-    # В идеале DTO должен содержать alert_text.
-    # Но пока просто обновим меню.
-    await call.answer("Предмет использован (или нет)", show_alert=False)
+    # Используем alert_text из DTO для обратной связи
+    alert_text = result_dto.alert_text or "Предмет использован"
+    await call.answer(alert_text, show_alert=False)
 
     # Обновляем сообщение через координаты (по стандарту)
     if result_dto.menu and (coords := orchestrator.get_menu_coords(state_data)):

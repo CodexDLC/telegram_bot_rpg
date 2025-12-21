@@ -6,13 +6,13 @@ from loguru import logger as log
 
 from apps.bot.core_client.status_client import StatusClient
 from apps.bot.resources.keyboards.status_callback import StatusModifierCallback, StatusNavCallback, StatusSkillsCallback
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.helpers_ui.ui_animation_service import UIAnimationService
-from apps.bot.ui_service.status.dto.status_view_dto import StatusViewDTO
+from apps.bot.ui_service.status_menu.dto.status_view_dto import StatusViewDTO
 from apps.bot.ui_service.status_menu.status_modifier_service import CharacterModifierUIService
 from apps.bot.ui_service.status_menu.status_service import CharacterMenuUIService
 from apps.bot.ui_service.status_menu.status_skill_service import CharacterSkillStatusService
-from apps.bot.ui_service.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.common.schemas_dto import SessionDataDTO
 
 
@@ -94,6 +94,10 @@ class StatusBotOrchestrator:
             run_logic(),
         )
         return results[1] or StatusViewDTO()
+
+    async def change_skill_mode(self, char_id: int, skill_key: str, new_mode: str) -> bool:
+        """Изменяет режим прокачки навыка."""
+        return await self._client.update_skill_state(char_id, skill_key, new_mode)
 
     async def get_modifier_view(
         self, char_id: int, level: str, key: str, state_data: dict[str, Any], bot: Bot

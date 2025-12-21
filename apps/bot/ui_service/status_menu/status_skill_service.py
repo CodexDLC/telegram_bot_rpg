@@ -9,6 +9,7 @@ from apps.bot.resources.keyboards.status_callback import (
     StatusNavCallback,
     StatusSkillsCallback,
 )
+from apps.bot.resources.status_menu.bio_group_data import TABS_NAV_DATA
 from apps.bot.resources.status_menu.skill_group_data import SKILL_HIERARCHY
 from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.base_service import BaseUIService
@@ -101,10 +102,20 @@ class CharacterSkillStatusService(BaseUIService):
             kb.button(text=value, callback_data=callback_data)
         kb.adjust(2)
 
-        # Навигация
-        # back_callback = StatusNavCallback(char_id=self.char_id, key="bio").pack() # Удалено: не используется
-        # Добавляем табы
-        # ... (логика табов)
+        # Добавляем табы навигации (Колесо)
+        nav_buttons = []
+        for key, value in TABS_NAV_DATA.items():
+            if key == "skills":  # Пропускаем текущую вкладку
+                continue
+
+            callback_data = StatusNavCallback(
+                char_id=self.char_id,
+                key=key,
+            ).pack()
+            nav_buttons.append(InlineKeyboardButton(text=value, callback_data=callback_data))
+
+        if nav_buttons:
+            kb.row(*nav_buttons)
 
         return text or "Ошибка форматирования", kb.as_markup()
 
@@ -162,7 +173,7 @@ class CharacterSkillStatusService(BaseUIService):
             }
             # current_state = skill_dto.progress_state # В DTO пока нет progress_state, нужно добавить или заглушку
             # Предположим PAUSE
-            current_state = SkillProgressState.PAUSE
+            current_state = skill_dto.progress_state
 
             for state_enum in [SkillProgressState.PLUS, SkillProgressState.PAUSE, SkillProgressState.MINUS]:
                 if state_enum != current_state:

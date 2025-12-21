@@ -36,10 +36,11 @@ class MonsterRepository(IMonsterRepository):
 
     async def get_monster_by_id(self, monster_id: UUID | str) -> GeneratedMonsterORM | None:
         try:
-            real_uuid = UUID(monster_id) if isinstance(monster_id, str) else monster_id
+            real_uuid = UUID(str(monster_id)) if not isinstance(monster_id, UUID) else monster_id
         except ValueError:
             log.warning(f"GetMonsterByIdFail | reason=invalid_uuid monster_id='{monster_id}'")
             return None
+
         query = (
             select(GeneratedMonsterORM)
             .where(GeneratedMonsterORM.id == real_uuid)

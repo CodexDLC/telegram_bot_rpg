@@ -7,7 +7,7 @@ from typing import Any
 
 TABS_NAV_DATA: dict[str, str] = {
     "bio": "📋 Био",
-    "stats": "❤️ Модификаторы",
+    "modifiers": "❤️ Модификаторы",
     "skills": "📚 Навыки",
 }
 

@@ -7,7 +7,7 @@ from loguru import logger as log
 from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.exploration.encounter_ui import EncounterUI
 from apps.bot.ui_service.exploration.navigation_ui import NavigationUI
-from apps.bot.ui_service.ui_common_dto import ViewResultDTO
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 from apps.common.schemas_dto.exploration_dto import EncounterDTO, EncounterType, WorldNavigationDTO
 
 

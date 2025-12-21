@@ -7,6 +7,7 @@ from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.bot.core_client.exploration import ExplorationClient
 from apps.bot.core_client.inventory_client import InventoryClient
 from apps.bot.core_client.lobby_client import LobbyClient
+from apps.bot.core_client.scenario_client import ScenarioClient
 from apps.bot.core_client.status_client import StatusClient
 from apps.bot.ui_service.arena_ui_service.arena_bot_orchestrator import ArenaBotOrchestrator
 from apps.bot.ui_service.auth.auth_bot_orchestrator import AuthBotOrchestrator
@@ -15,7 +16,8 @@ from apps.bot.ui_service.exploration.exploration_bot_orchestrator import Explora
 from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService
 from apps.bot.ui_service.inventory.inventory_bot_orchestrator import InventoryBotOrchestrator
 from apps.bot.ui_service.lobby.lobby_bot_orchestrator import LobbyBotOrchestrator
-from apps.bot.ui_service.status.status_bot_orchestrator import StatusBotOrchestrator
+from apps.bot.ui_service.scenario.scenario_bot_orchestrator import ScenarioBotOrchestrator
+from apps.bot.ui_service.status_menu.status_bot_orchestrator import StatusBotOrchestrator
 from apps.common.core.settings import settings
 from apps.common.database.repositories.ORM.users_repo_orm import UsersRepoORM
 from apps.common.database.session import async_engine, async_session_factory
@@ -23,8 +25,6 @@ from apps.common.services.core_service import CombatManager, RedisService
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
 from apps.common.services.core_service.manager.world_manager import WorldManager
-
-# --- Новые импорты ---
 from apps.game_core.game_service.exploration.encounter_service import EncounterService
 from apps.game_core.game_service.exploration.exploration_orchestrator import ExplorationOrchestrator
 from apps.game_core.game_service.exploration.movement_service import MovementService
@@ -164,3 +164,11 @@ class AppContainer:
             exploration_client=expl_client,
             combat_client=combat_client,
         )
+
+    def get_scenario_client(self, session: AsyncSession) -> ScenarioClient:
+        # Клиент сам соберет все зависимости Core-слоя
+        return ScenarioClient(session=session, redis_service=self.redis_service, account_manager=self.account_manager)
+
+    def get_scenario_bot_orchestrator(self, session: AsyncSession) -> ScenarioBotOrchestrator:
+        client = self.get_scenario_client(session)
+        return ScenarioBotOrchestrator(client=client, account_manager=self.account_manager)

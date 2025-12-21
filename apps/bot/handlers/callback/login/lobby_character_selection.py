@@ -69,6 +69,15 @@ async def select_or_delete_character_handler(
         log.debug(f"FSM | data_updated user_id={user_id} char_id={char_id}")
 
         # Показываем статус персонажа (через мост)
+        # ВАЖНО: Мы не передаем call, чтобы show_status_tab_logic не пытался редактировать сообщение,
+        # из которого пришел колбэк (меню лобби), а использовал координаты контента.
+        # Но show_status_tab_logic требует call для user_id.
+        # Поэтому мы передаем call, но внутри show_status_tab_logic логика должна быть умнее.
+
+        # Однако, show_status_tab_logic сейчас пытается редактировать сообщение по координатам контента.
+        # Если контента нет (первый раз), он должен отправить новое сообщение.
+        # Но в лобби контент (верхнее сообщение) уже должен быть создан (приветствие).
+
         await show_status_tab_logic(
             char_id=char_id, state=state, bot=bot, call=call, key="bio", session=session, container=container
         )
