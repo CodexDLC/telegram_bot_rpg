@@ -1,94 +1,83 @@
 import contextlib
-import time
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, ReplyKeyboardRemove
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.keyboards.inline_kb.loggin_und_new_character import get_start_adventure_kb
 from apps.bot.resources.keyboards.reply_kb import RESTART_BUTTON_TEXT, SETTINGS_BUTTON_TEXT
-from apps.bot.resources.texts.ui_messages import START_GREETING
-from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.command_service import CommandService
-from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
+from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY, fsm_store
 from apps.bot.ui_service.helpers_ui.formatters.message_info_formatter import MessageInfoFormatter
-from apps.bot.ui_service.helpers_ui.ui_tools import await_min_delay
+from apps.common.core.container import AppContainer
+from apps.common.schemas_dto import SessionDataDTO
 
 router = Router(name="commands_router")
 
 
 @router.message(Command("start"))
-async def cmd_start(m: Message, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
+async def cmd_start(m: Message, state: FSMContext, bot: Bot, session: AsyncSession, container: AppContainer) -> None:
     """
-    Обрабатывает команду /start, сбрасывает состояние и очищает UI.
+    Обрабатывает команду /start.
     """
     if not m.from_user:
-        log.warning("Handler 'cmd_start' received update without 'from_user'.")
         return
 
     user_id = m.from_user.id
     log.info(f"HandlerStart | command=/start user_id={user_id}")
-    start_time = time.monotonic()
+
+    com_service = CommandService(m.from_user)
+    auth_client = container.get_auth_client(session)
 
     try:
-        state_data = await state.get_data()
-        ui_service = BaseUIService(state_data=state_data)
+        # Сервис готовит почву и возвращает DTO
+        view_dto = await com_service.prepare_start(state, bot, auth_client)
 
-        menu_data = ui_service.get_message_menu_data()
-        if menu_data:
-            await bot.delete_message(chat_id=menu_data[0], message_id=menu_data[1])
-            log.debug(f"UICleanup | message=menu_message id={menu_data[1]} user_id={user_id}")
+        # Хендлер отправляет сообщение
+        mes = await m.answer(view_dto.text, reply_markup=view_dto.keyboard)
 
-        content_data = ui_service.get_message_content_data()
-        if content_data:
-            await bot.delete_message(chat_id=content_data[0], message_id=content_data[1])
-            log.debug(f"UICleanup | message=content_message id={content_data[1]} user_id={user_id}")
+        # Хендлер обновляет стейт, используя SessionDataDTO
+        message_menu = {"message_id": mes.message_id, "chat_id": mes.chat.id}
 
-    except TelegramAPIError as e:
-        log.warning(f"UICleanup | status=failed user_id={user_id} error='{e}'")
+        session_data = SessionDataDTO(user_id=user_id, message_menu=message_menu)
 
-    await state.clear()
-    log.debug(f"FSM | action=clear user_id={user_id}")
+        # Сериализуем и сохраняем
+        await state.update_data({FSM_CONTEXT_KEY: await fsm_store(session_data)})
+        log.debug(f"FSM | action=update_data user_id={user_id} message_id={mes.message_id}")
 
-    try:
-        com_service = CommandService(m.from_user)
-        await com_service.create_user_in_db(session)
-        log.debug(f"UserInit | status=success user_id={user_id}")
+        # Удаляем сообщение с командой /start
+        with contextlib.suppress(TelegramAPIError):
+            await m.delete()
+
     except SQLAlchemyError:
-        log.error(f"UserInit | status=db_error user_id={user_id}", exc_info=True)
+        log.error(f"HandlerStart | status=db_error user_id={user_id}", exc_info=True)
         await m.answer("⚠️ Не удалось подключиться к базе данных.\nПожалуйста, попробуйте снова через несколько минут.")
         await m.answer("...", reply_markup=ReplyKeyboardRemove())
-        return
 
-    await await_min_delay(start_time, min_delay=0.5)
 
-    mes = await m.answer(
-        START_GREETING.format(first_name=m.from_user.first_name),
-        reply_markup=get_start_adventure_kb(),
-    )
-
-    message_menu = {"message_id": mes.message_id, "chat_id": mes.chat.id}
-    await state.update_data({FSM_CONTEXT_KEY: {"message_menu": message_menu}})
-    log.debug(f"FSM | action=update_data user_id={user_id} message_id={mes.message_id}")
-
-    with contextlib.suppress(TelegramAPIError):
-        await m.delete()
+@router.callback_query(F.data == "settings")
+async def handle_settings_callback(call: CallbackQuery):
+    """
+    Обрабатывает нажатие Inline-кнопки "Настройки".
+    """
+    await call.answer("⚠️ Меню настроек находится в разработке.", show_alert=True)
 
 
 @router.message(F.text == RESTART_BUTTON_TEXT)
-async def handle_restart_button(m: Message, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
+async def handle_restart_button(
+    m: Message, state: FSMContext, bot: Bot, session: AsyncSession, container: AppContainer
+) -> None:
     """
     Обрабатывает нажатие Reply-кнопки "Рестарт", вызывая `cmd_start`.
     """
     if not m.from_user:
         return
     log.info(f"HandlerRestart | user_id={m.from_user.id} trigger=reply_button")
-    await cmd_start(m, state, bot, session)
+    await cmd_start(m, state, bot, session, container)
 
 
 @router.message(F.text == SETTINGS_BUTTON_TEXT)
@@ -96,7 +85,6 @@ async def handle_settings_button(m: Message) -> None:
     """
     Обрабатывает нажатие Reply-кнопки "Настройки" (заглушка).
     """
-    # TODO: Реализовать меню настроек.
     if not m.from_user:
         return
     log.info(f"HandlerStub | user_id={m.from_user.id} name=settings_button")
@@ -110,7 +98,6 @@ async def cmd_setting(m: Message) -> None:
     """
     Обрабатывает команду /setting (заглушка).
     """
-    # TODO: Реализовать команду /setting.
     if not m.from_user:
         return
     log.info(f"HandlerStub | user_id={m.from_user.id} name=setting_command")
@@ -124,7 +111,6 @@ async def cmd_help(m: Message) -> None:
     """
     Обрабатывает команду /help (заглушка).
     """
-    # TODO: Реализовать команду /help.
     if not m.from_user:
         return
     log.info(f"HandlerStub | user_id={m.from_user.id} name=help_command")

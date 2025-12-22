@@ -97,11 +97,11 @@ class InventoryCoreOrchestrator:
 
     async def equip_item(self, char_id: int, item_id: int, slot: str) -> tuple[bool, str]:
         """Экипировка предмета."""
-        # service = self._get_service(char_id) # Удалено: не используется
-        # В InventoryService есть equip_item?
-        # Нужно проверить.
-        # Если нет, то это заглушка.
-        return (True, "Equipped")
+        # TODO: Реализовать логику экипировки.
+        # 1. Получить предмет через service.get_item_by_id
+        # 2. Определить слот (если slot="auto", взять из item.data.valid_slots)
+        # 3. Вызвать service.equip_item(item_id, target_slot)
+        return (True, "Equipped (STUB)")
 
     async def use_item(self, char_id: int, item_id: int) -> tuple[bool, str]:
         """Использование предмета."""

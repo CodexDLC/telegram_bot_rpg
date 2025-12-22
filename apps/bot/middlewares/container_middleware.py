@@ -32,7 +32,7 @@ class ContainerMiddleware(BaseMiddleware):
 
         # Новые зависимости
         if "session" in data:
-            data["exploration_ui_service"] = self.container.get_exploration_ui_service(data["session"])
+            # data["exploration_ui_service"] = self.container.get_exploration_ui_service(data["session"]) # УДАЛЕНО: Не используется
 
             # Создаем и передаем ArenaClient
             data["arena_client"] = ArenaClient(

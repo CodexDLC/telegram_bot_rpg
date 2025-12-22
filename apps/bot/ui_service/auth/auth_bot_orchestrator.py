@@ -150,9 +150,6 @@ class AuthBotOrchestrator:
             sync_service = GameSyncService(self.session, self.account_manager)
             await sync_service.synchronize_player_state(char_id)
 
-            # session_context = state_data.get(FSM_CONTEXT_KEY, {}) # Удалено: не используется
-            # actor_name = session_context.get("symbiote_name", "Симбиот") # Удалено: не используется
-
             # Нам нужно получить текущую локацию.
             from apps.bot.ui_service.exploration.exploration_bot_orchestrator import ExplorationBotOrchestrator
 

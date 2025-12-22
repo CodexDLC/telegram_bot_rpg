@@ -31,6 +31,36 @@
 
 ---
 
+## 🎭 Задача: Сценарии и Обучение (Scenario & Tutorial Files)
+**Суть:** Список всех файлов, связанных с системой сценариев и обучения, для анализа и рефакторинга.
+
+**Scenario (Сценарии):**
+*   `apps/bot/core_client/scenario_client.py`
+*   `apps/bot/handlers/callback/game/scenario_handler.py`
+*   `apps/bot/ui_service/scenario/dto/scenario_view_dto.py`
+*   `apps/bot/ui_service/scenario/formatters/scenario_formatter.py`
+*   `apps/bot/ui_service/scenario/scenario_bot_orchestrator.py`
+*   `apps/bot/ui_service/scenario/scenario_ui_service.py`
+*   `apps/common/database/db_contract/i_scenario_repo.py`
+*   `apps/common/database/model_orm/scenario.py`
+*   `apps/common/database/repositories/ORM/scenario_repository.py`
+*   `apps/common/schemas_dto/scenario_dto.py`
+*   `apps/game_core/game_service/quest/logic/scenario_director.py`
+*   `apps/game_core/game_service/quest/logic/scenario_evaluator.py`
+*   `apps/game_core/game_service/quest/logic/scenario_formatter.py`
+*   `apps/game_core/game_service/quest/logic/scenario_manager.py`
+*   `apps/game_core/game_service/quest/scenario_core_orchestrator.py`
+
+**Tutorial (Обучение):**
+*   `apps/bot/handlers/callback/tutorial/tutorial_game.py`
+*   `apps/bot/handlers/callback/tutorial/tutorial_skill.py`
+*   `apps/bot/resources/texts/game_messages/tutorial_messages.py`
+*   `apps/bot/resources/texts/game_messages/tutorial_messages_skill.py`
+*   `apps/bot/ui_service/tutorial/tutorial_service.py`
+*   `apps/bot/ui_service/tutorial/tutorial_service_skill.py`
+
+---
+
 ## 🎲 Задача: Реализация системы Риска и Награды (Task_Risk_Reward_Implementation)
 **Суть:** Внедрение механики "незащищенного" лута и опыта, которые можно потерять при смерти в опасных зонах (Рифтах).
 

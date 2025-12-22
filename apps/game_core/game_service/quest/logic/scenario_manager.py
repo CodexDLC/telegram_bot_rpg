@@ -118,19 +118,32 @@ class ScenarioManager:
     # --- Обработчики конкретных типов данных Redis ---
 
     async def _handle_hjson(self, key: str, path: str | None, value: Any = None) -> Any:
-        """Обработка JSON внутри HASH (например, ac:stats.strength)"""
+        """Обработка JSON внутри HASH с валидацией структуры."""
         field = path.split(".")[0] if path else "data"
         sub_key = path.split(".")[1] if path and "." in path else None
 
-        if value is None:  # GET
+        # GET
+        if value is None:
             data = await self.redis.get_hash_json(key, field)
-            return data.get(sub_key) if (data and sub_key) else data
-        else:  # SET
-            current_data = await self.redis.get_hash_json(key, field) or {}
+            if not isinstance(data, dict):
+                log.warning(f"ScenarioManager | status=invalid_json_type key={key} field={field}")
+                return None
+            return data.get(sub_key) if sub_key else data
+
+        # SET
+        else:
+            current_data = await self.redis.get_hash_json(key, field)
+            if not isinstance(current_data, dict):
+                current_data = {}
+
             if sub_key:
                 current_data[sub_key] = value
             else:
+                if not isinstance(value, dict):
+                    log.error(f"ScenarioManager | action=set_hjson error=value_must_be_dict key={key}")
+                    return False
                 current_data = value
+
             await self.redis.set_hash_json(key, field, current_data)
             return True
 

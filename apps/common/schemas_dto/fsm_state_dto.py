@@ -19,6 +19,7 @@ class SessionDataDTO(BaseModel):
     char_id: int | None = None  # Идентификатор активного персонажа пользователя.
     message_menu: dict[str, int] | None = None  # Словарь с chat_id и message_id для сообщения главного меню.
     message_content: dict[str, int] | None = None  # Словарь с chat_id и message_id для контентного сообщения (нижнего).
+    message_error: dict[str, int] | None = None  # Словарь для сообщения об ошибке, чтобы не спамить.
     char_name: str | None = None  # Имя активного персонажа.
     symbiote_name: str | None = None  # Имя симбиота (NPC-помощника).
 
