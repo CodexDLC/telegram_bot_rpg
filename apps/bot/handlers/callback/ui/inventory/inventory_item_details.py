@@ -45,6 +45,13 @@ async def inventory_item_details_handler(
         await Err.char_id_not_found_in_fsm(call)
         return
 
+    # TODO: Реализовать обработку действий 'equip' и 'unequip' здесь или в отдельном хендлере.
+    # Сейчас InventoryCallback с action='equip' попадает сюда, но get_item_details просто показывает детали заново.
+    if callback_data.action in ("equip", "unequip"):
+        log.warning(f"InventoryDetails | action='{callback_data.action}' is NOT IMPLEMENTED yet.")
+        await call.answer("Функционал экипировки в разработке.", show_alert=True)
+        return
+
     # Создаем оркестратор через контейнер
     orchestrator = container.get_inventory_bot_orchestrator(session)
 

@@ -7,8 +7,8 @@ class Buttons:
     """
 
     START = {
-        "start_adventure": "Начать приключение",
-        "login": "Войти",  # Добавлена кнопка Логин
+        "start_adventure": "⚔️ Начать приключение",
+        "settings": "⚙️ Настройки",
     }
 
     LOBBY_KB_UP = {"create": "➕ Создать"}

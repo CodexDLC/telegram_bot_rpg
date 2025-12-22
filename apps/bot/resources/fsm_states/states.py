@@ -45,12 +45,13 @@ class BugReport(StatesGroup):
 class InGame(StatesGroup):
     """Состояния, когда игрок находится в игровом мире."""
 
+    onboarding = State()  # <-- Новый этап: создание "Био"
     navigation = State()
     inventory = State()
     combat = State()
-    status = State()  # <-- Добавлено
-    scenario = State()  # <-- Добавлено
-    arena = State()  # <-- Добавлено (для будущего рефакторинга)
+    status = State()
+    scenario = State()
+    arena = State()
 
 
 class AdminMode(StatesGroup):

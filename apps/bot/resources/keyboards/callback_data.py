@@ -53,3 +53,12 @@ class ScenarioCallback(CallbackData, prefix="sc"):
 class GenderCallback(CallbackData, prefix="gender"):
     action: str
     value: str
+
+
+class OnboardingCallback(CallbackData, prefix="onb"):
+    """
+    Универсальный колбэк для процесса онбординга (создания персонажа).
+    """
+
+    action: str  # "start", "set_gender", "finalize", etc.
+    value: str | None = None

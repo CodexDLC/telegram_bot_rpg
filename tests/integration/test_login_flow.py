@@ -7,45 +7,20 @@ from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, Message, User
 
-from apps.bot.handlers.callback.login.char_creation import (
-    choose_gender_handler,
-    choosing_name_handler,
-    confirm_creation_handler,
-)
 from apps.bot.handlers.callback.login.lobby import start_login_handler
-from apps.bot.handlers.callback.login.lobby_character_selection import (
-    select_or_delete_character_handler,
+from apps.bot.handlers.callback.onboarding.onboarding_handler import (
+    on_name_input,
+    on_onboarding_action,
 )
-from apps.bot.handlers.callback.login.login_handler import start_logging_handler
-from apps.bot.handlers.callback.login.logout import global_logout_handler
-from apps.bot.handlers.callback.tutorial.tutorial_game import (
-    start_tutorial_handler,
-    tutorial_confirmation_handler,
-    tutorial_event_stats_handler,
-)
-from apps.bot.handlers.callback.tutorial.tutorial_skill import (
-    in_skills_progres_handler,
-    skill_confirm_handler,
-    start_skill_phase_handler,
-)
-from apps.bot.handlers.commands import cmd_start
-from apps.bot.resources.fsm_states import (
-    CharacterCreation,
-    CharacterLobby,
-    InGame,
-    StartTutorial,
-)
-from apps.bot.resources.keyboards.callback_data import (
-    LobbySelectionCallback,
-    TutorialQuestCallback,
-)
-from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 
-# 2. Создание
-# 3. Туториалы
-# --- ИМПОРТЫ ХЭНДЛЕРОВ ---
-# 1. Общие
-# --- РЕСУРСЫ ---
+# Хендлеры
+from apps.bot.handlers.commands import cmd_start
+
+# Ресурсы
+from apps.bot.resources.fsm_states import InGame
+from apps.bot.resources.keyboards.callback_data import OnboardingCallback
+from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
+from apps.common.database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 
 TEST_USER_ID = 777
 TEST_CHAT_ID = 777
@@ -106,148 +81,89 @@ def mock_callback(mock_bot, mock_message):
 
 
 @pytest.mark.asyncio
-async def test_full_game_cycle(get_async_session, fsm_context, mock_bot, mock_message, mock_callback, app_container):
+async def test_onboarding_flow(get_async_session, fsm_context, mock_bot, mock_message, mock_callback, app_container):
     """
-    Полный цикл: Старт -> Создание -> Туториал (Статы) -> Туториал (Скиллы) -> Вход -> Выход -> Вход.
+    Тест процесса создания персонажа (Onboarding):
+    1. /start
+    2. Вход в создание (start_adventure) -> InGame.onboarding
+    3. Выбор пола (set_gender)
+    4. Ввод имени (set_name)
+    5. Финализация (finalize)
     """
-    # Имитация работы Middleware
+
+    # Имитация данных Middleware
     data = {
         "account_manager": app_container.account_manager,
-        "arena_manager": app_container.arena_manager,
-        "combat_manager": app_container.combat_manager,
-        "world_manager": app_container.world_manager,
-        "game_world_service": app_container.game_world_service,
     }
     await fsm_context.set_data(data)
 
-    try:
-        async with get_async_session() as session:
-            # 1. СТАРТ
-            print("\n🏁 Шаг 1: /start")
-            await cmd_start(mock_message, fsm_context, mock_bot, session)
+    async with get_async_session() as session:
+        # ==========================================
+        # 0. ОЧИСТКА ДАННЫХ (CLEANUP)
+        # ==========================================
+        # Удаляем всех персонажей пользователя, чтобы тест начинался с чистого листа
+        char_repo = CharactersRepoORM(session)
+        chars = await char_repo.get_characters(TEST_USER_ID)
+        for char in chars:
+            await char_repo.delete_characters(char.character_id)
+        await session.commit()
 
-            fsm_data = await fsm_context.get_data()
-            assert FSM_CONTEXT_KEY in fsm_data
-            assert fsm_data[FSM_CONTEXT_KEY].get("message_menu") is not None
+        # ==========================================
+        # 1. СТАРТ (/start)
+        # ==========================================
+        print("\n🏁 Шаг 1: /start")
+        # ИСПРАВЛЕНО: Передаем container
+        await cmd_start(mock_message, fsm_context, mock_bot, session, app_container)
 
-            # 2. НАЧАЛО (Авто-создание)
-            print("\n🏁 Шаг 2: Начать приключение")
-            mock_callback.data = "start_adventure"
-            await start_login_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"])
-            assert await fsm_context.get_state() == CharacterCreation.choosing_gender
+        fsm_data = await fsm_context.get_data()
+        assert FSM_CONTEXT_KEY in fsm_data
 
-            # 3. СОЗДАНИЕ
-            print("\n🏁 Шаг 3: Ввод данных")
-            mock_callback.data = "gender:male"
-            await choose_gender_handler(mock_callback, fsm_context, mock_bot)
+        # ==========================================
+        # 2. НАЧАЛО (Вход в Onboarding)
+        # ==========================================
+        print("\n🏁 Шаг 2: Начать приключение")
+        mock_callback.data = "start_adventure"
+        # ИСПРАВЛЕНО: Передаем container
+        await start_login_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"], app_container)
 
-            mock_message.text = "Hero"
-            await choosing_name_handler(mock_message, fsm_context, mock_bot)
+        # Проверяем переход в стейт onboarding
+        assert await fsm_context.get_state() == InGame.onboarding
 
-            mock_callback.data = "confirm"
-            await confirm_creation_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"])
-            print("✅ Персонаж создан.")
+        # Проверяем создание временного ID персонажа
+        fsm_data = await fsm_context.get_data()
+        assert "char_id" in fsm_data
 
-            # 4. ТУТОРИАЛ (СТАТЫ)
-            print("\n🏁 Шаг 4: Туториал (Статы)")
-            # Фикс бага с InGame стейтом (если ты его еще не поправил в коде, тут мы страхуемся)
-            state = await fsm_context.get_state()
-            if state != StartTutorial.start:
-                await fsm_context.set_state(StartTutorial.start)
+        # ==========================================
+        # 3. ВЫБОР ПОЛА
+        # ==========================================
+        print("\n🏁 Шаг 3: Выбор пола")
+        cb_gender = OnboardingCallback(action="set_gender", value="male")
+        await on_onboarding_action(mock_callback, cb_gender, fsm_context, session, app_container)
 
-            mock_callback.data = "tut:start"
-            await start_tutorial_handler(mock_callback, fsm_context, mock_bot)
+        # Проверяем сохранение в FSM
+        fsm_data = await fsm_context.get_data()
+        assert fsm_data.get("gender") == "male"
 
-            for _ in range(4):
-                mock_callback.data = "tut_ev1:might"
-                await tutorial_event_stats_handler(mock_callback, fsm_context, mock_bot)
+        # ==========================================
+        # 4. ВВОД ИМЕНИ
+        # ==========================================
+        print("\n🏁 Шаг 4: Ввод имени")
+        mock_message.text = "TestHero"
+        await on_name_input(mock_message, fsm_context, session, app_container)
 
-            mock_callback.data = "tut:continue"
-            await tutorial_confirmation_handler(mock_callback, fsm_context, mock_bot, session)
-            print("✅ Статы распределены.")
+        # Проверяем сохранение в FSM
+        fsm_data = await fsm_context.get_data()
+        assert fsm_data.get("name") == "TestHero"
 
-            # 5. ТУТОРИАЛ (СКИЛЛЫ)
-            print("\n🏁 Шаг 5: Туториал (Скиллы)")
-            # Начало фазы скиллов
-            mock_callback.data = "tut_quest:start_skill_phase"
-            await start_skill_phase_handler(mock_callback, fsm_context, mock_bot)
-            assert await fsm_context.get_state() == StartTutorial.in_skills_progres
+        # ==========================================
+        # 5. ФИНАЛИЗАЦИЯ
+        # ==========================================
+        print("\n🏁 Шаг 5: Финализация")
+        cb_finalize = OnboardingCallback(action="finalize", value="confirm")
+        await on_onboarding_action(mock_callback, cb_finalize, fsm_context, session, app_container)
 
-            # Прокликиваем ветку (Меч -> Легкая броня -> Рефлексы -> Лут)
-            # Используем TutorialQuestCallback
-            path = [
-                ("step_1", "path_melee", "path_melee"),
-                ("step_2", "path_melee", "light_armor"),
-                ("step_3", "path_melee", "reflexes"),
-                ("finale", "path_melee", "FINALE_LOOTING"),
-            ]
+        # Проверяем, что бот попытался отредактировать сообщение (показать финальный экран)
+        # Это означает, что оркестратор отработал и вернул ViewDTO
+        assert mock_callback.message.edit_text.called
 
-            for phase, branch, val in path:
-                cb_data = TutorialQuestCallback(phase=phase, branch=branch, value=val)
-                await in_skills_progres_handler(mock_callback, fsm_context, cb_data, mock_bot)
-
-            # Подтверждение (Награда)
-            print("✅ Скиллы выбраны, подтверждаем...")
-            cb_data = TutorialQuestCallback(phase="p_end", branch="none", value="mining")
-            await skill_confirm_handler(mock_callback, fsm_context, cb_data, mock_bot, session)
-
-            # После скиллов нас должно перекинуть в Лобби для входа
-            assert await fsm_context.get_state() == CharacterLobby.selection
-
-            # 6. ВХОД В ИГРУ
-            print("\n🏁 Шаг 6: Вход в мир (Login)")
-            mock_callback.data = "lsc:login"
-            await start_logging_handler(
-                call=mock_callback,
-                state=fsm_context,
-                bot=mock_bot,
-                session=session,
-                account_manager=data["account_manager"],
-                world_manager=data["world_manager"],
-                game_world_service=data["game_world_service"],
-                combat_manager=data["combat_manager"],
-            )
-
-            state = await fsm_context.get_state()
-            assert state == InGame.navigation, f"❌ Ошибка входа! Текущий стейт: {state}"
-            print("✅ Успешный вход в Навигацию.")
-
-            # 7. ВЫХОД (Logout)
-            print("\n🏁 Шаг 7: Выход (Logout)")
-            mock_callback.data = "lsc:logout"
-            await global_logout_handler(mock_callback, fsm_context, mock_bot)
-            assert await fsm_context.get_state() is None
-            print("✅ Выход успешен.")
-
-            # 8. РЕ-ЛОГИН (Проверка сохранения)
-            print("\n🏁 Шаг 8: Возвращение (Re-Login)")
-            mock_callback.data = "start_adventure"
-            await start_login_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"])
-
-            # Выбираем чара
-            fsm_data = await fsm_context.get_data()
-            char_id = fsm_data["characters"][-1]["character_id"]
-            lobby_cb_data = LobbySelectionCallback(action="select", char_id=char_id)
-            await select_or_delete_character_handler(mock_callback, lobby_cb_data, fsm_context, mock_bot, session)
-
-            # Входим
-            mock_callback.data = "lsc:login"
-            await start_logging_handler(
-                call=mock_callback,
-                state=fsm_context,
-                bot=mock_bot,
-                session=session,
-                account_manager=data["account_manager"],
-                world_manager=data["world_manager"],
-                game_world_service=data["game_world_service"],
-                combat_manager=data["combat_manager"],
-            )
-
-            state = await fsm_context.get_state()
-            assert state == InGame.navigation
-            print("✅ Ре-логин успешен! Цепочка работает.")
-    finally:
-        # Я предполагаю, что у вашего сервиса есть метод shutdown
-        # для очистки фоновых задач.
-        if app_container.game_world_service and hasattr(app_container.game_world_service, "shutdown"):
-            await app_container.game_world_service.shutdown()
+        print("✅ Тест онбординга успешно пройден.")

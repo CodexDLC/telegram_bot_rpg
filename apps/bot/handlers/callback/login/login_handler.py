@@ -1,14 +1,15 @@
 # apps/bot/handlers/callback/login/login_handler.py
 import asyncio
+from typing import cast
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.handlers.callback.login.char_creation import start_creation_handler
+from apps.bot.handlers.callback.onboarding.onboarding_handler import start_onboarding_process
 from apps.bot.resources.keyboards.callback_data import LobbySelectionCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY, fsm_clean_core_state
@@ -67,10 +68,13 @@ async def start_logging_handler(
 
     # Обработка создания персонажа (пока оставим как есть, так как это отдельный флоу)
     if result_dto.game_stage == GameStage.CREATION:
-        message_menu = session_context.get("message_menu")
-        if isinstance(message_menu, dict):
-            await start_creation_handler(
-                call, state, bot, user_id, char_id, message_menu, session, container.account_manager
+        if call.message:
+            # mypy считает, что call.message может быть InaccessibleMessage,
+            # но мы знаем, что в данном контексте это Message.
+            # Используем cast для явного указания типа.
+            message = cast(Message, call.message)
+            await start_onboarding_process(
+                message=message, state=state, char_id=char_id, session=session, container=container
             )
         return
 
