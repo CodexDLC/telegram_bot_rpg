@@ -6,11 +6,13 @@ from apps.common.database.repositories.ORM.scenario_repository import ScenarioRe
 from apps.common.schemas_dto.scenario_dto import ScenarioResponseDTO
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.redis_service import RedisService
-from apps.game_core.game_service.quest.logic.scenario_director import ScenarioDirector
-from apps.game_core.game_service.quest.logic.scenario_evaluator import ScenarioEvaluator
-from apps.game_core.game_service.quest.logic.scenario_formatter import ScenarioFormatter
-from apps.game_core.game_service.quest.logic.scenario_manager import ScenarioManager
-from apps.game_core.game_service.quest.scenario_core_orchestrator import ScenarioCoreOrchestrator
+
+# Исправленные импорты
+from apps.game_core.game_service.scenario_orchestrator.logic.scenario_director import ScenarioDirector
+from apps.game_core.game_service.scenario_orchestrator.logic.scenario_evaluator import ScenarioEvaluator
+from apps.game_core.game_service.scenario_orchestrator.logic.scenario_formatter import ScenarioFormatter
+from apps.game_core.game_service.scenario_orchestrator.logic.scenario_manager import ScenarioManager
+from apps.game_core.game_service.scenario_orchestrator.scenario_core_orchestrator import ScenarioCoreOrchestrator
 
 
 class ScenarioClient:
@@ -22,14 +24,19 @@ class ScenarioClient:
     def __init__(self, session: AsyncSession, redis_service: RedisService, account_manager: AccountManager):
         # Инициализация зависимостей Core-слоя
         repo = ScenarioRepositoryORM(session)
-        manager = ScenarioManager(redis_service)
+
+        # Manager теперь принимает repo и account_manager
+        manager = ScenarioManager(redis_service, repo, account_manager)
+
         evaluator = ScenarioEvaluator()
-        director = ScenarioDirector(evaluator)
+
+        # Director теперь принимает manager
+        director = ScenarioDirector(evaluator, manager)
+
         formatter = ScenarioFormatter()
 
+        # Orchestrator теперь принимает только саппорт-классы
         self._orchestrator = ScenarioCoreOrchestrator(
-            repo=repo,
-            account_manager=account_manager,
             scenario_manager=manager,
             scenario_evaluator=evaluator,
             scenario_director=director,

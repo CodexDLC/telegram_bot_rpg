@@ -114,3 +114,28 @@ class SymbioteRepoORM(ISymbioteRepo):
         except SQLAlchemyError:
             log.exception(f"SymbioteRepoORM | action=update_progress status=failed char_id={character_id}")
             raise
+
+    async def update_elements_resonance(self, character_id: int, new_resonance: dict) -> None:
+        """
+        Обновляет поле резонанса элементов (JSON).
+
+        Полностью перезаписывает поле `elements_resonance` переданным словарем.
+
+        Args:
+            character_id: Идентификатор персонажа.
+            new_resonance: Словарь с новыми значениями резонанса.
+        """
+        log.debug(
+            f"SymbioteRepoORM | action=update_elements_resonance char_id={character_id} resonance={new_resonance}"
+        )
+        stmt = (
+            update(CharacterSymbiote)
+            .where(CharacterSymbiote.character_id == character_id)
+            .values(elements_resonance=new_resonance)
+        )
+        try:
+            await self.session.execute(stmt)
+            log.info(f"SymbioteRepoORM | action=update_elements_resonance status=success char_id={character_id}")
+        except SQLAlchemyError:
+            log.exception(f"SymbioteRepoORM | action=update_elements_resonance status=failed char_id={character_id}")
+            raise

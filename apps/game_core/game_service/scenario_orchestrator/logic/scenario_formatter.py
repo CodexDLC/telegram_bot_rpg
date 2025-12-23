@@ -1,3 +1,4 @@
+# apps/game_core/game_service/scenario_orchestrator/logic/scenario_formatter.py
 import re
 from typing import Any
 

@@ -1,6 +1,12 @@
 # apps/admin_dashboard/ui_core.py
+from contextlib import asynccontextmanager
+
 import plotly.graph_objects as go
 import streamlit as st
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
+
+from apps.common.core.settings import settings
 
 # --- CONSTANTS ---
 THEME_COLOR = "#E69138"  # Основной акцент (Gold/Orange)
@@ -136,3 +142,31 @@ def render_inventory_grid(items):
             """,
                 unsafe_allow_html=True,
             )
+
+
+# --- DATABASE SESSION FOR STREAMLIT ---
+
+
+@asynccontextmanager
+async def get_dashboard_session():
+    """
+    Создает изолированную сессию БД для Streamlit.
+    Использует NullPool, чтобы не конфликтовать с event loop при перезагрузках страницы.
+    """
+    # Создаем движок с NullPool (каждое соединение закрывается сразу)
+    engine = create_async_engine(settings.sqlalchemy_database_url, echo=False, poolclass=NullPool)
+
+    session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with session_factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+    # Обязательно закрываем движок, чтобы не висели коннекты
+    await engine.dispose()

@@ -10,6 +10,7 @@ from apps.bot.resources.keyboards.callback_data import OnboardingCallback
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY, fsm_load_auto, fsm_store
 from apps.common.core.container import AppContainer
 from apps.common.schemas_dto import SessionDataDTO
+from apps.common.services.validators.character_validator import validate_character_name
 
 router = Router()
 
@@ -60,7 +61,7 @@ async def on_onboarding_action(
 
                 await state.update_data({FSM_CONTEXT_KEY: await fsm_store(session_data)})
         except Exception as e:  # noqa: BLE001
-            log.warning(f"Failed to finalize onboarding session data: {e}")
+            log.warning(f"Failed to finalize onboarding session data: {e}", exc_info=True)
 
     # Обновляем сообщение
     if call.message:
@@ -94,9 +95,10 @@ async def on_name_input(message: Message, state: FSMContext, session: AsyncSessi
 
     name = message.text.strip()
 
-    # Простая валидация длины
-    if not (3 <= len(name) <= 16):
-        await message.answer("⚠️ Имя должно быть от 3 до 16 символов.")
+    # Валидация имени
+    is_valid, error_msg = validate_character_name(name)
+    if not is_valid:
+        await message.answer(f"⚠️ {error_msg}")
         return
 
     # Сохраняем имя в FSM

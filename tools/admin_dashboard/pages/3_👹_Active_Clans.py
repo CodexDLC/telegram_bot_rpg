@@ -10,9 +10,15 @@ from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
 
 from apps.common.database.repositories import get_monster_repo
-from apps.common.database.session import async_session_factory
 from apps.game_core.resources.game_data.items.bases import BASES_DB
-from tools.admin_dashboard.ui_core import apply_global_styles, render_header, render_rpg_stat_chart
+
+# Заменили импорт
+from tools.admin_dashboard.ui_core import (
+    apply_global_styles,
+    get_dashboard_session,
+    render_header,
+    render_rpg_stat_chart,
+)
 
 # --- Адаптация под структуру проекта ---
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -43,7 +49,7 @@ async def load_clans_data():
     """
     log.info("LoadClans | event=start")
     try:
-        async with async_session_factory() as session:
+        async with get_dashboard_session() as session:
             repo = get_monster_repo(session)
             clans = await repo.get_all_clans()
             log.info(f"LoadClans | event=success count={len(clans)}")

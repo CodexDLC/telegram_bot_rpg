@@ -16,8 +16,10 @@ if project_root not in sys.path:
 
 
 from apps.common.core.loguru_setup import setup_loguru  # noqa: E402
-from apps.common.database.session import async_session_factory  # noqa: E402
-from tools.admin_dashboard.ui_core import apply_global_styles, render_header  # noqa: E402
+from apps.game_core.utils.scenario_loader import ScenarioLoader  # noqa: E402
+
+# Заменили импорт
+from tools.admin_dashboard.ui_core import apply_global_styles, get_dashboard_session, render_header  # noqa: E402
 
 # --- 2. Инициализация ---
 setup_loguru()
@@ -47,7 +49,8 @@ async def load_kpi_data() -> dict[str, Any]:
     }
 
     try:
-        async with async_session_factory() as session:
+        # Используем get_dashboard_session
+        async with get_dashboard_session() as session:
             # 1. Считаем игроков (таблица users)
             res_users = await session.execute(text("SELECT count(*) FROM users"))
             stats["players_total"] = res_users.scalar() or 0
@@ -78,6 +81,21 @@ async def load_kpi_data() -> dict[str, Any]:
     stats["db_latency_ms"] = round((end_time - start_time) * 1000, 2)
 
     return stats
+
+
+async def reload_scenarios_action():
+    """
+    Перезагружает сценарии из JSON в БД.
+    """
+    try:
+        # Используем get_dashboard_session
+        async with get_dashboard_session() as session:
+            loader = ScenarioLoader(session)
+            await loader.load_all_scenarios()
+        return True, "Сценарии успешно обновлены!"
+    except Exception as e:  # noqa: BLE001
+        log.exception(f"Reload Scenarios Failed: {e}")
+        return False, f"Ошибка обновления: {e}"
 
 
 # --- 4. Основной интерфейс ---
@@ -129,13 +147,20 @@ st.divider()
 
 # --- 6. Quick Actions (Меню быстрых действий) ---
 st.subheader("🚀 Quick Actions")
-st.caption("Управление состоянием сервера (Mock-кнопки для примера)")
+st.caption("Управление состоянием сервера")
 
 with st.container():
     c1, c2, c3 = st.columns(3)
 
-    if c1.button("🔄 Restart Bot Service", use_container_width=True):
-        st.toast("Команда перезагрузки отправлена...", icon="🔄")
+    if c1.button("🔄 Reload Scenarios (JSON -> DB)", use_container_width=True):
+        with st.spinner("Обновление сценариев..."):
+            success, msg = asyncio.run(reload_scenarios_action())
+            if success:
+                st.toast(msg, icon="✅")
+                st.success(msg)
+            else:
+                st.toast("Ошибка!", icon="❌")
+                st.error(msg)
 
     if c2.button("🧹 Clear Cache (Redis)", use_container_width=True):
         st.cache_data.clear()

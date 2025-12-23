@@ -13,7 +13,7 @@ from apps.common.services.core_service.manager.account_manager import AccountMan
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
 from apps.common.services.core_service.manager.world_manager import WorldManager
-from apps.game_core.game_service.game_sync_service import GameSyncService
+from apps.game_core.game_service.game_sync.game_sync_service import GameSyncService
 from apps.game_core.game_service.login_service import LoginService
 
 

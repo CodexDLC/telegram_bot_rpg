@@ -29,10 +29,26 @@ class ScenarioRepositoryORM(IScenarioRepository):
         try:
             result = await self.session.execute(stmt)
             obj = result.scalar_one_or_none()
-            return obj.__dict__ if obj else None
+            return self._to_dict(obj) if obj else None
         except SQLAlchemyError:
             log.exception(f"ScenarioRepositoryORM | action=get_master status=failed quest_key='{quest_key}'")
             return None
+
+    async def upsert_master(self, master_data: dict[str, Any]) -> None:
+        """Создает или обновляет мастер-запись квеста."""
+        quest_key = master_data.get("quest_key")
+        log.debug(f"ScenarioRepositoryORM | action=upsert_master quest_key='{quest_key}'")
+
+        stmt = insert(ScenarioMaster).values(**master_data)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["quest_key"], set_={k: v for k, v in master_data.items() if k != "quest_key"}
+        )
+
+        try:
+            await self.session.execute(stmt)
+        except SQLAlchemyError:
+            log.exception(f"ScenarioRepositoryORM | action=upsert_master status=failed quest_key='{quest_key}'")
+            raise
 
     # --- 2. Работа с Scenario_Nodes (Table B) ---
 
@@ -43,7 +59,7 @@ class ScenarioRepositoryORM(IScenarioRepository):
         try:
             result = await self.session.execute(stmt)
             obj = result.scalar_one_or_none()
-            return obj.__dict__ if obj else None
+            return self._to_dict(obj) if obj else None
         except SQLAlchemyError:
             log.exception(
                 f"ScenarioRepositoryORM | action=get_node status=failed quest='{quest_key}' node='{node_key}'"
@@ -51,16 +67,14 @@ class ScenarioRepositoryORM(IScenarioRepository):
             return None
 
     async def get_nodes_by_pool(self, quest_key: str, pool_tag: str) -> list[dict[str, Any]]:
-        """Поиск нод по значению внутри JSON-поля."""
+        """Поиск нод по тегу в массиве tags (JSONB)."""
         log.debug(f"ScenarioRepositoryORM | action=get_nodes_by_pool quest='{quest_key}' pool='{pool_tag}'")
         try:
-            # Используем .astext для PostgreSQL JSONB
-            # Это стандартный способ извлечения текста из JSON в SQLAlchemy для PG
             stmt = select(ScenarioNode).where(
-                ScenarioNode.quest_key == quest_key, ScenarioNode.selection_requirements["pool"].astext == pool_tag
+                ScenarioNode.quest_key == quest_key, ScenarioNode.tags.contains([pool_tag])
             )
             result = await self.session.execute(stmt)
-            return [n.__dict__ for n in result.scalars().all()]
+            return [self._to_dict(n) for n in result.scalars().all()]
         except SQLAlchemyError:
             log.exception(
                 f"ScenarioRepositoryORM | action=get_nodes_by_pool status=failed quest='{quest_key}' pool='{pool_tag}'"
@@ -73,10 +87,41 @@ class ScenarioRepositoryORM(IScenarioRepository):
         stmt = select(ScenarioNode).where(ScenarioNode.quest_key == quest_key)
         try:
             result = await self.session.execute(stmt)
-            return [n.__dict__ for n in result.scalars().all()]
+            return [self._to_dict(n) for n in result.scalars().all()]
         except SQLAlchemyError:
             log.exception(f"ScenarioRepositoryORM | action=get_all_quest_nodes status=failed quest='{quest_key}'")
             return []
+
+    async def upsert_node(self, node_data: dict[str, Any]) -> None:
+        """Создает или обновляет ноду."""
+        quest_key = node_data.get("quest_key")
+        node_key = node_data.get("node_key")
+        log.debug(f"ScenarioRepositoryORM | action=upsert_node quest='{quest_key}' node='{node_key}'")
+
+        stmt = insert(ScenarioNode).values(**node_data)
+        # Используем явное имя констрейнта для надежности
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_quest_node_key",
+            set_={k: v for k, v in node_data.items() if k not in ["quest_key", "node_key"]},
+        )
+
+        try:
+            await self.session.execute(stmt)
+        except SQLAlchemyError:
+            log.exception(
+                f"ScenarioRepositoryORM | action=upsert_node status=failed quest='{quest_key}' node='{node_key}'"
+            )
+            raise
+
+    async def delete_quest_nodes(self, quest_key: str) -> None:
+        """Удаляет все ноды квеста (для перезаливки)."""
+        log.debug(f"ScenarioRepositoryORM | action=delete_quest_nodes quest='{quest_key}'")
+        stmt = delete(ScenarioNode).where(ScenarioNode.quest_key == quest_key)
+        try:
+            await self.session.execute(stmt)
+        except SQLAlchemyError:
+            log.exception(f"ScenarioRepositoryORM | action=delete_quest_nodes status=failed quest='{quest_key}'")
+            raise
 
     # --- 3. Работа с Character_Quest_State (Table C) ---
 
@@ -87,7 +132,7 @@ class ScenarioRepositoryORM(IScenarioRepository):
         try:
             result = await self.session.execute(stmt)
             obj = result.scalar_one_or_none()
-            return obj.__dict__ if obj else None
+            return self._to_dict(obj) if obj else None
         except SQLAlchemyError:
             log.exception(f"ScenarioRepositoryORM | action=get_active_state status=failed char_id={char_id}")
             return None
@@ -106,14 +151,14 @@ class ScenarioRepositoryORM(IScenarioRepository):
                 "current_node_key": node_key,
                 "context": context,
                 "session_id": session_id,
-                "updated_at": func.now(),  # Используем серверное время БД
+                "updated_at": func.now(),
             }
 
             stmt = insert(CharacterScenarioState).values(**data)
 
-            # Упрощенный блок обновления для SQLAlchemy 2.0
+            # Используем явное имя констрейнта, которое мы добавили в модель
             stmt = stmt.on_conflict_do_update(
-                index_elements=["char_id"], set_={k: v for k, v in data.items() if k != "char_id"}
+                constraint="uq_char_scenario_state_char_id", set_={k: v for k, v in data.items() if k != "char_id"}
             )
 
             await self.session.execute(stmt)
@@ -134,3 +179,9 @@ class ScenarioRepositoryORM(IScenarioRepository):
             log.exception(f"ScenarioRepositoryORM | action=delete_state status=failed char_id={char_id}")
             await self.session.rollback()
             raise
+
+    def _to_dict(self, obj: Any) -> dict[str, Any]:
+        """Безопасное преобразование ORM-объекта в словарь."""
+        if not obj:
+            return {}
+        return {k: v for k, v in obj.__dict__.items() if not k.startswith("_sa_")}

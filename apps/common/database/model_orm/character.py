@@ -22,7 +22,17 @@ class Character(Base, TimestampMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.telegram_id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), default="Новый персонаж", nullable=False)
     gender: Mapped[str] = mapped_column(String(20), default="other", nullable=False)
-    game_stage: Mapped[str] = mapped_column(String(50), default="creation", nullable=False)
+
+    # FSM State и Навигация
+    game_stage: Mapped[str] = mapped_column(
+        String(50), default="creation", nullable=False, comment="Текущий FSM стейт (state)."
+    )
+    prev_game_stage: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="Предыдущий FSM стейт (prev_state)."
+    )
+
+    location_id: Mapped[str] = mapped_column(String(50), default="52_52", nullable=False, comment="Текущая локация.")
+    prev_location_id: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="Предыдущая локация.")
 
     user: Mapped[User] = relationship(back_populates="characters")
     stats: Mapped[CharacterStats] = relationship(
