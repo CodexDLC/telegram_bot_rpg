@@ -16,10 +16,12 @@ from apps.common.database.repositories import (
     get_user_repo,
     get_wallet_repo,
 )
-from apps.common.database.session import async_session_factory
 from apps.game_core.game_service.stats_aggregation_service import StatsAggregationService
+
+# Заменили импорт
 from tools.admin_dashboard.ui_core import (
     apply_global_styles,
+    get_dashboard_session,
     render_header,
     render_inventory_grid,
     render_rpg_stat_chart,
@@ -227,7 +229,7 @@ def orm_to_dict(orm_obj: Any) -> dict[str, Any]:
 # --- Data Layer ---
 async def fetch_users_page(offset: int, limit: int):
     try:
-        async with async_session_factory() as session:
+        async with get_dashboard_session() as session:
             repo = get_user_repo(session)
             return await repo.get_users_with_pagination(offset, limit)
     except SQLAlchemyError:
@@ -236,7 +238,7 @@ async def fetch_users_page(offset: int, limit: int):
 
 async def fetch_character_full_details(char_id: int) -> dict[str, Any] | None:
     try:
-        async with async_session_factory() as session:
+        async with get_dashboard_session() as session:
             agg_service = StatsAggregationService(session)
             inventory_repo = get_inventory_repo(session)
             skill_repo = get_skill_progress_repo(session)

@@ -9,7 +9,7 @@ from ..monster_structs import MonsterFamily
 UNDEAD_FAMILY: MonsterFamily = {
     "id": "undead_legion",
     "archetype": "undead",
-    "organization_type": "horde",
+    "organization_type": "horde",  # TSP Base: 30
     "default_tags": ["undead", "fearless", "dark_magic"],
     "hierarchy": {
         "minions": ["skeleton_servant", "rotting_corpse", "bone_walker"],
@@ -18,7 +18,7 @@ UNDEAD_FAMILY: MonsterFamily = {
         "boss": ["lich_acolyte", "necromancer", "lich_lord"],
     },
     "variants": {
-        # --- 1. Пешки (Minions) ---
+        # --- 1. Пешки (Minions) [TSP ~30] ---
         "skeleton_servant": {
             "id": "skeleton_servant",
             "role": "minion",
@@ -28,15 +28,15 @@ UNDEAD_FAMILY: MonsterFamily = {
             "narrative_hint": "A fragile skeleton holding a rusty tool or weapon. Moves with jerky motions.",
             "extra_tags": ["skeleton", "weak"],
             "base_stats": {
-                "strength": 5,
+                "strength": 6,
                 "agility": 8,
-                "endurance": 5,
+                "endurance": 6,
                 "intelligence": 1,
                 "wisdom": 1,
-                "men": 10,
-                "perception": 8,
+                "men": 10,  # Нежить не знает страха
+                "perception": 4,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 1,  # Итого: 38 (из-за Men)
             },
             "fixed_loadout": {"main_hand": "dagger", "chest_garment": "shirt"},
             "skills": ["attack_basic"],
@@ -51,14 +51,14 @@ UNDEAD_FAMILY: MonsterFamily = {
             "extra_tags": ["zombie", "disease"],
             "base_stats": {
                 "strength": 8,
-                "agility": 4,
+                "agility": 2,
                 "endurance": 12,
                 "intelligence": 1,
                 "wisdom": 1,
                 "men": 10,
-                "perception": 6,
+                "perception": 2,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 1,  # Итого: 38
             },
             "fixed_loadout": {"chest_garment": "shirt", "legs_garment": "trousers"},
             "skills": ["attack_basic", "debuff_poison"],
@@ -72,20 +72,20 @@ UNDEAD_FAMILY: MonsterFamily = {
             "narrative_hint": "A skeleton reinforced with extra bones. Looks sturdier than a servant.",
             "extra_tags": ["skeleton", "sturdy"],
             "base_stats": {
-                "strength": 7,
-                "agility": 7,
+                "strength": 8,
+                "agility": 6,
                 "endurance": 8,
                 "intelligence": 2,
                 "wisdom": 2,
                 "men": 10,
-                "perception": 8,
+                "perception": 4,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 2,  # Итого: 43
             },
             "fixed_loadout": {"main_hand": "mace", "off_hand": "buckler"},
             "skills": ["attack_heavy"],
         },
-        # --- 2. Воины (Veterans) ---
+        # --- 2. Воины (Veterans) [TSP ~45] ---
         "skeleton_soldier": {
             "id": "skeleton_soldier",
             "role": "veteran",
@@ -95,15 +95,15 @@ UNDEAD_FAMILY: MonsterFamily = {
             "narrative_hint": "A skeleton in tattered military gear. Holds a formation.",
             "extra_tags": ["skeleton", "soldier", "shield"],
             "base_stats": {
-                "strength": 9,
-                "agility": 9,
-                "endurance": 9,
-                "intelligence": 3,
-                "wisdom": 3,
+                "strength": 10,
+                "agility": 8,
+                "endurance": 10,
+                "intelligence": 2,
+                "wisdom": 2,
                 "men": 10,
-                "perception": 9,
-                "charisma": 2,
-                "luck": 5,
+                "perception": 6,
+                "charisma": 1,
+                "luck": 2,  # Итого: 51
             },
             "fixed_loadout": {
                 "main_hand": "sword",
@@ -122,15 +122,15 @@ UNDEAD_FAMILY: MonsterFamily = {
             "narrative_hint": "A heavily armored skeleton with a large shield. Stands guard eternally.",
             "extra_tags": ["skeleton", "heavy_armor", "guardian"],
             "base_stats": {
-                "strength": 11,
-                "agility": 6,
+                "strength": 12,
+                "agility": 4,
                 "endurance": 14,
-                "intelligence": 3,
-                "wisdom": 4,
+                "intelligence": 2,
+                "wisdom": 2,
                 "men": 10,
-                "perception": 10,
-                "charisma": 2,
-                "luck": 5,
+                "perception": 6,
+                "charisma": 1,
+                "luck": 2,  # Итого: 53
             },
             "fixed_loadout": {
                 "main_hand": "mace",
@@ -150,20 +150,20 @@ UNDEAD_FAMILY: MonsterFamily = {
             "narrative_hint": "A massive, bloated zombie. Its skin is tough as leather.",
             "extra_tags": ["zombie", "brute", "tough"],
             "base_stats": {
-                "strength": 16,
-                "agility": 3,
+                "strength": 18,
+                "agility": 2,
                 "endurance": 20,
                 "intelligence": 1,
                 "wisdom": 1,
                 "men": 10,
-                "perception": 5,
+                "perception": 2,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 1,  # Итого: 56
             },
             "fixed_loadout": {"main_hand": "warhammer"},
             "skills": ["attack_heavy", "explode_on_death"],
         },
-        # --- 3. Элита (Elites) ---
+        # --- 3. Элита (Elites) [TSP ~75] ---
         "death_knight": {
             "id": "death_knight",
             "role": "elite",
@@ -174,14 +174,14 @@ UNDEAD_FAMILY: MonsterFamily = {
             "extra_tags": ["knight", "heavy_armor", "cold"],
             "base_stats": {
                 "strength": 18,
-                "agility": 10,
+                "agility": 8,
                 "endurance": 18,
-                "intelligence": 8,
-                "wisdom": 8,
+                "intelligence": 6,
+                "wisdom": 6,
                 "men": 12,
-                "perception": 12,
-                "charisma": 10,
-                "luck": 5,
+                "perception": 8,
+                "charisma": 8,
+                "luck": 4,  # Итого: 88
             },
             "fixed_loadout": {
                 "main_hand": "greatsword",
@@ -205,12 +205,12 @@ UNDEAD_FAMILY: MonsterFamily = {
                 "strength": 12,
                 "agility": 16,
                 "endurance": 12,
-                "intelligence": 10,
-                "wisdom": 10,
+                "intelligence": 8,
+                "wisdom": 8,
                 "men": 12,
-                "perception": 14,
-                "charisma": 5,
-                "luck": 8,
+                "perception": 10,
+                "charisma": 4,
+                "luck": 6,  # Итого: 88
             },
             "fixed_loadout": {"main_hand": "sword", "off_hand": "dagger", "chest_garment": "cloak"},
             "skills": ["attack_lifesteal", "debuff_stun"],
@@ -230,14 +230,14 @@ UNDEAD_FAMILY: MonsterFamily = {
                 "intelligence": 6,
                 "wisdom": 6,
                 "men": 10,
-                "perception": 15,
-                "charisma": 6,
-                "luck": 10,
+                "perception": 12,
+                "charisma": 4,
+                "luck": 8,  # Итого: 92
             },
             "fixed_loadout": {"main_hand": "katana", "off_hand": "wakizashi", "chest_armor": "plate_chest"},
             "skills": ["attack_aoe", "attack_aoe"],
         },
-        # --- 4. Командиры (Bosses) ---
+        # --- 4. Командиры (Bosses) [TSP ~120] ---
         "lich_acolyte": {
             "id": "lich_acolyte",
             "role": "boss",
@@ -250,12 +250,12 @@ UNDEAD_FAMILY: MonsterFamily = {
                 "strength": 6,
                 "agility": 8,
                 "endurance": 12,
-                "intelligence": 18,
-                "wisdom": 16,
+                "intelligence": 20,
+                "wisdom": 18,
                 "men": 20,
                 "perception": 14,
                 "charisma": 12,
-                "luck": 10,
+                "luck": 8,  # Итого: 118
             },
             "fixed_loadout": {"main_hand": "quarterstaff", "chest_garment": "robe", "head_armor": "hood"},
             "skills": ["attack_ranged", "summon_minion", "buff_defense"],
@@ -272,12 +272,12 @@ UNDEAD_FAMILY: MonsterFamily = {
                 "strength": 8,
                 "agility": 10,
                 "endurance": 14,
-                "intelligence": 20,
-                "wisdom": 18,
+                "intelligence": 22,
+                "wisdom": 20,
                 "men": 25,
                 "perception": 16,
                 "charisma": 15,
-                "luck": 12,
+                "luck": 10,  # Итого: 140
             },
             "fixed_loadout": {
                 "main_hand": "dagger",
@@ -299,12 +299,12 @@ UNDEAD_FAMILY: MonsterFamily = {
                 "strength": 10,
                 "agility": 12,
                 "endurance": 20,
-                "intelligence": 25,
-                "wisdom": 25,
+                "intelligence": 30,
+                "wisdom": 30,
                 "men": 40,
                 "perception": 20,
                 "charisma": 20,
-                "luck": 15,
+                "luck": 15,  # Итого: 197
             },
             "fixed_loadout": {
                 "main_hand": "quarterstaff",

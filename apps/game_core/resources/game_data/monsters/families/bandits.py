@@ -3,7 +3,7 @@ from ..monster_structs import MonsterFamily
 BANDITS_FAMILY: MonsterFamily = {
     "id": "bandit_gang",
     "archetype": "humanoid",
-    "organization_type": "gang",
+    "organization_type": "gang",  # TSP Base: 50
     "default_tags": ["human", "outlaw", "survivor", "marauder"],
     "hierarchy": {
         "minions": ["bandit_thug", "bandit_poacher"],
@@ -12,7 +12,7 @@ BANDITS_FAMILY: MonsterFamily = {
         "boss": ["bandit_kingpin"],
     },
     "variants": {
-        # === 1. Мелкая сошка (Minions) [Tier 0-2] ===
+        # === 1. Мелкая сошка (Minions) [TSP ~50] ===
         "bandit_thug": {
             "id": "bandit_thug",
             "role": "minion",
@@ -23,13 +23,13 @@ BANDITS_FAMILY: MonsterFamily = {
             "base_stats": {
                 "strength": 10,
                 "agility": 8,
-                "endurance": 8,
+                "endurance": 10,
                 "intelligence": 4,
                 "wisdom": 3,
                 "men": 5,
                 "perception": 6,
                 "charisma": 2,
-                "luck": 5,
+                "luck": 5,  # Итого: 53
             },
             "fixed_loadout": {
                 "main_hand": "hatchet",
@@ -49,13 +49,13 @@ BANDITS_FAMILY: MonsterFamily = {
             "base_stats": {
                 "strength": 8,
                 "agility": 12,
-                "endurance": 6,
+                "endurance": 8,
                 "intelligence": 5,
                 "wisdom": 4,
                 "men": 6,
-                "perception": 12,
+                "perception": 10,
                 "charisma": 2,
-                "luck": 8,
+                "luck": 6,  # Итого: 61
             },
             "fixed_loadout": {
                 "main_hand": "shortbow",
@@ -65,7 +65,7 @@ BANDITS_FAMILY: MonsterFamily = {
             },
             "skills": ["aimed_shot"],
         },
-        # === 2. Головорезы (Veterans) [Tier 0-2] ===
+        # === 2. Головорезы (Veterans) [TSP ~75] ===
         "bandit_cutthroat": {
             "id": "bandit_cutthroat",
             "role": "veteran",
@@ -74,15 +74,15 @@ BANDITS_FAMILY: MonsterFamily = {
             "max_tier": 2,
             "narrative_hint": "A quick and ruthless fighter with two daggers, likely a former city rogue.",
             "base_stats": {
-                "strength": 9,
-                "agility": 16,
-                "endurance": 7,
+                "strength": 10,
+                "agility": 18,
+                "endurance": 10,
                 "intelligence": 6,
                 "wisdom": 4,
                 "men": 8,
                 "perception": 10,
                 "charisma": 3,
-                "luck": 12,
+                "luck": 10,  # Итого: 79
             },
             "fixed_loadout": {
                 "main_hand": "dagger",
@@ -93,7 +93,7 @@ BANDITS_FAMILY: MonsterFamily = {
             },
             "skills": ["poison_stab", "evasion"],
         },
-        # === 3. Элита (Elites) [Tier 1-2] ===
+        # === 3. Элита (Elites) [TSP ~125] ===
         "bandit_captain": {
             "id": "bandit_captain",
             "role": "elite",
@@ -102,15 +102,15 @@ BANDITS_FAMILY: MonsterFamily = {
             "max_tier": 2,
             "narrative_hint": "The leader of this small gang, a hardened survivor with a stolen longsword and chainmail.",
             "base_stats": {
-                "strength": 16,
-                "agility": 12,
-                "endurance": 14,
-                "intelligence": 6,
-                "wisdom": 5,
-                "men": 10,
+                "strength": 20,
+                "agility": 14,
+                "endurance": 20,
+                "intelligence": 8,
+                "wisdom": 6,
+                "men": 12,
                 "perception": 10,
                 "charisma": 12,
-                "luck": 6,
+                "luck": 6,  # Итого: 108
             },
             "fixed_loadout": {
                 "main_hand": "sword",
@@ -130,15 +130,15 @@ BANDITS_FAMILY: MonsterFamily = {
             "max_tier": 2,
             "narrative_hint": "An outcast who dabbles in forbidden magic, using a crude staff to cast chaotic spells.",
             "base_stats": {
-                "strength": 5,
-                "agility": 8,
-                "endurance": 6,
-                "intelligence": 14,
-                "wisdom": 8,
-                "men": 18,
-                "perception": 8,
-                "charisma": 4,
-                "luck": -2,
+                "strength": 6,
+                "agility": 10,
+                "endurance": 10,
+                "intelligence": 20,
+                "wisdom": 14,
+                "men": 20,
+                "perception": 10,
+                "charisma": 6,
+                "luck": 4,  # Итого: 100
             },
             "fixed_loadout": {
                 "main_hand": "quarterstaff",
@@ -149,7 +149,7 @@ BANDITS_FAMILY: MonsterFamily = {
             },
             "skills": ["lightning_bolt", "confusion", "smoke_bomb"],
         },
-        # === 4. Босс (Bosses) [Tier 2] ===
+        # === 4. Босс (Bosses) [TSP ~200] ===
         "bandit_kingpin": {
             "id": "bandit_kingpin",
             "role": "boss",
@@ -158,15 +158,15 @@ BANDITS_FAMILY: MonsterFamily = {
             "max_tier": 2,
             "narrative_hint": "The ruthless leader of all local marauders. Wields a heavy two-handed axe and is surprisingly quick.",
             "base_stats": {
-                "strength": 22,
-                "agility": 15,
-                "endurance": 20,
-                "intelligence": 12,
-                "wisdom": 8,
-                "men": 12,
+                "strength": 30,
+                "agility": 20,
+                "endurance": 30,
+                "intelligence": 14,
+                "wisdom": 10,
+                "men": 15,
                 "perception": 15,
-                "charisma": 18,
-                "luck": 10,
+                "charisma": 20,
+                "luck": 15,  # Итого: 169
             },
             "fixed_loadout": {
                 "main_hand": "warhammer",

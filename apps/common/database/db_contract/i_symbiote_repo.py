@@ -60,3 +60,16 @@ class ISymbioteRepo(ABC):
             new_rank: Новый ранг Симбиота.
         """
         pass
+
+    @abstractmethod
+    async def update_elements_resonance(self, character_id: int, new_resonance: dict) -> None:
+        """
+        Обновляет поле резонанса элементов (JSON).
+
+        Полностью перезаписывает поле `elements_resonance` переданным словарем.
+
+        Args:
+            character_id: Идентификатор персонажа.
+            new_resonance: Словарь с новыми значениями резонанса.
+        """
+        pass

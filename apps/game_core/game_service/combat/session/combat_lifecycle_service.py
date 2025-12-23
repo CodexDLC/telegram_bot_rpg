@@ -20,7 +20,7 @@ from apps.common.schemas_dto import (
     FighterStateDTO,
     StatSourceData,
 )
-from apps.common.services.analytics_service import analytics_service
+from apps.common.services.analytics.analytics_service import analytics_service
 from apps.common.services.core_service import CombatManager
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.redis_key import RedisKeys as Rk

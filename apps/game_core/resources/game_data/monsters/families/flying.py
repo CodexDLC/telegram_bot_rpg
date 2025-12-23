@@ -9,7 +9,7 @@ from ..monster_structs import MonsterFamily
 FLYING_FAMILY: MonsterFamily = {
     "id": "bat_colony",
     "archetype": "beast",
-    "organization_type": "swarm",
+    "organization_type": "swarm",  # TSP Base: 30
     "default_tags": ["beast", "flying", "bat", "chaos"],
     "hierarchy": {
         "minions": ["cave_bat", "night_flutter"],
@@ -18,7 +18,7 @@ FLYING_FAMILY: MonsterFamily = {
         "boss": ["vampire_lord", "ancient_wyvern"],
     },
     "variants": {
-        # --- 1. Мелкие (Minions) ---
+        # --- 1. Мелкие (Minions) [TSP ~30] ---
         "cave_bat": {
             "id": "cave_bat",
             "role": "minion",
@@ -28,15 +28,15 @@ FLYING_FAMILY: MonsterFamily = {
             "narrative_hint": "A common bat with leathery wings. Flutters erratically.",
             "extra_tags": ["common", "weak"],
             "base_stats": {
-                "strength": 3,
+                "strength": 2,
                 "agility": 14,
-                "endurance": 3,
+                "endurance": 2,
                 "intelligence": 1,
                 "wisdom": 1,
-                "men": 5,
-                "perception": 10,
+                "men": 2,
+                "perception": 8,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 2,  # Итого: 33
             },
             "fixed_loadout": {},
             "skills": ["attack_basic"],
@@ -50,20 +50,20 @@ FLYING_FAMILY: MonsterFamily = {
             "narrative_hint": "A tiny, moth-like bat. Hard to hit.",
             "extra_tags": ["fast", "agile"],
             "base_stats": {
-                "strength": 2,
+                "strength": 1,
                 "agility": 18,
-                "endurance": 2,
+                "endurance": 1,
                 "intelligence": 1,
                 "wisdom": 1,
-                "men": 5,
-                "perception": 12,
+                "men": 2,
+                "perception": 10,
                 "charisma": 1,
-                "luck": 8,
+                "luck": 4,  # Итого: 39
             },
             "fixed_loadout": {},
             "skills": ["buff_evasion", "debuff_weaken"],
         },
-        # --- 2. Охотники (Veterans) ---
+        # --- 2. Охотники (Veterans) [TSP ~45] ---
         "blood_drainer": {
             "id": "blood_drainer",
             "role": "veteran",
@@ -73,15 +73,15 @@ FLYING_FAMILY: MonsterFamily = {
             "narrative_hint": "A bat with elongated fangs and a red tint to its fur.",
             "extra_tags": ["vampiric", "lifesteal"],
             "base_stats": {
-                "strength": 5,
+                "strength": 4,
                 "agility": 12,
-                "endurance": 5,
+                "endurance": 4,
                 "intelligence": 2,
                 "wisdom": 2,
-                "men": 6,
-                "perception": 10,
+                "men": 4,
+                "perception": 8,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 2,  # Итого: 39 (компенсация вампиризмом)
             },
             "fixed_loadout": {},
             "skills": ["attack_lifesteal", "debuff_stun"],
@@ -95,15 +95,15 @@ FLYING_FAMILY: MonsterFamily = {
             "narrative_hint": "A bat with unusually sharp claws on its wings. Dives from above.",
             "extra_tags": ["striker", "sharp"],
             "base_stats": {
-                "strength": 7,
+                "strength": 6,
                 "agility": 14,
                 "endurance": 6,
                 "intelligence": 2,
                 "wisdom": 2,
-                "men": 6,
-                "perception": 12,
+                "men": 4,
+                "perception": 10,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 2,  # Итого: 47
             },
             "fixed_loadout": {},
             "skills": ["attack_heavy", "debuff_bleed"],
@@ -122,10 +122,10 @@ FLYING_FAMILY: MonsterFamily = {
                 "endurance": 6,
                 "intelligence": 3,
                 "wisdom": 3,
-                "men": 8,
-                "perception": 14,
+                "men": 6,
+                "perception": 12,
                 "charisma": 2,
-                "luck": 5,
+                "luck": 2,  # Итого: 48
             },
             "fixed_loadout": {},
             "skills": ["debuff_stun", "debuff_stun"],
@@ -141,18 +141,18 @@ FLYING_FAMILY: MonsterFamily = {
             "base_stats": {
                 "strength": 4,
                 "agility": 12,
-                "endurance": 5,
+                "endurance": 4,
                 "intelligence": 2,
                 "wisdom": 2,
-                "men": 6,
-                "perception": 10,
+                "men": 4,
+                "perception": 8,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 2,  # Итого: 39 (компенсация ослеплением)
             },
             "fixed_loadout": {},
             "skills": ["debuff_blind", "debuff_blind"],
         },
-        # --- 3. Альфы (Elites) ---
+        # --- 3. Альфы (Elites) [TSP ~75] ---
         "swarm_wing": {
             "id": "swarm_wing",
             "role": "elite",
@@ -167,10 +167,10 @@ FLYING_FAMILY: MonsterFamily = {
                 "endurance": 10,
                 "intelligence": 5,
                 "wisdom": 5,
-                "men": 10,
-                "perception": 16,
-                "charisma": 8,
-                "luck": 5,
+                "men": 8,
+                "perception": 14,
+                "charisma": 6,
+                "luck": 4,  # Итого: 76
             },
             "fixed_loadout": {},
             "skills": ["buff_rage", "attack_fast", "buff_rage"],
@@ -189,15 +189,15 @@ FLYING_FAMILY: MonsterFamily = {
                 "endurance": 14,
                 "intelligence": 6,
                 "wisdom": 6,
-                "men": 12,
-                "perception": 14,
-                "charisma": 6,
-                "luck": 8,
+                "men": 10,
+                "perception": 12,
+                "charisma": 4,
+                "luck": 6,  # Итого: 84
             },
             "fixed_loadout": {},
             "skills": ["attack_heavy", "debuff_weaken", "buff_evasion"],
         },
-        # --- 4. Боссы (Bosses) ---
+        # --- 4. Боссы (Bosses) [TSP ~120] ---
         "vampire_lord": {
             "id": "vampire_lord",
             "role": "boss",
@@ -215,7 +215,7 @@ FLYING_FAMILY: MonsterFamily = {
                 "men": 25,
                 "perception": 18,
                 "charisma": 15,
-                "luck": 10,
+                "luck": 10,  # Итого: 156
             },
             "fixed_loadout": {},
             "skills": ["attack_lifesteal", "special_unique", "debuff_stun", "attack_lifesteal"],
@@ -237,7 +237,7 @@ FLYING_FAMILY: MonsterFamily = {
                 "men": 15,
                 "perception": 16,
                 "charisma": 10,
-                "luck": 5,
+                "luck": 5,  # Итого: 134
             },
             "fixed_loadout": {},
             "skills": ["debuff_poison", "attack_pierce", "attack_heavy", "attack_aoe"],

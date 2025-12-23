@@ -9,7 +9,7 @@ from ..monster_structs import MonsterFamily
 INSECTS_FAMILY: MonsterFamily = {
     "id": "insect_hive",
     "archetype": "beast",
-    "organization_type": "swarm",
+    "organization_type": "swarm",  # TSP Base: 30
     "default_tags": ["beast", "insect", "chitin", "acid"],
     "hierarchy": {
         "minions": ["drone_bug", "burrower", "forager"],
@@ -18,7 +18,7 @@ INSECTS_FAMILY: MonsterFamily = {
         "boss": ["insect_queen", "ancient_broodmother"],
     },
     "variants": {
-        # --- 1. Мелкие (Minions) ---
+        # --- 1. Мелкие (Minions) [TSP ~30] ---
         "drone_bug": {
             "id": "drone_bug",
             "role": "minion",
@@ -30,13 +30,13 @@ INSECTS_FAMILY: MonsterFamily = {
             "base_stats": {
                 "strength": 8,
                 "agility": 6,
-                "endurance": 10,
+                "endurance": 8,
                 "intelligence": 1,
                 "wisdom": 1,
-                "men": 5,
-                "perception": 6,
+                "men": 2,
+                "perception": 4,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 2,  # Итого: 33
             },
             "fixed_loadout": {},
             "skills": ["attack_basic"],
@@ -51,14 +51,14 @@ INSECTS_FAMILY: MonsterFamily = {
             "extra_tags": ["digger", "surprise"],
             "base_stats": {
                 "strength": 10,
-                "agility": 5,
-                "endurance": 12,
+                "agility": 4,
+                "endurance": 10,
                 "intelligence": 1,
                 "wisdom": 1,
-                "men": 5,
-                "perception": 4,
+                "men": 2,
+                "perception": 2,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 2,  # Итого: 33
             },
             "fixed_loadout": {},
             "skills": ["attack_heavy"],
@@ -72,20 +72,20 @@ INSECTS_FAMILY: MonsterFamily = {
             "narrative_hint": "A fast insect with sensitive antennae. Scouts for food.",
             "extra_tags": ["scout", "fast"],
             "base_stats": {
-                "strength": 6,
+                "strength": 4,
                 "agility": 12,
-                "endurance": 8,
+                "endurance": 6,
                 "intelligence": 2,
                 "wisdom": 2,
-                "men": 5,
-                "perception": 14,
+                "men": 2,
+                "perception": 8,
                 "charisma": 1,
-                "luck": 8,
+                "luck": 3,  # Итого: 40
             },
             "fixed_loadout": {},
             "skills": [],
         },
-        # --- 2. Охотники / Бойцы (Veterans) ---
+        # --- 2. Охотники / Бойцы (Veterans) [TSP ~45] ---
         "acid_spitter": {
             "id": "acid_spitter",
             "role": "veteran",
@@ -95,15 +95,15 @@ INSECTS_FAMILY: MonsterFamily = {
             "narrative_hint": "An insect with a pulsating green sac on its back. Spits corrosive acid.",
             "extra_tags": ["ranged", "acid"],
             "base_stats": {
-                "strength": 8,
+                "strength": 6,
                 "agility": 10,
                 "endurance": 8,
                 "intelligence": 2,
                 "wisdom": 2,
-                "men": 5,
-                "perception": 10,
+                "men": 4,
+                "perception": 8,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 3,  # Итого: 44
             },
             "fixed_loadout": {},
             "skills": ["debuff_armor_break", "debuff_armor_break"],
@@ -117,15 +117,15 @@ INSECTS_FAMILY: MonsterFamily = {
             "narrative_hint": "A heavily armored insect. Its chitin is thick as plate mail.",
             "extra_tags": ["tank", "heavy_armor"],
             "base_stats": {
-                "strength": 14,
+                "strength": 12,
                 "agility": 4,
-                "endurance": 18,
+                "endurance": 16,
                 "intelligence": 2,
                 "wisdom": 2,
-                "men": 8,
-                "perception": 8,
+                "men": 6,
+                "perception": 4,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 2,  # Итого: 49
             },
             "fixed_loadout": {},
             "skills": ["buff_defense", "debuff_stun"],
@@ -144,15 +144,15 @@ INSECTS_FAMILY: MonsterFamily = {
                 "endurance": 10,
                 "intelligence": 2,
                 "wisdom": 2,
-                "men": 6,
-                "perception": 10,
+                "men": 4,
+                "perception": 8,
                 "charisma": 1,
-                "luck": 5,
+                "luck": 3,  # Итого: 54
             },
             "fixed_loadout": {},
             "skills": ["debuff_bleed", "attack_fast"],
         },
-        # --- 3. Элита (Elites) ---
+        # --- 3. Элита (Elites) [TSP ~75] ---
         "hive_caster": {
             "id": "hive_caster",
             "role": "elite",
@@ -162,15 +162,15 @@ INSECTS_FAMILY: MonsterFamily = {
             "narrative_hint": "A strange insect that emits a humming sound. Glows with bio-luminescence.",
             "extra_tags": ["support", "caster", "aura"],
             "base_stats": {
-                "strength": 8,
+                "strength": 6,
                 "agility": 8,
-                "endurance": 12,
+                "endurance": 10,
                 "intelligence": 10,
                 "wisdom": 10,
-                "men": 15,
-                "perception": 12,
+                "men": 12,
+                "perception": 10,
                 "charisma": 5,
-                "luck": 5,
+                "luck": 4,  # Итого: 75
             },
             "fixed_loadout": {},
             "skills": ["buff_rage", "buff_rage", "buff_defense"],
@@ -184,20 +184,20 @@ INSECTS_FAMILY: MonsterFamily = {
             "narrative_hint": "A bloated insect covered in fungal growths. Releases clouds of spores.",
             "extra_tags": ["spores", "poison", "debuff"],
             "base_stats": {
-                "strength": 10,
+                "strength": 8,
                 "agility": 6,
-                "endurance": 16,
+                "endurance": 14,
                 "intelligence": 4,
                 "wisdom": 6,
-                "men": 10,
+                "men": 8,
                 "perception": 8,
                 "charisma": 2,
-                "luck": 5,
+                "luck": 4,  # Итого: 60 (компенсация ядами)
             },
             "fixed_loadout": {},
             "skills": ["debuff_poison", "debuff_blind", "debuff_poison"],
         },
-        # --- 4. Королевы / Боссы (Bosses) ---
+        # --- 4. Королевы / Боссы (Bosses) [TSP ~120] ---
         "insect_queen": {
             "id": "insect_queen",
             "role": "boss",
@@ -212,10 +212,10 @@ INSECTS_FAMILY: MonsterFamily = {
                 "endurance": 30,
                 "intelligence": 15,
                 "wisdom": 15,
-                "men": 25,
-                "perception": 20,
-                "charisma": 20,
-                "luck": 10,
+                "men": 20,
+                "perception": 15,
+                "charisma": 15,
+                "luck": 8,  # Итого: 143
             },
             "fixed_loadout": {},
             "skills": ["buff_rage", "summon_minion", "debuff_weaken", "debuff_armor_break"],
@@ -232,12 +232,12 @@ INSECTS_FAMILY: MonsterFamily = {
                 "strength": 25,
                 "agility": 8,
                 "endurance": 40,
-                "intelligence": 18,
-                "wisdom": 18,
-                "men": 30,
-                "perception": 20,
-                "charisma": 15,
-                "luck": 10,
+                "intelligence": 10,
+                "wisdom": 10,
+                "men": 20,
+                "perception": 15,
+                "charisma": 10,
+                "luck": 8,  # Итого: 146
             },
             "fixed_loadout": {},
             "skills": ["attack_aoe", "attack_execute", "debuff_poison", "buff_defense"],

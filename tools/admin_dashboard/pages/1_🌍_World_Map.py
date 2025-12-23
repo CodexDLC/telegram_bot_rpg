@@ -8,8 +8,9 @@ from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
 
 from apps.common.database.repositories import get_monster_repo, get_world_repo
-from apps.common.database.session import async_session_factory
-from tools.admin_dashboard.ui_core import apply_global_styles, render_header
+
+# Заменили импорт
+from tools.admin_dashboard.ui_core import apply_global_styles, get_dashboard_session, render_header
 
 # --- Адаптация под структуру проекта ---
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -92,7 +93,7 @@ async def load_region_list() -> list[str]:
     """Загружает список всех существующих ID регионов."""
     log.info("LoadRegions | event=start")
     try:
-        async with async_session_factory() as session:
+        async with get_dashboard_session() as session:
             repo = get_world_repo(session)
             regions = await repo.get_all_regions()
             region_ids = [r.id for r in regions]
@@ -108,7 +109,7 @@ async def load_zone_data(region_id: str) -> list:
     """Загружает данные о зонах для указанного региона."""
     log.info(f"LoadZones | event=start region_id='{region_id}'")
     try:
-        async with async_session_factory() as session:
+        async with get_dashboard_session() as session:
             repo = get_world_repo(session)
             zones = await repo.get_zones_by_region(region_id)
             log.info(f"LoadZones | event=success region_id='{region_id}' count={len(zones)}")
@@ -123,7 +124,7 @@ async def load_cells_and_clans_data(zone_id: str) -> tuple[list, str, list]:
     """Загружает клетки и кланы для указанной зоны."""
     log.info(f"LoadCellsAndClans | event=start zone_id='{zone_id}'")
     try:
-        async with async_session_factory() as session:
+        async with get_dashboard_session() as session:
             world_repo = get_world_repo(session)
             monster_repo = get_monster_repo(session)
 

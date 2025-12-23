@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import JSON, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
@@ -39,6 +39,13 @@ class CharacterSymbiote(Base, TimestampMixin):
     )
     gift_rank: Mapped[int] = mapped_column(
         Integer, default=1, nullable=False, comment="Ранг Дара (фактический 'уровень' Симбиота)."
+    )
+
+    elements_resonance: Mapped[dict] = mapped_column(
+        JSON,
+        default=lambda: {"fire": 0, "water": 0, "earth": 0, "air": 0, "dark": 0, "arcane": 0, "light": 0, "nature": 0},
+        nullable=False,
+        comment="Накопленный резонанс с элементами (fire, water, earth, air, dark, arcane, light, nature).",
     )
 
     character: Mapped[Character] = relationship(back_populates="symbiote")

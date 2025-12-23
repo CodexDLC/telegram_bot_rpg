@@ -100,6 +100,27 @@ class CharactersRepoORM(ICharactersRepo):
             )
             raise
 
+    async def update_dynamic_state(self, character_id: int, state_data: dict) -> None:
+        """
+        Обновляет динамические параметры персонажа (HP, Energy, Location, Exp).
+        Используется для бэкапа состояния из Redis в БД.
+        """
+        log.debug(f"CharactersRepoORM | action=update_dynamic_state char_id={character_id}")
+
+        # Фильтруем только разрешенные поля, чтобы не затереть лишнее
+        allowed_fields = {"hp_current", "energy_current", "location", "experience"}
+        values_to_update = {k: v for k, v in state_data.items() if k in allowed_fields}
+
+        if not values_to_update:
+            return
+
+        stmt = update(Character).where(Character.character_id == character_id).values(**values_to_update)
+        try:
+            await self.session.execute(stmt)
+        except SQLAlchemyError:
+            log.exception(f"CharactersRepoORM | action=update_dynamic_state status=failed char_id={character_id}")
+            raise
+
 
 class CharacterStatsRepoORM(ICharacterStatsRepo):
     def __init__(self, session: AsyncSession):
