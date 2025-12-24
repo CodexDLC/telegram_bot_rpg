@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.database.repositories import get_character_stats_repo, get_inventory_repo
 from apps.common.schemas_dto import CharacterStatsReadDTO, InventoryItemDTO, ItemType
-from apps.game_core.game_service.modifiers_calculator_service import ModifiersCalculatorService
+from apps.game_core.game_service.status.modifiers_calculator_service import ModifiersCalculatorService
 
 
 class StatInfo(TypedDict):

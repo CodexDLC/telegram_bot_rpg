@@ -11,7 +11,7 @@ from apps.common.schemas_dto import (
 )
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.game_core.game_service.inventory.inventory_service import InventoryService
-from apps.game_core.game_service.modifiers_calculator_service import (
+from apps.game_core.game_service.status.modifiers_calculator_service import (
     ModifiersCalculatorService,
 )
 

@@ -1,3 +1,4 @@
+# MARKED: Uses non-InGame state: BugReport
 import contextlib
 
 from aiogram import Bot, F, Router

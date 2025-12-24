@@ -5,7 +5,7 @@ from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.game_core.game_service.stats_aggregation_service import StatsAggregationService
+from apps.game_core.game_service.status.stats_aggregation_service import StatsAggregationService
 
 BASE_REGEN_TIME_SEC = 300.0
 ENDURANCE_REGEN_BONUS = 0.1

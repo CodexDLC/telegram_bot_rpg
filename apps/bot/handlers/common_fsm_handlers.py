@@ -1,3 +1,4 @@
+# MARKED: Uses non-InGame state: GARBAGE_TEXT_STATES
 # apps/bot/handlers/common_fsm_handlers.py
 from aiogram import F, Router
 from aiogram.exceptions import TelegramAPIError

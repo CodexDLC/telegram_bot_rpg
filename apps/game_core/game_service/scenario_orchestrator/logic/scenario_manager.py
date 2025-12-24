@@ -6,7 +6,10 @@ from typing import Any
 from loguru import logger as log
 
 from apps.common.database.db_contract.i_scenario_repo import IScenarioRepository
+from apps.common.schemas_dto.game_state_enum import GameState
 from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.common.services.core_service.redis_fields import AccountFields as Af
+from apps.common.services.core_service.redis_key import RedisKeys
 from apps.common.services.core_service.redis_service import RedisService
 
 
@@ -36,7 +39,7 @@ class ScenarioManager:
         await self.update_account_state(char_id, quest_key, session_id_str)
 
         # 2. Обогащаем контекст системными данными
-        context["scenario_session_id"] = session_id_str
+        context[Af.SCENARIO_SESSION_ID] = session_id_str
         context["quest_key"] = quest_key
         if "step_counter" not in context:
             context["step_counter"] = 0
@@ -73,7 +76,7 @@ class ScenarioManager:
 
     async def get_session_context(self, char_id: int) -> dict[str, Any]:
         """Прямое получение из Redis (без фоллбэка в БД)."""
-        key = f"scen:session:{char_id}:data"
+        key = RedisKeys.get_scenario_session_key(char_id)
         raw_data = await self.redis.get_all_hash(key)
         if not raw_data:
             return {}
@@ -100,7 +103,7 @@ class ScenarioManager:
 
     async def save_session_context(self, char_id: int, context: dict[str, Any], ttl: int = 86400):
         """Сохранение в Redis."""
-        key = f"scen:session:{char_id}:data"
+        key = RedisKeys.get_scenario_session_key(char_id)
         if not context:
             return
 
@@ -121,7 +124,8 @@ class ScenarioManager:
 
     async def clear_session(self, char_id: int):
         """Удаляет сессию из Redis."""
-        await self.redis.delete_key(f"scen:session:{char_id}:data")
+        key = RedisKeys.get_scenario_session_key(char_id)
+        await self.redis.delete_key(key)
 
     # --- 2. Контент (Nodes / Master) ---
 
@@ -140,13 +144,13 @@ class ScenarioManager:
         """Переводит аккаунт в режим сценария."""
         await self.account_manager.update_account_fields(
             char_id,
-            {"state": "scenario", "scenario_session_id": session_id, "active_quest_key": quest_key},
+            {Af.STATE: GameState.SCENARIO, Af.SCENARIO_SESSION_ID: session_id, Af.ACTIVE_QUEST_KEY: quest_key},
         )
 
     async def clear_account_state(self, char_id: int):
         """Возвращает аккаунт в мир."""
         await self.account_manager.update_account_fields(
-            char_id, {"state": "world", "scenario_session_id": "", "active_quest_key": ""}
+            char_id, {Af.STATE: GameState.EXPLORATION, Af.SCENARIO_SESSION_ID: "", Af.ACTIVE_QUEST_KEY: ""}
         )
 
     async def backup_progress(self, char_id: int, quest_key: str, node_key: str, context: dict, session_id: uuid.UUID):
@@ -163,4 +167,4 @@ class ScenarioManager:
 
     async def get_session_id(self, char_id: int) -> str | None:
         """Получает ID текущей сессии из аккаунта."""
-        return await self.account_manager.get_account_field(char_id, "scenario_session_id")
+        return await self.account_manager.get_account_field(char_id, Af.SCENARIO_SESSION_ID)

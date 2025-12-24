@@ -7,6 +7,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from loguru import logger as log
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 # Импортируем модели, чтобы они были в metadata
 from apps.common.database.model_orm import *  # noqa: F403
@@ -41,8 +42,10 @@ async def reset_character_tables():
                 # Используем CASCADE, чтобы удалить и связи
                 await session.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
                 log.info(f"Dropped table: {table}")
-            except Exception as e:  # noqa: BLE001
+            except SQLAlchemyError as e:
                 log.error(f"Failed to drop {table}: {e}")
+            except Exception as e:  # noqa: BLE001
+                log.error(f"Unexpected error dropping {table}: {e}")
 
         await session.commit()
         log.success("Character tables dropped.")

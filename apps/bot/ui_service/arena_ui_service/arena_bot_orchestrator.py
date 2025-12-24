@@ -101,6 +101,8 @@ class ArenaBotOrchestrator:
 
             expl_ui = ExplorationUIService(state_data=state_data, char_id=char_id)
             view = expl_ui.render_navigation(loc_dto)
-            return ArenaViewDTO(content=view, new_state="InGame:navigation")
+            return ArenaViewDTO(content=view, new_state="InGame:exploration")  # ИСПРАВЛЕНО: InGame.exploration
 
-        return ArenaViewDTO(content=ViewResultDTO(text="Ошибка загрузки локации."), new_state="InGame:navigation")
+        return ArenaViewDTO(
+            content=ViewResultDTO(text="Ошибка загрузки локации."), new_state="InGame:exploration"
+        )  # ИСПРАВЛЕНО: InGame.exploration

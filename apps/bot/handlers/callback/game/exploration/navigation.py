@@ -32,7 +32,9 @@ TRAVEL_FLAVOR_TEXTS = [
 ]
 
 
-@router.callback_query(InGame.navigation, NavigationCallback.filter(F.action == "move"))
+@router.callback_query(
+    InGame.exploration, NavigationCallback.filter(F.action == "move")
+)  # ИСПРАВЛЕНО: InGame.exploration
 async def navigation_move_handler(
     call: CallbackQuery,
     state: FSMContext,
@@ -96,7 +98,7 @@ async def navigation_move_handler(
             log.error(f"UIRender | component=navigation status=failed user_id={user_id} error='{e}'")
 
 
-@router.callback_query(InGame.navigation, F.data.startswith("svc:"))
+@router.callback_query(InGame.exploration, F.data.startswith("svc:"))  # ИСПРАВЛЕНО: InGame.exploration
 async def navigation_service_handler(
     call: CallbackQuery,
     state: FSMContext,
@@ -157,7 +159,7 @@ async def navigation_service_handler(
         )
 
 
-@router.callback_query(InGame.navigation, F.data.startswith("nav:action:"))
+@router.callback_query(InGame.exploration, F.data.startswith("nav:action:"))  # ИСПРАВЛЕНО: InGame.exploration
 async def navigation_action_stub(
     call: CallbackQuery,
     state: FSMContext,

@@ -1,3 +1,4 @@
+# MARKED: Uses non-InGame state: CharacterLobby
 import time
 
 from aiogram import Bot, F, Router

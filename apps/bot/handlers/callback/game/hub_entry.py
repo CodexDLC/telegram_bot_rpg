@@ -22,7 +22,7 @@ from apps.common.services.core_service.manager.combat_manager import CombatManag
 router = Router(name="hub_entry_router")
 
 
-@router.callback_query(InGame.navigation, ServiceEntryCallback.filter())
+@router.callback_query(InGame.exploration, ServiceEntryCallback.filter())  # ИСПРАВЛЕНО: InGame.exploration
 async def service_hub_entry_handler(
     call: CallbackQuery,
     callback_data: ServiceEntryCallback,

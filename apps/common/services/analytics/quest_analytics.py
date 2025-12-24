@@ -62,8 +62,10 @@ class DynamicQuestAnalytics:
                 if not file_exists:
                     writer.writeheader()
                 writer.writerow(row)
-        except Exception as e:  # noqa: BLE001
+        except (OSError, csv.Error) as e:
             log.error(f"QuestAnalytics | error='{e}'")
+        except Exception as e:  # noqa: BLE001
+            log.error(f"QuestAnalytics | unexpected_error='{e}'")
 
 
 # Глобальный экземпляр

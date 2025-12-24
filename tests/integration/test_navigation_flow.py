@@ -82,7 +82,7 @@ async def test_navigation_entry_exit(
     1. Подготовка: Создание персонажа.
     2. Установка контекста FSM (как будто мы выбрали персонажа в лобби).
     3. Вход (Login).
-    4. Проверка стейта InGame.navigation.
+    4. Проверка стейта InGame.exploration.
     5. Выход (Logout).
     6. Проверка сброса стейта.
     """
@@ -152,8 +152,8 @@ async def test_navigation_entry_exit(
 
         # Проверяем стейт
         current_state = await fsm_context.get_state()
-        assert current_state == InGame.navigation, f"Ожидался InGame.navigation, получен {current_state}"
-        print("   -> Стейт успешно переключен на InGame.navigation.")
+        assert current_state == InGame.exploration, f"Ожидался InGame.exploration, получен {current_state}"
+        print("   -> Стейт успешно переключен на InGame.exploration.")
 
         # Проверяем, что бот попытался обновить интерфейс (меню или контент)
         # start_logging_handler вызывает orchestrator.handle_login, который возвращает DTO с меню/контентом.

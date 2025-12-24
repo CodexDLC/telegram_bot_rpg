@@ -45,6 +45,22 @@ class RedisKeys:
         """
         return f"combat:rbc:{session_id}:logs"
 
+    # --- Session Keys (Scenario, Inventory, etc.) ---
+
+    @staticmethod
+    def get_scenario_session_key(char_id: int) -> str:
+        """
+        Генерирует ключ для хранения данных сессии сценария (тип HASH).
+        """
+        return f"scen:session:{char_id}:data"
+
+    @staticmethod
+    def get_inventory_session_key(char_id: int) -> str:
+        """
+        Генерирует ключ для хранения данных сессии инвентаря (тип HASH).
+        """
+        return f"inv:session:{char_id}:data"
+
     # --- Legacy Keys ---
 
     @staticmethod

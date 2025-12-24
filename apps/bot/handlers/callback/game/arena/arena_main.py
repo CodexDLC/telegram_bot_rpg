@@ -5,7 +5,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import ArenaState
+from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.callback_data import ArenaQueueCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.common.core.container import AppContainer
@@ -13,7 +13,7 @@ from apps.common.core.container import AppContainer
 router = Router(name="arena_main_router")
 
 
-@router.callback_query(ArenaState.menu, ArenaQueueCallback.filter(F.action == "menu_main"))
+@router.callback_query(InGame.arena, ArenaQueueCallback.filter(F.action == "menu_main"))
 async def arena_render_main_menu_handler(
     call: CallbackQuery,
     callback_data: ArenaQueueCallback,
@@ -51,7 +51,7 @@ async def arena_render_main_menu_handler(
         await Err.message_content_not_found_in_fsm(call)
 
 
-@router.callback_query(ArenaState.menu, ArenaQueueCallback.filter(F.action == "exit_service"))
+@router.callback_query(InGame.arena, ArenaQueueCallback.filter(F.action == "exit_service"))
 async def arena_exit_service_handler(
     call: CallbackQuery,
     callback_data: ArenaQueueCallback,
