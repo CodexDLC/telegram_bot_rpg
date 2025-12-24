@@ -1,3 +1,5 @@
+# LEGACY CODE
+# MARKED: Uses non-InGame state: StartTutorial, CharacterLobby
 import asyncio
 from typing import Any
 

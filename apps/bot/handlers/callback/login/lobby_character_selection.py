@@ -1,3 +1,4 @@
+# MARKED: Uses non-InGame state: CharacterLobby
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery

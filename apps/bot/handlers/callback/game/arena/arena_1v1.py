@@ -2,13 +2,12 @@ from contextlib import suppress
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InaccessibleMessage
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import ArenaState, InGame
+from apps.bot.resources.fsm_states.states import InGame
 from apps.bot.resources.keyboards.callback_data import ArenaQueueCallback
 from apps.bot.ui_service.arena_ui_service.arena_bot_orchestrator import (
     ArenaBotOrchestratorError,
@@ -22,7 +21,7 @@ from apps.common.schemas_dto import SessionDataDTO
 router = Router(name="arena_1v1_router")
 
 
-@router.callback_query(ArenaState.menu, ArenaQueueCallback.filter(F.action == "match_menu"))
+@router.callback_query(InGame.arena, ArenaQueueCallback.filter(F.action == "match_menu"))
 async def arena_1v1_menu_handler(
     call: CallbackQuery,
     callback_data: ArenaQueueCallback,
@@ -50,9 +49,7 @@ async def arena_1v1_menu_handler(
             )
 
 
-@router.callback_query(
-    StateFilter(ArenaState.menu, ArenaState.waiting), ArenaQueueCallback.filter(F.action == "toggle_queue")
-)
+@router.callback_query(InGame.arena, ArenaQueueCallback.filter(F.action == "toggle_queue"))
 async def arena_toggle_queue_handler(
     call: CallbackQuery,
     callback_data: ArenaQueueCallback,
@@ -78,6 +75,7 @@ async def arena_toggle_queue_handler(
     orchestrator = container.get_arena_bot_orchestrator(session)
 
     try:
+        # Оркестратор сам решает, войти в очередь или выйти, и возвращает обновленный UI
         result_dto = await orchestrator.handle_toggle_queue(mode, char_id, state_data)
 
         if result_dto.content:
@@ -92,10 +90,24 @@ async def arena_toggle_queue_handler(
         await Err.generic_error(call)
         return
 
-    current_state = await state.get_state()
-    if current_state == ArenaState.menu:
-        await state.set_state(ArenaState.waiting)
-        log.info(f"FSM | state=ArenaState.waiting user_id={user_id}")
+    # Проверяем, вошли мы в очередь или вышли.
+    # Это можно понять по тексту кнопки или по внутреннему состоянию, которое оркестратор мог бы вернуть.
+    # Но пока предположим, что если мы нажали кнопку и получили UI "Поиск...", значит мы ищем.
+    # Лучше всего использовать флаг в FSM.
+
+    # Проверяем текущий статус поиска в FSM (который должен был обновить оркестратор или мы сами)
+    # В данной реализации оркестратор обновляет БД, но FSM обновляем мы.
+
+    # ВАЖНО: Логика "toggle" подразумевает переключение.
+    # Если мы были не в поиске -> стали в поиске.
+    # Если были в поиске -> перестали.
+
+    is_searching = state_data.get("arena_searching", False)
+
+    if not is_searching:
+        # Мы только что начали поиск (так как нажали кнопку и до этого не искали)
+        await state.update_data(arena_searching=True)
+        log.info(f"Arena | status=searching_started user_id={user_id}")
 
         # --- ЗАПУСК АНИМАЦИИ ПОИСКА ---
         session_dto = SessionDataDTO(
@@ -104,8 +116,13 @@ async def arena_toggle_queue_handler(
         anim_service = UIAnimationService(bot, session_dto)
 
         async def check_match(step: int):
-            # Проверяем, не отменил ли пользователь поиск
-            if await state.get_state() != ArenaState.waiting:
+            # Проверяем актуальность состояния
+            current_data = await state.get_data()
+            if not current_data.get("arena_searching"):
+                return "cancelled"
+
+            # Если стейт сменился (например, ушли в инвентарь), тоже отмена
+            if await state.get_state() != InGame.arena:
                 return "cancelled"
 
             # Используем оркестратор для проверки матча
@@ -124,6 +141,9 @@ async def arena_toggle_queue_handler(
             step_delay=3.0,
         )
 
+        # Сбрасываем флаг поиска после завершения анимации (успех, отмена или таймаут)
+        await state.update_data(arena_searching=False)
+
         if result and result != "cancelled":
             # Матч найден!
             session_id = result
@@ -131,7 +151,7 @@ async def arena_toggle_queue_handler(
 
             # Сохраняем session_id
             session_context["combat_session_id"] = session_id
-            session_context["previous_state"] = "ArenaState:menu"
+            # session_context["previous_state"] = "InGame.arena" # Не нужно, мы и так там
 
             await state.update_data({FSM_CONTEXT_KEY: session_context})
 
@@ -157,15 +177,16 @@ async def arena_toggle_queue_handler(
                     await call.message.edit_text("⏳ Не удалось найти противника. Попробуйте снова.")
                 else:
                     await msg.edit_text("⏳ Не удалось найти противника. Попробуйте снова.")
-            await state.set_state(ArenaState.menu)
+            # Остаемся в InGame.arena, флаг сброшен
 
     else:
-        # Отмена поиска (нажата кнопка "Покинуть очередь")
-        await state.set_state(ArenaState.menu)
-        log.info(f"FSM | state=ArenaState.menu user_id={user_id}")
+        # Мы были в поиске и нажали кнопку (отмена)
+        await state.update_data(arena_searching=False)
+        log.info(f"Arena | status=searching_cancelled user_id={user_id}")
+        # Оркестратор уже вернул UI главного меню или меню режима, так что просто обновляем сообщение (сделано выше)
 
 
-@router.callback_query(ArenaState.waiting, ArenaQueueCallback.filter(F.action == "start_battle"))
+@router.callback_query(InGame.arena, ArenaQueueCallback.filter(F.action == "start_battle"))
 async def arena_start_battle_handler(
     call: CallbackQuery,
     state: FSMContext,
@@ -216,4 +237,4 @@ async def arena_start_battle_handler(
     except ValueError as e:
         log.warning(f"Arena | Session invalid or expired: {e}")
         await call.message.edit_text("⚠️ Сессия боя устарела или недействительна. Пожалуйста, начните поиск заново.")
-        await state.set_state(ArenaState.menu)
+        # Остаемся в InGame.arena

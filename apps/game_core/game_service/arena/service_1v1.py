@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.common.services.core_service import CombatManager
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
+from apps.game_core.game_service.arena.matchmaking_service import MatchmakingService
 from apps.game_core.game_service.combat.combat_orchestrator_rbc import CombatOrchestratorRBC
-from apps.game_core.game_service.matchmaking_service import MatchmakingService
 
 
 class Arena1v1Service:

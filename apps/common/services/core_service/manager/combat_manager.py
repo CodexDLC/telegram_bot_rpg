@@ -62,6 +62,15 @@ class CombatManager:
         key = Rk.get_combat_exchanges_key(session_id, char_id)
         await self.redis_service.push_to_list(key, str(target_id))
 
+    async def add_enemies_to_exchange_queue(self, session_id: str, char_id: int, enemies_ids: list[str]) -> None:
+        """
+        RBC: Добавляет список противников в конец очереди обменов.
+        """
+        if not enemies_ids:
+            return
+        key = Rk.get_combat_exchanges_key(session_id, char_id)
+        await self.redis_service.push_to_list(key, *enemies_ids)
+
     async def create_rbc_session_meta(self, session_id: str, data: dict[str, Any]) -> None:
         """RBC: Создает или обновляет метаданные сессии."""
         key = Rk.get_rbc_meta_key(session_id)

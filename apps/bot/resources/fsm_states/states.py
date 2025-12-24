@@ -45,8 +45,9 @@ class BugReport(StatesGroup):
 class InGame(StatesGroup):
     """Состояния, когда игрок находится в игровом мире."""
 
+    lobby = State()
     onboarding = State()  # <-- Новый этап: создание "Био"
-    navigation = State()
+    exploration = State()  # <-- Бывший navigation
     inventory = State()
     combat = State()
     status = State()
@@ -77,12 +78,12 @@ FSM_CONTEX_CHARACTER_STATUS = [
     CharacterLobby.selection,
     CharacterLobby.confirm_delete,
     # Основной игровой цикл
-    InGame.navigation,
+    InGame.exploration,  # <-- Обновлено
     InGame.inventory,
     InGame.combat,
-    InGame.status,  # <-- Добавлено
-    InGame.scenario,  # <-- Добавлено
-    InGame.arena,  # <-- Добавлено
+    InGame.status,
+    InGame.scenario,
+    InGame.arena,
     # Арена (Legacy)
     ArenaState.menu,
     ArenaState.waiting,

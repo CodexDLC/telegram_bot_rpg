@@ -172,6 +172,43 @@ class ScenarioCoreOrchestrator:
             "target_location_id": context.get("prev_loc"),
         }
 
+    async def backup_session(self, char_id: int, db: AsyncSession) -> None:
+        """
+        Реализация метода для SessionSyncDispatcher.
+        Собирает контекст из Redis и делает холодный бэкап в Postgres.
+        """
+        # 1. Загружаем текущий контекст из Redis через менеджер
+        context = await self.manager.get_session_context(char_id)
+        if not context:
+            log.warning(f"Scenario | No session to backup for {char_id}")
+            return
+
+        # 2. Вытаскиваем метаданные для репозитория
+        quest_key = context.get("quest_key")
+        node_key = context.get("current_node_key")
+        session_id_str = context.get("scenario_session_id")
+
+        if not all([quest_key, node_key, session_id_str]):
+            log.error(f"Scenario | Incomplete context for backup: {char_id}")
+            return
+
+        session_id = uuid.UUID(str(session_id_str))
+
+        # 3. Делаем холодный бэкап в БД (IScenarioRepository)
+        # Передаем session напрямую, так как мы в FastAPI контексте
+        # Mypy fix: ensure quest_key and node_key are strings
+        await self.manager.repo.upsert_state(char_id, str(quest_key), str(node_key), context, session_id)
+
+        # 4. СТАВИМ TTL (Теплая сессия)
+        # Оставляем данные в Redis на 1 час, чтобы игрок мог вернуться
+        await self.manager.redis.expire(f"scen:session:{char_id}:data", 3600)
+
+        # 5. ОТЦЕПЛЯЕМ СЕССИЮ ОТ ЯДРА
+        # Удаляем только ссылку, чтобы Диспетчер больше не считал эту сессию активной
+        await self.manager.account_manager.delete_account_field(char_id, "scenario_session_id")
+
+        log.info(f"Scenario | Session backed up and unlinked for {char_id}")
+
     # --- Вспомогательные методы ---
 
     async def _handle_backup(self, char_id, quest_key, node_key, context, executor):

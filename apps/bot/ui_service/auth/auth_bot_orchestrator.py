@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.bot.core_client.exploration import ExplorationClient
+from apps.bot.ui_service.auth.dto.auth_view_dto import AuthViewDTO
 from apps.bot.ui_service.combat.combat_bot_orchestrator import CombatBotOrchestrator
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -9,22 +10,14 @@ from apps.bot.ui_service.mesage_menu.menu_service import MenuService
 from apps.bot.ui_service.tutorial.tutorial_service import TutorialServiceStats
 from apps.bot.ui_service.tutorial.tutorial_service_skill import TutorialServiceSkills
 from apps.common.schemas_dto.auth_dto import GameStage
+from apps.common.schemas_dto.game_state_enum import GameState
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
 from apps.common.services.core_service.manager.world_manager import WorldManager
+from apps.common.services.core_service.redis_fields import AccountFields as Af
+from apps.game_core.game_service.auth.login_service import LoginService
 from apps.game_core.game_service.game_sync.game_sync_service import GameSyncService
-from apps.game_core.game_service.login_service import LoginService
-
-
-class AuthViewDTO:
-    """DTO для ответа оркестратора авторизации."""
-
-    content: ViewResultDTO | None = None
-    menu: ViewResultDTO | None = None
-    new_state: str | None = None
-    fsm_update: dict | None = None
-    game_stage: str | None = None
 
 
 class AuthBotOrchestrator:
@@ -119,7 +112,7 @@ class AuthBotOrchestrator:
             # Восстановление боя
             # Нам нужно получить session_id из аккаунта
             ac_data = await self.account_manager.get_account_data(char_id)
-            combat_session_id = ac_data.get("combat_session_id") if ac_data else None
+            combat_session_id = ac_data.get(Af.COMBAT_SESSION_ID) if ac_data else None
 
             if combat_session_id:
                 combat_orchestrator = CombatBotOrchestrator(
@@ -137,14 +130,15 @@ class AuthBotOrchestrator:
                 result.content = combat_view.content
                 result.menu = combat_view.menu  # Переопределяем меню, так как в бою оно свое (лог)
                 result.new_state = "InGame:combat"
-                result.fsm_update = {"combat_session_id": combat_session_id}
+                result.fsm_update = {Af.COMBAT_SESSION_ID: combat_session_id}
 
                 if combat_view.target_id:
                     result.fsm_update["combat_target_id"] = combat_view.target_id
 
-        # ИСПРАВЛЕНИЕ: Добавлена проверка на "world", так как LoginService может возвращать "world" вместо "in_game"
-        elif game_stage in ("in_game", "world") or (
-            isinstance(login_result, tuple) and login_result[0] in ("in_game", "world")
+        # ИСПРАВЛЕНИЕ: Добавлена проверка на "exploration" (и "world" для совместимости)
+        elif game_stage in ("in_game", "world", "exploration", GameState.EXPLORATION) or (
+            isinstance(login_result, tuple)
+            and login_result[0] in ("in_game", "world", "exploration", GameState.EXPLORATION)
         ):
             # Вход в игру (Навигация)
             sync_service = GameSyncService(self.session, self.account_manager)
@@ -158,6 +152,6 @@ class AuthBotOrchestrator:
             expl_view = await expl_orchestrator.get_current_view(char_id, state_data)
 
             result.content = expl_view.content
-            result.new_state = "InGame:navigation"
+            result.new_state = "InGame:exploration"
 
         return result

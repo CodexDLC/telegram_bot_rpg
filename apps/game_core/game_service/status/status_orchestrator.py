@@ -7,7 +7,7 @@ from apps.common.database.repositories import (
     get_symbiote_repo,
 )
 from apps.common.schemas_dto.status_dto import FullCharacterDataDTO, SkillProgressDTO, SymbioteReadDTO
-from apps.game_core.game_service.stats_aggregation_service import StatsAggregationService
+from apps.game_core.game_service.status.stats_aggregation_service import StatsAggregationService
 
 
 class StatusCoreOrchestrator:

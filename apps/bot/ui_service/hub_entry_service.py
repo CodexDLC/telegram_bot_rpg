@@ -45,7 +45,7 @@ class HubEntryService(BaseUIService):
         возвращая готовый контент и новое FSM-состояние.
         """
         config = HUB_CONFIGS.get(self.target_loc)
-        default_fsm_state = InGame.navigation
+        default_fsm_state = InGame.exploration  # ИСПРАВЛЕНО: InGame.exploration
 
         if not config:
             log.warning(f"HubEntryService | status=failed reason='Config not found' target_loc='{self.target_loc}'")

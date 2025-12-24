@@ -89,7 +89,7 @@ async def main_menu_dispatcher(
             active_orchestrator = inv_orc
 
         elif action == "navigation":
-            await state.set_state(InGame.navigation)
+            await state.set_state(InGame.exploration)  # ИСПРАВЛЕНО: InGame.exploration
             expl_orc = container.get_exploration_bot_orchestrator(session)
             result_dto = await expl_orc.get_current_view(char_id, state_data)
             active_orchestrator = expl_orc
@@ -98,9 +98,9 @@ async def main_menu_dispatcher(
             # Статус не меняет стейт FSM (обычно), или меняет на InGame.status?
             # В character_status.py стейт не меняется явно, но лучше задать контекст.
             # Пока оставим текущий стейт или зададим InGame.status (если он есть).
-            # В states.py есть FSM_CONTEX_CHARACTER_STATUS = [InGame.navigation, InGame.inventory, InGame.combat]
+            # В states.py есть FSM_CONTEX_CHARACTER_STATUS = [InGame.exploration, InGame.inventory, InGame.combat]
             # Значит, статус доступен из любого стейта.
-            # Но лучше переключить на InGame.navigation (как дефолт) или оставить как есть.
+            # Но лучше переключить на InGame.exploration (как дефолт) или оставить как есть.
 
             stat_orc = container.get_status_bot_orchestrator(session)
             result_dto = await stat_orc.get_status_view(char_id, "bio", state_data, bot)

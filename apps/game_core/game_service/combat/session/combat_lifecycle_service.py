@@ -23,7 +23,8 @@ from apps.common.schemas_dto import (
 from apps.common.services.analytics.analytics_service import analytics_service
 from apps.common.services.core_service import CombatManager
 from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.redis_key import RedisKeys as Rk
+from apps.common.services.core_service.redis_fields import AccountFields as Af
+from apps.game_core.game_service.combat.combat_redis_fields import CombatSessionFields as Csf
 from apps.game_core.game_service.combat.core.combat_stats_calculator import StatsCalculator
 from apps.game_core.game_service.combat.session.combat_aggregator import CombatAggregator
 from apps.game_core.game_service.skill.skill_service import CharacterSkillsService
@@ -62,11 +63,11 @@ class CombatLifecycleService:
             config: Словарь с параметрами боя (battle_type, mode, is_pve и т.д.).
         """
         meta_data = {
-            "start_time": int(time.time()),
-            "active": 1,
-            "teams": json.dumps({}),  # Инициализируем пустые команды
-            "actors_info": json.dumps({}),  # Инициализируем пустые роли
-            "dead_actors": json.dumps([]),  # Инициализируем пустой список мертвых
+            Csf.START_TIME: int(time.time()),
+            Csf.ACTIVE: 1,
+            Csf.TEAMS: json.dumps({}),  # Инициализируем пустые команды
+            Csf.ACTORS_INFO: json.dumps({}),  # Инициализируем пустые роли
+            Csf.DEAD_ACTORS: json.dumps([]),  # Инициализируем пустой список мертвых
             **config,  # Распаковываем весь конфиг сразу
         }
         # RBC: Пишем в новую мету
@@ -105,7 +106,7 @@ class CombatLifecycleService:
 
             # ВАЖНО: Привязываем сессию к аккаунту игрока (Mapping)
             if not is_ai:
-                await self.account_manager.update_account_fields(char_id, {"combat_session_id": session_id})
+                await self.account_manager.update_account_fields(char_id, {Af.COMBAT_SESSION_ID: session_id})
 
             log.debug(f"AddParticipant | event=success session_id='{session_id}' char_id={char_id}")
         except (SQLAlchemyError, ValidationError, json.JSONDecodeError) as e:
@@ -169,12 +170,12 @@ class CombatLifecycleService:
                 actors_teams[int(aid)] = container.team
 
         for p_id in players:
-            queue_key = Rk.get_combat_exchanges_key(session_id, p_id)
             player_team = actors_teams.get(p_id)
             enemies_ids = [str(aid) for aid, team in actors_teams.items() if team != player_team]
 
             if enemies_ids:
-                await self.combat_manager.redis_service.push_to_list(queue_key, *enemies_ids)
+                # ИСПРАВЛЕНО: Используем метод менеджера вместо прямого доступа к Redis
+                await self.combat_manager.add_enemies_to_exchange_queue(session_id, p_id, enemies_ids)
         log.debug(f"InitializeExchangeQueues | session_id='{session_id}' players={players}")
 
     async def initialize_battle_state(self, session_id: str) -> None:
@@ -216,7 +217,7 @@ class CombatLifecycleService:
                 continue
 
         # Обновляем метаданные сессии
-        meta_update = {"teams": json.dumps(teams_map), "actors_info": json.dumps(actors_info)}
+        meta_update = {Csf.TEAMS: json.dumps(teams_map), Csf.ACTORS_INFO: json.dumps(actors_info)}
         await self.combat_manager.create_rbc_session_meta(session_id, meta_update)
 
         for pid, actor in actors_cache.items():
@@ -254,7 +255,7 @@ class CombatLifecycleService:
         end_time = int(time.time())
         # RBC: Читаем из новой меты
         meta = await self.combat_manager.get_rbc_session_meta(session_id)
-        start_time = int(meta.get("start_time", end_time)) if meta else end_time
+        start_time = int(meta.get(Csf.START_TIME, end_time)) if meta else end_time
         duration = max(0, end_time - start_time)
 
         # Читаем участников из RBC хэша
@@ -342,10 +343,10 @@ class CombatLifecycleService:
                             await self.account_manager.update_account_fields(
                                 pid,
                                 {
-                                    "hp_current": actor.state.hp_current,
-                                    "energy_current": actor.state.energy_current,
-                                    "last_update": time.time(),
-                                    "combat_session_id": "",  # <--- ИСПРАВЛЕНО: Пустая строка вместо None
+                                    Af.HP_CURRENT: actor.state.hp_current,
+                                    Af.ENERGY_CURRENT: actor.state.energy_current,
+                                    Af.LAST_UPDATE: time.time(),
+                                    Af.COMBAT_SESSION_ID: "",  # <--- ИСПРАВЛЕНО: Пустая строка вместо None
                                 },
                             )
                             log.info(
@@ -363,10 +364,10 @@ class CombatLifecycleService:
 
         # Сохраняем rewards в метаданные сессии, чтобы UI мог их прочитать
         new_meta = {
-            "active": 0,
-            "winner": winner_team,
-            "end_time": end_time,
-            "rewards": json.dumps(rewards_map),  # <--- Добавили сохранение наград
+            Csf.ACTIVE: 0,
+            Csf.WINNER: winner_team,
+            Csf.END_TIME: end_time,
+            Csf.REWARDS: json.dumps(rewards_map),  # <--- Добавили сохранение наград
         }
         # RBC: Обновляем новую мету
         await self.combat_manager.create_rbc_session_meta(session_id, new_meta)

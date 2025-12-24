@@ -64,7 +64,8 @@ class CombatBotOrchestrator:
     async def leave_combat(self, char_id: int, state_data: dict, session: AsyncSession) -> CombatViewDTO:
         """Логика выхода из боя: очистка и подготовка UI для возврата."""
         session_context = state_data.get(FSM_CONTEXT_KEY, {})
-        prev_state_str = session_context.get("previous_state", "InGame:navigation")
+        # ИСПРАВЛЕНО: InGame.exploration
+        prev_state_str = session_context.get("previous_state", "InGame:exploration")
 
         result = CombatViewDTO()
 
@@ -82,7 +83,7 @@ class CombatBotOrchestrator:
             text, kb, _ = await hub.render_hub_menu()
             result.content = ViewResultDTO(text=text, kb=kb)
         else:
-            result.new_state = "InGame:navigation"
+            result.new_state = "InGame:exploration"  # ИСПРАВЛЕНО: InGame.exploration
             # Получаем текущую локацию через клиент
             loc_dto = await self.exploration_client.get_current_location(char_id)
 

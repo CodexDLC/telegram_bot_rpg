@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.common.database.repositories import get_inventory_repo, get_wallet_repo
 from apps.common.schemas_dto import EquippedSlot, InventoryItemDTO, ItemType, QuickSlot
 from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.game_core.game_service.matchmaking_service import MatchmakingService
-from apps.game_core.game_service.stats_aggregation_service import StatsAggregationService
+from apps.game_core.game_service.arena.matchmaking_service import MatchmakingService
+from apps.game_core.game_service.status.stats_aggregation_service import StatsAggregationService
 
 from .inventory_logic_helper import InventoryLogicHelpers
 
