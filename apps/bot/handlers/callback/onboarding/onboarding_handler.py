@@ -1,4 +1,4 @@
-from aiogram import Router
+from aiogram import Bot, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -12,7 +12,7 @@ from apps.common.core.container import AppContainer
 from apps.common.schemas_dto import SessionDataDTO
 from apps.common.services.validators.character_validator import validate_character_name
 
-router = Router()
+router = Router(name="onboarding_router")
 
 # --- Handlers ---
 
@@ -76,21 +76,43 @@ async def on_onboarding_action(
 
 
 @router.message(InGame.onboarding)
-async def on_name_input(message: Message, state: FSMContext, session: AsyncSession, container: AppContainer):
+async def on_name_input(message: Message, state: FSMContext, session: AsyncSession, container: AppContainer, bot: Bot):
     """
     Обработка ввода имени (текстовое сообщение).
     """
+    # 1. Удаляем сообщение пользователя (чистильщик)
+    try:
+        await message.delete()
+    except TelegramAPIError:
+        log.warning(f"Failed to delete user message: {message.message_id}")
+
     orchestrator = container.get_onboarding_bot_orchestrator(session)
 
     fsm_data = await state.get_data()
     char_id = fsm_data.get("char_id")
+    session_context = fsm_data.get(FSM_CONTEXT_KEY, {})
+    message_content = session_context.get("message_content")
+
+    # Вспомогательная функция для отправки ошибок (редактируем контекстное сообщение)
+    async def send_error(text: str):
+        if message_content and "chat_id" in message_content and "message_id" in message_content:
+            try:
+                await bot.edit_message_text(
+                    chat_id=message_content["chat_id"],
+                    message_id=message_content["message_id"],
+                    text=text,
+                )
+            except TelegramAPIError:
+                await message.answer(text)
+        else:
+            await message.answer(text)
 
     if not char_id:
-        await message.answer("Ошибка сессии. Попробуйте /start")
+        await send_error("Ошибка сессии. Попробуйте /start")
         return
 
     if not message.text:
-        await message.answer("Пожалуйста, введите имя текстом.")
+        await send_error("Пожалуйста, введите имя текстом.")
         return
 
     name = message.text.strip()
@@ -98,7 +120,7 @@ async def on_name_input(message: Message, state: FSMContext, session: AsyncSessi
     # Валидация имени
     is_valid, error_msg = validate_character_name(name)
     if not is_valid:
-        await message.answer(f"⚠️ {error_msg}")
+        await send_error(f"⚠️ {error_msg}")
         return
 
     # Сохраняем имя в FSM
@@ -108,22 +130,76 @@ async def on_name_input(message: Message, state: FSMContext, session: AsyncSessi
     # Вызываем оркестратор с действием set_name
     view_dto = await orchestrator.handle_request(char_id=char_id, action="set_name", value=name, fsm_data=fsm_data)
 
-    # Отправляем новое сообщение
-    await message.answer(text=view_dto.text, reply_markup=view_dto.keyboard)
+    # Отправляем новое сообщение (редактируем старое)
+    if message_content and "chat_id" in message_content and "message_id" in message_content:
+        try:
+            await bot.edit_message_text(
+                chat_id=message_content["chat_id"],
+                message_id=message_content["message_id"],
+                text=view_dto.text,
+                reply_markup=view_dto.keyboard,
+            )
+        except TelegramAPIError:
+            # Если не удалось отредактировать, шлем новое
+            sent_msg = await message.answer(text=view_dto.text, reply_markup=view_dto.keyboard)
+            # Обновляем координаты, если пришлось отправить новое
+            session_context["message_content"] = {
+                "chat_id": sent_msg.chat.id,
+                "message_id": sent_msg.message_id,
+            }
+            await state.update_data({FSM_CONTEXT_KEY: session_context})
+    else:
+        sent_msg = await message.answer(text=view_dto.text, reply_markup=view_dto.keyboard)
+        # Обновляем координаты
+        session_context["message_content"] = {
+            "chat_id": sent_msg.chat.id,
+            "message_id": sent_msg.message_id,
+        }
+        await state.update_data({FSM_CONTEXT_KEY: session_context})
 
 
 # --- Entry Point ---
 async def start_onboarding_process(
-    message: Message, state: FSMContext, char_id: int, session: AsyncSession, container: AppContainer
+    bot: Bot,
+    state: FSMContext,
+    char_id: int,
+    session: AsyncSession,
+    container: AppContainer,
+    message: Message | None = None,
 ):
     """
     Запускает процесс онбординга для указанного персонажа.
+    Редактирует нижнее сообщение (контекст), если оно есть в FSM.
     """
     await state.set_state(InGame.onboarding)
     await state.update_data(char_id=char_id)
 
     orchestrator = container.get_onboarding_bot_orchestrator(session)
-
     view_dto = await orchestrator.handle_request(char_id=char_id, action="start")
 
-    await message.answer(text=view_dto.text, reply_markup=view_dto.keyboard)
+    # Пытаемся найти координаты нижнего сообщения
+    state_data = await state.get_data()
+    session_context = state_data.get(FSM_CONTEXT_KEY, {})
+    message_content = session_context.get("message_content")
+
+    if message_content and "chat_id" in message_content and "message_id" in message_content:
+        try:
+            await bot.edit_message_text(
+                chat_id=message_content["chat_id"],
+                message_id=message_content["message_id"],
+                text=view_dto.text,
+                reply_markup=view_dto.keyboard,
+            )
+            return
+        except TelegramAPIError:
+            log.warning("Failed to edit content message for onboarding, sending new one.")
+
+    # Если не нашли или не смогли отредактировать - шлем новое (если есть message)
+    if message:
+        sent_msg = await message.answer(text=view_dto.text, reply_markup=view_dto.keyboard)
+        # Сохраняем новые координаты
+        session_context["message_content"] = {
+            "chat_id": sent_msg.chat.id,
+            "message_id": sent_msg.message_id,
+        }
+        await state.update_data({FSM_CONTEXT_KEY: session_context})

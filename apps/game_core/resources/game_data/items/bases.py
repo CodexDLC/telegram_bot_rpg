@@ -32,6 +32,7 @@ class BaseItemData(TypedDict):
     damage_spread: float
     implicit_bonuses: dict[str, float]
     narrative_tags: list[str]
+    type: NotRequired[str]  # Added type field
 
 
 # Сборка единой базы данных из модулей

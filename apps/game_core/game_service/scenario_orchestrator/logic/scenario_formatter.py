@@ -16,22 +16,50 @@ class ScenarioFormatter:
     """
 
     def __init__(self):
-        # Паттерн для поиска тегов типа [#stats:str] или [#p_gold]
-        self.tag_pattern = re.compile(r"\[#(?:stats:)?(\w+)\]")
+        # Паттерн для поиска тегов типа [#stats:str] или [#loot_queue.0]
+        # Теперь поддерживает точки и цифры в имени переменной
+        self.tag_pattern = re.compile(r"\[#(?:stats:)?([\w\.]+)\]")
 
     # --- 1. Text Processing (Парсинг переменных в тексте) ---
 
     def format_text(self, text: str, context: dict[str, Any]) -> str:
         """
         Заменяет плейсхолдеры в тексте на реальные значения из контекста.
+        Поддерживает вложенный доступ через точку (например, loot_queue.0).
         """
         if not text:
             return ""
 
         def replace_tag(match):
-            var_name = match.group(1)
-            value = context.get(var_name, f"Unknown:{var_name}")
-            return str(value)
+            full_key = match.group(1)
+
+            # Попытка разрешить ключ с точками (вложенность/индексы)
+            keys = full_key.split(".")
+            value: Any = context
+
+            try:
+                for k in keys:
+                    if isinstance(value, dict):
+                        value = value.get(k)
+                    elif isinstance(value, list):
+                        # Если ключ - число, пробуем индекс
+                        if k.isdigit():
+                            idx = int(k)
+                            if 0 <= idx < len(value):
+                                value = value[idx]
+                            else:
+                                return f"Unknown:{full_key}"
+                        else:
+                            return f"Unknown:{full_key}"
+                    else:
+                        return f"Unknown:{full_key}"
+
+                    if value is None:
+                        return f"Unknown:{full_key}"
+
+                return str(value)
+            except (KeyError, IndexError, ValueError, AttributeError):
+                return f"Unknown:{full_key}"
 
         return self.tag_pattern.sub(replace_tag, text)
 
@@ -71,21 +99,30 @@ class ScenarioFormatter:
         raw_text = node_data.get("text_content", "")
         formatted_text = self.format_text(raw_text, context)
 
+        # Форматируем лейблы кнопок (там тоже могут быть переменные)
+        formatted_actions = []
+        for action in available_actions:
+            action_copy = action.copy()
+            action_copy["label"] = self.format_text(action["label"], context)
+            formatted_actions.append(action_copy)
+
         # Собираем данные для статус-бара
         status_bar_lines = self.build_status_bar_data(master_config, context)
 
         # Формируем список кнопок
         buttons_dto = [
-            ScenarioButtonDTO(label=action["label"], action_id=action["action_id"]) for action in available_actions
+            ScenarioButtonDTO(label=action["label"], action_id=action["action_id"]) for action in formatted_actions
         ]
 
         # Формируем Payload
+        # ИСПРАВЛЕНО: Добавляем quest_key в payload для UI
         payload = ScenarioPayloadDTO(
             node_key=node_data.get("node_key", "unknown"),
             text=formatted_text,
             status_bar=status_bar_lines,
             buttons=buttons_dto,
             is_terminal=node_data.get("is_terminal", False),
+            # quest_key=master_config.get("quest_key") # Пока не добавляем в DTO, так как нужно менять схему
         )
 
         # Формируем Response

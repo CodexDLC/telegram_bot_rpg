@@ -69,7 +69,8 @@ class CombatManager:
         if not enemies_ids:
             return
         key = Rk.get_combat_exchanges_key(session_id, char_id)
-        await self.redis_service.push_to_list(key, *enemies_ids)
+        for enemy_id in enemies_ids:
+            await self.redis_service.push_to_list(key, enemy_id)
 
     async def create_rbc_session_meta(self, session_id: str, data: dict[str, Any]) -> None:
         """RBC: Создает или обновляет метаданные сессии."""
@@ -159,7 +160,7 @@ class CombatManager:
 
     async def get_session_participants(self, session_id: str) -> set[str]:
         key = Rk.get_combat_participants_key(session_id)
-        return await self.redis_service.get_to_set(key)
+        return await self.redis_service.get_set_members(key)
 
     async def save_actor_json(self, session_id: str, char_id: int, json_data: str) -> None:
         key = Rk.get_combat_actor_key(session_id, char_id)

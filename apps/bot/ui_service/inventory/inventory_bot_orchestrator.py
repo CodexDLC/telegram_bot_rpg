@@ -1,13 +1,20 @@
 from apps.bot.core_client.inventory_client import InventoryClient
+from apps.bot.resources.keyboards.inventory_callback import InventoryCallback
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.inventory.dto.inventory_view_dto import InventoryViewDTO
 from apps.bot.ui_service.inventory.inventory_ui_service import InventoryUIService
+from apps.common.schemas_dto.inventory_dto import (
+    InventoryBagResponseDTO,
+    InventoryItemDetailsResponseDTO,
+    InventoryMainMenuResponseDTO,
+)
 
 
 class InventoryBotOrchestrator:
     """
     Оркестратор инвентаря на стороне бота.
+    Связывает UI-слой (View) с Core-слоем (Logic) через Клиент.
     """
 
     def __init__(self, inventory_client: InventoryClient):
@@ -23,26 +30,84 @@ class InventoryBotOrchestrator:
 
         return InventoryUIService(char_id=char_id, user_id=user_id, state_data=state_data)
 
-    # --- Обертки для доступа к координатам сообщений через UI ---
     def get_content_coords(self, state_data: dict, user_id: int) -> MessageCoordsDTO | None:
-        """Возвращает (chat_id, message_id) для основного контента."""
         data = self._get_ui(state_data, user_id).get_message_content_data()
         return MessageCoordsDTO(chat_id=data[0], message_id=data[1]) if data else None
 
-    # -----------------------------------------------------------
+    # --- UNIFIED HANDLER (Единая точка входа) ---
+
+    async def handle_callback(
+        self, char_id: int, user_id: int, callback_data: InventoryCallback, state_data: dict
+    ) -> InventoryViewDTO:
+        """
+        Главный метод обработки событий инвентаря.
+        """
+        if callback_data.action:
+            await self._handle_action(char_id, callback_data)
+
+            if callback_data.level == 2:
+                return await self.get_item_list(
+                    char_id,
+                    user_id,
+                    callback_data.section,
+                    callback_data.category,
+                    callback_data.page,
+                    state_data,
+                    callback_data.filter_type,
+                )
+            return await self.get_main_menu(char_id, user_id, state_data)
+
+        if callback_data.level == 0:
+            return await self.get_main_menu(char_id, user_id, state_data)
+
+        elif callback_data.level == 1:
+            return await self.get_item_list(
+                char_id,
+                user_id,
+                callback_data.section,
+                callback_data.category,
+                callback_data.page,
+                state_data,
+                callback_data.filter_type,
+            )
+
+        elif callback_data.level == 2:
+            if callback_data.item_id is None:
+                return await self.get_main_menu(char_id, user_id, state_data)
+            return await self.get_item_details(
+                char_id,
+                user_id,
+                callback_data.item_id,
+                callback_data.category,
+                callback_data.page,
+                callback_data.filter_type,
+                state_data,
+            )
+
+        elif callback_data.level == 3 and callback_data.item_id:
+            return await self.get_quick_slot_selection_menu(
+                char_id, user_id, callback_data.item_id, callback_data.model_dump(), state_data
+            )
+
+        return await self.get_main_menu(char_id, user_id, state_data)
+
+    async def _handle_action(self, char_id: int, cb: InventoryCallback):
+        """Приватный обработчик действий."""
+        if cb.action == "equip":
+            await self._client.execute_action(char_id, "equip", item_id=cb.item_id, slot="auto")
+        elif cb.action == "unequip":
+            await self._client.execute_action(char_id, "unequip", item_id=cb.item_id)
+        elif cb.action == "drop":
+            await self._client.execute_action(char_id, "drop", item_id=cb.item_id)
+        elif cb.action == "bind_quick_slot_select":
+            await self._client.execute_action(char_id, "move_quick_slot", item_id=cb.item_id, position=cb.section)
+
+    # --- SPECIFIC VIEW METHODS ---
 
     async def get_main_menu(self, char_id: int, user_id: int, state_data: dict) -> InventoryViewDTO:
-        """Возвращает главное меню инвентаря."""
         ui = self._get_ui(state_data, user_id)
-
-        # Получаем данные из Core
-        summary = await self._client.get_summary(char_id)
-
-        # Получаем экипировку
-        equipped_data = await self._client.get_items(char_id, "equipped", "all", 0, 100)
-        equipped = equipped_data.get("items", [])
-
-        view = ui.render_main_menu(summary, equipped)
+        response: InventoryMainMenuResponseDTO = await self._client.get_view(char_id, "main")
+        view = ui.render_main_menu(response.summary, response.equipped)
         return InventoryViewDTO(content=view)
 
     async def get_item_list(
@@ -55,102 +120,78 @@ class InventoryBotOrchestrator:
         state_data: dict,
         filter_type: str = "category",
     ) -> InventoryViewDTO:
-        """Возвращает список предметов."""
         ui = self._get_ui(state_data, user_id)
-
-        # Получаем данные из Core
-        page_size = 9
-        data = await self._client.get_items(char_id, section, category, page, page_size)
-
-        items = data.get("items", [])
-        total_pages = data.get("total_pages", 1)
-        current_page = data.get("current_page", 0)
-
-        view = ui.render_item_list(items, total_pages, current_page, section, category, filter_type)
-        return InventoryViewDTO(content=view, current_page=current_page, total_pages=total_pages)
+        response: InventoryBagResponseDTO = await self._client.get_view(
+            char_id, "bag", section=section, category=category, page=page
+        )
+        view = ui.render_item_list(
+            items_on_page=list(response.items),
+            total_pages=response.total_pages,
+            current_page=response.page,
+            section=response.section,
+            category=response.category or "all",
+            filter_type=filter_type,
+        )
+        return InventoryViewDTO(content=view, current_page=response.page, total_pages=response.total_pages)
 
     async def get_item_details(
         self, char_id: int, user_id: int, item_id: int, category: str, page: int, filter_type: str, state_data: dict
     ) -> InventoryViewDTO:
-        """Возвращает детали предмета."""
         ui = self._get_ui(state_data, user_id)
+        response: InventoryItemDetailsResponseDTO | None = await self._client.get_view(
+            char_id, "details", item_id=item_id
+        )
 
-        item = await self._client.get_item_details(char_id, item_id)
-        if not item:
+        if not response:
             return InventoryViewDTO(content=ViewResultDTO(text="Предмет не найден."))
 
-        # Получаем данные для сравнения
-        comparison = await self._client.get_comparison(char_id, item)
+        comparison_data = None
+        if response.comparison:
+            comparison_data = {"old_item_name": response.comparison.data.name, "diffs": {}, "is_empty": False}
+        elif response.actions and "equip" in response.actions and not response.comparison:
+            comparison_data = {"is_empty": True}
 
-        view = ui.render_item_details(item, comparison, category, page, filter_type)
+        view = ui.render_item_details(
+            item=response.item, comparison_data=comparison_data, category=category, page=page, filter_type=filter_type
+        )
         return InventoryViewDTO(content=view, item_id=item_id)
-
-    async def handle_equip_action(
-        self, char_id: int, user_id: int, item_id: int, action: str, state_data: dict
-    ) -> InventoryViewDTO:
-        """Обрабатывает экипировку/снятие."""
-        # Логика экипировки
-        if action == "equip":
-            # success, msg = await self._client.equip_item(char_id, item_id, "auto") # auto slot # Удалено: не используется
-            await self._client.equip_item(char_id, item_id, "auto")
-        elif action == "unequip":
-            # unequip тоже через equip_item? Или отдельный метод?
-            # В InventoryService unequip обычно это equip(None) или unequip.
-            # В InventoryCoreOrchestrator equip_item - заглушка.
-            # success, msg = True, "Unequipped" # Удалено: не используется
-            pass
-        else:
-            # success, msg = False, "Unknown action" # Удалено: не используется
-            pass
-
-        # Возвращаем DTO с сообщением (alert) и обновленным видом (если нужно).
-        # Пока просто вернем главное меню.
-        return await self.get_main_menu(char_id, user_id, state_data)
-
-    async def get_belt_overview(self, char_id: int, user_id: int, state_data: dict) -> InventoryViewDTO:
-        """Возвращает обзор пояса."""
-        ui = self._get_ui(state_data, user_id)
-
-        max_slots = await self._client.get_quick_slot_limit(char_id)
-
-        # Получаем все предметы (чтобы найти те, что в слотах)
-        items_data = await self._client.get_items(char_id, "inventory", "all", 0, 1000)
-        items = items_data.get("items", [])
-
-        view = ui.render_belt_overview(max_slots, items)
-        return InventoryViewDTO(content=view)
 
     async def get_quick_slot_selection_menu(
         self, char_id: int, user_id: int, item_id: int, context_data: dict, state_data: dict
     ) -> InventoryViewDTO:
-        """Возвращает меню выбора слота."""
         ui = self._get_ui(state_data, user_id)
+        response: InventoryItemDetailsResponseDTO | None = await self._client.get_view(
+            char_id, "details", item_id=item_id
+        )
 
-        item = await self._client.get_item_details(char_id, item_id)
-        if not item:
+        if not response:
             return InventoryViewDTO(content=ViewResultDTO(text="Предмет не найден."))
 
-        max_slots = await self._client.get_quick_slot_limit(char_id)
-
-        view = ui.render_quick_slot_selection_menu(item.data.name, item_id, max_slots, context_data)
+        max_slots = await self._client.get_view(char_id, "quick_slot_limit")
+        view = ui.render_quick_slot_selection_menu(response.item.data.name, item_id, max_slots, context_data)
         return InventoryViewDTO(content=view)
 
-    async def handle_quick_slot_action(
-        self, char_id: int, user_id: int, item_id: int, action: str, slot_key: str | None, state_data: dict
-    ) -> InventoryViewDTO:
-        """Обрабатывает действия с быстрыми слотами."""
-        if action == "bind":
-            if slot_key:
-                # success, msg = await self._client.bind_quick_slot(char_id, item_id, slot_key) # Удалено: не используется
-                await self._client.bind_quick_slot(char_id, item_id, slot_key)
-            else:
-                # success, msg = False, "Slot key missing" # Удалено: не используется
-                pass
-        elif action == "unbind":
-            # success, msg = await self._client.unbind_quick_slot(char_id, item_id) # Удалено: не используется
-            await self._client.unbind_quick_slot(char_id, item_id)
-        else:
-            # success, msg = False, "Unknown action" # Удалено: не используется
-            pass
+    # --- MISSING METHODS ---
 
-        return InventoryViewDTO(content=None)  # Хендлер сам обновит UI
+    async def handle_quick_slot_action(
+        self, char_id: int, user_id: int, item_id: int, action_key: str, slot_id: str | None, state_data: dict
+    ) -> InventoryViewDTO:
+        """
+        Обрабатывает назначение предмета на быстрый слот.
+        """
+        if action_key == "bind" and slot_id:
+            success, message = await self._client.execute_action(
+                char_id, "move_quick_slot", item_id=item_id, position=slot_id
+            )
+
+        # После назначения возвращаемся в детали предмета
+        # Для этого нам нужно знать категорию и страницу, но они могут быть потеряны
+        # Поэтому возвращаемся в главное меню или пытаемся восстановить контекст
+        return await self.get_main_menu(char_id, user_id, state_data)
+
+    async def get_belt_overview(self, char_id: int, user_id: int, state_data: dict) -> InventoryViewDTO:
+        """
+        Показывает обзор пояса (быстрых слотов).
+        """
+        # Пока просто возвращаем главное меню, так как отдельного view для пояса нет в API
+        return await self.get_main_menu(char_id, user_id, state_data)

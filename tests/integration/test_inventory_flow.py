@@ -7,10 +7,10 @@ from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, Message, User
 
-from apps.bot.handlers.callback.ui.inventory.inventory_item_details import inventory_item_details_handler
-
 # Хендлеры (Используем правильные имена)
-from apps.bot.handlers.callback.ui.inventory.inventory_main import inventory_main_handler
+from apps.bot.handlers.callback.ui.inventory.inventory_unified_handler import inventory_unified_handler
+
+from apps.bot.handlers.callback.ui.inventory.inventory_item_details import inventory_item_details_handler
 
 # Ресурсы
 from apps.bot.resources.fsm_states import InGame
@@ -133,7 +133,7 @@ async def test_inventory_equip_unequip_flow(get_async_session, fsm_context, mock
         # ==========================================
         print("\n🏁 Шаг 1: Открытие инвентаря")
         cb_open = InventoryCallback(level=0, user_id=TEST_USER_ID, action="open", category="all")
-        await inventory_main_handler(mock_callback, cb_open, fsm_context, session, mock_bot, app_container)
+        await inventory_unified_handler(mock_callback, cb_open, fsm_context, session, mock_bot, app_container)
 
         assert mock_bot.edit_message_text.called
         print("   -> Инвентарь открыт.")

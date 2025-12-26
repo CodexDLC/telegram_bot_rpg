@@ -18,7 +18,9 @@ from apps.common.database.model_orm import Base
 database_url = settings.sqlalchemy_database_url
 
 # --- 2. Настраиваем аргументы для Postgres ---
-connect_args: dict[str, Any] = {}
+connect_args: dict[str, Any] = {
+    "prepared_statement_cache_size": 0,
+}
 if settings.db_ssl_require:
     connect_args["ssl"] = "require"
 

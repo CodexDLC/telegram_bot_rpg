@@ -1390,104 +1390,92 @@
           "branching": [
             {
               "condition": "w_strength >= w_agility and w_strength >= w_intelligence",
-              "to_node": "resonance_strength_sub"
+              "to_node": "choice_strength_weapon"
             },
             {
               "condition": "w_agility > w_strength and w_agility >= w_intelligence",
-              "to_node": "resonance_agility_sub"
+              "to_node": "choice_agility_weapon"
             },
             {
               "condition": "default",
-              "to_node": "resonance_balance_sub"
+              "to_node": "choice_balance_weapon"
             }
           ]
         }
       }
     },
     {
-      "node_key": "resonance_strength_sub",
+      "node_key": "choice_strength_weapon",
       "quest_key": "awakening_rift",
+      "text_content": "Энергия Рифта реагирует на твою силу. Перед тобой возникают два силуэта.",
       "actions_logic": {
-        "auto": {
-          "type": "logic_gate",
-          "branching": [
-            {
-              "condition": "w_endurance >= 6",
-              "math": {
-                "loot_queue": "push:warhammer",
-                "skills_queue": "push:melee_combat",
-                "is_two_handed": 1
-              },
-              "to_node": "bridge_resonance_award"
-            },
-            {
-              "condition": "default",
-              "math": {
-                "loot_queue": "push:battle_axe",
-                "skills_queue": "push:melee_combat",
-                "is_two_handed": 0
-              },
-              "to_node": "bridge_resonance_award"
-            }
-          ]
+        "take_hammer": {
+          "label": "🔨 Схватить Боевой Молот",
+          "math": {
+            "loot_queue": "push:warhammer",
+            "skills_queue": "push:melee_combat",
+            "is_two_handed": 1
+          },
+          "to_node": "bridge_resonance_award"
+        },
+        "take_axe": {
+          "label": "🪓 Выбрать Боевой Топор",
+          "math": {
+            "loot_queue": "push:battle_axe",
+            "skills_queue": "push:melee_combat",
+            "is_two_handed": 0
+          },
+          "to_node": "bridge_resonance_award"
         }
       }
     },
     {
-      "node_key": "resonance_agility_sub",
+      "node_key": "choice_agility_weapon",
       "quest_key": "awakening_rift",
+      "text_content": "Рифт чувствует твою скорость. Воздух сгущается в две стремительные формы.",
       "actions_logic": {
-        "auto": {
-          "type": "logic_gate",
-          "branching": [
-            {
-              "condition": "w_luck >= 6",
-              "math": {
-                "loot_queue": "push:katana",
-                "skills_queue": "push:melee_combat",
-                "is_two_handed": 1
-              },
-              "to_node": "bridge_resonance_award"
-            },
-            {
-              "condition": "default",
-              "math": {
-                "loot_queue": "push:dagger",
-                "skills_queue": "push:melee_combat",
-                "is_two_handed": 0
-              },
-              "to_node": "bridge_resonance_award"
-            }
-          ]
+        "take_katana": {
+          "label": "🗡️ Взять Катану",
+          "math": {
+            "loot_queue": "push:katana",
+            "skills_queue": "push:melee_combat",
+            "is_two_handed": 1
+          },
+          "to_node": "bridge_resonance_award"
+        },
+        "take_dagger": {
+          "label": "🔪 Выбрать Кинжал",
+          "math": {
+            "loot_queue": "push:dagger",
+            "skills_queue": "push:melee_combat",
+            "is_two_handed": 0
+          },
+          "to_node": "bridge_resonance_award"
         }
       }
     },
     {
-      "node_key": "resonance_balance_sub",
+      "node_key": "choice_balance_weapon",
       "quest_key": "awakening_rift",
+      "text_content": "Твой разум ищет баланс. Рифт предлагает инструменты для тех, кто ценит точность.",
       "actions_logic": {
-        "auto": {
-          "type": "logic_gate",
-          "branching": [
-            {
-              "condition": "w_wisdom >= 6",
-              "math": {
-                "loot_queue": "push:quarterstaff",
-                "skills_queue": "push:melee_combat",
-                "is_two_handed": 1
-              },
-              "to_node": "bridge_resonance_award"
-            },
-            {
-              "condition": "default",
-              "math": {
-                "loot_queue": "push:sword",
-                "skills_queue": "push:melee_combat",
-                "is_two_handed": 0
-              },
-              "to_node": "bridge_resonance_award"
-            }
-          ]
+        "take_staff": {
+          "label": "🥢 Взять Боевой Посох",
+          "math": {
+            "loot_queue": "push:quarterstaff",
+            "skills_queue": "push:melee_combat",
+            "is_two_handed": 1
+          },
+          "to_node": "bridge_resonance_award"
+        },
+        "take_sword": {
+          "label": "⚔️ Выбрать Меч",
+          "math": {
+            "loot_queue": "push:sword",
+            "skills_queue": "push:melee_combat",
+            "is_two_handed": 0
+          },
+          "to_node": "bridge_resonance_award"
         }
       }
     },
@@ -1511,46 +1499,60 @@
           "type": "logic_gate",
           "branching": [
             {
-              "condition": "is_two_handed == 0 and w_strength >= w_agility",
-              "math": {
-                "loot_queue": "push:shield",
-                "skills_queue": [
-                  "push:shield_mastery"
-                ]
-              },
-              "to_node": "bridge_resonance_award_2"
-            },
-            {
-              "condition": "is_two_handed == 0 and w_agility > w_strength",
-              "math": {
-                "loot_queue": "push:buckler",
-                "skills_queue": [
-                  "push:reflexes"
-                ]
-              },
-              "to_node": "bridge_resonance_award_2"
-            },
-            {
-              "condition": "is_two_handed == 1",
-              "math": {
-                "loot_queue": "push:belt",
-                "skills_queue": [
-                  "push:intuition"
-                ]
-              },
-              "to_node": "bridge_resonance_award_2"
+              "condition": "is_two_handed == 0",
+              "to_node": "choice_offhand"
             },
             {
               "condition": "default",
-              "math": {
-                "loot_queue": "push:dagger",
-                "skills_queue": [
-                  "push:reflexes"
-                ]
-              },
-              "to_node": "bridge_resonance_award_2"
+              "to_node": "choice_accessory"
             }
           ]
+        }
+      }
+    },
+    {
+      "node_key": "choice_offhand",
+      "quest_key": "awakening_rift",
+      "text_content": "Твоя вторая рука свободна. Рифт предлагает защиту или скорость.",
+      "actions_logic": {
+        "take_shield": {
+          "label": "🛡️ Взять Щит",
+          "math": {
+            "loot_queue": "push:shield",
+            "skills_queue": ["push:shield_mastery"]
+          },
+          "to_node": "bridge_resonance_award_2"
+        },
+        "take_buckler": {
+          "label": "🔘 Выбрать Баклер (Парирование)",
+          "math": {
+            "loot_queue": "push:buckler",
+            "skills_queue": ["push:reflexes"]
+          },
+          "to_node": "bridge_resonance_award_2"
+        }
+      }
+    },
+    {
+      "node_key": "choice_accessory",
+      "quest_key": "awakening_rift",
+      "text_content": "Твои руки заняты двуручным оружием. Рифт предлагает усиление через артефакт.",
+      "actions_logic": {
+        "take_belt": {
+          "label": "🎗️ Пояс Силы",
+          "math": {
+            "loot_queue": "push:belt",
+            "skills_queue": ["push:intuition"]
+          },
+          "to_node": "bridge_resonance_award_2"
+        },
+        "take_amulet": {
+          "label": "🧿 Амулет Концентрации",
+          "math": {
+            "loot_queue": "push:amulet",
+            "skills_queue": ["push:focus"]
+          },
+          "to_node": "bridge_resonance_award_2"
         }
       }
     },
@@ -1574,79 +1576,84 @@
           "branching": [
             {
               "condition": "w_endurance >= 15 or w_strength >= 15",
-              "to_node": "resonance_pack_heavy"
+              "to_node": "choice_heavy_armor"
             },
             {
               "condition": "w_agility >= 15 or w_luck >= 15",
-              "to_node": "resonance_pack_light"
+              "to_node": "choice_light_armor"
             },
             {
               "condition": "default",
-              "to_node": "resonance_pack_medium"
+              "to_node": "choice_medium_armor"
             }
           ]
         }
       }
     },
     {
-      "node_key": "resonance_pack_heavy",
+      "node_key": "choice_heavy_armor",
       "quest_key": "awakening_rift",
+      "text_content": "Твоя стойкость впечатляет Рифт. Он предлагает тебе стать несокрушимой скалой.",
       "actions_logic": {
-        "auto": {
-          "type": "logic_gate",
+        "take_plate": {
+          "label": "🛡️ Облачиться в Латные Доспехи",
           "math": {
-            "loot_queue": [
-              "push:plate_chest",
-              "push:helmet",
-              "push:wool_tunic",
-              "push:fur_pants",
-              "push:boots"
-            ],
-            "skills_queue": [
-              "push:heavy_armor_mastery"
-            ]
+            "loot_queue": ["push:plate_chest", "push:helmet", "push:wool_tunic", "push:fur_pants", "push:boots"],
+            "skills_queue": ["push:heavy_armor_mastery"]
+          },
+          "to_node": "final_award_heavy"
+        },
+        "take_scale": {
+          "label": "🐉 Выбрать Чешуйчатую Броню",
+          "math": {
+            "loot_queue": ["push:scale_mail", "push:helmet", "push:wool_tunic", "push:fur_pants", "push:boots"],
+            "skills_queue": ["push:heavy_armor_mastery"]
           },
           "to_node": "final_award_heavy"
         }
       }
     },
     {
-      "node_key": "resonance_pack_light",
+      "node_key": "choice_light_armor",
       "quest_key": "awakening_rift",
+      "text_content": "Твоя скорость требует свободы. Рифт предлагает защиту, которая не сковывает движений.",
       "actions_logic": {
-        "auto": {
-          "type": "logic_gate",
+        "take_robe": {
+          "label": "👘 Надеть Магическую Робу",
           "math": {
-            "loot_queue": [
-              "push:robe",
-              "push:hood",
-              "push:linen_shirt",
-              "push:sandals"
-            ],
-            "skills_queue": [
-              "push:light_armor_mastery"
-            ]
+            "loot_queue": ["push:robe", "push:hood", "push:linen_shirt", "push:sandals"],
+            "skills_queue": ["push:light_armor_mastery"]
+          },
+          "to_node": "final_award_light"
+        },
+        "take_leather": {
+          "label": "🧥 Выбрать Легкую Кожу",
+          "math": {
+            "loot_queue": ["push:leather_armor", "push:hood", "push:linen_shirt", "push:boots"],
+            "skills_queue": ["push:light_armor_mastery"]
           },
           "to_node": "final_award_light"
         }
       }
     },
     {
-      "node_key": "resonance_pack_medium",
+      "node_key": "choice_medium_armor",
       "quest_key": "awakening_rift",
+      "text_content": "Ты ищешь баланс во всем. Рифт предлагает универсальную защиту.",
       "actions_logic": {
-        "auto": {
-          "type": "logic_gate",
+        "take_chainmail": {
+          "label": "⛓️ Надеть Кольчугу",
           "math": {
-            "loot_queue": [
-              "push:chainmail",
-              "push:leather_cap",
-              "push:linen_shirt",
-              "push:boots"
-            ],
-            "skills_queue": [
-              "push:medium_armor_mastery"
-            ]
+            "loot_queue": ["push:chainmail", "push:leather_cap", "push:linen_shirt", "push:boots"],
+            "skills_queue": ["push:medium_armor_mastery"]
+          },
+          "to_node": "final_award_medium"
+        },
+        "take_brigandine": {
+          "label": "🛡️ Выбрать Бригантину",
+          "math": {
+            "loot_queue": ["push:brigandine", "push:leather_cap", "push:linen_shirt", "push:boots"],
+            "skills_queue": ["push:medium_armor_mastery"]
           },
           "to_node": "final_award_medium"
         }
@@ -1655,7 +1662,7 @@
     {
       "node_key": "final_award_heavy",
       "quest_key": "awakening_rift",
-      "text_content": "Изумрудный Разлом взрывается ослепительным светом. Ты чувствуешь, как на твои плечи ложится колоссальная тяжесть, но она не давит, а дает уверенность. \n\nТвое тело теперь заковано в **тяжелую кирасу**, голову защищает **массивный шлем**, а под сталью ощущается тепло **шерстяной туники**. Ты — живая крепость среди хаоса кода. \n\n[#sys_actor]: КАЛИБРОВКА ПОЛНОСТЬЮ ЗАВЕРШЕНА. ВЫ ГOTOВЫ К ВЫХОДУ ИЗ РИФТА.",
+      "text_content": "Изумрудный Разлом взрывается ослепительным светом. Ты чувствуешь, как на твои плечи ложится колоссальная тяжесть, но она не давит, а дает уверенность. \n\nТвое тело теперь заковано в **тяжелую броню**. Ты — живая крепость среди хаоса кода. \n\n[#sys_actor]: КАЛИБРОВКА ПОЛНОСТЬЮ ЗАВЕРШЕНА. ВЫ ГOTOВЫ К ВЫХОДУ ИЗ РИФТА.",
       "actions_logic": {
         "exit": {
           "label": "🌌 Шагнуть в финальный портал",
@@ -1666,7 +1673,7 @@
     {
       "node_key": "final_award_light",
       "quest_key": "awakening_rift",
-      "text_content": "Осколок Зеро окутывает тебя невесомым коконом. Когда сияние гаснет, ты чувствуешь на плечах мягкую ткань, пропитанную энергией Разлома. \n\nТвоим облачением становится **магическая роба**, под которой надета **льняная рубаха**, а голову скрывает **глубокий капюшон**. Это снаряжение не защитит от прямого удара топором, но позволит тебе двигаться быстрее ветра. \n\n[#sys_actor]: СИНХРОНИЗАЦИЯ С ЛЕГКИМ КОНТУРОМ: 100%. ПОЛУЧЕН НАВЫК: МАСТЕР ЛЕГКОЙ БРОНИ.",
+      "text_content": "Осколок Зеро окутывает тебя невесомым коконом. Когда сияние гаснет, ты чувствуешь на плечах мягкую ткань, пропитанную энергией Разлома. \n\nТвоим облачением становится **легкая броня**. Это снаряжение не защитит от прямого удара топором, но позволит тебе двигаться быстрее ветра. \n\n[#sys_actor]: СИНХРОНИЗАЦИЯ С ЛЕГКИМ КОНТУРОМ: 100%. ПОЛУЧЕН НАВЫК: МАСТЕР ЛЕГКОЙ БРОНИ.",
       "actions_logic": {
         "exit": {
           "label": "🌌 Выйти из марева",
@@ -1677,7 +1684,7 @@
     {
       "node_key": "final_award_medium",
       "quest_key": "awakening_rift",
-      "text_content": "Изумрудный свет застывает на твоем теле гибкой металлической сеткой. Ты чувствуешь приятную тяжесть и надежность.\n\nНа тебе надета **кольчуга**, защищающая торс, и **кожаный шлем**. Этот комплект — идеальный баланс между защитой и мобильностью. \n\n[#sys_actor]: СИНХРОНИЗАЦИЯ СО СРЕДНИМ КОНТУРОМ ЗАВЕРШЕНА. ПОЛУЧЕН НАВЫК: МАСТЕР СРЕДНЕЙ БРОНИ.",
+      "text_content": "Изумрудный свет застывает на твоем теле гибкой металлической сеткой. Ты чувствуешь приятную тяжесть и надежность.\n\nНа тебе надета **средняя броня**. Этот комплект — идеальный баланс между защитой и мобильностью. \n\n[#sys_actor]: СИНХРОНИЗАЦИЯ СО СРЕДНИМ КОНТУРОМ ЗАВЕРШЕНА. ПОЛУЧЕН НАВЫК: МАСТЕР СРЕДНЕЙ БРОНИ.",
       "actions_logic": {
         "exit": {
           "label": "🌌 Продолжить путь",
@@ -1868,6 +1875,17 @@
           "label": "🧱 Сгруппироваться и защитить органы доспехом",
           "to_node": "cycle_3_logic_router",
           "math": { "w_endurance": "+3", "w_men": "+2", "w_strength": "+1", "t_nature": "+1", "step_counter": "+1" }
+        }
+      }
+    },
+    {
+      "node_key": "rift_exit_battle",
+      "quest_key": "awakening_rift",
+      "text_content": "Портал перед тобой пульсирует, открывая путь в неизведанное. Твоя экипировка готова, навыки откалиброваны. Пришло время встретиться с реальными угрозами Осколка.",
+      "actions_logic": {
+        "finish": {
+          "label": "⚔️ К бою!",
+          "type": "finish_quest"
         }
       }
     }

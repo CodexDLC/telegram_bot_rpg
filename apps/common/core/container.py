@@ -36,6 +36,8 @@ from apps.common.services.core_service import (
 from apps.game_core.game_service.exploration.encounter_service import EncounterService
 from apps.game_core.game_service.exploration.exploration_orchestrator import ExplorationOrchestrator
 from apps.game_core.game_service.exploration.movement_service import MovementService
+from apps.game_core.game_service.inventory.inventory_orchestrator import InventoryOrchestrator
+from apps.game_core.game_service.inventory.logic.inventory_session_manager import InventorySessionManager
 from apps.game_core.game_service.monster.encounter_pool_service import EncounterPoolService
 from apps.game_core.game_service.world.game_world_service import GameWorldService
 from apps.game_core.game_service.world.world_loader_service import WorldLoaderService
@@ -134,7 +136,10 @@ class AppContainer:
         return ExplorationBotOrchestrator(exploration_client=expl_client, combat_client=combat_client)
 
     def get_inventory_client(self, session: AsyncSession) -> InventoryClient:
-        return InventoryClient(session=session, account_manager=self.account_manager)
+        # Создаем новую цепочку: Manager -> Core -> Client
+        session_manager = InventorySessionManager(redis_service=self.redis_service, session=session)
+        core_orchestrator = InventoryOrchestrator(session_manager=session_manager)
+        return InventoryClient(orchestrator=core_orchestrator)
 
     def get_inventory_bot_orchestrator(self, session: AsyncSession) -> InventoryBotOrchestrator:
         client = self.get_inventory_client(session)

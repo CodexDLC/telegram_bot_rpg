@@ -1,4 +1,5 @@
 # apps/game_core/game_service/scenario_orchestrator/logic/scenario_director.py
+import random
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger as log
@@ -123,8 +124,14 @@ class ScenarioDirector:
 
     def select_node_from_pool(self, candidate_nodes: list[dict[str, Any]], context: dict[str, Any]) -> str | None:
         """Выбор из пула."""
+        visited_nodes = context.get("visited_nodes", [])
         valid_nodes = []
+
         for node in candidate_nodes:
+            # Пропускаем уже посещенные ноды
+            if node.get("node_key") in visited_nodes:
+                continue
+
             reqs = node.get("selection_requirements")
             if not reqs or self.evaluator.check_condition(reqs, context):
                 valid_nodes.append(node)
@@ -133,7 +140,8 @@ class ScenarioDirector:
             log.warning(f"Director | action=smart_selection status=no_candidates context_keys={list(context.keys())}")
             return None
 
-        selected_node = valid_nodes[-1]
+        # Выбираем случайную ноду из валидных
+        selected_node = random.choice(valid_nodes)
         return str(selected_node.get("node_key"))
 
     def get_available_actions(self, actions_logic: dict[str, Any], context: dict[str, Any]) -> list[dict[str, Any]]:

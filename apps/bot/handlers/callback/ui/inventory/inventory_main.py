@@ -1,4 +1,5 @@
-from aiogram import Bot, F, Router
+from aiogram import Bot, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger as log
@@ -15,9 +16,9 @@ router = Router(name="inventory_main_router")
 
 @router.callback_query(
     InGame.inventory,
-    InventoryCallback.filter(F.level == 0),
+    InventoryCallback.filter(),  # Ловим ВСЕ уровни и действия
 )
-async def inventory_main_handler(
+async def inventory_unified_handler(
     call: CallbackQuery,
     callback_data: InventoryCallback,
     state: FSMContext,
@@ -25,7 +26,10 @@ async def inventory_main_handler(
     bot: Bot,
     container: AppContainer,
 ) -> None:
-    """Обрабатывает главное меню инвентаря."""
+    """
+    Единый хендлер для всей системы инвентаря.
+    Делегирует обработку в InventoryBotOrchestrator.handle_callback.
+    """
     user_id = call.from_user.id
 
     if user_id != callback_data.user_id:
@@ -45,19 +49,36 @@ async def inventory_main_handler(
     # Создаем оркестратор через контейнер
     orchestrator = container.get_inventory_bot_orchestrator(session)
 
-    # Получаем главное меню
-    result_dto = await orchestrator.get_main_menu(char_id, user_id, state_data)
+    # --- ЕДИНАЯ ТОЧКА ВХОДА ---
+    # Оркестратор сам решит, что делать (навигация или действие) и что вернуть (ViewDTO)
+    result_dto = await orchestrator.handle_callback(char_id, user_id, callback_data, state_data)
 
-    # Обновляем сообщение через координаты
+    # Обновляем сообщение
     if result_dto.content and (coords := orchestrator.get_content_coords(state_data, user_id)):
-        await bot.edit_message_text(
-            chat_id=coords.chat_id,
-            message_id=coords.message_id,
-            text=result_dto.content.text,
-            reply_markup=result_dto.content.kb,
-            parse_mode="HTML",
-        )
-        log.info(f"Inventory | event=main_menu_rendered user_id={user_id} char_id={char_id}")
+        # Если есть item_id (например, при просмотре деталей), можно использовать его для логов или аналитики
+
+        try:
+            await bot.edit_message_text(
+                chat_id=coords.chat_id,
+                message_id=coords.message_id,
+                text=result_dto.content.text,
+                reply_markup=result_dto.content.kb,
+                parse_mode="HTML",
+            )
+            log.info(
+                f"Inventory | event=view_updated level={callback_data.level} action={callback_data.action} user_id={user_id}"
+            )
+        except TelegramAPIError as e:
+            if "message is not modified" in str(e):
+                # Игнорируем ошибку, если контент не изменился (например, нажали ту же страницу)
+                await call.answer()
+            else:
+                log.error(f"Inventory | status=render_error error='{e}'")
+                await Err.generic_error(call)
+        except Exception as e:  # noqa: BLE001
+            log.error(f"Inventory | status=render_error error='{e}'")
+            await Err.generic_error(call)
     else:
-        log.error(f"Inventory | status=failed reason='message_content not found' user_id={user_id}")
-        await Err.generic_error(call)
+        # Если content=None, значит действие выполнено, но UI обновлять не нужно (или это алерт)
+        # В текущей реализации handle_callback всегда возвращает контент, но на будущее
+        await call.answer()

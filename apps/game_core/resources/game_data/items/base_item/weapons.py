@@ -32,14 +32,47 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 6,
+            "base_power": 3,  # Было 6
             "damage_spread": 0.05,
             "base_durability": 40,
             "narrative_tags": ["dagger", "swift", "stealth"],
             "implicit_bonuses": {
-                "physical_crit_chance": 0.15,  # Частые криты
-                "physical_pierce_chance": 0.15,  # Шанс игнора брони (убийца танков)
-                "physical_accuracy": 0.10,  # Точность
+                "physical_crit_chance": 0.15,
+                "physical_pierce_chance": 0.15,
+                "physical_accuracy": 0.10,
+            },
+        },
+        "knife": {
+            "id": "knife",
+            "name_ru": "Нож",
+            "slot": "main_hand",
+            "extra_slots": ["off_hand"],
+            "damage_type": "physical",
+            "defense_type": None,
+            "allowed_materials": ["ingots"],
+            "base_power": 2,  # Было 5
+            "damage_spread": 0.1,
+            "base_durability": 35,
+            "narrative_tags": ["knife", "tool", "simple"],
+            "implicit_bonuses": {
+                "physical_crit_chance": 0.05,
+            },
+        },
+        "tanto": {
+            "id": "tanto",
+            "name_ru": "Танто",
+            "slot": "main_hand",
+            "extra_slots": ["off_hand"],
+            "damage_type": "physical",
+            "defense_type": None,
+            "allowed_materials": ["ingots"],
+            "base_power": 4,  # Было 7
+            "damage_spread": 0.05,
+            "base_durability": 45,
+            "narrative_tags": ["tanto", "samurai", "short"],
+            "implicit_bonuses": {
+                "physical_crit_chance": 0.10,
+                "physical_pierce_chance": 0.10,
             },
         },
         "hatchet": {
@@ -50,13 +83,13 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 7,
+            "base_power": 4,  # Было 7
             "damage_spread": 0.3,
             "base_durability": 50,
             "narrative_tags": ["axe", "light", "chop"],
             "implicit_bonuses": {
-                "physical_crit_power_float": 0.50,  # Сильные криты
-                "bleed_damage_bonus": 0.15,  # Кровотечение
+                "physical_crit_power_float": 0.50,
+                "bleed_damage_bonus": 0.15,
             },
         },
         "wakizashi": {
@@ -67,14 +100,14 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 8,
+            "base_power": 4,  # Было 8
             "damage_spread": 0.1,
             "base_durability": 55,
             "narrative_tags": ["wakizashi", "samurai", "blade"],
             "implicit_bonuses": {
-                "physical_accuracy": 0.15,  # Высокая точность
-                "parry_chance": 0.10,  # Защита
-                "counter_attack_chance": 0.05,  # Шанс контратаки
+                "physical_accuracy": 0.15,
+                "parry_chance": 0.10,
+                "counter_attack_chance": 0.05,
             },
         },
     },
@@ -89,13 +122,61 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 10,
+            "base_power": 5,  # Было 10
             "damage_spread": 0.1,
             "base_durability": 60,
             "narrative_tags": ["sword", "balanced", "blade"],
             "implicit_bonuses": {
-                "physical_accuracy": 0.10,  # Баланс точности
-                "parry_chance": 0.10,  # Баланс защиты
+                "physical_accuracy": 0.10,
+                "parry_chance": 0.10,
+            },
+        },
+        "shortsword": {
+            "id": "shortsword",
+            "name_ru": "Короткий меч",
+            "slot": "main_hand",
+            "damage_type": "physical",
+            "defense_type": None,
+            "allowed_materials": ["ingots"],
+            "base_power": 4,  # Было 8
+            "damage_spread": 0.1,
+            "base_durability": 55,
+            "narrative_tags": ["sword", "short", "agile"],
+            "implicit_bonuses": {
+                "physical_accuracy": 0.10,
+                "attack_speed": 0.05,
+            },
+        },
+        "scimitar": {
+            "id": "scimitar",
+            "name_ru": "Скимитар",
+            "slot": "main_hand",
+            "damage_type": "physical",
+            "defense_type": None,
+            "allowed_materials": ["ingots"],
+            "base_power": 6,  # Было 12
+            "damage_spread": 0.1,
+            "base_durability": 60,
+            "narrative_tags": ["scimitar", "curved", "slash"],
+            "implicit_bonuses": {
+                "bleed_chance": 0.10,
+                "parry_chance": 0.05,
+            },
+        },
+        "longsword": {
+            "id": "longsword",
+            "name_ru": "Длинный меч",
+            "slot": "main_hand",
+            "damage_type": "physical",
+            "defense_type": None,
+            "allowed_materials": ["ingots"],
+            "base_power": 7,  # Было 15
+            "damage_spread": 0.1,
+            "base_durability": 65,
+            "narrative_tags": ["sword", "long", "knight"],
+            "implicit_bonuses": {
+                "parry_chance": 0.10,
+                "physical_damage_bonus": 0.05,
             },
         },
         "battle_axe": {
@@ -105,13 +186,13 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 12,
+            "base_power": 6,  # Было 12
             "damage_spread": 0.4,
             "base_durability": 50,
             "narrative_tags": ["axe", "brutal", "chop"],
             "implicit_bonuses": {
-                "physical_crit_power_float": 0.60,  # Очень сильные криты
-                "physical_damage_bonus": 0.05,  # Бонус к урону
+                "physical_crit_power_float": 0.60,
+                "physical_damage_bonus": 0.05,
             },
         },
         "mace": {
@@ -121,13 +202,13 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 11,
+            "base_power": 6,  # Было 11
             "damage_spread": 0.2,
             "base_durability": 80,
             "narrative_tags": ["mace", "crushing", "blunt"],
             "implicit_bonuses": {
-                "physical_penetration": 0.25,  # Пробивание брони
-                "shock_resistance": 0.10,  # Устойчивость к шоку (твердость)
+                "physical_penetration": 0.25,
+                "shock_resistance": 0.10,
             },
         },
         "rapier": {
@@ -137,13 +218,13 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 8,
+            "base_power": 4,  # Было 8
             "damage_spread": 0.05,
             "base_durability": 45,
             "narrative_tags": ["rapier", "fencing", "piercing"],
             "implicit_bonuses": {
-                "physical_accuracy": 0.20,  # Снайперская точность в ближнем бою
-                "physical_pierce_chance": 0.10,  # Укол в уязвимое место
+                "physical_accuracy": 0.20,
+                "physical_pierce_chance": 0.10,
                 "parry_chance": 0.05,
             },
         },
@@ -159,13 +240,13 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 20,
+            "base_power": 10,  # Было 20
             "damage_spread": 0.15,
             "base_durability": 70,
             "narrative_tags": ["greatsword", "massive", "cleave"],
             "implicit_bonuses": {
-                "parry_chance": 0.15,  # Большим мечом удобно парировать
-                "physical_damage_bonus": 0.15,  # Огромный урон
+                "parry_chance": 0.15,
+                "physical_damage_bonus": 0.15,
             },
         },
         "warhammer": {
@@ -175,13 +256,13 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 24,
+            "base_power": 12,  # Было 24
             "damage_spread": 0.3,
             "base_durability": 90,
             "narrative_tags": ["hammer", "smash", "heavy"],
             "implicit_bonuses": {
-                "physical_penetration": 0.40,  # Крушит любую броню
-                "dodge_chance": -0.10,  # Тяжелый, мешает уворачиваться
+                "physical_penetration": 0.40,
+                "dodge_chance": -0.10,
             },
         },
         "spear": {
@@ -191,14 +272,30 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots", "woods"],
-            "base_power": 18,
+            "base_power": 9,  # Было 18
             "damage_spread": 0.1,
             "base_durability": 50,
             "narrative_tags": ["spear", "reach", "piercing"],
             "implicit_bonuses": {
-                "counter_attack_chance": 0.20,  # Длина позволяет бить на опережение
+                "counter_attack_chance": 0.20,
                 "physical_accuracy": 0.10,
                 "physical_pierce_chance": 0.05,
+            },
+        },
+        "halberd": {
+            "id": "halberd",
+            "name_ru": "Алебарда",
+            "slot": "two_hand",
+            "damage_type": "physical",
+            "defense_type": None,
+            "allowed_materials": ["ingots", "woods"],
+            "base_power": 11,  # Было 22
+            "damage_spread": 0.15,
+            "base_durability": 60,
+            "narrative_tags": ["halberd", "polearm", "chop"],
+            "implicit_bonuses": {
+                "physical_penetration": 0.20,
+                "counter_attack_chance": 0.15,
             },
         },
         "katana": {
@@ -208,13 +305,13 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 19,
+            "base_power": 9,  # Было 19
             "damage_spread": 0.1,
             "base_durability": 65,
             "narrative_tags": ["katana", "samurai", "fast_blade"],
             "implicit_bonuses": {
-                "physical_crit_chance": 0.15,  # Острота
-                "bleed_damage_bonus": 0.20,  # Режущие раны
+                "physical_crit_chance": 0.15,
+                "bleed_damage_bonus": 0.20,
                 "physical_accuracy": 0.10,
             },
         },
@@ -225,13 +322,13 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": "physical",
             "allowed_materials": ["woods"],
-            "base_power": 12,
+            "base_power": 6,  # Было 12
             "damage_spread": 0.1,
             "base_durability": 100,
             "narrative_tags": ["staff", "monk", "defensive"],
             "implicit_bonuses": {
-                "parry_chance": 0.20,  # Отличная защита
-                "dodge_chance": 0.10,  # Помогает двигаться
+                "parry_chance": 0.20,
+                "dodge_chance": 0.10,
                 "counter_attack_chance": 0.10,
             },
         },
@@ -240,6 +337,22 @@ WEAPONS_DB = {
     # 4. ДАЛЬНИЙ БОЙ (Ranged)
     # ==========================================
     "ranged": {
+        "sling": {
+            "id": "sling",
+            "name_ru": "Праща",
+            "slot": "main_hand",
+            "damage_type": "physical",
+            "defense_type": None,
+            "allowed_materials": ["leathers"],
+            "base_power": 4,  # Было 8
+            "damage_spread": 0.2,
+            "base_durability": 30,
+            "narrative_tags": ["sling", "simple", "stone"],
+            "implicit_bonuses": {
+                "physical_accuracy": -0.05,
+                "physical_crit_power_float": 0.20,
+            },
+        },
         "shortbow": {
             "id": "shortbow",
             "name_ru": "Короткий лук",
@@ -247,13 +360,13 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["woods"],
-            "base_power": 12,
+            "base_power": 6,  # Было 12
             "damage_spread": 0.1,
             "base_durability": 40,
             "narrative_tags": ["bow", "ranger", "fast"],
             "implicit_bonuses": {
                 "physical_accuracy": 0.15,
-                "dodge_chance": 0.05,  # Мобильность
+                "dodge_chance": 0.05,
             },
         },
         "longbow": {
@@ -263,12 +376,12 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["woods"],
-            "base_power": 18,
+            "base_power": 9,  # Было 18
             "damage_spread": 0.15,
             "base_durability": 35,
             "narrative_tags": ["bow", "long_range", "sniper"],
             "implicit_bonuses": {
-                "physical_damage_bonus": 0.15,  # Сила натяжения
+                "physical_damage_bonus": 0.15,
                 "physical_accuracy": 0.10,
                 "physical_pierce_chance": 0.05,
             },
@@ -280,12 +393,12 @@ WEAPONS_DB = {
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["woods", "ingots"],
-            "base_power": 25,
+            "base_power": 12,  # Было 25
             "damage_spread": 0.05,
             "base_durability": 60,
             "narrative_tags": ["crossbow", "heavy", "slow"],
             "implicit_bonuses": {
-                "physical_penetration": 0.40,  # Пробивает латы
+                "physical_penetration": 0.40,
                 "physical_crit_power_float": 0.50,
             },
         },
@@ -301,13 +414,13 @@ WEAPONS_DB = {
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["woods", "ingots"],
-            "base_power": 15,
+            "base_power": 8,  # Было 15
             "base_durability": 80,
             "damage_spread": 0.0,
             "narrative_tags": ["shield", "block", "protection"],
             "implicit_bonuses": {
-                "shield_block_chance": 0.20,  # Шанс блока
-                "shield_block_power": 0.30,  # Сила блока
+                "shield_block_chance": 0.20,
+                "shield_block_power": 0.30,
             },
         },
         "buckler": {
@@ -317,13 +430,13 @@ WEAPONS_DB = {
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["woods", "ingots"],
-            "base_power": 5,
+            "base_power": 3,  # Было 5
             "base_durability": 50,
             "damage_spread": 0.0,
             "narrative_tags": ["buckler", "parry", "small_shield"],
             "implicit_bonuses": {
-                "parry_chance": 0.15,  # Парирование вместо блока
-                "counter_attack_chance": 0.10,  # Возможность контратаки
+                "parry_chance": 0.15,
+                "counter_attack_chance": 0.10,
                 "shield_block_chance": 0.05,
             },
         },

@@ -14,6 +14,7 @@ from apps.bot.resources.keyboards.callback_data import LobbySelectionCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY, fsm_store
 from apps.bot.ui_service.helpers_ui.ui_tools import await_min_delay
+from apps.bot.ui_service.mesage_menu.menu_service import MenuService
 from apps.common.core.container import AppContainer
 from apps.common.schemas_dto import UserUpsertDTO
 from apps.common.services.core_service.manager.account_manager import AccountManager
@@ -113,15 +114,23 @@ async def start_login_handler(
             await Err.char_id_not_found_in_fsm(call=call)
             return
 
-        # ИЗМЕНЕНО: Запуск нового процесса онбординга
+        # 1. Обновляем верхнее меню на "Message Menu" (onboarding)
+        menu_service = MenuService(
+            game_stage="onboarding", state_data=state_data, session=session, account_manager=account_manager
+        )
+        menu_text, menu_kb = await menu_service.get_data_menu()
         if isinstance(call.message, Message):
-            await start_onboarding_process(
-                message=call.message,
-                state=state,
-                char_id=char_id,
-                session=session,
-                container=container,  # Передаем только контейнер
-            )
+            await call.message.edit_text(text=menu_text, reply_markup=menu_kb, parse_mode="html")
+
+        # 2. Запускаем онбординг в нижнем сообщении
+        await start_onboarding_process(
+            bot=bot,
+            state=state,
+            char_id=char_id,
+            session=session,
+            container=container,
+            message=call.message if isinstance(call.message, Message) else None,
+        )
 
 
 @router.callback_query(CharacterLobby.selection, LobbySelectionCallback.filter(F.action == "create"))
@@ -152,12 +161,22 @@ async def create_character_handler(
         await Err.char_id_not_found_in_fsm(call=call)
         return
 
-    # ИЗМЕНЕНО: Запуск нового процесса онбординга
+    state_data = await state.get_data()
+
+    # 1. Обновляем верхнее меню на "Message Menu" (onboarding)
+    menu_service = MenuService(
+        game_stage="onboarding", state_data=state_data, session=session, account_manager=account_manager
+    )
+    menu_text, menu_kb = await menu_service.get_data_menu()
     if isinstance(call.message, Message):
-        await start_onboarding_process(
-            message=call.message,
-            state=state,
-            char_id=char_id,
-            session=session,
-            container=container,  # Передаем только контейнер
-        )
+        await call.message.edit_text(text=menu_text, reply_markup=menu_kb, parse_mode="html")
+
+    # 2. Запускаем онбординг в нижнем сообщении
+    await start_onboarding_process(
+        bot=bot,
+        state=state,
+        char_id=char_id,
+        session=session,
+        container=container,
+        message=call.message if isinstance(call.message, Message) else None,
+    )

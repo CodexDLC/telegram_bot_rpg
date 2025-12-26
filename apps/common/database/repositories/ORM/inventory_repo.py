@@ -33,6 +33,7 @@ class InventoryRepo(IInventoryRepo):
         item_data: dict[str, Any],
         location: str = "inventory",
         quantity: int = 1,
+        equipped_slot: str | None = None,
     ) -> int:
         log.debug(f"InventoryRepo | action=create_item char_id={character_id} type='{item_type}' subtype='{subtype}'")
         new_inv_item = InventoryItem(
@@ -43,6 +44,7 @@ class InventoryRepo(IInventoryRepo):
             location=location,
             item_data=item_data,
             quantity=quantity,
+            equipped_slot=equipped_slot,
         )
 
         try:

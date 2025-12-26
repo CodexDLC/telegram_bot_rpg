@@ -9,7 +9,7 @@
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 
 # --- ENUMS ---
@@ -145,8 +145,8 @@ class BaseInventoryItemDTO(BaseModel):
     subtype: str
     rarity: ItemRarity
     quantity: int = 1
-    equipped_slot: EquippedSlot | None = None
-    quick_slot_position: QuickSlot | None = None
+    equipped_slot: str | None = None  # Changed from EquippedSlot to str to allow flexibility
+    quick_slot_position: str | None = None  # Changed from QuickSlot to str
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -180,3 +180,5 @@ InventoryItemDTO = Annotated[
     WeaponItemDTO | ArmorItemDTO | AccessoryItemDTO | ConsumableItemDTO | ResourceItemDTO,
     Field(discriminator="item_type"),
 ]
+
+InventoryItemTypeAdapter: TypeAdapter[InventoryItemDTO] = TypeAdapter(InventoryItemDTO)

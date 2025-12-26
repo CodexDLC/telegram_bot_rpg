@@ -112,4 +112,5 @@ pythonpath = "."
 asyncio_mode = "auto"
 # 👇 ЭТА СТРОКА ОБЯЗАТЕЛЬНА 👇
 asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "class"
 addopts = "-v"

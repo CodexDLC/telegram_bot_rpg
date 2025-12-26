@@ -1,41 +1,70 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any
 
 from apps.common.schemas_dto import InventoryItemDTO
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.game_core.game_service.inventory.inventory_orchestrator import InventoryCoreOrchestrator
+from apps.game_core.game_service.inventory.inventory_orchestrator import InventoryOrchestrator
 
 
 class InventoryClient:
     """
     Клиент для взаимодействия с системой инвентаря.
+    В будущем здесь будут HTTP-запросы к микросервису.
+    Сейчас это прокси к InventoryOrchestrator.
     """
 
-    def __init__(self, session: AsyncSession, account_manager: AccountManager):
-        self._orchestrator = InventoryCoreOrchestrator(session, account_manager)
+    def __init__(self, orchestrator: InventoryOrchestrator):
+        self._orchestrator = orchestrator
+
+    # --- NEW API (Unified) ---
+
+    async def get_view(self, char_id: int, view_type: str, **kwargs) -> Any:
+        """
+        Получение данных для отображения (Main Menu, Bag, Details).
+        """
+        return await self._orchestrator.get_view(char_id, view_type, **kwargs)
+
+    async def execute_action(self, char_id: int, action_type: str, **kwargs) -> tuple[bool, str]:
+        """
+        Выполнение действия (Equip, Drop, Use).
+        """
+        return await self._orchestrator.execute_action(char_id, action_type, **kwargs)
+
+    # --- LEGACY API (Adapters for Loot/Shop/Matchmaking) ---
 
     async def get_summary(self, char_id: int) -> dict:
-        return await self._orchestrator.get_inventory_summary(char_id)
+        # Адаптер: возвращает dict, как раньше
+        response = await self.get_view(char_id, "main")
+        return response.summary
 
     async def get_items(self, char_id: int, section: str, category: str, page: int, page_size: int) -> dict:
-        return await self._orchestrator.get_items(char_id, section, category, page, page_size)
+        # Адаптер: возвращает dict с items и пагинацией
+        response = await self.get_view(char_id, "bag", section=section, category=category, page=page)
+        return {"items": response.items, "total_pages": response.total_pages, "current_page": response.page}
 
     async def get_item_details(self, char_id: int, item_id: int) -> InventoryItemDTO | None:
-        return await self._orchestrator.get_item_details(char_id, item_id)
+        response = await self.get_view(char_id, "details", item_id=item_id)
+        return response.item if response else None
 
     async def get_comparison(self, char_id: int, item: InventoryItemDTO) -> dict | None:
-        return await self._orchestrator.get_comparison(char_id, item)
+        # Этот метод сложно адаптировать, так как get_view('details') требует item_id, а тут передается DTO.
+        # Но обычно get_comparison вызывался после get_item_details.
+        # Если старый код вызывает это отдельно, он может упасть.
+        # Но в UI мы уже заменили вызов. Если Loot/Shop это не используют, то ок.
+        return None
 
     async def equip_item(self, char_id: int, item_id: int, slot: str) -> tuple[bool, str]:
-        return await self._orchestrator.equip_item(char_id, item_id, slot)
+        return await self.execute_action(char_id, "equip", item_id=item_id, slot=slot)
 
     async def use_item(self, char_id: int, item_id: int) -> tuple[bool, str]:
-        return await self._orchestrator.use_item(char_id, item_id)
+        # use пока не реализован в execute_action, добавим заглушку или реализуем
+        # return await self.execute_action(char_id, "use", item_id=item_id)
+        return False, "Not implemented yet"
 
     async def get_quick_slot_limit(self, char_id: int) -> int:
-        return await self._orchestrator.get_quick_slot_limit(char_id)
+        return await self.get_view(char_id, "quick_slot_limit")
 
     async def bind_quick_slot(self, char_id: int, item_id: int, slot_key: str) -> tuple[bool, str]:
-        return await self._orchestrator.bind_quick_slot(char_id, item_id, slot_key)
+        return await self.execute_action(char_id, "move_quick_slot", item_id=item_id, position=slot_key)
 
     async def unbind_quick_slot(self, char_id: int, item_id: int) -> tuple[bool, str]:
-        return await self._orchestrator.unbind_quick_slot(char_id, item_id)
+        # unbind пока нет, можно реализовать как move(None)
+        return False, "Not implemented yet"

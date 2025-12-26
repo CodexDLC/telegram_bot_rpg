@@ -83,3 +83,21 @@ class WalletRepoORM(IWalletRepo):
             f"WalletRepoORM | action=remove_resource char_id={char_id} group='{group}' key='{key}' amount={amount}"
         )
         return True
+
+    async def update_wallet(
+        self, char_id: int, currency: dict[str, int], resources: dict[str, int], components: dict[str, int]
+    ) -> None:
+        """
+        Полностью обновляет содержимое кошелька.
+        """
+        wallet = await self.get_wallet(char_id)
+
+        wallet.currency = currency
+        wallet.resources = resources
+        wallet.components = components
+
+        wallet.flag_as_modified("currency")
+        wallet.flag_as_modified("resources")
+        wallet.flag_as_modified("components")
+
+        log.debug(f"WalletRepoORM | action=update_wallet char_id={char_id}")

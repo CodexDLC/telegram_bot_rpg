@@ -82,6 +82,22 @@ async def scenario_initialize_handler(
             await Err.message_content_not_found_in_fsm(call)
 
 
+@router.callback_query(InGame.onboarding, ScenarioCallback.filter(F.action == "initialize"))
+async def scenario_initialize_from_onboarding_handler(
+    call: CallbackQuery,
+    callback_data: ScenarioCallback,
+    state: FSMContext,
+    bot: Bot,
+    container: AppContainer,
+    session: AsyncSession,
+) -> None:
+    """
+    Специальный хендлер для запуска сценария из состояния онбординга.
+    """
+    log.info("Scenario | event=init_from_onboarding")
+    await scenario_initialize_handler(call, callback_data, state, bot, container, session)
+
+
 @router.callback_query(InGame.scenario, ScenarioCallback.filter(F.action == "step"))
 async def scenario_step_handler(
     call: CallbackQuery,
@@ -110,8 +126,44 @@ async def scenario_step_handler(
     # Выполняем шаг
     result_dto = await orchestrator.step_view(char_id, str(callback_data.action_id))
 
-    # Если сценарий закончился (is_terminal=True), запускаем финализацию
+    # Если сценарий закончился (is_terminal=True)
     if result_dto.is_terminal:
+        # Проверяем, нужно ли перейти в бой
+        if result_dto.extra_data and (combat_session_id := result_dto.extra_data.get("combat_session_id")):
+            log.info(f"Scenario | event=transition_to_combat char_id={char_id} combat_session='{combat_session_id}'")
+
+            # 1. Сохраняем ID сессии в FSM, чтобы combat_handler его увидел
+            session_context["combat_session_id"] = combat_session_id
+            await state.update_data({FSM_CONTEXT_KEY: session_context})
+
+            # 2. Переключаем FSM
+            await state.set_state(InGame.combat)
+
+            # 3. Получаем и отрисовываем дашборд боя
+            combat_orchestrator = container.get_combat_bot_orchestrator(session)
+
+            # Обновляем state_data, так как мы изменили его выше
+            updated_state_data = await state.get_data()
+
+            view = await combat_orchestrator.get_dashboard_view(
+                session_id=combat_session_id, char_id=char_id, selection={}, state_data=updated_state_data
+            )
+
+            # ВАЖНО: Сохраняем target_id в FSM, иначе при ударе будет ошибка
+            if view.target_id is not None:
+                await state.update_data(combat_target_id=view.target_id)
+
+            if view.content and (coords := orchestrator.get_content_coords(state_data)):
+                await bot.edit_message_text(
+                    chat_id=coords.chat_id,
+                    message_id=coords.message_id,
+                    text=view.content.text,
+                    reply_markup=view.content.kb,
+                    parse_mode="HTML",
+                )
+            return
+
+        # Иначе - стандартная финализация
         await _finalize_scenario_logic(call, state, bot, container, session, char_id, orchestrator)
         return
 
@@ -146,7 +198,7 @@ async def _finalize_scenario_logic(
     # 1. Финализируем на бэкенде и получаем данные для возврата
     finalize_result = await orchestrator.finalize_view(char_id)
 
-    if not finalize_result.get("success", False):
+    if finalize_result.get("status") != "success":
         await call.answer("Ошибка завершения сценария", show_alert=True)
         return
 

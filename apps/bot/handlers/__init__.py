@@ -8,7 +8,6 @@ from .callback.game import game_router_group
 # --- Наши новые "Цепочки" (Группы) ---
 from .callback.login import login_router_group
 from .callback.onboarding import onboarding_router_group  # <--- НОВЫЙ РОУТЕР
-from .callback.tutorial import tutorial_router_group
 from .callback.ui.inventory import inventory_group_router
 from .callback.ui.menu_dispatch import router as menu_dispatch_router
 from .callback.ui.status_menu import status_menu_router_group
@@ -30,7 +29,6 @@ router.include_routers(
     # Затем "цепочки" callback-хэндлеров
     login_router_group,
     onboarding_router_group,  # <--- РЕГИСТРАЦИЯ
-    tutorial_router_group,
     status_menu_router_group,
     inventory_group_router,
     game_router_group,

@@ -1,5 +1,6 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardMarkup
 
+from apps.bot.resources.keyboards.callback_data import ScenarioCallback
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 from apps.bot.ui_service.scenario.formatters.scenario_formatter import ScenarioFormatter
 from apps.common.schemas_dto.scenario_dto import ScenarioButtonDTO, ScenarioPayloadDTO
@@ -15,11 +16,11 @@ class ScenarioUIService:
         """
         Рендерит сцену: текст, статус-бар и адаптивную клавиатуру.
         """
-        # 1. Получаем отформатированный текст через форматтер
-        final_text = ScenarioFormatter.format_scene_text(payload)
+        # 1. Адаптируем текст и кнопки (если кнопки слишком длинные)
+        final_text, adapted_buttons = ScenarioFormatter.adapt_buttons_to_text(payload)
 
         # 2. Клавиатура собирается внутренним методом
-        kb = self._build_adaptive_keyboard(payload.buttons)
+        kb = self._build_adaptive_keyboard(adapted_buttons)
 
         return ViewResultDTO(text=final_text, kb=kb)
 
@@ -49,9 +50,9 @@ class ScenarioUIService:
         # Пересоздаем билдер и добавляем все кнопки по порядку (короткие, потом длинные)
         kb = InlineKeyboardBuilder()
         for button in short_buttons:
-            kb.button(text=button.label, callback_data=f"sc:{button.action_id}")
+            kb.button(text=button.label, callback_data=ScenarioCallback(action="step", action_id=button.action_id))
         for button in long_buttons:
-            kb.button(text=button.label, callback_data=f"sc:{button.action_id}")
+            kb.button(text=button.label, callback_data=ScenarioCallback(action="step", action_id=button.action_id))
 
         kb.adjust(*row_widths)
 

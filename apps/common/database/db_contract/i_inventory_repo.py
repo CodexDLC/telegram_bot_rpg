@@ -19,6 +19,7 @@ class IInventoryRepo(ABC):
         item_data: dict[str, Any],
         location: str = "inventory",
         quantity: int = 1,
+        equipped_slot: str | None = None,
     ) -> int:
         pass
 
