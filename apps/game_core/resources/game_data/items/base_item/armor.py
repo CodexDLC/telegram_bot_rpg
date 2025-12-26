@@ -121,6 +121,22 @@ ARMOR_DB = {
                 "perception": 1.0,
             },
         },
+        "goggles": {
+            "id": "goggles",
+            "name_ru": "Защитные очки",
+            "slot": "head_armor",
+            "damage_type": None,
+            "defense_type": "physical",
+            "allowed_materials": ["leathers", "ingots"],
+            "base_power": 1,
+            "base_durability": 30,
+            "damage_spread": 0.0,
+            "narrative_tags": ["goggles", "engineer", "vision"],
+            "implicit_bonuses": {
+                "physical_accuracy": 0.10,
+                "perception": 2.0,
+            },
+        },
         "jerkin": {
             "id": "jerkin",
             "name_ru": "Куртка",
@@ -136,6 +152,21 @@ ARMOR_DB = {
                 "dodge_chance": 0.05,  # Мобильность
                 "physical_crit_chance": 0.05,  # Свобода движений
                 "bleed_resistance": 0.10,
+            },
+        },
+        "leather_vest": {
+            "id": "leather_vest",
+            "name_ru": "Кожаный жилет",
+            "slot": "chest_armor",
+            "damage_type": None,
+            "defense_type": "physical",
+            "allowed_materials": ["leathers"],
+            "base_power": 4,
+            "base_durability": 50,
+            "damage_spread": 0.0,
+            "narrative_tags": ["vest", "light", "leather"],
+            "implicit_bonuses": {
+                "dodge_chance": 0.05,
             },
         },
         "bracers": {

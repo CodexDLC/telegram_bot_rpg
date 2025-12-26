@@ -74,7 +74,7 @@ async def start_logging_handler(
             # Используем cast для явного указания типа.
             message = cast(Message, call.message)
             await start_onboarding_process(
-                message=message, state=state, char_id=char_id, session=session, container=container
+                message=message, state=state, char_id=char_id, session=session, container=container, bot=bot
             )
         return
 

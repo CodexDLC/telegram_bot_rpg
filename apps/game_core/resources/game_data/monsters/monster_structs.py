@@ -42,9 +42,14 @@ class MonsterLoadout(TypedDict, total=False):
 # ==========================================
 class MonsterVariant(TypedDict):
     id: str
+    name_ru: NotRequired[str]  # Имя для отображения в UI
     role: Literal["minion", "veteran", "elite", "boss"]
     narrative_hint: str  # Описание для LLM
     cost: int  # "Цена" для балансировщика
+
+    # Описания для UI
+    description: NotRequired[str]  # Художественное описание (Бестиарий)
+    combat_intro_text: NotRequired[str]  # Текст при появлении в бою
 
     # Свойства самого монстра (Traits).
     # Используем для боя (уязв. к яду) и LLM (описание).

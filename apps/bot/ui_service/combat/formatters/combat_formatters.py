@@ -55,21 +55,36 @@ class CombatFormatter:
         en_max = int(player_state.get("energy_max", 0))
 
         tokens = player_state.get("tokens", {})
-        t_hit = tokens.get("hit", 0)
-        t_crit = tokens.get("crit", 0)
-        t_block = tokens.get("block", 0)
-        t_parry = tokens.get("parry", 0)
-        t_counter = tokens.get("counter", 0)
         charges = player_state.get("switch_charges", 0)
 
-        tokens_atk_str = f"🗡 <b>{t_hit}</b>  💥 <b>{t_crit}</b>"
-        tokens_def_str = f"🛡 <b>{t_block}</b>  ⚔️ <b>{t_parry}</b>  ↩️ <b>{t_counter}</b>"
+        # Собираем строку токенов динамически
+        token_map = {
+            "hit": "🗡",
+            "crit": "💥",
+            "shield_block": "🛡",
+            "geo_block": "🤺",
+            "parry": "⚔️",
+            "dodge": "💨",
+            "counter": "↩️",
+        }
+
+        token_parts = []
+        # Сначала стандартные
+        for key, icon in token_map.items():
+            val = tokens.get(key, 0)
+            if val > 0:
+                token_parts.append(f"{icon} <b>{val}</b>")
+
+        # Потом любые другие (кастомные)
+        for key, val in tokens.items():
+            if key not in token_map and key != "block" and val > 0:  # block пропускаем, так как он дублирует shield/geo
+                token_parts.append(f"🔹 <b>{val}</b> ({key})")
+
+        tokens_str = "  ".join(token_parts) if token_parts else "<i>нет</i>"
 
         header = (
             f"👤 <b>Вы:</b> {hp_cur}/{hp_max} HP | {en_cur}/{en_max} EN\n"
-            f"💎 <b>Токены:</b>\n"
-            f"[ {tokens_atk_str} ]\n"
-            f"[ {tokens_def_str} ]\n"
+            f"💎 <b>Токены:</b> {tokens_str}\n"
             f"🔄 <b>Тактика:</b> {charges} зарядов"
         )
 

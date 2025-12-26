@@ -83,4 +83,4 @@ class WorldManager:
             Множество строковых идентификаторов персонажей в локации.
         """
         key = Rk.get_world_location_players_key(loc_id)
-        return await self.redis_service.get_to_set(key)
+        return await self.redis_service.get_set_members(key)

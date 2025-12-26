@@ -49,3 +49,12 @@ class IWalletRepo(ABC):
         amount: int,
     ) -> bool:
         pass
+
+    @abstractmethod
+    async def update_wallet(
+        self, char_id: int, currency: dict[str, int], resources: dict[str, int], components: dict[str, int]
+    ) -> None:
+        """
+        Полностью обновляет содержимое кошелька.
+        """
+        pass

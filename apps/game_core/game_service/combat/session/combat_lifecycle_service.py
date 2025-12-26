@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.common.database.model_orm.monster import GeneratedMonsterORM
 from apps.common.database.repositories import (
     get_character_stats_repo,
     get_skill_progress_repo,
@@ -27,6 +28,7 @@ from apps.common.services.core_service.redis_fields import AccountFields as Af
 from apps.game_core.game_service.combat.combat_redis_fields import CombatSessionFields as Csf
 from apps.game_core.game_service.combat.core.combat_stats_calculator import StatsCalculator
 from apps.game_core.game_service.combat.session.combat_aggregator import CombatAggregator
+from apps.game_core.game_service.combat.session.monster_factory import MonsterFactory
 from apps.game_core.game_service.skill.skill_service import CharacterSkillsService
 
 SWITCH_CHARGES_BASE = 1
@@ -128,6 +130,45 @@ class CombatLifecycleService:
         # RBC: Пишем ТОЛЬКО в Hash акторов
         await self.combat_manager.set_rbc_actor_state_json(session_id, char_id, container.model_dump_json())
         log.debug(f"AddDummy | event=success session_id='{session_id}' char_id={char_id}")
+
+    async def add_monster_participant(
+        self, session_id: str, char_id: int, monster_data: dict[str, Any], team: str = "red"
+    ) -> None:
+        """
+        Создает полноценного боевого участника из шаблона монстра (MonsterVariant).
+        Использует MonsterFactory для корректной сборки статов и экипировки.
+        """
+        log.info(f"AddMonster | session_id='{session_id}' char_id={char_id}")
+
+        try:
+            # Используем фабрику для создания контейнера
+            container = MonsterFactory.create_from_data(monster_data, char_id, team)
+
+            # Сохраняем
+            await self.combat_manager.set_rbc_actor_state_json(session_id, char_id, container.model_dump_json())
+            log.debug(f"AddMonster | event=success session_id='{session_id}' char_id={char_id} name='{container.name}'")
+        except Exception as e:  # noqa: BLE001
+            log.exception(f"AddMonsterError | session_id='{session_id}' char_id={char_id} error='{e}'")
+
+    async def add_db_monster_participant(
+        self, session_id: str, char_id: int, monster_orm: GeneratedMonsterORM, team: str = "red"
+    ) -> None:
+        """
+        Создает полноценного боевого участника из ORM-объекта монстра.
+        """
+        log.info(f"AddDBMonster | session_id='{session_id}' char_id={char_id} monster_id='{monster_orm.id}'")
+
+        try:
+            # Используем фабрику для создания контейнера из ORM
+            container = MonsterFactory.create_from_db(monster_orm, char_id, team)
+
+            # Сохраняем
+            await self.combat_manager.set_rbc_actor_state_json(session_id, char_id, container.model_dump_json())
+            log.debug(
+                f"AddDBMonster | event=success session_id='{session_id}' char_id={char_id} name='{container.name}'"
+            )
+        except Exception as e:  # noqa: BLE001
+            log.exception(f"AddDBMonsterError | session_id='{session_id}' char_id={char_id} error='{e}'")
 
     async def create_shadow_copy(self, session_id: str, original_char_id: int) -> None:
         """
@@ -338,19 +379,25 @@ class CombatLifecycleService:
                         }
 
                         if pid > 0:
-                            # ВАЖНО: Очищаем combat_session_id у игрока
-                            # Используем пустую строку вместо None, чтобы Redis не ругался
+                            # Получаем текущее состояние, чтобы узнать prev_state
+                            # ИСПРАВЛЕНО: Используем get_account_field для одного поля
+                            prev_state = await self.account_manager.get_account_field(pid, Af.PREV_STATE)
+                            if not prev_state:
+                                prev_state = "exploration"
+
+                            # ВАЖНО: Очищаем combat_session_id и возвращаем игрока в prev_state
                             await self.account_manager.update_account_fields(
                                 pid,
                                 {
                                     Af.HP_CURRENT: actor.state.hp_current,
                                     Af.ENERGY_CURRENT: actor.state.energy_current,
                                     Af.LAST_UPDATE: time.time(),
-                                    Af.COMBAT_SESSION_ID: "",  # <--- ИСПРАВЛЕНО: Пустая строка вместо None
+                                    Af.COMBAT_SESSION_ID: "",
+                                    Af.STATE: prev_state,  # <--- АВТОМАТИЧЕСКИЙ ВЫХОД ИЗ БОЯ
                                 },
                             )
                             log.info(
-                                f"FinishBattle | event=global_state_update char_id={pid} hp={actor.state.hp_current}"
+                                f"FinishBattle | event=global_state_update char_id={pid} hp={actor.state.hp_current} state={prev_state}"
                             )
 
                     except (json.JSONDecodeError, ValidationError) as e:

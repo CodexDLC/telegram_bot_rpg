@@ -4,6 +4,7 @@ from loguru import logger as log
 from apps.bot.core_client.scenario_client import ScenarioClient
 from apps.bot.resources.keyboards.callback_data import ScenarioCallback
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
+from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.scenario.dto.scenario_view_dto import ScenarioViewDTO
 from apps.bot.ui_service.scenario.scenario_ui_service import ScenarioUIService
 from apps.common.services.core_service.manager.account_manager import AccountManager
@@ -21,7 +22,14 @@ class ScenarioBotOrchestrator:
 
     def get_content_coords(self, state_data: dict) -> MessageCoordsDTO | None:
         """Возвращает координаты сообщения из FSM."""
-        # TODO: Реализовать получение координат
+        session_context = state_data.get(FSM_CONTEXT_KEY, {})
+        if isinstance(session_context, dict):
+            message_content = session_context.get("message_content")
+            if isinstance(message_content, dict):
+                chat_id = message_content.get("chat_id")
+                message_id = message_content.get("message_id")
+                if chat_id and message_id:
+                    return MessageCoordsDTO(chat_id=chat_id, message_id=message_id)
         return None
 
     async def initialize_view(
@@ -59,6 +67,7 @@ class ScenarioBotOrchestrator:
             content=view_result,
             is_terminal=response_dto.payload.is_terminal,
             node_key=response_dto.payload.node_key,
+            extra_data=response_dto.payload.extra_data,
         )
 
     async def step_view(self, char_id: int, action_id: str) -> ScenarioViewDTO:
@@ -80,6 +89,7 @@ class ScenarioBotOrchestrator:
             content=view_result,
             is_terminal=response_dto.payload.is_terminal,
             node_key=response_dto.payload.node_key,
+            extra_data=response_dto.payload.extra_data,
         )
 
     async def finalize_view(self, char_id: int) -> dict:

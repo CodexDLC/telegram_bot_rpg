@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -16,6 +18,9 @@ class ScenarioPayloadDTO(BaseModel):
     status_bar: list[str] = Field(default_factory=list, description="Список строк для статус-бара")
     buttons: list[ScenarioButtonDTO] = Field(default_factory=list, description="Список доступных кнопок")
     is_terminal: bool = Field(default=False, description="Является ли сцена финальной (конец квеста)")
+    extra_data: dict[str, Any] | None = Field(
+        default=None, description="Дополнительные данные (например, для перехода в бой)"
+    )
 
 
 class ScenarioResponseDTO(BaseModel):

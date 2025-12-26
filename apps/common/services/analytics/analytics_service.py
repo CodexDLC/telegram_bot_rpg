@@ -17,12 +17,10 @@ class AnalyticsService:
 
     def __init__(self):
         """
-        Инициализирует AnalyticsService, создает директорию для хранения
-        аналитических данных, если она не существует, и определяет заголовки
-        для CSV-файлов.
+        Инициализирует AnalyticsService и определяет заголовки для CSV-файлов.
+        Создание директории происходит лениво при первой записи.
         """
         self.base_path = "data/analytics"
-        os.makedirs(self.base_path, exist_ok=True)
         self.fieldnames = [
             "timestamp",
             "date_iso",
@@ -67,6 +65,14 @@ class AnalyticsService:
             combat_data: Словарь, содержащий данные о боевой сессии.
                          Ключи словаря должны соответствовать `self.fieldnames`.
         """
+        # Ленивое создание директории
+        if not os.path.exists(self.base_path):
+            try:
+                os.makedirs(self.base_path, exist_ok=True)
+            except OSError as e:
+                log.error(f"AnalyticsService | status=failed reason='Could not create directory' error='{e}'")
+                return
+
         filename = f"{self.base_path}/combats_{date.today()}.csv"
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self._write_csv_sync, filename, combat_data)

@@ -12,7 +12,6 @@ class DynamicQuestAnalytics:
         # Путь относительно корня проекта.
         # В реальном проекте лучше брать из конфига, но пока так.
         self.base_path = "data/analytics/quests"
-        os.makedirs(self.base_path, exist_ok=True)
         # Базовые поля, которые есть везде
         self.common_fields = ["timestamp", "session_id", "char_id", "seed", "step_count", "history"]
 
@@ -21,6 +20,14 @@ class DynamicQuestAnalytics:
         quest_key: используется для названия файла (напр. 'awakening_rift')
         mapping_config: словарь {'поле_в_сессии': 'название_колонки_в_csv'}
         """
+        # Ленивое создание директории
+        if not os.path.exists(self.base_path):
+            try:
+                os.makedirs(self.base_path, exist_ok=True)
+            except OSError as e:
+                log.error(f"QuestAnalytics | status=failed reason='Could not create directory' error='{e}'")
+                return
+
         filename = f"{self.base_path}/{quest_key}_{date.today()}.csv"
 
         # Если конфиг не передан, берем всё из data "как есть"

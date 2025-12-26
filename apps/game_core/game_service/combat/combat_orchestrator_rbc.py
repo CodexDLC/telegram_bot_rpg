@@ -6,6 +6,7 @@ from typing import Any
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.common.database.model_orm.monster import GeneratedMonsterORM
 from apps.common.schemas_dto.combat_source_dto import (
     ActorSnapshotDTO,
     CombatDashboardDTO,
@@ -24,6 +25,7 @@ from apps.game_core.game_service.combat.supervisor.combat_supervisor_manager imp
     add_supervisor_task,
     get_supervisor_task,
 )
+from apps.game_core.resources.game_data.monsters.training_monsters import TRAINING_POOL
 
 
 class CombatOrchestratorRBC:
@@ -54,12 +56,51 @@ class CombatOrchestratorRBC:
             task = asyncio.create_task(supervisor.run())
             add_supervisor_task(session_id, task)
 
+    async def create_pve_battle_with_monster(
+        self, player_id: int, monster: GeneratedMonsterORM, config: dict[str, Any] | None = None
+    ) -> CombatDashboardDTO:
+        """
+        Создает PVE бой с конкретным монстром (ORM), переданным извне.
+        Используется для туториала и энкаунтеров, где монстр уже выбран.
+        """
+        session_id = str(uuid.uuid4())
+        config = config or {}
+
+        # 1. Конфиг
+        battle_config = {
+            "mode": config.get("mode", "exploration"),
+            "battle_type": config.get("battle_type", "pve"),
+            "is_pve": "1",
+            **config,
+        }
+
+        # 2. Создаем сессию
+        await self.lifecycle_service.create_battle(session_id, battle_config)
+
+        # 3. Добавляем игрока
+        await self.lifecycle_service.add_participant(self.session, session_id, player_id, "blue", f"Player {player_id}")
+
+        # 4. Добавляем монстра (используем переданный ORM объект)
+        # Генерируем временный ID для боя
+        m_id = -abs(hash(f"{session_id}_{monster.id}")) % 1000000
+        if m_id == 0:
+            m_id = -1
+
+        await self.lifecycle_service.add_db_monster_participant(session_id, m_id, monster)
+
+        # 5. Финализация
+        await self.lifecycle_service.initialize_battle_state(session_id)
+        await self.lifecycle_service.initialize_exchange_queues(session_id, [player_id])
+
+        # 6. Возвращаем снапшот (без запуска супервизора)
+        return await self.get_dashboard_snapshot(session_id, player_id)
+
     async def start_battle(
         self, players: list[int], enemies: list[int] | None = None, config: dict[str, Any] | None = None
     ) -> CombatDashboardDTO:
         """
         Единая точка входа для создания ЛЮБОГО боя.
-        config['battle_type'] может быть: 'pvp', 'pve', 'arena_shadow'
+        config['battle_type'] может быть: 'pvp', 'pve', 'arena_shadow', 'pve_tutorial'
         """
         session_id = str(uuid.uuid4())
         config = config or {}
@@ -94,6 +135,23 @@ class CombatOrchestratorRBC:
         elif battle_type == "pve":
             for m_id in enemies:
                 await self._setup_monster_participant(session_id, m_id)
+
+        elif battle_type == "pve_tutorial":
+            monster_key = config.get("monster_variant")
+            if monster_key and monster_key in TRAINING_POOL:
+                monster_data = TRAINING_POOL[monster_key]
+                # Генерируем временный ID для монстра (отрицательный)
+                # Используем хэш от session_id, чтобы было уникально в рамках сессии
+                m_id = -abs(hash(f"{session_id}_{monster_key}")) % 1000000
+                if m_id == 0:
+                    m_id = -1
+
+                # Приводим к типу dict, так как TypedDict это dict во время выполнения
+                await self.lifecycle_service.add_monster_participant(session_id, m_id, dict(monster_data))
+            else:
+                log.error(f"StartBattle | Monster variant '{monster_key}' not found for pve_tutorial")
+                # Фоллбэк на манекен
+                await self.lifecycle_service.add_dummy_participant(session_id, -999, 100, 50, "Unknown Monster")
 
         # 5. Финализация: рассчитываем инициативу, статы, создаем FighterStateDTO
         await self.lifecycle_service.initialize_battle_state(session_id)

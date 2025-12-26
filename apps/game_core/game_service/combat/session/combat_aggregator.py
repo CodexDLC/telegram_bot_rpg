@@ -4,13 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.database.repositories import get_character_stats_repo, get_inventory_repo
 from apps.common.schemas_dto import (
+    CharacterStatsReadDTO,
     CombatSessionContainerDTO,
     InventoryItemDTO,
     ItemType,
     StatSourceData,
 )
 from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.game_core.game_service.inventory.inventory_service import InventoryService
+from apps.game_core.game_service.inventory.inventory_logic_helper import InventoryLogicHelpers
 from apps.game_core.game_service.status.modifiers_calculator_service import (
     ModifiersCalculatorService,
 )
@@ -36,6 +37,8 @@ class CombatAggregator:
         self.account_manager = account_manager
         self.stats_repo = get_character_stats_repo(session)
         self.inv_repo = get_inventory_repo(session)
+        # Используем хелпер напрямую, чтобы не зависеть от Legacy InventoryService
+        self.inv_helper = InventoryLogicHelpers(self.inv_repo)
         log.debug("CombatAggregatorInit")
 
     async def collect_session_container(self, char_id: int) -> CombatSessionContainerDTO:
@@ -52,10 +55,52 @@ class CombatAggregator:
         container = CombatSessionContainerDTO(char_id=char_id, team="none", name="Unknown")
 
         try:
-            base_stats = await self.stats_repo.get_stats(char_id)
+            # 1. Пытаемся получить статы из Redis (для туториала и временных баффов)
+            redis_stats_json = await self.account_manager.get_account_json(char_id, "stats")
+            base_stats = None
+
+            if redis_stats_json and isinstance(redis_stats_json, dict):
+                log.info(f"CollectSessionContainer | source=redis char_id={char_id}")
+                # Если статы есть в Redis, используем их.
+                # Но нам нужно получить полный объект CharacterStatsReadDTO.
+                # Если в Redis лежат только частичные статы (например, бонусы),
+                # то нужно сначала загрузить базу из БД, а потом наложить Redis.
+
+                # Загружаем базу из БД
+                db_stats = await self.stats_repo.get_stats(char_id)
+                if db_stats:
+                    # Накладываем статы из Redis поверх БД
+                    # (предполагаем, что в Redis лежат бонусы, которые нужно добавить к базе)
+                    # ИЛИ если в Redis лежат полные статы (как в туториале), то используем их как базу.
+
+                    # В туториале мы пишем в Redis: {"stats": final_stats}
+                    # final_stats - это словарь {stat_name: value}.
+                    # Это ПОЛНЫЕ значения бонусов, которые мы хотим видеть.
+                    # Но у персонажа есть еще базовые 1.
+
+                    # Давайте сделаем так: берем БД как основу, и добавляем значения из Redis.
+                    stats_dict = db_stats.model_dump()
+                    for k, v in redis_stats_json.items():
+                        if k in stats_dict:
+                            stats_dict[k] += v  # Добавляем бонус
+                        else:
+                            stats_dict[k] = v
+
+                    base_stats = CharacterStatsReadDTO(**stats_dict)
+                else:
+                    # Если в БД нет статов (странно), пробуем создать из Redis
+                    try:
+                        base_stats = CharacterStatsReadDTO(**redis_stats_json)
+                    except Exception:  # noqa: BLE001
+                        log.warning(f"CollectSessionContainer | reason=redis_parse_fail char_id={char_id}")
+
+            # 2. Если в Redis пусто или ошибка, берем чисто из БД
+            if not base_stats:
+                log.info(f"CollectSessionContainer | source=db char_id={char_id}")
+                base_stats = await self.stats_repo.get_stats(char_id)
+
             if not base_stats:
                 log.warning(f"CollectSessionContainerFail | reason=no_base_stats char_id={char_id}")
-                # Возвращаем пустой контейнер, чтобы не крашить вызывающий код
                 return container
 
             equipped_items = await self.inv_repo.get_items_by_location(char_id, "equipped")
@@ -87,8 +132,8 @@ class CombatAggregator:
             belt_items.sort(key=lambda x: x.quick_slot_position or "")
         container.belt_items = belt_items
 
-        inv_service = InventoryService(self.session, char_id, self.account_manager)
-        container.quick_slot_limit = await inv_service.get_quick_slot_limit()
+        # Используем хелпер вместо сервиса
+        container.quick_slot_limit = await self.inv_helper.get_quick_slot_limit(char_id)
 
         log.info(f"CollectSessionContainer | event=success char_id={char_id} stats_count={len(container.stats)}")
         return container

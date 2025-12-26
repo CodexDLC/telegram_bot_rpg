@@ -220,7 +220,7 @@ class RedisService:
         except RedisError:
             log.exception(f"RedisSet | action=add status=failed reason='Redis error' key='{key}' value='{value}'")
 
-    async def get_to_set(self, key: str) -> set[str]:
+    async def get_set_members(self, key: str) -> set[str]:
         """
         Возвращает все элементы множества Redis.
 

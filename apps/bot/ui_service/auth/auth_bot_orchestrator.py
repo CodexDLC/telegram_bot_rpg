@@ -136,9 +136,8 @@ class AuthBotOrchestrator:
                     result.fsm_update["combat_target_id"] = combat_view.target_id
 
         # ИСПРАВЛЕНИЕ: Добавлена проверка на "exploration" (и "world" для совместимости)
-        elif game_stage in ("in_game", "world", "exploration", GameState.EXPLORATION) or (
-            isinstance(login_result, tuple)
-            and login_result[0] in ("in_game", "world", "exploration", GameState.EXPLORATION)
+        elif game_stage in ("in_game", "world", GameState.EXPLORATION) or (
+            isinstance(login_result, tuple) and login_result[0] in ("in_game", "world", GameState.EXPLORATION)
         ):
             # Вход в игру (Навигация)
             sync_service = GameSyncService(self.session, self.account_manager)

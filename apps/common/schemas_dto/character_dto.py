@@ -74,7 +74,8 @@ class CharacterStatsReadDTO(CharacterStatsUpdateDTO):
     Включает поля из `CharacterStatsUpdateDTO` и временные метки.
     """
 
-    created_at: datetime  # Дата и время создания записи характеристик.
-    updated_at: datetime  # Дата и время последнего обновления записи характеристик.
+    created_at: datetime | None = None  # Дата и время создания записи характеристик.
+    updated_at: datetime | None = None  # Дата и время последнего обновления записи характеристик.
+    character_id: int = 0  # Added default value for dummy creation
 
     model_config = ConfigDict(from_attributes=True)

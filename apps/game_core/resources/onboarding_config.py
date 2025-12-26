@@ -46,6 +46,6 @@ class OnboardingConfig:
             "Мир вокруг начинает обретать форму..."
         ),
         "buttons": [
-            {"label": "👁 Открыть глаза", "action": "init_scenario", "value": "tutorial_arrival", "is_scenario": True}
+            {"label": "👁 Открыть глаза", "action": "init_scenario", "value": "awakening_rift", "is_scenario": True}
         ],
     }

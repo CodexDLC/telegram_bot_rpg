@@ -20,17 +20,18 @@ class ScenarioManager:
     Скрывает детали хранения от Оркестратора.
     """
 
+    STATIC_TTL = 3600  # Время жизни кэша квеста (1 час)
+
     def __init__(self, redis_service: RedisService, repo: IScenarioRepository, account_manager: AccountManager):
         self.redis = redis_service
         self.repo = repo
         self.account_manager = account_manager
 
-    # --- 1. Работа с сессией (Умная загрузка) ---
+    # --- 1. Работа с сессией (User Session) ---
 
     async def register_new_session(self, char_id: int, quest_key: str, context: dict[str, Any]) -> dict[str, Any]:
         """
         Создает новую сессию: генерирует UUID, обновляет аккаунт и сохраняет контекст.
-        Используется Хендлерами при инициализации.
         """
         session_id = uuid.uuid4()
         session_id_str = str(session_id)
@@ -53,7 +54,6 @@ class ScenarioManager:
         """
         Пытается загрузить сессию из Redis.
         Если Redis пуст — пытается восстановить из БД (Backup).
-        Возвращает пустой dict, если сессии нет нигде.
         """
         # 1. Пробуем Redis (быстро)
         context = await self.get_session_context(char_id)
@@ -88,10 +88,8 @@ class ScenarioManager:
                 continue
 
             try:
-                # Пытаемся десериализовать JSON (для списков и словарей)
                 context[k] = json.loads(v)
             except (json.JSONDecodeError, TypeError):
-                # Простая типизация для плоских значений
                 if v.isdigit():
                     context[k] = int(v)
                 else:
@@ -110,13 +108,10 @@ class ScenarioManager:
         processed_context = {}
         for k, v in context.items():
             if v is None:
-                # Redis не принимает None. Сохраняем как 'null' (строка).
                 processed_context[k] = "null"
             elif isinstance(v, (dict, list, bool)):
-                # bool тоже лучше в json, чтобы True -> 'true'
-                processed_context[k] = json.dumps(v)
+                processed_context[k] = json.dumps(v, ensure_ascii=False)
             else:
-                # Все остальное (числа, строки) сохраняем как есть
                 processed_context[k] = v
 
         await self.redis.set_hash_fields(key, processed_context)
@@ -127,16 +122,133 @@ class ScenarioManager:
         key = RedisKeys.get_scenario_session_key(char_id)
         await self.redis.delete_key(key)
 
-    # --- 2. Контент (Nodes / Master) ---
+    # --- 2. Контент (Global Static Cache) ---
+
+    async def _ensure_static_cache(self, quest_key: str) -> bool:
+        """
+        Проверяет наличие квеста в глобальном кэше Redis.
+        Если нет — загружает ВСЁ из БД (Мастер + Ноды) и кэширует.
+        """
+        key = f"scenario:static:{quest_key}"
+        if await self.redis.key_exists(key):
+            return True
+
+        log.info(f"Manager | Static Cache MISS for '{quest_key}'. Loading from DB...")
+
+        # 1. Загружаем Мастер-данные
+        master = await self.repo.get_master(quest_key)
+        if not master:
+            log.error(f"Manager | Quest '{quest_key}' not found in DB.")
+            return False
+
+        # 2. Загружаем ВСЕ ноды
+        try:
+            nodes = await self.repo.get_all_quest_nodes(quest_key)
+        except AttributeError:
+            log.error("Manager | Repo missing 'get_all_quest_nodes' method. Cannot cache quest.")
+            return False
+
+        # 3. Формируем Hash для Redis
+        # Ключ 'master' -> JSON мастера
+        # Ключ 'node:{id}' -> JSON ноды
+        data = {
+            "master": json.dumps(master, ensure_ascii=False, default=str),
+        }
+
+        count = 0
+        for node in nodes:
+            # Предполагаем, что node - это dict или объект, который можно сериализовать
+            # И у него есть поле 'id' или 'key'
+            n_id = node.get("node_key") or node.get("id")
+            if n_id:
+                data[f"node:{n_id}"] = json.dumps(node, ensure_ascii=False, default=str)
+                count += 1
+
+        # 4. Заливаем в Redis с TTL
+        if data:
+            await self.redis.set_hash_fields(key, data)
+            await self.redis.expire(key, self.STATIC_TTL)
+            log.success(f"Manager | Cached quest '{quest_key}': {count} nodes. TTL={self.STATIC_TTL}s")
+            return True
+
+        return False
 
     async def get_node(self, quest_key: str, node_key: str) -> dict[str, Any] | None:
+        """
+        Получает ноду. Сначала ищет в Redis Cache, затем фоллбэк в БД.
+        """
+        # 1. Пробуем кэш
+        key = f"scenario:static:{quest_key}"
+        cached_json = await self.redis.get_hash_field(key, f"node:{node_key}")
+
+        if cached_json:
+            try:
+                return json.loads(cached_json)
+            except json.JSONDecodeError:
+                pass
+
+        # 2. Если нет в кэше — пробуем загрузить весь квест
+        if await self._ensure_static_cache(quest_key):
+            # Повторная попытка из кэша
+            cached_json = await self.redis.get_hash_field(key, f"node:{node_key}")
+            if cached_json:
+                return json.loads(cached_json)
+
+        # 3. Фоллбэк: прямой запрос в БД (медленно)
+        log.warning(f"Manager | Node miss in cache: {quest_key}/{node_key}. Fallback to DB.")
         return await self.repo.get_node(quest_key, node_key)
 
     async def get_quest_master(self, quest_key: str) -> dict[str, Any] | None:
+        """
+        Получает мастер-данные квеста. Сначала кэш, потом БД.
+        """
+        key = f"scenario:static:{quest_key}"
+        cached_json = await self.redis.get_hash_field(key, "master")
+
+        if cached_json:
+            try:
+                return json.loads(cached_json)
+            except json.JSONDecodeError:
+                pass
+
+        if await self._ensure_static_cache(quest_key):
+            cached_json = await self.redis.get_hash_field(key, "master")
+            if cached_json:
+                return json.loads(cached_json)
+
         return await self.repo.get_master(quest_key)
 
     async def get_nodes_by_pool(self, quest_key: str, pool_tag: str) -> list[dict[str, Any]]:
-        return await self.repo.get_nodes_by_pool(quest_key, pool_tag)
+        """
+        Получает список нод по тегу, используя Redis Cache.
+        """
+        # 1. Гарантируем наличие кэша
+        if not await self._ensure_static_cache(quest_key):
+            log.warning(f"Manager | Failed to cache quest '{quest_key}'. Fallback to DB.")
+            return await self.repo.get_nodes_by_pool(quest_key, pool_tag)
+
+        # 2. Загружаем все данные квеста из Redis
+        key = f"scenario:static:{quest_key}"
+        all_data = await self.redis.get_all_hash(key)
+
+        candidates = []
+        if all_data:
+            for k, v in all_data.items():
+                # Пропускаем мастер-запись и другие метаданные
+                if not k.startswith("node:"):
+                    continue
+
+                try:
+                    node_data = json.loads(v)
+                    tags = node_data.get("tags")
+
+                    # Проверяем наличие тега
+                    if tags and isinstance(tags, list) and pool_tag in tags:
+                        candidates.append(node_data)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+        return candidates
 
     # --- 3. Аккаунт и Бэкапы ---
 
