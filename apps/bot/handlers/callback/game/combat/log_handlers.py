@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.combat_callback import CombatLogCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -18,7 +18,7 @@ from apps.common.core.container import AppContainer
 log_router = Router(name="combat_log")
 
 
-@log_router.callback_query(InGame.combat, CombatLogCallback.filter())
+@log_router.callback_query(BotState.combat, CombatLogCallback.filter())
 async def combat_log_pagination(
     call: CallbackQuery,
     callback_data: CombatLogCallback,

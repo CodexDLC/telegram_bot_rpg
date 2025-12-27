@@ -25,6 +25,7 @@ class CharacterMenuUIService(BaseUIService):
     ):
         super().__init__(state_data=state_data, char_id=callback_data.char_id)
 
+        # Используем переданное имя или дефолтное
         self.actor_name = syb_name or DEFAULT_ACTOR_NAME
         self.status_buttons = TABS_NAV_DATA
         self.data_bio: dict[str, Any] = BIO_HIERARCHY.get("bio", {})

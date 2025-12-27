@@ -9,15 +9,15 @@ from aiogram.types import CallbackQuery, Chat, Message, User
 
 from apps.bot.handlers.callback.login.lobby import start_login_handler
 from apps.bot.handlers.callback.onboarding.onboarding_handler import (
-    on_name_input,
     on_onboarding_action,
+    on_text_input,
 )
 
 # Хендлеры
 from apps.bot.handlers.commands import cmd_start
 
 # Ресурсы
-from apps.bot.resources.fsm_states import InGame
+from apps.bot.resources.fsm_states import BotState
 from apps.bot.resources.keyboards.callback_data import OnboardingCallback
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.common.database.repositories.ORM.characters_repo_orm import CharactersRepoORM
@@ -123,11 +123,11 @@ async def test_onboarding_flow(get_async_session, fsm_context, mock_bot, mock_me
         # ==========================================
         print("\n🏁 Шаг 2: Начать приключение")
         mock_callback.data = "start_adventure"
-        # ИСПРАВЛЕНО: Передаем container
-        await start_login_handler(mock_callback, fsm_context, mock_bot, session, data["account_manager"], app_container)
+        # ИСПРАВЛЕНО: Убран лишний аргумент account_manager
+        await start_login_handler(mock_callback, fsm_context, mock_bot, session, app_container)
 
         # Проверяем переход в стейт onboarding
-        assert await fsm_context.get_state() == InGame.onboarding
+        assert await fsm_context.get_state() == BotState.onboarding
 
         # Проверяем создание временного ID персонажа
         fsm_data = await fsm_context.get_data()
@@ -149,7 +149,8 @@ async def test_onboarding_flow(get_async_session, fsm_context, mock_bot, mock_me
         # ==========================================
         print("\n🏁 Шаг 4: Ввод имени")
         mock_message.text = "TestHero"
-        await on_name_input(mock_message, fsm_context, session, app_container)
+        # ИСПРАВЛЕНО: Используем on_text_input вместо on_name_input
+        await on_text_input(mock_message, fsm_context, mock_bot, session, app_container)
 
         # Проверяем сохранение в FSM
         fsm_data = await fsm_context.get_data()

@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.combat_callback import CombatItemCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -20,7 +20,7 @@ from apps.common.core.container import AppContainer
 item_router = Router(name="combat_items")
 
 
-@item_router.callback_query(InGame.combat, CombatItemCallback.filter(F.action == "use"))
+@item_router.callback_query(BotState.combat, CombatItemCallback.filter(F.action == "use"))
 async def combat_item_use_handler(
     call: CallbackQuery,
     callback_data: CombatItemCallback,

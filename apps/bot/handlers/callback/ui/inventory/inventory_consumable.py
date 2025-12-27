@@ -4,7 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.inventory_callback import InventoryCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -15,7 +15,7 @@ router = Router(name="inventory_consumable_router")
 
 # 1. ОБРАБОТЧИК КНОПКИ "РАСХОДНИКИ" -> ОТКРЫВАЕТ ПОЯС
 @router.callback_query(
-    InGame.inventory,
+    BotState.inventory,
     InventoryCallback.filter((F.section == "consumable") & (F.level == 1) & (F.action != "open_slot_filler")),
 )
 async def inventory_belt_view_handler(
@@ -54,7 +54,7 @@ async def inventory_belt_view_handler(
 
 # 2. ОБРАБОТЧИК НАЖАТИЯ НА ЦИФРУ СЛОТА -> ОТКРЫВАЕТ СПИСОК ПРЕДМЕТОВ
 @router.callback_query(
-    InGame.inventory,
+    BotState.inventory,
     InventoryCallback.filter(F.action == "open_slot_filler"),
 )
 async def inventory_fill_slot_handler(

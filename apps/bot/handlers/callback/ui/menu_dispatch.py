@@ -10,7 +10,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.callback_data import MeinMenuCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -83,13 +83,13 @@ async def main_menu_dispatcher(
 
     try:
         if action == "inventory":
-            await state.set_state(InGame.inventory)
+            await state.set_state(BotState.inventory)
             inv_orc = container.get_inventory_bot_orchestrator(session)
             result_dto = await inv_orc.get_main_menu(char_id, user_id, state_data)
             active_orchestrator = inv_orc
 
         elif action == "navigation":
-            await state.set_state(InGame.exploration)  # ИСПРАВЛЕНО: InGame.exploration
+            await state.set_state(BotState.exploration)  # ИСПРАВЛЕНО: InGame.exploration
             expl_orc = container.get_exploration_bot_orchestrator(session)
             result_dto = await expl_orc.get_current_view(char_id, state_data)
             active_orchestrator = expl_orc

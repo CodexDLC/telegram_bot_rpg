@@ -13,7 +13,7 @@ from apps.bot.handlers.callback.ui.inventory.inventory_unified_handler import in
 from apps.bot.handlers.callback.ui.inventory.inventory_item_details import inventory_item_details_handler
 
 # Ресурсы
-from apps.bot.resources.fsm_states import InGame
+from apps.bot.resources.fsm_states import BotState
 from apps.bot.resources.keyboards.inventory_callback import InventoryCallback
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.common.database.repositories.ORM.characters_repo_orm import CharactersRepoORM
@@ -118,7 +118,7 @@ async def test_inventory_equip_unequip_flow(get_async_session, fsm_context, mock
         print(f"   -> Создан персонаж {char_id} с мечом {sword_id}")
 
         # Устанавливаем стейт (как будто мы в игре)
-        await fsm_context.set_state(InGame.inventory)
+        await fsm_context.set_state(BotState.inventory)
 
         # Устанавливаем контекст сессии
         initial_context = {

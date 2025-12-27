@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.callback_data import NavigationCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -33,7 +33,7 @@ TRAVEL_FLAVOR_TEXTS = [
 
 
 @router.callback_query(
-    InGame.exploration, NavigationCallback.filter(F.action == "move")
+    BotState.exploration, NavigationCallback.filter(F.action == "move")
 )  # ИСПРАВЛЕНО: InGame.exploration
 async def navigation_move_handler(
     call: CallbackQuery,
@@ -98,7 +98,7 @@ async def navigation_move_handler(
             log.error(f"UIRender | component=navigation status=failed user_id={user_id} error='{e}'")
 
 
-@router.callback_query(InGame.exploration, F.data.startswith("svc:"))  # ИСПРАВЛЕНО: InGame.exploration
+@router.callback_query(BotState.exploration, F.data.startswith("svc:"))  # ИСПРАВЛЕНО: InGame.exploration
 async def navigation_service_handler(
     call: CallbackQuery,
     state: FSMContext,
@@ -159,7 +159,7 @@ async def navigation_service_handler(
         )
 
 
-@router.callback_query(InGame.exploration, F.data.startswith("nav:action:"))  # ИСПРАВЛЕНО: InGame.exploration
+@router.callback_query(BotState.exploration, F.data.startswith("nav:action:"))  # ИСПРАВЛЕНО: InGame.exploration
 async def navigation_action_stub(
     call: CallbackQuery,
     state: FSMContext,

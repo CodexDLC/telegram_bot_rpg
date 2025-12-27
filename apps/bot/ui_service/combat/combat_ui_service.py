@@ -12,6 +12,7 @@ from apps.bot.resources.keyboards.combat_callback import (
     CombatLogCallback,
     CombatZoneCallback,
 )
+from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.combat.formatters.combat_formatters import CombatFormatter
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
@@ -27,6 +28,8 @@ class CombatUIService(BaseUIService):
     def __init__(self, state_data: dict[str, Any], char_id: int):
         super().__init__(state_data=state_data, char_id=char_id)
         self.fmt = CombatFormatter
+        # Используем дефолтное имя, так как в BaseUIService его больше нет
+        self.actor_name = DEFAULT_ACTOR_NAME
         log.debug(f"CombatUIService (Thin) init: char={char_id}")
 
     async def render_dashboard(self, snapshot: CombatDashboardDTO, selection: dict) -> ViewResultDTO:

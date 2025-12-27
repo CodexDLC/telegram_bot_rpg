@@ -7,7 +7,7 @@ from aiogram.types import CallbackQuery, InaccessibleMessage
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.callback_data import ArenaQueueCallback
 from apps.bot.ui_service.arena_ui_service.arena_bot_orchestrator import (
     ArenaBotOrchestratorError,
@@ -21,7 +21,7 @@ from apps.common.schemas_dto import SessionDataDTO
 router = Router(name="arena_1v1_router")
 
 
-@router.callback_query(InGame.arena, ArenaQueueCallback.filter(F.action == "match_menu"))
+@router.callback_query(BotState.arena, ArenaQueueCallback.filter(F.action == "match_menu"))
 async def arena_1v1_menu_handler(
     call: CallbackQuery,
     callback_data: ArenaQueueCallback,
@@ -49,7 +49,7 @@ async def arena_1v1_menu_handler(
             )
 
 
-@router.callback_query(InGame.arena, ArenaQueueCallback.filter(F.action == "toggle_queue"))
+@router.callback_query(BotState.arena, ArenaQueueCallback.filter(F.action == "toggle_queue"))
 async def arena_toggle_queue_handler(
     call: CallbackQuery,
     callback_data: ArenaQueueCallback,
@@ -122,7 +122,7 @@ async def arena_toggle_queue_handler(
                 return "cancelled"
 
             # Если стейт сменился (например, ушли в инвентарь), тоже отмена
-            if await state.get_state() != InGame.arena:
+            if await state.get_state() != BotState.arena:
                 return "cancelled"
 
             # Используем оркестратор для проверки матча
@@ -186,7 +186,7 @@ async def arena_toggle_queue_handler(
         # Оркестратор уже вернул UI главного меню или меню режима, так что просто обновляем сообщение (сделано выше)
 
 
-@router.callback_query(InGame.arena, ArenaQueueCallback.filter(F.action == "start_battle"))
+@router.callback_query(BotState.arena, ArenaQueueCallback.filter(F.action == "start_battle"))
 async def arena_start_battle_handler(
     call: CallbackQuery,
     state: FSMContext,
@@ -231,7 +231,7 @@ async def arena_start_battle_handler(
                 text=result_dto.content.text, reply_markup=result_dto.content.kb, parse_mode="HTML"
             )
 
-        await state.set_state(InGame.combat)
+        await state.set_state(BotState.combat)
         log.info(f"FSM | state=InGame.combat user_id={user_id}")
 
     except ValueError as e:

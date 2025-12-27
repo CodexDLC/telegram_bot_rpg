@@ -1,136 +1,159 @@
-# Lobby & Entry Flow
+# Lobby & Entry Flow (V2 Architecture)
 
-## 1. Current Architecture (AS IS)
-Текущая реализация: "Толстый Бот". Оркестратор сам управляет зависимостями и восстанавливает состояние, обращаясь к разным клиентам.
+## 1. The Big Picture (Ideal Flow)
+Общая схема входа в игру: от команды `/start` до появления в игровом мире.
 
 ```mermaid
 graph TD
-    %% --- СЛОИ ---
-    subgraph Bot_Layer ["Bot Layer"]
-        LobbyHandler["LobbyHandler"]
-        LobbyOrch["LobbyBotOrchestrator"]
-        LobbyUI["LobbyService - View"]
+    %% --- ACTORS ---
+    User((User))
+
+    %% --- BOT LAYER ---
+    subgraph Bot_Layer ["Bot Layer (Presentation)"]
+        StartH["Start Handler"]
+        LobbyH["Lobby Handler"]
         
-        AuthOrch["AuthBotOrchestrator - Router"]
+        CmdOrch["CommandOrchestrator"]
+        LobbyOrch["LobbyOrchestrator"]
+        AuthOrch["AuthOrchestrator"]
         
-        subgraph Target_Orchestrators ["Target Orchestrators"]
-            CombatOrch["CombatBotOrchestrator"]
-            ExplOrch["ExplorationBotOrchestrator"]
-            TutUI["TutorialService"]
-        end
+        Director["GameDirector"]
+        Sender["ViewSender"]
     end
 
-    subgraph Client_Layer ["Client Layer"]
+    %% --- CLIENT LAYER ---
+    subgraph Client_Layer ["Client Layer (Bridge)"]
+        AuthClient["AuthClient"]
         LobbyClient["LobbyClient"]
-        CombatClient["CombatRBCClient"]
-        ExplClient["ExplorationClient"]
     end
 
-    subgraph Core_Layer ["Core Layer"]
-        LoginService["LoginService"]
-        GameSync["GameSyncService"]
+    %% --- CORE LAYER ---
+    subgraph Core_Layer ["Core Layer (Logic)"]
+        UserRepo["UserRepo"]
+        CharRepo["CharacterRepo"]
+        SessionMgr["SessionManager"]
     end
 
-    subgraph Data_Layer ["Data Layer"]
-        AccountMgr["AccountManager"]
-        DB["Database"]
-    end
+    %% --- FLOW 1: START ---
+    User -->|"/start"| StartH
+    StartH -->|"handle_start()"| CmdOrch
+    CmdOrch -->|"upsert_user()"| AuthClient
+    AuthClient --> UserRepo
+    CmdOrch -.->|"UnifiedViewDTO (Title)"| StartH
+    StartH -->|"send()"| Sender
 
-    %% --- FLOW ---
-    
-    %% 1. Lobby (Character Selection)
-    LobbyHandler -->|"/start"| LobbyOrch
-    LobbyOrch -->|"get_characters"| LobbyClient
-    LobbyClient --> DB
-    LobbyOrch -->|"Render List"| LobbyUI
-    LobbyUI -.->|"Message"| LobbyHandler
+    %% --- FLOW 2: LOBBY ---
+    User -->|"Click 'Adventure'"| LobbyH
+    LobbyH -->|"set_scene(LOBBY)"| Director
+    Director -->|"render()"| LobbyOrch
+    LobbyOrch -->|"get_characters()"| LobbyClient
+    LobbyClient --> CharRepo
+    LobbyOrch -.->|"UnifiedViewDTO (Char List)"| Director
+    Director -.->|"DTO"| LobbyH
+    LobbyH -->|"send()"| Sender
 
-    %% 2. Login Request
-    LobbyHandler -->|"Select Char"| AuthOrch
-    AuthOrch -->|"handle_login"| LoginService
-    LoginService -->|"Check State"| AccountMgr
-    LoginService -.->|"GameStage"| AuthOrch
-
-    %% 3. Routing Logic (The Switch)
-    AuthOrch -->|"If COMBAT"| CombatOrch
-    CombatOrch -->|"Restore View"| CombatClient
+    %% --- FLOW 3: LOGIN ---
+    User -->|"Select Character"| LobbyH
+    LobbyH -->|"handle_login()"| AuthOrch
+    AuthOrch -->|"restore_session()"| SessionMgr
+    SessionMgr -.->|"GameState (e.g. COMBAT)"| AuthOrch
     
-    AuthOrch -->|"If EXPLORATION"| ExplOrch
-    ExplOrch -->|"Get Location"| ExplClient
-    AuthOrch -->|"Sync State"| GameSync
-    
-    AuthOrch -->|"If TUTORIAL"| TutUI
-    
-    %% 4. Final Render
-    CombatOrch -.->|"Combat View"| AuthOrch
-    ExplOrch -.->|"Exploration View"| AuthOrch
-    TutUI -.->|"Tutorial View"| AuthOrch
-    
-    AuthOrch -->|"Render Target UI"| LobbyHandler
-
-    %% --- Вертикальное выравнивание ---
-    LobbyOrch ~~~ AuthOrch ~~~ LoginService ~~~ AccountMgr
+    AuthOrch -->|"set_scene(COMBAT)"| Director
+    Director -->|"render()"| CombatOrch["CombatOrchestrator"]
+    CombatOrch -.->|"UnifiedViewDTO"| Director
+    Director -.->|"DTO"| LobbyH
+    LobbyH -->|"send()"| Sender
 ```
 
-## 2. Ideal Architecture (TO BE)
-Целевая архитектура: "Тонкий Бот". Вся логика восстановления состояния инкапсулирована в Core. Бот получает полиморфный DTO и просто выбирает рендерер.
+---
+
+## 2. Layer Details
+
+### 2.1. Bot Layer (Presentation)
+Отвечает за обработку команд, управление сценами (Director) и отправку сообщений (Sender).
 
 ```mermaid
 graph TD
-    %% --- СЛОИ ---
-    subgraph Bot_Layer ["Bot Layer (Thin View)"]
+    %% --- EXTERNAL ---
+    Telegram((Telegram API))
+    Client["External: LobbyClient"]
+    Director["External: GameDirector"]
+
+    %% --- BOT LAYER SCOPE ---
+    subgraph Bot_Layer ["Bot Layer"]
         Handler["LobbyHandler"]
-        AuthOrch["AuthBotOrchestrator"]
+        Sender["ViewSender"]
         
-        subgraph Renderers ["UI Renderers"]
-            CombatUI["CombatUIService"]
-            ExplUI["ExplorationUIService"]
-            MenuUI["MenuUIService"]
+        subgraph Orchestrator_Scope ["LobbyOrchestrator"]
+            Logic["Orchestrator Logic"]
+            Renderer["LobbyUIService"]
+            DTO_Builder["DTO Builder"]
         end
     end
-
-    subgraph Client_Layer ["Client Layer"]
-        SessionClient["SessionClient"]
-    end
-
-    subgraph Core_Layer ["Core Layer (Smart Logic)"]
-        SessionMgr["SessionManager - Facade"]
-        
-        subgraph Core_Services ["Domain Services"]
-            CombatSvc["CombatService"]
-            WorldSvc["WorldService"]
-            TutSvc["TutorialService"]
-        end
-    end
+    
+    %% --- DATA OBJECT ---
+    DTO[("UnifiedViewDTO")]
 
     %% --- FLOW ---
+    Telegram -->|"1. Update (Callback)"| Handler
+    Handler -->|"2. handle_action()"| Logic
     
-    %% 1. Request
-    Handler -->|"Login"| AuthOrch
-    AuthOrch -->|"restore_session"| SessionClient
-    SessionClient -->|"restore_session"| SessionMgr
+    Logic -->|"3. get_data()"| Client
+    Client -.->|"4. Response (Header + Payload)"| Logic
     
-    %% 2. Core Decision (Hidden from Bot)
-    SessionMgr -->|"Check State"| SessionMgr
+    Logic --> CheckState{State Changed?}
     
-    SessionMgr -->|"If Combat -> Get Snapshot"| CombatSvc
-    SessionMgr -->|"If World -> Get Loc"| WorldSvc
+    %% CASE 1: State Changed -> Call Director
+    CheckState -- Yes --> CallDir["5a. director.set_scene(NewState)"]
+    CallDir --> Director
+    Director -.->|"6a. New UnifiedViewDTO"| Logic
     
-    %% 3. Polymorphic Response
-    CombatSvc -.->|"Data"| SessionMgr
-    WorldSvc -.->|"Data"| SessionMgr
+    %% CASE 2: Same State -> Render Locally
+    CheckState -- No --> Render["5b. render(Payload)"]
+    Render --> Renderer
+    Renderer -.->|"6b. ViewResult"| Logic
+    Logic -->|"7b. Wrap"| DTO_Builder
+    DTO_Builder -.->|"8b. UnifiedViewDTO"| Logic
     
-    SessionMgr -.->|"GameStateDTO (type=combat, data={...})"| SessionClient
-    SessionClient -.->|"DTO"| AuthOrch
+    %% RETURN
+    Logic -.->|"9. UnifiedViewDTO"| Handler
     
-    %% 4. Dumb Rendering
-    AuthOrch -->|"Switch type"| AuthOrch
-    AuthOrch -->|"type=combat"| CombatUI
-    AuthOrch -->|"type=world"| ExplUI
-    
-    CombatUI -.->|"View"| AuthOrch
-    AuthOrch -->|"Message"| Handler
+    Handler -->|"10. sender.send(DTO)"| Sender
+    Sender -->|"11. Edit/Send Message"| Telegram
+```
 
-    %% --- Вертикальное выравнивание ---
-    AuthOrch ~~~ SessionClient ~~~ SessionMgr ~~~ CombatSvc
+### 2.2. Client Layer (Bridge)
+Связующее звено. Преобразует вызовы оркестратора в запросы к ядру (или БД для простых операций).
+
+```mermaid
+graph TD
+    %% --- COMPONENTS ---
+    Orchestrator["Bot Orchestrator"]
+    Client["Core Client"]
+    Core["Core Service / Repo"]
+
+    %% --- FLOW ---
+    Orchestrator -->|"1. get_data()"| Client
+    Client -->|"2. Call Core"| Core
+    Core -.->|"3. Domain Model"| Client
+    Client -.->|"4. DTO"| Orchestrator
+```
+
+### 2.3. Game Core Layer (Logic)
+Бизнес-логика. Для процесса входа (Login) это управление сессией и восстановление состояния.
+
+```mermaid
+graph TD
+    %% --- COMPONENTS ---
+    Client["Client"]
+    CoreOrch["Core Orchestrator (Lobby)"]
+    Repo["CharacterRepo"]
+    
+    %% --- FLOW ---
+    Client -->|"1. get_characters(user_id)"| CoreOrch
+    CoreOrch -->|"2. Fetch from DB"| Repo
+    Repo -.->|"3. List[Character]"| CoreOrch
+    
+    CoreOrch -->|"4. Format Domain Data"| CoreOrch
+    CoreOrch -.->|"5. LobbyDTO (Chars + Bio)"| Client
 ```

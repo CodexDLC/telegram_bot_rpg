@@ -15,7 +15,7 @@ from apps.bot.handlers.callback.game.combat.action_handlers import (
 )
 
 # Ресурсы
-from apps.bot.resources.fsm_states import InGame
+from apps.bot.resources.fsm_states import BotState
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.common.database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from apps.common.schemas_dto import CharacterOnboardingUpdateDTO, CharacterShellCreateDTO, UserUpsertDTO
@@ -123,7 +123,7 @@ async def test_combat_flow(get_async_session, fsm_context, mock_bot, mock_callba
         print(f"   -> Бой создан: {SESSION_ID}, Игрок: {char_id}, Враг: {dummy_id}")
 
         # Устанавливаем FSM
-        await fsm_context.set_state(InGame.combat)
+        await fsm_context.set_state(BotState.combat)
         initial_context = {
             "user_id": TEST_USER_ID,
             "char_id": char_id,

@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.callback_data import ScenarioCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -63,7 +63,7 @@ async def scenario_initialize_handler(
 
     if result_dto.content:
         # Переключаем стейт
-        await state.set_state(InGame.scenario)
+        await state.set_state(BotState.scenario)
 
         # Отрисовываем
         if coords := orchestrator.get_content_coords(state_data):
@@ -82,7 +82,7 @@ async def scenario_initialize_handler(
             await Err.message_content_not_found_in_fsm(call)
 
 
-@router.callback_query(InGame.onboarding, ScenarioCallback.filter(F.action == "initialize"))
+@router.callback_query(BotState.onboarding, ScenarioCallback.filter(F.action == "initialize"))
 async def scenario_initialize_from_onboarding_handler(
     call: CallbackQuery,
     callback_data: ScenarioCallback,
@@ -98,7 +98,7 @@ async def scenario_initialize_from_onboarding_handler(
     await scenario_initialize_handler(call, callback_data, state, bot, container, session)
 
 
-@router.callback_query(InGame.scenario, ScenarioCallback.filter(F.action == "step"))
+@router.callback_query(BotState.scenario, ScenarioCallback.filter(F.action == "step"))
 async def scenario_step_handler(
     call: CallbackQuery,
     callback_data: ScenarioCallback,
@@ -137,7 +137,7 @@ async def scenario_step_handler(
             await state.update_data({FSM_CONTEXT_KEY: session_context})
 
             # 2. Переключаем FSM
-            await state.set_state(InGame.combat)
+            await state.set_state(BotState.combat)
 
             # 3. Получаем и отрисовываем дашборд боя
             combat_orchestrator = container.get_combat_bot_orchestrator(session)

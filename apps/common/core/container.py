@@ -153,14 +153,16 @@ class AppContainer:
         return StatusBotOrchestrator(status_client=client)
 
     def get_lobby_client(self, session: AsyncSession) -> LobbyClient:
-        return LobbyClient(session=session)
+        # UPDATED: Передаем redis_service
+        return LobbyClient(session=session, redis_service=self.redis_service)
 
     def get_lobby_bot_orchestrator(self, session: AsyncSession) -> LobbyBotOrchestrator:
         client = self.get_lobby_client(session)
         return LobbyBotOrchestrator(lobby_client=client)
 
     def get_auth_client(self, session: AsyncSession) -> AuthClient:
-        return AuthClient(session=session)
+        # UPDATED: Передаем redis_service
+        return AuthClient(session=session, redis_service=self.redis_service)
 
     def get_auth_bot_orchestrator(self, session: AsyncSession) -> AuthBotOrchestrator:
         expl_client = self.get_exploration_client(session)

@@ -12,7 +12,7 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.combat_callback import CombatActionCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -21,7 +21,7 @@ from apps.common.core.container import AppContainer
 menu_router = Router(name="combat_menu")
 
 
-@menu_router.callback_query(InGame.combat, CombatActionCallback.filter(F.action == "menu"))
+@menu_router.callback_query(BotState.combat, CombatActionCallback.filter(F.action == "menu"))
 async def open_combat_menu_handler(
     call: CallbackQuery,
     state: FSMContext,
@@ -61,7 +61,7 @@ async def open_combat_menu_handler(
     await call.answer()
 
 
-@menu_router.callback_query(InGame.combat, CombatActionCallback.filter(F.action == "menu_skills"))
+@menu_router.callback_query(BotState.combat, CombatActionCallback.filter(F.action == "menu_skills"))
 async def switch_to_skills_handler(
     call: CallbackQuery,
     state: FSMContext,
@@ -99,7 +99,7 @@ async def switch_to_skills_handler(
     await call.answer()
 
 
-@menu_router.callback_query(InGame.combat, CombatActionCallback.filter(F.action == "menu_items"))
+@menu_router.callback_query(BotState.combat, CombatActionCallback.filter(F.action == "menu_items"))
 async def switch_to_items_handler(
     call: CallbackQuery,
     state: FSMContext,

@@ -3,6 +3,7 @@ from typing import Any
 
 from loguru import logger as log
 
+from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 from apps.common.schemas_dto import InventoryItemDTO
@@ -26,6 +27,8 @@ class InventoryUIService(BaseUIService):
     ):
         super().__init__(char_id=char_id, state_data=state_data)
         self.user_id = user_id
+        # Используем дефолтное имя, так как в BaseUIService его больше нет
+        self.actor_name = DEFAULT_ACTOR_NAME
 
         # Инициализация специализированных UI-помощников
         self._main_menu_ui = InventoryMainMenuUI(

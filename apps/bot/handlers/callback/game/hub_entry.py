@@ -7,7 +7,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.callback_data import ServiceEntryCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -22,7 +22,7 @@ from apps.common.services.core_service.manager.combat_manager import CombatManag
 router = Router(name="hub_entry_router")
 
 
-@router.callback_query(InGame.exploration, ServiceEntryCallback.filter())  # ИСПРАВЛЕНО: InGame.exploration
+@router.callback_query(BotState.exploration, ServiceEntryCallback.filter())  # ИСПРАВЛЕНО: InGame.exploration
 async def service_hub_entry_handler(
     call: CallbackQuery,
     callback_data: ServiceEntryCallback,

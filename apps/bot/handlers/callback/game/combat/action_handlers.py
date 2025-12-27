@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, InaccessibleMessage
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states import InGame
+from apps.bot.resources.fsm_states import BotState
 from apps.bot.resources.keyboards.combat_callback import CombatActionCallback
 from apps.bot.ui_service.combat.dto.combat_view_dto import CombatViewDTO
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
@@ -21,7 +21,7 @@ from apps.common.schemas_dto.combat_source_dto import CombatMoveDTO
 action_router = Router(name="combat_actions")
 
 
-@action_router.callback_query(InGame.combat, CombatActionCallback.filter(F.action == "submit"))
+@action_router.callback_query(BotState.combat, CombatActionCallback.filter(F.action == "submit"))
 async def submit_turn_handler(
     call: CallbackQuery,
     state: FSMContext,
@@ -156,7 +156,7 @@ async def submit_turn_handler(
         await Err.report_and_restart(call, "Не удалось отправить ход в Ядро.")
 
 
-@action_router.callback_query(InGame.combat, CombatActionCallback.filter(F.action == "refresh"))
+@action_router.callback_query(BotState.combat, CombatActionCallback.filter(F.action == "refresh"))
 async def refresh_combat_handler(
     call: CallbackQuery,
     state: FSMContext,
@@ -221,7 +221,7 @@ async def refresh_combat_handler(
         await Err.report_and_restart(call, "Сбой при получении данных боя.")
 
 
-@action_router.callback_query(InGame.combat, CombatActionCallback.filter(F.action == "leave"))
+@action_router.callback_query(BotState.combat, CombatActionCallback.filter(F.action == "leave"))
 async def leave_combat_handler(
     call: CallbackQuery,
     state: FSMContext,

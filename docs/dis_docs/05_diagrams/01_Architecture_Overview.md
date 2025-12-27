@@ -26,27 +26,91 @@ graph TD
 ## 2. Layer Details (Current Monolith)
 
 ### 2.1. Bot Layer (Presentation)
-Отвечает за Telegram API, FSM и отрисовку (View).
+Отвечает за Telegram API, FSM и доставку контента. Реализует паттерн Passive View.
 
 ```mermaid
 graph TD
     Input["Telegram Update"]
+    Telegram["Telegram API"]
 
     subgraph Bot_Layer ["Bot Layer"]
-        Handler["Handler / Middleware"]
+        Handler["Handler (Controller)"]
         Orch["Bot Orchestrator"]
-        UI["UI Service (Renderer)"]
+        Sender["ViewSender (Delivery)"]
     end
 
     Output["NEXT: Client Layer"]
 
-    Input --> Handler
-    Handler --> Orch
-    Orch -->|"Call Client"| Output
+    %% Flow
+    Input -->|"1. Callback"| Handler
+    Handler -->|"2. Process Action"| Orch
+    Orch -->|"3. Call Business Logic"| Output
     
-    Output -.->|"DTO"| Orch
-    Orch -->|"Render"| UI
-    UI -.->|"Message"| Handler
+    Output -.->|"4. Domain Data"| Orch
+    Orch -.->|"5. UnifiedViewDTO"| Handler
+    
+    Handler -->|"6. send(dto)"| Sender
+    Sender -->|"7. Edit/Send Message"| Telegram
+```
+
+### 2.1.1. Bot Orchestrator Internals (UI Brain)
+Оркестратор — это не просто "прокси". Это центр принятия решений UI-слоя. Он изолирует Хендлер от сложности выбора данных и форматирования.
+
+**Алгоритм работы метода (Pipeline):**
+
+1.  **Resolution (Выбор стратегии):**
+    *   Если запрос простой — Оркестратор сам знает, какой метод Клиента вызвать.
+    *   Если запрос сложный (зависит от контекста, фильтров или состояния) — Оркестратор делегирует выбор `LogicHelper`.
+
+2.  **Data Fetching (Запрос данных):**
+    *   Оркестратор вызывает `Core Client` для получения "сырых" бизнес-данных (Domain DTO).
+
+3.  **Rendering (Визуализация):**
+    *   Оркестратор вызывает `UIService` (Renderer), передавая ему бизнес-данные.
+    *   `UIService` строит тексты и клавиатуры, возвращая `ViewResult`.
+
+4.  **Packaging (Сборка):**
+    *   Оркестратор упаковывает результат в `UnifiedViewDTO` (распределяет по слотам Menu/Content) и возвращает Хендлеру.
+
+```mermaid
+graph TD
+    %% --- EXTERNAL ---
+    Handler["External: Handler"]
+    Client["External: Core Client"]
+
+    %% --- ORCHESTRATOR INTERNAL SCOPE ---
+    subgraph Orchestrator_Scope ["Bot Orchestrator (Internal Structure)"]
+        Facade["Orchestrator Facade (Logic)"]
+        
+        subgraph Helpers ["Helpers (Optional)"]
+            Strategy["Selection Strategy"]
+        end
+        
+        subgraph Rendering ["Rendering Subsystem"]
+            UIRenderer["UI Renderer (Builder)"]
+            Formatter1["Text Formatter"]
+            Formatter2["Keyboard Builder"]
+        end
+        
+        Wrapper["DTO Wrapper (UnifiedViewDTO)"]
+    end
+
+    %% --- FLOW ---
+    Handler -->|"1. Call Action"| Facade
+    
+    Facade -.->|"2. Consult (if needed)"| Strategy
+    Strategy -.->|"Decision"| Facade
+    
+    Facade -->|"3. Request Data"| Client
+    Client -->|"4. Domain Data"| Facade
+    
+    Facade -->|"5. Delegate Rendering"| UIRenderer
+    UIRenderer -->|"Format Text"| Formatter1
+    UIRenderer -->|"Build KB"| Formatter2
+    UIRenderer -->|"ViewResult"| Facade
+    
+    Facade -->|"6. Wrap Result"| Wrapper
+    Wrapper -->|"7. UnifiedViewDTO"| Handler
 ```
 
 ### 2.2. Client Layer (The Bridge)

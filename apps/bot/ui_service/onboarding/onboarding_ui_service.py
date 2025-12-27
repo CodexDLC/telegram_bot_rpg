@@ -1,45 +1,69 @@
-from aiogram.types import InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from apps.bot.resources.keyboards.callback_data import OnboardingCallback, ScenarioCallback
-from apps.bot.ui_service.onboarding.dto.onboarding_view_dto import OnboardingViewDTO
-from apps.bot.ui_service.onboarding.formatters.onboarding_formatter import OnboardingFormatter
-from apps.common.schemas_dto.onboarding_dto import OnboardingButtonDTO, OnboardingResponseDTO
+from apps.bot.resources.keyboards.callback_data import OnboardingCallback
+from apps.bot.resources.texts.buttons_callback import Buttons
+from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
+from apps.common.schemas_dto.onboarding_dto import OnboardingStepEnum, OnboardingViewDTO
 
 
 class OnboardingUIService:
     """
-    UI-сервис (View Layer).
-    Единственная задача: превратить DTO от бэкенда в красивый текст и клавиатуру Telegram.
+    UI-сервис для онбординга.
+    Превращает OnboardingViewDTO (step, draft) в ViewResultDTO (text, kb).
     """
 
-    def render_view(self, dto: OnboardingResponseDTO, context: dict | None = None) -> OnboardingViewDTO:
+    def render(self, dto: OnboardingViewDTO) -> ViewResultDTO:
         """
-        Преобразует ответ бэкенда в UI элементы.
-        Использует OnboardingFormatter для обработки текста.
+        Главный метод рендеринга.
         """
-        # Делегируем форматирование текста специальному классу
-        text = OnboardingFormatter.format_text(dto.text, context)
+        text = ""
+        kb = None
 
+        if dto.error:
+            text += f"⚠️ <b>Ошибка:</b> {dto.error}\n\n"
+
+        if dto.step == OnboardingStepEnum.WELCOME:
+            text += "Добро пожаловать в мир RPG! Давайте создадим вашего персонажа.\n\nНажмите кнопку, чтобы начать."
+            kb = self._get_welcome_kb()
+
+        elif dto.step == OnboardingStepEnum.NAME:
+            text += "Как будут звать вашего героя?\n\n<i>Введите имя сообщением:</i>"
+            kb = None  # Клавиатура не нужна, ждем текст
+
+        elif dto.step == OnboardingStepEnum.GENDER:
+            text += f"Приятно познакомиться, <b>{dto.draft.name}</b>!\n\nВыберите пол вашего персонажа:"
+            kb = self._get_gender_kb()
+
+        elif dto.step == OnboardingStepEnum.CONFIRM:
+            text += (
+                f"Проверьте данные:\n\n"
+                f"👤 Имя: <b>{dto.draft.name}</b>\n"
+                f"⚧ Пол: <b>{Buttons.GENDER.get(str(dto.draft.gender), dto.draft.gender)}</b>\n\n"
+                f"Всё верно?"
+            )
+            kb = self._get_confirm_kb()
+
+        return ViewResultDTO(text=text, kb=kb)
+
+    def _get_welcome_kb(self) -> InlineKeyboardMarkup:
         builder = InlineKeyboardBuilder()
+        builder.button(text="🚀 Начать создание", callback_data=OnboardingCallback(action="start").pack())
+        return builder.as_markup()
 
-        for btn in dto.buttons:
-            callback_data = self._generate_callback(btn)
-            builder.add(InlineKeyboardButton(text=btn.label, callback_data=callback_data))
+    def _get_gender_kb(self) -> InlineKeyboardMarkup:
+        builder = InlineKeyboardBuilder()
+        builder.button(
+            text=Buttons.GENDER["male"], callback_data=OnboardingCallback(action="set_gender", value="male").pack()
+        )
+        builder.button(
+            text=Buttons.GENDER["female"], callback_data=OnboardingCallback(action="set_gender", value="female").pack()
+        )
+        builder.adjust(2)
+        return builder.as_markup()
 
-        # Настраиваем сетку (по 1 кнопке в ряд)
-        builder.adjust(1)
-
-        return OnboardingViewDTO(text=text, keyboard=builder.as_markup())
-
-    def _generate_callback(self, btn: OnboardingButtonDTO) -> str:
-        """
-        Генерирует правильный CallbackData в зависимости от типа кнопки.
-        """
-        if btn.is_scenario:
-            # Переключение на движок сценариев (ScenarioCallback)
-            return ScenarioCallback(action="initialize", quest_key=str(btn.value)).pack()
-
-        # Внутренняя навигация онбординга (OnboardingCallback)
-        val = str(btn.value) if btn.value is not None else None
-        return OnboardingCallback(action=btn.action, value=val).pack()
+    def _get_confirm_kb(self) -> InlineKeyboardMarkup:
+        builder = InlineKeyboardBuilder()
+        builder.button(text="✅ Открыть глаза", callback_data=OnboardingCallback(action="finalize").pack())
+        # Можно добавить кнопку "Назад" или "Сбросить", если нужно
+        return builder.as_markup()

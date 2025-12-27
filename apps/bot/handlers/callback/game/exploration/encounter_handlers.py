@@ -7,7 +7,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.callback_data import EncounterCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -59,7 +59,7 @@ async def handle_encounter_action(
             await Err.generic_error(call)
             return
 
-        await state.set_state(InGame.combat)
+        await state.set_state(BotState.combat)
 
         # Атомарное обновление FSM
         session_context["combat_session_id"] = result_dto.combat_session_id

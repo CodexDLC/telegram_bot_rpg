@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.combat_callback import CombatAbilityCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -20,7 +20,7 @@ from apps.common.core.container import AppContainer
 ability_router = Router(name="combat_abilities")
 
 
-@ability_router.callback_query(InGame.combat, CombatAbilityCallback.filter(F.action == "select"))
+@ability_router.callback_query(BotState.combat, CombatAbilityCallback.filter(F.action == "select"))
 async def handle_skill_select(
     call: CallbackQuery,
     callback_data: CombatAbilityCallback,

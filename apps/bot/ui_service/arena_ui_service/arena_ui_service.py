@@ -5,6 +5,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
 
 from apps.bot.resources.keyboards.callback_data import ArenaQueueCallback
+from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 
@@ -28,9 +29,8 @@ class ArenaUIService(BaseUIService):
         # Если state_data не передан, создаем пустой словарь, чтобы BaseUIService не упал
         super().__init__(state_data or {}, char_id)
 
-        # Если actor_name передан явно, используем его, иначе пытаемся взять из BaseUIService (который берет из state_data)
-        if actor_name:
-            self.actor_name = actor_name
+        # Используем переданное имя или дефолтное
+        self.actor_name = actor_name or DEFAULT_ACTOR_NAME
 
         log.debug(f"ArenaUIService | Initialized for char_id={self.char_id}, actor_name='{self.actor_name}'")
 

@@ -4,7 +4,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.inventory_callback import InventoryCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -14,7 +14,7 @@ router = Router(name="inventory_equip_router")
 
 
 @router.callback_query(
-    InGame.inventory,
+    BotState.inventory,
     InventoryCallback.filter((F.section == "equip") & (F.level == 1)),
 )
 async def inventory_equip_list_handler(
