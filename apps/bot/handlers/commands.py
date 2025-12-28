@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.bot.bot_container import BotContainer
 from apps.bot.resources.keyboards.reply_kb import RESTART_BUTTON_TEXT, SETTINGS_BUTTON_TEXT
 from apps.bot.ui_service.command.command_bot_orchestrator import CommandBotOrchestrator
 from apps.bot.ui_service.command.command_ui_service import CommandUIService
@@ -19,7 +20,9 @@ router = Router(name="commands_router")
 
 
 @router.message(Command("start"))
-async def cmd_start(m: Message, state: FSMContext, bot: Bot, session: AsyncSession, container: AppContainer) -> None:
+async def cmd_start(
+    m: Message, state: FSMContext, bot: Bot, session: AsyncSession, container: AppContainer, bot_container: BotContainer
+) -> None:
     if not m.from_user:
         return
 
@@ -38,7 +41,8 @@ async def cmd_start(m: Message, state: FSMContext, bot: Bot, session: AsyncSessi
         await m.delete()
 
     # 3. LOGIC
-    auth_client = container.get_auth_client(session)
+    # Используем новый контейнер для AuthClient
+    auth_client = bot_container.get_auth_client()
     ui_service = CommandUIService()
     orchestrator = CommandBotOrchestrator(auth_client, ui_service, m.from_user)
 
@@ -55,10 +59,10 @@ async def cmd_start(m: Message, state: FSMContext, bot: Bot, session: AsyncSessi
 
 @router.message(F.text == RESTART_BUTTON_TEXT)
 async def handle_restart_button(
-    m: Message, state: FSMContext, bot: Bot, session: AsyncSession, container: AppContainer
+    m: Message, state: FSMContext, bot: Bot, session: AsyncSession, container: AppContainer, bot_container: BotContainer
 ) -> None:
     """Рестарт = тот же /start"""
-    await cmd_start(m, state, bot, session, container)
+    await cmd_start(m, state, bot, session, container, bot_container)
 
 
 @router.callback_query(F.data == "settings")

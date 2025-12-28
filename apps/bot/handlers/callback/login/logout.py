@@ -6,12 +6,12 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.bot.bot_container import BotContainer
 from apps.bot.resources.keyboards.callback_data import SystemCallback
 from apps.bot.ui_service.command.command_bot_orchestrator import CommandBotOrchestrator
 from apps.bot.ui_service.command.command_ui_service import CommandUIService
 from apps.bot.ui_service.game_director.director import GameDirector
 from apps.bot.ui_service.view_sender import ViewSender
-from apps.common.core.container import AppContainer
 
 router = Router(name="logout_router")
 
@@ -22,7 +22,7 @@ async def global_logout_handler(
     state: FSMContext,
     bot: Bot,
     session: AsyncSession,
-    container: AppContainer,
+    bot_container: BotContainer,
 ) -> None:
     """
     Глобальный обработчик выхода из мира (Logout).
@@ -38,11 +38,12 @@ async def global_logout_handler(
     # 1. Инициализация
     state_data = await state.get_data()
 
-    auth_client = container.get_auth_client(session)
+    # Используем новый контейнер
+    auth_client = bot_container.get_auth_client()
     ui_service = CommandUIService()
     orchestrator = CommandBotOrchestrator(auth_client, ui_service, call.from_user)
 
-    director = GameDirector(container, state, session)
+    director = GameDirector(bot_container, state, session)
     orchestrator.set_director(director)
 
     # 2. Выполнение действия

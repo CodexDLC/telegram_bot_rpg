@@ -1,197 +1,81 @@
-# Scenario & Quest Flow
+# Scenario & Quest Flow (Thin Client Architecture)
 
-Реализация Session-Based архитектуры для диалоговой системы.
+Реализация архитектуры "Тонкий Клиент", где Бот отвечает только за отображение (View) и пересылку действий, а Бэкенд (Core) управляет логикой и навигацией.
 
-## 1. High-Level Process (Dialogue Step)
-Алгоритм обработки шага сценария.
+## 1. High-Level Process
+Цикл обработки действий пользователя.
 
 ```mermaid
 graph TD
     %% --- BLOCKS ---
-    Input["1. User Choice (Option ID)"]
-    Context["2. Load Context (Redis)"]
-    Logic["3. Logic Engine (Director)"]
-    State["4. State Update (Next Node)"]
-    Output["5. Render View (DTO)"]
-
+    User((User))
+    Bot_Handler["Bot Handler\n(ScenarioHandler)"]
+    Bot_Orch["Bot Orchestrator\n(ScenarioOrchestrator)"]
+    Core_Client["API Client\n(ScenarioClient)"]
+    Core_Logic["Core Logic Layer\n(Backend)"]
+    Director["GameDirector"]
+    ViewSender["ViewSender"]
+    
     %% --- FLOW ---
-    Input --> Context
-    Context --> Logic
+    User -->|"1. Click Action"| Bot_Handler
+    Bot_Handler -->|"2. Call Orchestrator"| Bot_Orch
+    Bot_Orch -->|"3. Send ActionDTO"| Core_Client
+    Core_Client -->|"4. Request"| Core_Logic
     
-    Logic -->|"Check Conditions"| Logic
-    Logic -->|"Execute Actions"| State
+    Core_Logic -->|"5. Return CoreResponseDTO\n(Header: State, Payload: Data)"| Core_Client
+    Core_Client -->|"6. Return DTO"| Bot_Orch
     
-    State --> Output
-    Output -.->|"New Message"| Input
+    Bot_Orch -->|"7. Check State (Header)"| Director
+    
+    Director --"State Changed"--> Switch["Switch Scene\n(Find new Orchestrator)"]
+    Director --"State Same"--> Render["Render View\n(Current Orchestrator)"]
+    
+    Switch --> Result["UnifiedViewDTO"]
+    Render --> Result
+    
+    Result -->|"8. Return to Handler"| Bot_Handler
+    Bot_Handler -->|"9. Send(DTO)"| ViewSender
+    ViewSender -->|"10. Update Telegram"| User
 ```
 
 ---
 
-## 2. Layer Details
+## 2. Key Components
 
-### 2.1. Bot Layer (Presentation)
-Отвечает за отрисовку диалогов и кнопок.
-
-```mermaid
-graph TD
-    Input["User Callback"]
-
-    subgraph Bot_Layer ["Bot Layer"]
-        Handler["ScenarioHandler"]
-        Orch["ScenarioBotOrchestrator"]
-        UI["ScenarioUIService"]
-    end
-
-    Output["NEXT: Client Layer"]
-
-    Input -->|"Click Option"| Handler
-    Handler -->|"handle_action"| Orch
-    Orch -->|"step_scenario"| Output
-    
-    Output -.->|"ScenarioViewDTO"| Orch
-    Orch -->|"Render"| UI
-    UI -.->|"Message"| Handler
+### 2.1. CoreResponseDTO
+Универсальный конверт ответа от бэкенда.
+```python
+class CoreResponseDTO(Generic[T]):
+    header: GameStateHeader  # Навигация (current_state, screen_type)
+    payload: T | None        # Данные для отображения
 ```
 
-### 2.2. Client Layer (The Bridge)
-Изолирует Бот от логики сценариев.
+### 2.2. GameDirector
+Центральный узел управления состоянием.
+- **set_scene(state, payload)**: Меняет FSM состояние, находит нужный оркестратор и вызывает у него `render`.
+- **handle_response(response)**: Умный метод, который сам решает: переключить сцену или отрендерить текущую.
 
-```mermaid
-graph TD
-    Input["PREV: Bot Layer"]
-
-    subgraph Client_Layer ["Client Layer"]
-        Client["ScenarioClient"]
-    end
-
-    Output["NEXT: Game Core Layer"]
-
-    Input -->|"step_scenario"| Client
-    Client -->|"Call Core Orchestrator"| Output
-    
-    Output -.->|"Response DTO"| Client
-    Client -.->|"Return"| Input
-```
-
-### 2.3. Game Core Layer (Business Logic)
-Разделение на API (Оркестратор) и Движок (Director/Manager).
-
-```mermaid
-graph TD
-    Input["PREV: Client Layer"]
-
-    subgraph Core_Layer ["Game Core Layer"]
-        
-        %% Entity 1: API Interface
-        subgraph Orchestrator_Entity ["1. ScenarioCoreOrchestrator (API)"]
-            Orch["Orchestrator"]
-            Formatter["ScenarioFormatter"]
-        end
-        
-        %% Entity 2: Logic Engine
-        subgraph Engine_Entity ["2. Scenario Engine (Logic)"]
-            Director["ScenarioDirector"]
-            Evaluator["ScenarioEvaluator"]
-            Manager["ScenarioManager"]
-        end
-        
-        subgraph Side_Effects ["3. Side Effects"]
-            Actions["ActionExecutor"]
-            Sync["SessionSyncDispatcher"]
-        end
-    end
-
-    Output["NEXT: Data Layer"]
-
-    %% --- FLOW ---
-    Input -->|"step_scenario"| Orch
-    
-    %% 1. Load Context
-    Orch -->|"load_session"| Manager
-    Manager -->|"Read Redis/DB"| Output
-    
-    %% 2. Execute Logic
-    Orch -->|"execute_step"| Director
-    Director -->|"Get Node Data"| Manager
-    Manager -->|"Read Global Cache"| Output
-    
-    Director -->|"Check Conditions"| Evaluator
-    Director -->|"Execute Actions"| Actions
-    Actions -->|"Give Reward"| Output
-    
-    %% 3. Save State
-    Director -.->|"New Context"| Orch
-    Orch -->|"save_session"| Manager
-    Manager -->|"Write Redis"| Output
-    
-    %% 4. Backup (Lazy)
-    Orch -.->|"Check Backup Rule"| Orch
-    Orch -.->|"If needed -> sync()"| Sync
-    Sync -->|"Commit to DB"| Output
-    
-    %% 5. Response
-    Orch -->|"Build DTO"| Formatter
-    Formatter -.->|"DTO"| Input
-```
-
-### 2.4. Data Layer (Storage)
-Глобальный кэш для статики и сессии для пользователей.
-
-```mermaid
-graph TD
-    Input["PREV: Game Core Layer"]
-
-    subgraph Data_Layer ["Data Layer"]
-        subgraph Redis_Storage ["Redis"]
-            GlobalCache["Hash: Static Quest Data (1h TTL)"]
-            UserSession["Hash: User Context (State)"]
-        end
-        
-        subgraph DB_Storage ["PostgreSQL"]
-            Scenarios["Table: Scenarios (JSON)"]
-            Progress["Table: QuestProgress"]
-        end
-    end
-
-    %% Flow
-    Input -->|"Read Node"| GlobalCache
-    GlobalCache -.->|"Miss -> Load"| Scenarios
-    
-    Input -->|"Read/Write State"| UserSession
-    Input -->|"Backup State"| Progress
-```
+### 2.3. ViewSender
+Отвечает за физическое обновление сообщений.
+- **Menu**: Верхнее сообщение (статус, навигация).
+- **Content**: Основное сообщение (сценарий, бой, инвентарь).
+- **Clean History**: Умеет удалять старые сообщения при смене контекста.
 
 ---
 
-## 3. API Optimization Strategy
-Единый роут для управления сценарием.
+## 3. Data Flow Example (Scenario -> Combat)
 
-```mermaid
-graph TD
-    subgraph Client_Side ["Client Side"]
-        Request["POST /scenario/action"]
-        Body["Body: { action: 'step', option_id: 'opt_1' }"]
-    end
-
-    subgraph Core_API ["Core API Layer"]
-        Controller["ScenarioController"]
-        Dispatcher["ActionDispatcher"]
-    end
-
-    subgraph Logic ["Logic Layer"]
-        Orch["ScenarioCoreOrchestrator"]
-    end
-
-    %% --- FLOW ---
-    Request --> Controller
-    Body -.-> Controller
-    
-    Controller -->|"Validate DTO"| Dispatcher
-    
-    Dispatcher -->|"Switch(action)"| Dispatcher
-    Dispatcher -->|"Case 'start'"| Orch
-    Dispatcher -->|"Case 'step'"| Orch
-    Dispatcher -->|"Case 'resume'"| Orch
-    
-    Orch -->|"Update Redis"| Redis["Redis"]
-```
+1.  **User** нажимает "Атаковать".
+2.  **Core** обрабатывает логику, понимает, что начался бой.
+3.  **Core** возвращает:
+    ```json
+    {
+      "header": { "current_state": "COMBAT", "screen_type": "START" },
+      "payload": { "enemy": "Orc", "hp": 50 }
+    }
+    ```
+4.  **ScenarioOrchestrator** видит `COMBAT` != `SCENARIO`.
+5.  Вызывает `director.set_scene(COMBAT, payload)`.
+6.  **Director** находит `CombatOrchestrator`.
+7.  `CombatOrchestrator.render(payload)` создает экран боя.
+8.  **ViewSender** заменяет текст сценария на экран боя.

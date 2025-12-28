@@ -30,6 +30,7 @@ class OnboardingDraftDTO(BaseModel):
     """
 
     step: OnboardingStepEnum = OnboardingStepEnum.WELCOME
+    char_id: int | None = None  # ID созданной болванки
     name: str | None = None
     gender: str | None = None
     race: str | None = None

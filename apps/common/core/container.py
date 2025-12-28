@@ -4,24 +4,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.bot.core_client import (
     ArenaClient,
-    AuthClient,
+    # AuthClient,
     CombatRBCClient,
     ExplorationClient,
     InventoryClient,
-    LobbyClient,
-    OnboardingClient,
-    ScenarioClient,
+    # LobbyClient,
+    # OnboardingClient,
+    # ScenarioClient,
     StatusClient,
 )
 from apps.bot.ui_service import (
     ArenaBotOrchestrator,
-    AuthBotOrchestrator,
+    # AuthBotOrchestrator,
     CombatBotOrchestrator,
     ExplorationBotOrchestrator,
     InventoryBotOrchestrator,
-    LobbyBotOrchestrator,
-    OnboardingBotOrchestrator,
-    ScenarioBotOrchestrator,
+    # LobbyBotOrchestrator,
+    # OnboardingBotOrchestrator,
+    # ScenarioBotOrchestrator,
     StatusBotOrchestrator,
 )
 from apps.common.core.settings import settings
@@ -152,43 +152,45 @@ class AppContainer:
         client = self.get_status_client(session)
         return StatusBotOrchestrator(status_client=client)
 
-    def get_lobby_client(self, session: AsyncSession) -> LobbyClient:
-        # UPDATED: Передаем redis_service
-        return LobbyClient(session=session, redis_service=self.redis_service)
+    # --- DEPRECATED / MOVED TO BotContainer ---
 
-    def get_lobby_bot_orchestrator(self, session: AsyncSession) -> LobbyBotOrchestrator:
-        client = self.get_lobby_client(session)
-        return LobbyBotOrchestrator(lobby_client=client)
+    # def get_lobby_client(self, session: AsyncSession) -> LobbyClient:
+    #     # UPDATED: Передаем redis_service
+    #     return LobbyClient(session=session, redis_service=self.redis_service)
 
-    def get_auth_client(self, session: AsyncSession) -> AuthClient:
-        # UPDATED: Передаем redis_service
-        return AuthClient(session=session, redis_service=self.redis_service)
+    # def get_lobby_bot_orchestrator(self, session: AsyncSession) -> LobbyBotOrchestrator:
+    #     client = self.get_lobby_client(session)
+    #     return LobbyBotOrchestrator(lobby_client=client)
 
-    def get_auth_bot_orchestrator(self, session: AsyncSession) -> AuthBotOrchestrator:
-        expl_client = self.get_exploration_client(session)
-        combat_client = self.get_combat_client(session)
-        return AuthBotOrchestrator(
-            session=session,
-            account_manager=self.account_manager,
-            combat_manager=self.combat_manager,
-            arena_manager=self.arena_manager,
-            world_manager=self.world_manager,
-            exploration_client=expl_client,
-            combat_client=combat_client,
-        )
+    # def get_auth_client(self, session: AsyncSession) -> AuthClient:
+    #     # UPDATED: Передаем redis_service
+    #     return AuthClient(session=session, redis_service=self.redis_service)
 
-    def get_scenario_client(self, session: AsyncSession) -> ScenarioClient:
-        # Клиент сам соберет все зависимости Core-слоя
-        return ScenarioClient(session=session, redis_service=self.redis_service, account_manager=self.account_manager)
+    # def get_auth_bot_orchestrator(self, session: AsyncSession) -> AuthBotOrchestrator:
+    #     expl_client = self.get_exploration_client(session)
+    #     combat_client = self.get_combat_client(session)
+    #     return AuthBotOrchestrator(
+    #         session=session,
+    #         account_manager=self.account_manager,
+    #         combat_manager=self.combat_manager,
+    #         arena_manager=self.arena_manager,
+    #         world_manager=self.world_manager,
+    #         exploration_client=expl_client,
+    #         combat_client=combat_client,
+    #     )
 
-    def get_scenario_bot_orchestrator(self, session: AsyncSession) -> ScenarioBotOrchestrator:
-        client = self.get_scenario_client(session)
-        return ScenarioBotOrchestrator(client=client, account_manager=self.account_manager)
+    # def get_scenario_client(self, session: AsyncSession) -> ScenarioClient:
+    #     # Клиент сам соберет все зависимости Core-слоя
+    #     return ScenarioClient(session=session, redis_service=self.redis_service, account_manager=self.account_manager)
 
-    def get_onboarding_client(self, session: AsyncSession) -> OnboardingClient:
-        return OnboardingClient(session=session, redis_service=self.redis_service)
+    # def get_scenario_bot_orchestrator(self, session: AsyncSession) -> ScenarioBotOrchestrator:
+    #     client = self.get_scenario_client(session)
+    #     return ScenarioBotOrchestrator(client=client, account_manager=self.account_manager)
 
-    def get_onboarding_bot_orchestrator(self, session: AsyncSession) -> OnboardingBotOrchestrator:
-        client = self.get_onboarding_client(session)
-        # ui_service создается внутри оркестратора по дефолту
-        return OnboardingBotOrchestrator(client=client)
+    # def get_onboarding_client(self, session: AsyncSession) -> OnboardingClient:
+    #     return OnboardingClient(session=session, redis_service=self.redis_service)
+
+    # def get_onboarding_bot_orchestrator(self, session: AsyncSession) -> OnboardingBotOrchestrator:
+    #     client = self.get_onboarding_client(session)
+    #     # ui_service создается внутри оркестратора по дефолту
+    #     return OnboardingBotOrchestrator(client=client)

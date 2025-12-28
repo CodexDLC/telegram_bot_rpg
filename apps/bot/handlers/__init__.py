@@ -3,7 +3,8 @@ from aiogram import Router
 
 # from .admin.admin_menu import router as admin_router # ОТКЛЮЧЕНО (Refactoring)
 # from .bug_report import router as bug_report_router # ОТКЛЮЧЕНО (Refactoring)
-# from .callback.game import game_router_group # ОТКЛЮЧЕНО (Refactoring)
+from .callback.game import game_router_group  # ВКЛЮЧЕНО (Только Scenario)
+
 # --- Наши новые "Цепочки" (Группы) ---
 from .callback.login import login_router_group
 from .callback.onboarding import onboarding_router_group  # ВКЛЮЧЕНО
@@ -31,7 +32,7 @@ router.include_routers(
     onboarding_router_group,
     # status_menu_router_group,
     # inventory_group_router,
-    # game_router_group,
+    game_router_group,
     # 'common_fsm_handlers' (с F.text) должен идти в самом конце,
     # чтобы не перехватывать FSM-текст (например, ввод имени)
     # common_fsm_router,

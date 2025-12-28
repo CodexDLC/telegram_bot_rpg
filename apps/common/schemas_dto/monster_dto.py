@@ -116,11 +116,11 @@ class GeneratedMonsterDTO(BaseModel):
     Превращает JSON-поля из БД в удобные объекты.
     """
 
-    id: UUID
-    family_id: str
+    id: UUID  # Вернул UUID
+    family_id: UUID | str  # В БД это UUID, но может быть строкой в DTO
     variant_id: str
     name: str
-    description: str | None
+    description: str | dict | None  # В БД это JSON (dict), но может быть строкой
 
     level: int
     cost: int
@@ -130,7 +130,7 @@ class GeneratedMonsterDTO(BaseModel):
     attributes: MonsterStatsDTO
     loadout: MonsterLoadoutDTO
     skills: list[str]
-    tags: list[str]
+    tags: list[str] | None = None
 
     # Если монстр ранен, тут будет состояние, иначе None
     current_state: dict | None = None

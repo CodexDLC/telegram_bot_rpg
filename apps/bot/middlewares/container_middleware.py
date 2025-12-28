@@ -4,14 +4,16 @@ from typing import Any
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
+from apps.bot.bot_container import BotContainer
 from apps.bot.core_client.arena_client import ArenaClient
 from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.common.core.container import AppContainer
 
 
 class ContainerMiddleware(BaseMiddleware):
-    def __init__(self, container: AppContainer):
+    def __init__(self, container: AppContainer, bot_container: BotContainer | None = None):
         self.container = container
+        self.bot_container = bot_container
 
     async def __call__(
         self,
@@ -19,8 +21,10 @@ class ContainerMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        # Пробрасываем сам контейнер
+        # Пробрасываем контейнеры
         data["container"] = self.container
+        if self.bot_container:
+            data["bot_container"] = self.bot_container
 
         # Старые зависимости
         data["account_manager"] = self.container.account_manager

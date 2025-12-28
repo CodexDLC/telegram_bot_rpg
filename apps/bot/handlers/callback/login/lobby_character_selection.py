@@ -5,16 +5,18 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.bot.bot_container import BotContainer
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.callback_data import LobbySelectionCallback
 from apps.bot.ui_service.game_director.director import GameDirector
 from apps.bot.ui_service.view_sender import ViewSender
-from apps.common.core.container import AppContainer
 
 router = Router(name="lobby_selection_router")
 
 
 @router.callback_query(
-    LobbySelectionCallback.filter(F.action.in_({"select", "delete", "delete_yes", "delete_no", "login"}))
+    BotState.lobby,
+    LobbySelectionCallback.filter(F.action.in_({"select", "delete", "delete_yes", "delete_no", "login"})),
 )
 async def select_or_delete_character_handler(
     call: CallbackQuery,
@@ -22,7 +24,7 @@ async def select_or_delete_character_handler(
     state: FSMContext,
     bot: Bot,
     session: AsyncSession,
-    container: AppContainer,
+    bot_container: BotContainer,
 ) -> None:
     """Обрабатывает выбор, удаление или вход персонажа в лобби."""
     if not call.from_user:
@@ -37,8 +39,8 @@ async def select_or_delete_character_handler(
     state_data = await state.get_data()
 
     # 1. Инициализация
-    director = GameDirector(container, state, session)
-    orchestrator = container.get_lobby_bot_orchestrator(session)
+    director = GameDirector(container=bot_container, state=state, session=session)
+    orchestrator = bot_container.get_lobby_bot_orchestrator()
     orchestrator.set_director(director)
 
     view_dto = None
@@ -47,29 +49,24 @@ async def select_or_delete_character_handler(
     if action == "select":
         if not char_id:
             return
-        # Выбор персонажа -> Показ статуса и галочки
         view_dto = await orchestrator.handle_select_character(call.from_user, char_id)
 
     elif action == "login":
         if not char_id:
             return
-        # Вход в игру -> Редирект
         view_dto = await orchestrator.handle_enter_game(call.from_user, char_id)
 
     elif action == "delete":
         if not char_id:
             return
-        # Запрос удаления -> Показ подтверждения
         view_dto = await orchestrator.handle_delete_request(call.from_user, char_id)
 
     elif action == "delete_yes":
         if not char_id:
             return
-        # Подтверждение -> Удаление и возврат в лобби
         view_dto = await orchestrator.handle_delete_confirm(call.from_user, char_id)
 
     elif action == "delete_no":
-        # Отмена -> Возврат в лобби (сброс выбора)
         view_dto = await orchestrator.process_entry_point(call.from_user)
 
     # 3. Отправка ответа

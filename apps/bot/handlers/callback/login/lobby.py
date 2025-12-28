@@ -1,14 +1,13 @@
-# apps/bot/handlers/callback/login/lobby.py
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.bot.bot_container import BotContainer
 from apps.bot.resources.keyboards.callback_data import StartMenuCallback
 from apps.bot.ui_service.game_director.director import GameDirector
 from apps.bot.ui_service.view_sender import ViewSender
-from apps.common.core.container import AppContainer
 
 router = Router(name="login_lobby_router")
 
@@ -19,7 +18,7 @@ async def start_login_handler(
     state: FSMContext,
     bot: Bot,
     session: AsyncSession,
-    container: AppContainer,
+    bot_container: BotContainer,
 ) -> None:
     """
     Обрабатывает кнопку "Начать приключение".
@@ -35,11 +34,11 @@ async def start_login_handler(
     # 1. Инициализация компонентов UI
     state_data = await state.get_data()
 
-    # Создаем Director
-    director = GameDirector(container, state, session)
+    # Создаем Director с bot_container
+    director = GameDirector(container=bot_container, state=state, session=session)
 
     # Создаем Orchestrator через контейнер
-    orchestrator = container.get_lobby_bot_orchestrator(session)
+    orchestrator = bot_container.get_lobby_bot_orchestrator()
     orchestrator.set_director(director)
 
     # 2. Запуск логики входа

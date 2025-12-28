@@ -1,6 +1,7 @@
 from typing import Any
 
 from aiogram.types import User
+from loguru import logger as log
 
 from apps.bot.core_client.lobby_client import LobbyClient
 from apps.bot.ui_service.base_bot_orchestrator import BaseBotOrchestrator
@@ -28,23 +29,33 @@ class LobbyBotOrchestrator(BaseBotOrchestrator):
         # 1. Запрос к бэкенду
         response = await self._client.get_initial_lobby_state(user.id)
 
-        # 2. Проверка хедера (Навигация)
-        if response.header.current_state != self.expected_state:
-            return await self.director.set_scene(target_state=response.header.current_state, payload=user)
+        # 2. Проверка на смену стейта (передаем user как fallback)
+        if result := await self.check_and_switch_state(response, fallback_payload=user):
+            return result
 
-        # 3. Если стейт наш (LOBBY), рендерим UI (без выбранного персонажа)
+        # 3. Если стейт наш (LOBBY), рендерим UI
         if not response.payload:
-            # Этого не должно случиться, если стейт LOBBY, но для MyPy:
+            log.warning("LobbyBotOrchestrator | Empty payload from backend")
+            return None
+
+        if not isinstance(response.payload, LobbyInitDTO):
+            log.error(f"LobbyBotOrchestrator | Invalid payload type: {type(response.payload)}")
             return None
 
         return await self._render_lobby(user, response.payload, char_id=None)
 
     async def render(self, payload: Any) -> UnifiedViewDTO:
         """
-        Стандартный метод render.
+        Стандартный метод render (используется Директором при входе).
         """
         if isinstance(payload, User):
             return await self.process_entry_point(payload)
+        if isinstance(payload, LobbyInitDTO):
+            # Если нам передали сразу DTO, нам все равно нужен User для контекста (имени и т.д.)
+            # Но render обычно вызывается с payload перехода.
+            # В данном случае лучше вызвать entry point, так как LobbyInitDTO не содержит User.
+            raise NotImplementedError("Lobby render requires User context via process_entry_point")
+
         return await self.process_entry_point(payload)
 
     async def _render_lobby(self, user: User, data: LobbyInitDTO, char_id: int | None) -> UnifiedViewDTO:
@@ -79,9 +90,8 @@ class LobbyBotOrchestrator(BaseBotOrchestrator):
     async def handle_select_character(self, user: User, char_id: int) -> UnifiedViewDTO:
         """
         Обрабатывает выбор персонажа.
-        Обновляет меню (ставит галочку) и показывает статус.
         """
-        # Получаем список персонажей (из кэша клиента)
+        # Получаем список персонажей
         characters = await self._client.get_characters(user.id)
         dto = LobbyInitDTO(characters=characters)
 
@@ -91,15 +101,21 @@ class LobbyBotOrchestrator(BaseBotOrchestrator):
     async def handle_enter_game(self, user: User, char_id: int) -> Any:
         """
         Обрабатывает нажатие "Войти".
-        Запрашивает у бэкенда целевой стейт и переключает сцену.
         """
+        # 1. Сохраняем сессию через Директора
+        await self.director.set_char_id(char_id)
+
+        # 2. Запрос к бэкенду
         response = await self._client.enter_game(user.id, char_id)
 
-        # Переключаем сцену на ту, что вернул бэкенд (обычно EXPLORATION)
-        return await self.director.set_scene(
-            target_state=response.header.current_state,
-            payload=char_id,  # Передаем ID персонажа в новую сцену
-        )
+        # 3. Переключаем сцену (передаем user как fallback)
+        if result := await self.check_and_switch_state(response, fallback_payload=user):
+            return result
+
+        # Если почему-то остались в лобби (ошибка?), рендерим лобби
+        # Но сначала нужно получить актуальный DTO
+        # Для простоты вернемся в entry point
+        return await self.process_entry_point(user)
 
     async def handle_delete_request(self, user: User, char_id: int) -> UnifiedViewDTO:
         """
@@ -116,10 +132,9 @@ class LobbyBotOrchestrator(BaseBotOrchestrator):
 
         text, kb = ui.get_message_delete(char_name)
 
-        # Возвращаем только Content (подтверждение), Menu не трогаем
         return UnifiedViewDTO(
             content=ViewResultDTO(text=text, kb=kb),
-            menu=None,  # Не обновляем меню
+            menu=None,
             clean_history=False,
         )
 
@@ -128,5 +143,4 @@ class LobbyBotOrchestrator(BaseBotOrchestrator):
         Удаляет персонажа и возвращает в список.
         """
         await self._client.delete_character(user.id, char_id)
-        # Полный перезапуск (сброс выбора)
         return await self.process_entry_point(user)
