@@ -9,12 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.common.database.model_orm.monster import GeneratedMonsterORM
 from apps.common.schemas_dto.combat_source_dto import (
     ActorSnapshotDTO,
+    CombatActionResultDTO,
     CombatDashboardDTO,
+    CombatLogDTO,
     CombatMoveDTO,
     CombatSessionContainerDTO,
     FighterStateDTO,
     StatSourceData,
 )
+from apps.common.schemas_dto.core_response_dto import CoreResponseDTO, GameStateHeader
+from apps.common.schemas_dto.game_state_enum import GameState
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
 from apps.game_core.game_service.combat.core.combat_stats_calculator import StatsCalculator
@@ -31,10 +35,6 @@ from apps.game_core.resources.game_data.monsters.training_monsters import TRAINI
 class CombatOrchestratorRBC:
     """
     Оркестратор боевой системы (RBC).
-    Отвечает за:
-    1. Инициализацию боя и запуск Актера-надсмотрщика.
-    2. Регистрацию ходов игрока в Redis (запись "пуль").
-    3. Предоставление данных клиенту (какая цель следующая).
     """
 
     def __init__(
@@ -47,6 +47,87 @@ class CombatOrchestratorRBC:
         self.combat_manager = combat_manager
         self.account_manager = account_manager
         self.lifecycle_service = CombatLifecycleService(combat_manager, account_manager)
+
+    # --- CLIENT API METHODS (Return CoreResponseDTO) ---
+
+    async def get_snapshot_wrapped(self, char_id: int) -> CoreResponseDTO[CombatDashboardDTO]:
+        """Обертка для получения снапшота с хедером."""
+        # TODO: session_id resolve
+        session_id = ""
+        payload = await self.get_dashboard_snapshot(session_id, char_id)
+
+        # Логика определения стейта
+        current_state = GameState.COMBAT
+        if payload.status == "finished":
+            # TODO: Определить, куда переходить (Lobby/Exploration)
+            current_state = GameState.LOBBY
+
+        return CoreResponseDTO(
+            header=GameStateHeader(current_state=current_state),
+            payload=payload,
+        )
+
+    async def register_move_wrapped(
+        self, char_id: int, target_id: int, move_data: dict
+    ) -> CoreResponseDTO[CombatDashboardDTO]:
+        """Обертка для хода."""
+        # TODO: session_id resolve
+        session_id = ""
+        payload = await self.register_move(session_id, char_id, target_id, move_data)
+
+        return CoreResponseDTO(
+            header=GameStateHeader(current_state=GameState.COMBAT),
+            payload=payload,
+        )
+
+    async def get_data(self, char_id: int, data_type: str, params: dict[str, Any]) -> CoreResponseDTO[Any]:
+        """
+        Универсальный метод получения данных (Logs, Info).
+        """
+        # TODO: Реализовать резолвинг session_id
+        session_id = ""
+
+        if data_type == "logs":
+            limit = params.get("limit", 5)
+            page = params.get("page", 0)
+            # TODO: Реализовать пагинацию в get_logs
+            logs = await self.get_logs(session_id, limit=limit)
+            payload = CombatLogDTO(logs=logs, page=page)
+
+            return CoreResponseDTO(
+                header=GameStateHeader(current_state=GameState.COMBAT),
+                payload=payload,
+            )
+
+        raise ValueError(f"Unknown data type: {data_type}")
+
+    async def perform_action(
+        self, char_id: int, action_type: str, payload: dict[str, Any]
+    ) -> CoreResponseDTO[CombatActionResultDTO]:
+        """
+        Выполняет мгновенное действие.
+        """
+        # TODO: Реализовать резолвинг session_id
+        session_id = ""
+
+        if action_type == "use_item":
+            item_id = int(payload["item_id"])
+            success, msg = await self.use_consumable(session_id, char_id, item_id)
+
+            updated_snapshot = None
+            if success:
+                updated_snapshot = await self.get_dashboard_snapshot(session_id, char_id)
+
+            result = CombatActionResultDTO(success=success, message=msg, updated_snapshot=updated_snapshot)
+
+            return CoreResponseDTO(
+                header=GameStateHeader(current_state=GameState.COMBAT),
+                payload=result,
+            )
+
+        raise ValueError(f"Unknown action type: {action_type}")
+
+    # --- INTERNAL / LEGACY METHODS ---
 
     async def _ensure_supervisor_running(self, session_id: str):
         """Проверяет, запущен ли воркер для сессии. Если нет — запускает."""
@@ -160,7 +241,7 @@ class CombatOrchestratorRBC:
         await self.lifecycle_service.initialize_exchange_queues(session_id, players)
 
         # 7. Supervisor НЕ запускаем здесь (Ленивая активация)
-        # Он запустится при первом запросе get_dashboard_snapshot
+        # Он запустится при первом register_move
 
         # 8. Возвращаем начальный снимок боя
         return await self.get_dashboard_snapshot(session_id, players[0])
@@ -195,8 +276,18 @@ class CombatOrchestratorRBC:
         self, session_id: str, char_id: int, target_id: int, move_data: dict[str, Any]
     ) -> CombatDashboardDTO:
         """Регистрирует ход и возвращает Snapshot (уже со следующей целью из очереди)."""
-        # Ленивая активация: на случай если ход прилетел раньше запроса снапшота
+        # Активация воркера при первой пуле
         await self._ensure_supervisor_running(session_id)
+
+        # АВТО-РЕЗОЛВИНГ ЦЕЛИ
+        if target_id == 0:
+            next_target = await self.combat_manager.get_rbc_next_target_id(session_id, char_id)
+            if next_target is None:
+                # Если цели нет, значит очередь пуста.
+                # Но мы все равно должны вернуть снапшот (он будет waiting)
+                log.warning(f"RegisterMove | No target found for char {char_id} in session {session_id}")
+                return await self.get_dashboard_snapshot(session_id, char_id)
+            target_id = next_target
 
         actor_state_json = await self.combat_manager.get_rbc_actor_state_json(session_id, char_id)
 
@@ -316,8 +407,8 @@ class CombatOrchestratorRBC:
         Собирает облегченный Snapshot данных для Бота.
         Это единственный метод, который Бот будет дергать для получения состояния.
         """
-        # Ленивая активация: ПЕРЕД тем как отдать данные игроку, проверяем запуск воркера
-        await self._ensure_supervisor_running(session_id)
+        # УБРАНО: Ленивая активация воркера. Теперь он запускается только при register_move.
+        # await self._ensure_supervisor_running(session_id)
 
         # 1. Метаданные (активен ли бой)
         # RBC: Читаем из новой меты
@@ -346,6 +437,23 @@ class CombatOrchestratorRBC:
                 StatsCalculator.calculate("energy_max", container.stats.get("energy_max", StatSourceData(base=100)))
             )
 
+            # ОПРЕДЕЛЕНИЕ LAYOUT
+            layout = "1h"
+            has_offhand = False
+            for item in container.equipped_items:
+                # Проверяем наличие атрибута slot (mypy fix)
+                if (
+                    hasattr(item, "slot")
+                    and item.slot == "off_hand"
+                    and hasattr(item, "item_type")
+                    and item.item_type.value == "weapon"
+                ):
+                    has_offhand = True
+                    break
+
+            if has_offhand:
+                layout = "dual"
+
             snapshots[aid] = ActorSnapshotDTO(
                 char_id=aid,
                 name=container.name,
@@ -357,6 +465,7 @@ class CombatOrchestratorRBC:
                 is_dead=bool(container.state and container.state.hp_current <= 0),
                 effects=list(container.state.effects.keys()) if container.state else [],
                 tokens=container.state.tokens if container.state else {},
+                weapon_layout=layout,
             )
             if aid == char_id:
                 player_team = container.team
@@ -365,11 +474,10 @@ class CombatOrchestratorRBC:
         queue_len = await self.combat_manager.get_rbc_queue_length(session_id, char_id)
         target_id = await self.combat_manager.get_rbc_next_target_id(session_id, char_id)
 
-        # 4. Проверка статуса "Ожидание" (если пуля уже в Redis)
-        if is_active:
-            moves = await self.combat_manager.get_rbc_moves(session_id, char_id)
-            if moves:
-                status = "waiting"
+        # 4. Проверка статуса "Ожидание"
+        # ИЗМЕНЕНО: Ждем только если очередь пуста (некого бить)
+        if is_active and queue_len == 0:
+            status = "waiting"
 
         player_snap = snapshots.get(char_id)
         if not player_snap:
@@ -385,6 +493,6 @@ class CombatOrchestratorRBC:
             allies=[s for s in snapshots.values() if s.team == player_team and s.char_id != char_id],
             queue_count=queue_len,
             switch_charges=player_snap.tokens.get("tactics", 0),
-            last_logs=await self.get_logs(session_id),
+            # last_logs убрали из DTO
             winner_team=winner,
         )

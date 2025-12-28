@@ -13,10 +13,10 @@ from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.callback_data import NavigationCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.bot.ui_service.helpers_ui.ui_animation_service import UIAnimationService
+
+# from apps.bot.ui_service.helpers_ui.ui_animation_service import UIAnimationService
 from apps.bot.ui_service.hub_entry_service import HubEntryService
 from apps.common.core.container import AppContainer
-from apps.common.schemas_dto import SessionDataDTO
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
@@ -71,9 +71,10 @@ async def navigation_move_handler(
     async def animate_task():
         if travel_time >= 2.0:
             log.debug(f"Navigation | animation=start duration={travel_time}s char_id={char_id}")
-            session_dto = SessionDataDTO(**session_context)
-            anim_service = UIAnimationService(bot=bot, message_data=session_dto)
-            await anim_service.animate_navigation(duration=travel_time, flavor_texts=TRAVEL_FLAVOR_TEXTS)
+            # session_dto = SessionDataDTO(**session_context)
+            # anim_service = UIAnimationService(bot=bot, message_data=session_dto)
+            # await anim_service.animate_navigation(duration=travel_time, flavor_texts=TRAVEL_FLAVOR_TEXTS)
+            await asyncio.sleep(travel_time)  # Заглушка
         else:
             await asyncio.sleep(travel_time or 0.3)
 

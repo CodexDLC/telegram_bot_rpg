@@ -1,190 +1,164 @@
 # Combat System Flow (RBC)
 
-Эталонная реализация Session-Based архитектуры.
+Этот документ описывает архитектуру модуля **Combat** (Боевая система).
+Модуль реализует пошаговый бой (Round Based Combat) с механикой непрерывного обмена (Continuous Exchange) и асинхронной обработкой ходов.
 
-## 1. High-Level Process (RBC Loop)
-Алгоритм боевого раунда: от заявки до результата.
+---
+
+## 1. Entity Map (Карта Сущностей)
+
+### 1.1. Bot Application Layer
+*   **Handlers**: `apps/bot/handlers/callback/game/combat/combat_handlers.py`
+    *   `on_combat_control`: Управление боем (Зоны, Скиллы, Предметы). Обновляет Content (Нижнее сообщение).
+    *   `on_combat_menu`: Управление меню (Лог, Настройки). Обновляет Menu (Верхнее сообщение).
+    *   `on_combat_flow`: Жизненный цикл (Submit, Leave). Запускает анимацию ожидания (Polling).
+*   **Orchestrator**: `CombatBotOrchestrator`.
+    *   Управляет локальным стейтом (FSM) через `CombatStateManager`.
+    *   Управляет анимацией ожидания (через `UIAnimationService`).
+    *   Формирует `UnifiedViewDTO`.
+*   **UI Services**:
+    *   `CombatContentUI`: Рендерит Дашборд, Сетку, Меню скиллов/предметов.
+    *   `CombatMenuUI`: Рендерит Лог боя.
+    *   `CombatFlowUI`: Рендерит экраны ожидания и результатов.
+
+### 1.2. Game Core Layer
+*   **Orchestrator**: `CombatOrchestratorRBC`. Фасад (API).
+    *   `register_move()`: Принимает ход и кладет в Redis.
+    *   `get_dashboard_snapshot()`: Читает состояние из Redis.
+*   **Session Manager**: `CombatManager`.
+    *   Хранит маппинг `char_id -> session_id`.
+    *   Загружает `CombatSessionContainerDTO` из Redis.
+*   **Worker**: `CombatSupervisor`. Фоновый процесс.
+    *   Сканирует активные сессии.
+    *   Запускает расчет при совпадении условий (Match/Timeout).
+*   **Engine**: `CombatService`. Чистая логика расчета урона.
+
+---
+
+## 2. Data Flow: Combat Controls (Управление Боем)
+
+Игрок выбирает зоны атаки/защиты или использует предмет.
 
 ```mermaid
 graph TD
-    %% --- BLOCKS ---
-    Input["1. Player Move (Bullet)"]
-    Queue["2. Queue (Redis)"]
-    Engine["3. Engine (Supervisor)"]
-    Calc["4. Calculation (Damage/Effects)"]
-    Output["5. State Update (Snapshot)"]
+    %% --- ACTORS ---
+    User((User))
+    Handler["combat_handlers.py"]
+    BotOrch["CombatBotOrchestrator"]
+    StateManager["CombatStateManager (FSM)"]
+    Client["CombatRBCClient"]
+    CoreOrch["CombatOrchestratorRBC"]
 
     %% --- FLOW ---
-    Input -->|"Push"| Queue
-    Queue -->|"Poll"| Engine
+    User -->|"1. Click 'toggle_zone'"| Handler
+    Handler -->|"2. handle_control_event()"| BotOrch
     
-    Engine -->|"Match Pair"| Calc
-    Calc -->|"Apply Rules"| Output
+    %% --- LOCAL STATE ---
+    BotOrch -->|"3. Update Selection"| StateManager
+    StateManager -->|"4. Save to FSM"| StateManager
     
-    Output -.->|"Notify UI"| Input
+    %% --- SNAPSHOT (Always Fresh) ---
+    BotOrch -->|"5. get_snapshot()"| Client
+    Client -->|"6. get_snapshot()"| CoreOrch
+    CoreOrch -.->|"7. DashboardDTO"| Client
+    
+    %% --- RENDER ---
+    Client -.->|"8. DTO"| BotOrch
+    BotOrch -->|"9. Render Content (Grid + HP)"| BotOrch
+    BotOrch -.->|"10. UnifiedViewDTO"| Handler
+    Handler -->|"11. Edit Content Message"| User
 ```
 
 ---
 
-## 2. Layer Details
+## 3. Continuous Exchange Pipeline (Asynchronous)
 
-### 2.1. Bot Layer (Presentation)
-Отвечает за обработку кнопок и отрисовку экрана боя.
+Система разделена на два независимых процесса, связанных через Redis.
 
-```mermaid
-graph TD
-    Input["User Callback"]
-
-    subgraph Bot_Layer ["Bot Layer"]
-        Handler["ActionHandler"]
-        Orch["CombatBotOrchestrator"]
-        UI["CombatUIService"]
-        Formatter["CombatFormatter"]
-    end
-
-    Output["NEXT: Client Layer"]
-
-    Input -->|"Click"| Handler
-    Handler -->|"handle_submit"| Orch
-    Orch -->|"register_move"| Output
-    
-    Output -.->|"CombatViewDTO"| Orch
-    Orch -->|"Render"| UI
-    UI -->|"Format Text"| Formatter
-    UI -.->|"Message"| Handler
-```
-
-### 2.2. Client Layer (The Bridge)
-Изолирует Бот от сложной логики RBC.
+### A. Input Flow (Client Side)
+Игрок делает ход. Задача системы — принять заявку и вернуть управление (или статус ожидания).
 
 ```mermaid
 graph TD
-    Input["PREV: Bot Layer"]
+    %% --- ACTORS ---
+    User((User))
+    BotOrch["BotOrchestrator"]
+    CoreAPI["CombatOrchestratorRBC (API)"]
+    Redis[("Redis (Moves & Queue)")]
 
-    subgraph Client_Layer ["Client Layer"]
-        Client["CombatRBCClient"]
-    end
-
-    Output["NEXT: Game Core Layer"]
-
-    Input -->|"register_move"| Client
-    Client -->|"Call Core Orchestrator"| Output
+    %% --- FLOW ---
+    User -->|"1. Submit Move"| BotOrch
+    BotOrch -->|"2. Register Move"| CoreAPI
     
-    Output -.->|"DashboardDTO"| Client
-    Client -.->|"Return"| Input
+    CoreAPI -->|"3. Save Bullet (MoveDTO)"| Redis
+    CoreAPI -->|"4. Pop Target from Queue"| Redis
+    
+    Redis -.->|"5. Queue State"| CoreAPI
+    
+    CoreAPI -->|"6. Decision"| Decision{Queue > 0?}
+    
+    Decision -->|"Yes: Return New Target"| BotOrch
+    BotOrch -->|"Render Next Enemy"| User
+    
+    Decision -->|"No: Return Status=Waiting"| BotOrch
+    BotOrch -->|"Start Polling Animation"| User
 ```
 
-### 2.3. Game Core Layer (Business Logic)
-Разделение на синхронный API (Оркестратор) и фоновый Актер (Супервизор).
+### B. Processing Flow (Server Side)
+Фоновый процесс обрабатывает заявки. Бот здесь не участвует.
 
 ```mermaid
 graph TD
-    Input["PREV: Client Layer"]
+    %% --- ACTORS ---
+    Supervisor["Supervisor (Worker)"]
+    Service["CombatService (Logic)"]
+    Redis[("Redis (Moves & Queue)")]
 
-    subgraph Core_Layer ["Game Core Layer"]
-        
-        %% Entity 1: API Interface
-        subgraph Orchestrator_Entity ["1. CombatOrchestratorRBC (API)"]
-            Orch["Orchestrator"]
-            Lifecycle["LifecycleService"]
-        end
-        
-        %% Entity 2: Background Engine
-        subgraph Supervisor_Entity ["2. CombatSupervisor (Background Actor)"]
-            Supervisor["Supervisor Loop"]
-            AI["CombatAIService"]
-            Service["CombatService"]
-            Calc["CombatCalculator"]
-        end
-    end
-
-    Output["NEXT: Data Layer"]
-
-    %% --- FLOW 1: Orchestrator (Read/Write) ---
-    Input -->|"register_move / get_snapshot"| Orch
+    %% --- LOOP ---
+    Supervisor -->|"1. Scan Active Sessions"| Redis
+    Redis -.->|"2. Moves & Timers"| Supervisor
     
-    Orch -->|"Save Move (Bullet)"| Output
-    Orch -->|"Read State (Snapshot)"| Output
-    Orch -.->|"Ensure Supervisor Running"| Supervisor
+    Supervisor -->|"3. Trigger Condition?"| Check{Match or Timeout?}
     
-    Orch -.->|"Return DTO"| Input
+    Check -->|"Yes"| Service
+    Check -->|"No"| Supervisor
     
-    %% --- FLOW 2: Supervisor (Processing) ---
-    Supervisor -->|"Poll Redis (While True)"| Output
+    %% --- CALCULATION ---
+    Service -->|"4. Process Exchange"| Service
+    Service -->|"5. Update HP/Stats"| Redis
     
-    %% Logic Details
-    Supervisor -->|"1. Check Timeouts"| Supervisor
-    Supervisor -->|"2. Check Mutual Moves"| Supervisor
-    Supervisor -->|"3. Generate AI Moves"| AI
-    
-    %% Execution
-    Supervisor -->|"4. Execute Exchange"| Service
-    Service -->|"Calculate Hit"| Calc
-    Service -->|"Apply Effects"| Service
-    Service -->|"Update Redis State"| Output
-    Service -->|"Push Logs"| Output
-    
-    %% Finish
-    Service -->|"If Dead -> Check Win"| Lifecycle
-    Lifecycle -->|"Save Stats to DB"| Output
+    %% --- ROTATION ---
+    Service -->|"6. Return Actors to Queue"| Redis
 ```
 
-### 2.4. Data Layer (Storage)
-Redis хранит активную сессию (быстро). БД хранит результаты (надежно).
+### Детализация этапов:
 
-```mermaid
-graph TD
-    Input["PREV: Game Core Layer"]
+1.  **Player Phase (UI)**:
+    *   Игрок видит цель (первую из очереди).
+    *   Делает ход (`Submit`).
+    *   Пуля улетает в Redis, цель удаляется из начала очереди.
+    *   Если в очереди есть **еще** враги — игрок сразу получает следующего.
+    *   Если очередь пуста — игрок переходит в режим ожидания (`Waiting`).
 
-    subgraph Data_Layer ["Data Layer"]
-        subgraph Redis_Session ["Redis (Active Session)"]
-            Meta["Hash: Meta"]
-            Actors["Hash: Actors State"]
-            Moves["Hash: Moves (Bullets)"]
-            Queues["List: Exchange Queues"]
-        end
-        
-        subgraph DB_Storage ["PostgreSQL (Persistence)"]
-            Stats["Table: CharacterStats"]
-            History["Table: CombatHistory"]
-        end
-    end
+2.  **Engine Phase (Supervisor)**:
+    *   Воркер сканирует пули.
+    *   **Trigger**: Запускает расчет, если:
+        *   Есть встречная пуля (Враг тоже ударил).
+        *   ИЛИ вышел таймер (Враг AFK).
 
-    Input -->|"Read/Write"| Redis_Session
-    Input -->|"Commit Result"| DB_Storage
-```
+3.  **Calculation Phase**:
+    *   `CombatService` считает урон.
+    *   **Rotation**: Возвращает живых бойцов в конец очередей друг друга.
+
+4.  **Return Phase**:
+    *   Очередь игрока пополняется (враг вернулся).
+    *   Бот видит это через поллинг и разблокирует UI.
 
 ---
 
-## 3. API Optimization Strategy
-Единый роут для всех боевых действий.
+## 4. Key Decisions (Ключевые решения)
 
-```mermaid
-graph TD
-    subgraph Client_Side ["Client Side"]
-        Request["POST /combat/action"]
-        Body["Body: { action: 'move', target_id: 1, zones: [...] }"]
-    end
-
-    subgraph Core_API ["Core API Layer"]
-        Controller["CombatController"]
-        Dispatcher["ActionDispatcher"]
-    end
-
-    subgraph Logic ["Logic Layer"]
-        Orch["CombatCoreOrchestrator"]
-    end
-
-    %% --- FLOW ---
-    Request --> Controller
-    Body -.-> Controller
-    
-    Controller -->|"Validate DTO"| Dispatcher
-    
-    Dispatcher -->|"Switch(action)"| Dispatcher
-    Dispatcher -->|"Case 'move'"| Orch
-    Dispatcher -->|"Case 'use_item'"| Orch
-    Dispatcher -->|"Case 'surrender'"| Orch
-    
-    Orch -->|"Update Redis"| Redis["Redis"]
-```
+1.  **Asynchronous Processing**: Ввод хода и его расчет развязаны. Бот не ждет расчета, он ждет изменения состояния в Redis (через поллинг).
+2.  **Continuous Flow**: Игрок может сделать несколько ходов подряд (по разным целям), если они есть в очереди. Блокировка UI (`Waiting`) наступает только когда очередь пуста.
+3.  **Snapshot-Based UI**: При любом действии мы запрашиваем свежий снапшот. Это гарантирует, что игрок видит актуальное HP, даже если расчет произошел в фоне.
+4.  **UI Layout**: Разделение на Menu (Лог) и Content (Дашборд) позволяет обновлять их независимо.

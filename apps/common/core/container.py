@@ -106,15 +106,15 @@ class AppContainer:
     def get_combat_bot_orchestrator(self, session: AsyncSession) -> CombatBotOrchestrator:
         """Создает UI-оркестратор для бота."""
         client = self.get_combat_client(session)
-        expl_client = self.get_exploration_client(session)
+        # expl_client = self.get_exploration_client(session)
 
         return CombatBotOrchestrator(
             client=client,
-            account_manager=self.account_manager,
-            exploration_client=expl_client,
-            arena_manager=self.arena_manager,
-            combat_manager=self.combat_manager,
-            world_manager=self.world_manager,
+            # account_manager=self.account_manager,
+            # exploration_client=expl_client,
+            # arena_manager=self.arena_manager,
+            # combat_manager=self.combat_manager,
+            # world_manager=self.world_manager,
         )
 
     def get_arena_client(self, session: AsyncSession) -> ArenaClient:

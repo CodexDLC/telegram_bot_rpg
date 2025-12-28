@@ -1,159 +1,115 @@
-# Lobby & Entry Flow (V2 Architecture)
+# Lobby & Entry Flow
 
-## 1. The Big Picture (Ideal Flow)
-Общая схема входа в игру: от команды `/start` до появления в игровом мире.
+Этот документ описывает архитектуру модуля **Lobby** (Вход в игру и выбор персонажа).
+Модуль следует стандарту "Тонкий Клиент" (см. `01_Architecture_Overview.md`).
+
+---
+
+## 1. Entity Map (Карта Сущностей)
+
+### 1.1. Bot Application Layer
+*   **Handlers**:
+    *   `start_login_handler` (в `lobby.py`): Вход в лобби (кнопка "Adventure").
+    *   `select_or_delete_character_handler` (в `lobby_character_selection.py`): Действия внутри (выбор, удаление, логин).
+*   **Orchestrator**: `LobbyBotOrchestrator`. Управляет логикой отображения лобби.
+*   **UI Service**: `LobbyService`. Строит меню выбора персонажей и статус.
+*   **Client**: `LobbyClient`. Интерфейс для общения с Core.
+
+### 1.2. Game Core Layer
+*   **Orchestrator**: `LobbyCoreOrchestrator`. Фасад модуля. Управляет списком персонажей.
+*   **Session Manager**: `LobbySessionManager`. Реализует паттерн Cache-Aside для списка персонажей.
+*   **Data Access**:
+    *   `CharacterRepository` (PostgreSQL).
+    *   `RedisService` + `RedisKeys` (Redis Cache).
+
+---
+
+## 2. Data Flow: Initialization (Вход в Лобби)
+
+Пользователь нажимает "Adventure". Система проверяет наличие персонажей.
 
 ```mermaid
 graph TD
     %% --- ACTORS ---
     User((User))
-
-    %% --- BOT LAYER ---
-    subgraph Bot_Layer ["Bot Layer (Presentation)"]
-        StartH["Start Handler"]
-        LobbyH["Lobby Handler"]
-        
-        CmdOrch["CommandOrchestrator"]
-        LobbyOrch["LobbyOrchestrator"]
-        AuthOrch["AuthOrchestrator"]
-        
-        Director["GameDirector"]
-        Sender["ViewSender"]
-    end
-
-    %% --- CLIENT LAYER ---
-    subgraph Client_Layer ["Client Layer (Bridge)"]
-        AuthClient["AuthClient"]
-        LobbyClient["LobbyClient"]
-    end
-
-    %% --- CORE LAYER ---
-    subgraph Core_Layer ["Core Layer (Logic)"]
-        UserRepo["UserRepo"]
-        CharRepo["CharacterRepo"]
-        SessionMgr["SessionManager"]
-    end
-
-    %% --- FLOW 1: START ---
-    User -->|"/start"| StartH
-    StartH -->|"handle_start()"| CmdOrch
-    CmdOrch -->|"upsert_user()"| AuthClient
-    AuthClient --> UserRepo
-    CmdOrch -.->|"UnifiedViewDTO (Title)"| StartH
-    StartH -->|"send()"| Sender
-
-    %% --- FLOW 2: LOBBY ---
-    User -->|"Click 'Adventure'"| LobbyH
-    LobbyH -->|"set_scene(LOBBY)"| Director
-    Director -->|"render()"| LobbyOrch
-    LobbyOrch -->|"get_characters()"| LobbyClient
-    LobbyClient --> CharRepo
-    LobbyOrch -.->|"UnifiedViewDTO (Char List)"| Director
-    Director -.->|"DTO"| LobbyH
-    LobbyH -->|"send()"| Sender
-
-    %% --- FLOW 3: LOGIN ---
-    User -->|"Select Character"| LobbyH
-    LobbyH -->|"handle_login()"| AuthOrch
-    AuthOrch -->|"restore_session()"| SessionMgr
-    SessionMgr -.->|"GameState (e.g. COMBAT)"| AuthOrch
+    Handler["Handler<br/>(start_login_handler)"]
+    BotOrch["LobbyBotOrchestrator"]
+    Client["LobbyClient"]
     
-    AuthOrch -->|"set_scene(COMBAT)"| Director
-    Director -->|"render()"| CombatOrch["CombatOrchestrator"]
-    CombatOrch -.->|"UnifiedViewDTO"| Director
-    Director -.->|"DTO"| LobbyH
-    LobbyH -->|"send()"| Sender
+    CoreOrch["LobbyCoreOrchestrator"]
+    SessMgr["LobbySessionManager"]
+    Repo["CharacterRepository"]
+    Redis["RedisService"]
+
+    %% --- FLOW ---
+    User -->|"1. Click 'Adventure'"| Handler
+    Handler -->|"2. process_entry_point()"| BotOrch
+    BotOrch -->|"3. get_initial_lobby_state()"| Client
+    
+    Client -->|"4. initialize_session()"| CoreOrch
+    CoreOrch -->|"5. get_characters()"| SessMgr
+    
+    %% --- CACHE ASIDE ---
+    SessMgr -->|"6. GET lobby_session:{uid}"| Redis
+    Redis -.->|"7. Miss"| SessMgr
+    SessMgr -->|"8. SELECT * FROM chars"| Repo
+    Repo -.->|"9. List[Character]"| SessMgr
+    SessMgr -->|"10. SET lobby_session:{uid}"| Redis
+    
+    %% --- LOGIC ---
+    SessMgr -.->|"11. Characters"| CoreOrch
+    CoreOrch -->|"12. Check Count"| CoreOrch
+    
+    %% --- RESPONSE ---
+    CoreOrch -.->|"13. CoreResponseDTO<br/>(State=LOBBY, Payload=LobbyInitDTO)"| Client
+    Client -.->|"14. DTO"| BotOrch
+    
+    BotOrch -->|"15. render_lobby()"| BotOrch
+    BotOrch -.->|"16. UnifiedViewDTO"| Handler
+    Handler -->|"17. Send Message"| User
 ```
 
 ---
 
-## 2. Layer Details
+## 3. Data Flow: Enter Game (Вход в мир)
 
-### 2.1. Bot Layer (Presentation)
-Отвечает за обработку команд, управление сценами (Director) и отправку сообщений (Sender).
-
-```mermaid
-graph TD
-    %% --- EXTERNAL ---
-    Telegram((Telegram API))
-    Client["External: LobbyClient"]
-    Director["External: GameDirector"]
-
-    %% --- BOT LAYER SCOPE ---
-    subgraph Bot_Layer ["Bot Layer"]
-        Handler["LobbyHandler"]
-        Sender["ViewSender"]
-        
-        subgraph Orchestrator_Scope ["LobbyOrchestrator"]
-            Logic["Orchestrator Logic"]
-            Renderer["LobbyUIService"]
-            DTO_Builder["DTO Builder"]
-        end
-    end
-    
-    %% --- DATA OBJECT ---
-    DTO[("UnifiedViewDTO")]
-
-    %% --- FLOW ---
-    Telegram -->|"1. Update (Callback)"| Handler
-    Handler -->|"2. handle_action()"| Logic
-    
-    Logic -->|"3. get_data()"| Client
-    Client -.->|"4. Response (Header + Payload)"| Logic
-    
-    Logic --> CheckState{State Changed?}
-    
-    %% CASE 1: State Changed -> Call Director
-    CheckState -- Yes --> CallDir["5a. director.set_scene(NewState)"]
-    CallDir --> Director
-    Director -.->|"6a. New UnifiedViewDTO"| Logic
-    
-    %% CASE 2: Same State -> Render Locally
-    CheckState -- No --> Render["5b. render(Payload)"]
-    Render --> Renderer
-    Renderer -.->|"6b. ViewResult"| Logic
-    Logic -->|"7b. Wrap"| DTO_Builder
-    DTO_Builder -.->|"8b. UnifiedViewDTO"| Logic
-    
-    %% RETURN
-    Logic -.->|"9. UnifiedViewDTO"| Handler
-    
-    Handler -->|"10. sender.send(DTO)"| Sender
-    Sender -->|"11. Edit/Send Message"| Telegram
-```
-
-### 2.2. Client Layer (Bridge)
-Связующее звено. Преобразует вызовы оркестратора в запросы к ядру (или БД для простых операций).
+Пользователь выбирает персонажа и нажимает "Войти".
 
 ```mermaid
 graph TD
-    %% --- COMPONENTS ---
-    Orchestrator["Bot Orchestrator"]
-    Client["Core Client"]
-    Core["Core Service / Repo"]
+    %% --- ACTORS ---
+    User((User))
+    Handler["Handler<br/>(select_or_delete_character_handler)"]
+    BotOrch["LobbyBotOrchestrator"]
+    Director["GameDirector"]
+    Client["LobbyClient"]
+    CoreOrch["LobbyCoreOrchestrator"]
 
     %% --- FLOW ---
-    Orchestrator -->|"1. get_data()"| Client
-    Client -->|"2. Call Core"| Core
-    Core -.->|"3. Domain Model"| Client
-    Client -.->|"4. DTO"| Orchestrator
+    User -->|"1. Click 'Enter Game'"| Handler
+    Handler -->|"2. handle_enter_game()"| BotOrch
+    
+    BotOrch -->|"3. set_char_id(123)"| Director
+    BotOrch -->|"4. enter_game(char_id=123)"| Client
+    
+    Client -->|"5. enter_game()"| CoreOrch
+    
+    %% --- LOGIC ---
+    CoreOrch -->|"6. Determine Target State"| CoreOrch
+    CoreOrch -.->|"7. CoreResponseDTO<br/>(State=EXPLORATION)"| Client
+    
+    %% --- TRANSITION ---
+    Client -.->|"8. DTO"| BotOrch
+    BotOrch -->|"9. check_and_switch_state()"| BotOrch
+    BotOrch -->|"10. set_scene(EXPLORATION)"| Director
+    
+    Director -->|"11. ExplorationOrchestrator.render()"| Director
 ```
 
-### 2.3. Game Core Layer (Logic)
-Бизнес-логика. Для процесса входа (Login) это управление сессией и восстановление состояния.
+---
 
-```mermaid
-graph TD
-    %% --- COMPONENTS ---
-    Client["Client"]
-    CoreOrch["Core Orchestrator (Lobby)"]
-    Repo["CharacterRepo"]
-    
-    %% --- FLOW ---
-    Client -->|"1. get_characters(user_id)"| CoreOrch
-    CoreOrch -->|"2. Fetch from DB"| Repo
-    Repo -.->|"3. List[Character]"| CoreOrch
-    
-    CoreOrch -->|"4. Format Domain Data"| CoreOrch
-    CoreOrch -.->|"5. LobbyDTO (Chars + Bio)"| Client
-```
+## 4. Key Decisions (Ключевые решения)
+
+1.  **Cache-Aside**: Список персонажей кэшируется в Redis (`lobby_session:{user_id}`) на 1 час. При создании/удалении персонажа кэш инвалидируется.
+2.  **State Switching**: `LobbyCoreOrchestrator` сам решает, куда отправить пользователя. Если персонажей нет — он возвращает `header.current_state = ONBOARDING`. Бот просто подчиняется.
+3.  **Session Context**: ID выбранного персонажа сохраняется в FSM (`GameDirector.set_char_id`) только на момент входа в игру. В самом лобби `char_id` передается в аргументах колбэка.

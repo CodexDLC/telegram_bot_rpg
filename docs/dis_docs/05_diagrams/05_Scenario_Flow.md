@@ -1,81 +1,140 @@
-# Scenario & Quest Flow (Thin Client Architecture)
+# Scenario & Quest Flow
 
-Реализация архитектуры "Тонкий Клиент", где Бот отвечает только за отображение (View) и пересылку действий, а Бэкенд (Core) управляет логикой и навигацией.
+Этот документ описывает архитектуру модуля **Scenario** (Квесты, Диалоги, Данжи).
+Модуль реализует сложную логику управления состоянием и кэширования статических данных.
 
-## 1. High-Level Process
-Цикл обработки действий пользователя.
+---
+
+## 1. Entity Map (Карта Сущностей)
+
+### 1.1. Bot Application Layer
+*   **Orchestrator**: `ScenarioBotOrchestrator`. Презентер. Получает `ScenarioPayloadDTO` и отдает его в UI.
+*   **UI Service**: `ScenarioUIService`. Строит экраны диалогов (текст, картинка, кнопки действий).
+*   **Client**: `ScenarioClient`. Интерфейс API.
+
+### 1.2. Game Core Layer
+*   **Orchestrator**: `ScenarioCoreOrchestrator`. Фасад. Координирует работу компонентов.
+*   **Data Manager**: `ScenarioManager`.
+    *   **User Session**: Хранит прогресс игрока в Redis (`scenario_session:{char_id}`) с бэкапом в БД.
+    *   **Static Cache**: Кэширует структуру квеста в Redis (`scenario:static:{quest_key}`).
+*   **Logic Engine**:
+    *   `ScenarioDirector`: Определяет доступные действия и следующую ноду.
+    *   `ScenarioEvaluator`: Проверяет условия (Requirements) и выполняет эффекты (Rewards).
+*   **Formatter**: `ScenarioFormatter`. Собирает `ScenarioPayloadDTO`.
+*   **Quest Handlers**: Специализированные классы для кастомной логики квестов (награды, сложные переходы).
+
+---
+
+## 2. Data Flow: Initialization (Start Quest)
+
+Запуск квеста. Система должна загрузить структуру квеста и создать сессию.
 
 ```mermaid
 graph TD
-    %% --- BLOCKS ---
-    User((User))
-    Bot_Handler["Bot Handler\n(ScenarioHandler)"]
-    Bot_Orch["Bot Orchestrator\n(ScenarioOrchestrator)"]
-    Core_Client["API Client\n(ScenarioClient)"]
-    Core_Logic["Core Logic Layer\n(Backend)"]
-    Director["GameDirector"]
-    ViewSender["ViewSender"]
-    
+    %% --- ACTORS ---
+    Client["ScenarioClient"]
+    CoreOrch["ScenarioCoreOrchestrator"]
+    SessMgr["ScenarioManager"]
+    Repo["Repository"]
+    Redis["RedisService"]
+    Director["ScenarioDirector"]
+
     %% --- FLOW ---
-    User -->|"1. Click Action"| Bot_Handler
-    Bot_Handler -->|"2. Call Orchestrator"| Bot_Orch
-    Bot_Orch -->|"3. Send ActionDTO"| Core_Client
-    Core_Client -->|"4. Request"| Core_Logic
+    Client -->|"1. initialize(quest_key)"| CoreOrch
     
-    Core_Logic -->|"5. Return CoreResponseDTO\n(Header: State, Payload: Data)"| Core_Client
-    Core_Client -->|"6. Return DTO"| Bot_Orch
+    %% --- STATIC CACHE ---
+    CoreOrch -->|"2. get_quest_master()"| SessMgr
+    SessMgr -->|"3. Check Cache (scenario:static)"| Redis
+    Redis -.->|"4. Miss"| SessMgr
+    SessMgr -->|"5. Load Full Quest"| Repo
+    SessMgr -->|"6. Cache Quest (TTL 1h)"| Redis
     
-    Bot_Orch -->|"7. Check State (Header)"| Director
+    %% --- SESSION CREATION ---
+    CoreOrch -->|"7. register_new_session()"| SessMgr
+    SessMgr -->|"8. Update Account (State=SCENARIO)"| Redis
+    SessMgr -->|"9. Save Context (scenario_session)"| Redis
+    SessMgr -->|"10. Backup to DB"| Repo
     
-    Director --"State Changed"--> Switch["Switch Scene\n(Find new Orchestrator)"]
-    Director --"State Same"--> Render["Render View\n(Current Orchestrator)"]
+    %% --- LOGIC ---
+    CoreOrch -->|"11. get_available_actions()"| Director
     
-    Switch --> Result["UnifiedViewDTO"]
-    Render --> Result
-    
-    Result -->|"8. Return to Handler"| Bot_Handler
-    Bot_Handler -->|"9. Send(DTO)"| ViewSender
-    ViewSender -->|"10. Update Telegram"| User
+    %% --- RESPONSE ---
+    CoreOrch -.->|"12. CoreResponseDTO"| Client
 ```
 
 ---
 
-## 2. Key Components
+## 3. Data Flow: Step Execution (Player Choice)
 
-### 2.1. CoreResponseDTO
-Универсальный конверт ответа от бэкенда.
-```python
-class CoreResponseDTO(Generic[T]):
-    header: GameStateHeader  # Навигация (current_state, screen_type)
-    payload: T | None        # Данные для отображения
+Игрок выбирает вариант ответа.
+
+```mermaid
+graph TD
+    %% --- ACTORS ---
+    Client["ScenarioClient"]
+    CoreOrch["ScenarioCoreOrchestrator"]
+    SessMgr["ScenarioManager"]
+    Director["ScenarioDirector"]
+    Evaluator["ScenarioEvaluator"]
+
+    %% --- FLOW ---
+    Client -->|"1. step(action_id)"| CoreOrch
+    
+    %% --- LOAD ---
+    CoreOrch -->|"2. load_session()"| SessMgr
+    SessMgr -.->|"3. Context"| CoreOrch
+    
+    %% --- EXECUTE ---
+    CoreOrch -->|"4. execute_step()"| Director
+    Director -->|"5. check_requirements()"| Evaluator
+    Director -->|"6. apply_effects()"| Evaluator
+    Director -.->|"7. New Node & Context"| CoreOrch
+    
+    %% --- SAVE ---
+    CoreOrch -->|"8. save_session_context()"| SessMgr
+    
+    %% --- RESPONSE ---
+    CoreOrch -.->|"9. CoreResponseDTO"| Client
 ```
-
-### 2.2. GameDirector
-Центральный узел управления состоянием.
-- **set_scene(state, payload)**: Меняет FSM состояние, находит нужный оркестратор и вызывает у него `render`.
-- **handle_response(response)**: Умный метод, который сам решает: переключить сцену или отрендерить текущую.
-
-### 2.3. ViewSender
-Отвечает за физическое обновление сообщений.
-- **Menu**: Верхнее сообщение (статус, навигация).
-- **Content**: Основное сообщение (сценарий, бой, инвентарь).
-- **Clean History**: Умеет удалять старые сообщения при смене контекста.
 
 ---
 
-## 3. Data Flow Example (Scenario -> Combat)
+## 4. Data Flow: Finalization (Quest Complete)
 
-1.  **User** нажимает "Атаковать".
-2.  **Core** обрабатывает логику, понимает, что начался бой.
-3.  **Core** возвращает:
-    ```json
-    {
-      "header": { "current_state": "COMBAT", "screen_type": "START" },
-      "payload": { "enemy": "Orc", "hp": 50 }
-    }
-    ```
-4.  **ScenarioOrchestrator** видит `COMBAT` != `SCENARIO`.
-5.  Вызывает `director.set_scene(COMBAT, payload)`.
-6.  **Director** находит `CombatOrchestrator`.
-7.  `CombatOrchestrator.render(payload)` создает экран боя.
-8.  **ViewSender** заменяет текст сценария на экран боя.
+Квест завершен. Нужно выдать награду и вернуть игрока в мир.
+
+```mermaid
+graph TD
+    %% --- ACTORS ---
+    CoreOrch["ScenarioCoreOrchestrator"]
+    Handler["QuestHandler (Custom Logic)"]
+    Router["CoreRouter"]
+    SessMgr["ScenarioManager"]
+
+    %% --- FLOW ---
+    CoreOrch -->|"1. Detect 'finish_quest'"| CoreOrch
+    CoreOrch -->|"2. finalize_scenario()"| CoreOrch
+    
+    %% --- HANDLER ---
+    CoreOrch -->|"3. on_finalize()"| Handler
+    Handler -->|"4. Give Rewards (XP, Items)"| Handler
+    
+    %% --- ROUTING ---
+    Handler -->|"5. router.get_initial_view(SCENARIO/EXPLORATION)"| Router
+    Router -.->|"6. CoreResponseDTO"| Handler
+    
+    %% --- CLEANUP ---
+    CoreOrch -->|"7. clear_session()"| SessMgr
+    CoreOrch -->|"8. delete_backup()"| SessMgr
+    
+    %% --- RETURN ---
+    CoreOrch -.->|"9. CoreResponseDTO"| Client["Client"]
+```
+
+---
+
+## 5. Key Decisions (Ключевые решения)
+
+1.  **Static Content Caching**: Структура квеста (тексты, связи) не меняется часто. Мы загружаем весь квест из БД один раз и храним в Redis (`scenario:static:{key}`) с TTL 1 час. Это снижает нагрузку на БД при каждом шаге.
+2.  **Session Resilience**: Сессия игрока живет в Redis. Если Redis падает или очищается, `ScenarioManager` умеет восстанавливать сессию из БД (`get_active_state`), где хранится бэкап.
+3.  **Handler Registry**: Логика конкретных квестов (особенно финальные награды) вынесена из ядра в отдельные классы-хендлеры. Это позволяет писать уникальные скрипты для каждого квеста, не загрязняя общий движок.
