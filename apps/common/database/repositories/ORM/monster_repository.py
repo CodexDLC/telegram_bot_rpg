@@ -30,9 +30,30 @@ class MonsterRepository(IMonsterRepository):
         return clan_orm
 
     async def get_clans_by_context_hash(self, context_hash: str) -> list[GeneratedClanORM]:
-        query = select(GeneratedClanORM).where(GeneratedClanORM.context_hash == context_hash)
+        # Оставляем старый метод для совместимости (с жадной загрузкой)
+        query = (
+            select(GeneratedClanORM)
+            .where(GeneratedClanORM.context_hash == context_hash)
+            .options(selectinload(GeneratedClanORM.members))
+        )
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    # --- Новые методы для оптимизированного выбора ---
+
+    async def get_clan_ids_by_context_hash(self, context_hash: str) -> list[UUID]:
+        """Возвращает только ID кланов (быстро)."""
+        query = select(GeneratedClanORM.id).where(GeneratedClanORM.context_hash == context_hash)
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
+    async def get_clan_members(self, clan_id: UUID) -> list[GeneratedMonsterORM]:
+        """Возвращает всех монстров конкретного клана."""
+        query = select(GeneratedMonsterORM).where(GeneratedMonsterORM.family_id == clan_id)
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
+    # ------------------------------------------------
 
     async def get_monster_by_id(self, monster_id: UUID | str) -> GeneratedMonsterORM | None:
         try:

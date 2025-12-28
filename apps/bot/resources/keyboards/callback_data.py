@@ -1,6 +1,10 @@
 from aiogram.filters.callback_data import CallbackData
 
 
+class StartMenuCallback(CallbackData, prefix="start"):
+    action: str  # "adventure", "settings", "help"
+
+
 class LobbySelectionCallback(CallbackData, prefix="lobby"):
     action: str
     char_id: int | None = None
@@ -10,6 +14,14 @@ class MeinMenuCallback(CallbackData, prefix="menu"):
     action: str
     game_stage: str
     char_id: int
+
+
+class SystemCallback(CallbackData, prefix="sys"):
+    """
+    Универсальный колбэк для системных действий (Logout, Reset, etc).
+    """
+
+    action: str  # "logout", "main_menu"
 
 
 class EncounterCallback(CallbackData, prefix="enc"):

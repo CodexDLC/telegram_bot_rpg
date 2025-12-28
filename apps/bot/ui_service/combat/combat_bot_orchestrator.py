@@ -1,245 +1,425 @@
-# apps/bot/ui_service/combat/combat_bot_orchestrator.py
-from aiogram.types import InlineKeyboardMarkup
-from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+from aiogram.types import User
 
 from apps.bot.core_client.combat_rbc_client import CombatRBCClient
-from apps.bot.core_client.exploration import ExplorationClient
-from apps.bot.ui_service.combat.combat_ui_service import CombatUIService
-from apps.bot.ui_service.combat.dto.combat_view_dto import CombatViewDTO
-from apps.bot.ui_service.exploration.exploration_ui import ExplorationUIService
-from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
-from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.bot.ui_service.hub_entry_service import HubEntryService
-from apps.bot.ui_service.mesage_menu.menu_service import MenuService
-from apps.common.schemas_dto.combat_source_dto import CombatDashboardDTO, CombatMoveDTO
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.manager.arena_manager import ArenaManager
-from apps.common.services.core_service.manager.combat_manager import CombatManager
-from apps.common.services.core_service.manager.world_manager import WorldManager
+from apps.bot.resources.keyboards.combat_callback import (
+    CombatControlCallback,
+    CombatFlowCallback,
+    CombatMenuCallback,
+)
+from apps.bot.resources.texts.error_messages import ErrorKeys
+from apps.bot.ui_service.base_bot_orchestrator import BaseBotOrchestrator
+from apps.bot.ui_service.combat.helpers.combat_state_manager import CombatStateManager
+from apps.bot.ui_service.combat.services.content_ui import CombatContentUI
+from apps.bot.ui_service.combat.services.flow_ui import CombatFlowUI
+from apps.bot.ui_service.combat.services.menu_ui import CombatMenuUI
+from apps.bot.ui_service.dto.view_dto import UnifiedViewDTO
+from apps.bot.ui_service.error.error_bot_orchestrator import ErrorBotOrchestrator
+from apps.common.schemas_dto.game_state_enum import GameState
 
 
-class CombatBotOrchestrator:
-    def __init__(
-        self,
-        client: CombatRBCClient,
-        account_manager: AccountManager,
-        exploration_client: ExplorationClient,
-        arena_manager: ArenaManager,
-        combat_manager: CombatManager,
-        world_manager: WorldManager,
-    ):
+class CombatBotOrchestrator(BaseBotOrchestrator):
+    """
+    Оркестратор боевой системы (RBC).
+    Управляет локальным стейтом (FSM) и синхронизирует два сообщения (Menu/Content).
+    """
+
+    def __init__(self, client: CombatRBCClient):
+        super().__init__(expected_state=GameState.COMBAT)
         self.client = client
-        self.account_manager = account_manager
-        self.exploration_client = exploration_client
-        self.arena_manager = arena_manager
-        self.combat_manager = combat_manager
-        self.world_manager = world_manager
+        self.error_orchestrator = ErrorBotOrchestrator()
 
-    def _get_ui(self, state_data: dict) -> CombatUIService:
-        """Внутренняя фабрика для UI сервиса."""
-        char_id = state_data.get("char_id")
+        # UI Services (Stateless)
+        self.content_ui = CombatContentUI()
+        self.menu_ui = CombatMenuUI()
+        self.flow_ui = CombatFlowUI()
+
+    # --- Entry Point ---
+
+    async def render(self, payload: Any) -> UnifiedViewDTO:
+        """
+        Рендер при входе в бой (вызывается Директором).
+        """
+        char_id = await self.director.get_char_id()
         if not char_id:
-            context = state_data.get("fsm_context_key", {})
-            if isinstance(context, dict):
-                char_id = context.get("char_id")
+            return self.error_orchestrator.view_session_expired(0, "CombatRender")
 
-        if not char_id:
-            char_id = state_data.get("combat_char_id")
+        # Запрашиваем начальное состояние И логи параллельно
+        task_snapshot = self.client.get_snapshot(char_id)
+        task_logs = self.client.get_data(char_id, "logs", {"page": 0})
 
-        return CombatUIService(state_data=state_data, char_id=char_id)  # type: ignore
+        snapshot_res, logs_res = await asyncio.gather(task_snapshot, task_logs)
 
-    # --- Обертки для доступа к координатам сообщений через UI ---
-    def get_content_coords(self, state_data: dict) -> MessageCoordsDTO | None:
-        """Возвращает (chat_id, message_id) для основного контента (Дашборд)."""
-        data = self._get_ui(state_data).get_message_content_data()
-        return MessageCoordsDTO(chat_id=data[0], message_id=data[1]) if data else None
+        # Проверка смены стейта
+        switch_result = await self.check_and_switch_state(snapshot_res)
+        if switch_result:
+            return switch_result
 
-    def get_menu_coords(self, state_data: dict) -> MessageCoordsDTO | None:
-        """Возвращает (chat_id, message_id) для меню (Лог боя/Кнопки)."""
-        data = self._get_ui(state_data).get_message_menu_data()
-        return MessageCoordsDTO(chat_id=data[0], message_id=data[1]) if data else None
+        if not snapshot_res.payload or not logs_res.payload:
+            raise ValueError("Incomplete data from backend")
 
-    # -----------------------------------------------------------
+        snapshot = snapshot_res.payload
 
-    async def leave_combat(self, char_id: int, state_data: dict, session: AsyncSession) -> CombatViewDTO:
-        """Логика выхода из боя: очистка и подготовка UI для возврата."""
-        session_context = state_data.get(FSM_CONTEXT_KEY, {})
-        # ИСПРАВЛЕНО: InGame.exploration
-        prev_state_str = session_context.get("previous_state", "InGame:exploration")
-
-        result = CombatViewDTO()
-
-        if prev_state_str == "ArenaState:menu":
-            result.new_state = "ArenaState:menu"
-            hub = HubEntryService(
-                char_id=char_id,
-                target_loc="svc_arena_main",
-                state_data=state_data,
-                session=session,
-                account_manager=self.account_manager,
-                arena_manager=self.arena_manager,
-                combat_manager=self.combat_manager,
-            )
-            text, kb, _ = await hub.render_hub_menu()
-            result.content = ViewResultDTO(text=text, kb=kb)
+        # Проверка статуса для правильного рендера
+        if snapshot.status == "waiting":
+            content_view = await self.flow_ui.render_waiting_screen(snapshot)
+        elif snapshot.player.is_dead and snapshot.status == "active":
+            content_view = await self.flow_ui.render_spectator_mode(snapshot)
         else:
-            result.new_state = "InGame:exploration"  # ИСПРАВЛЕНО: InGame.exploration
-            # Получаем текущую локацию через клиент
-            loc_dto = await self.exploration_client.get_current_location(char_id)
+            content_view = await self.content_ui.render_content("main", snapshot, {})
 
-            if loc_dto:
-                expl_ui = ExplorationUIService(state_data=state_data, char_id=char_id)
-                result.content = expl_ui.render_navigation(loc_dto)
+        menu_view = await self.menu_ui.render_menu("log", logs_res.payload)
+
+        return UnifiedViewDTO(content=content_view, menu=menu_view)
+
+    # --- Handlers ---
+
+    async def handle_menu_event(self, user: User, callback_data: CombatMenuCallback) -> UnifiedViewDTO:
+        """
+        Обработка действий с верхним сообщением (Лог, Статус, Настройки).
+        Вход: CombatMenuCallback (page, refresh, info, settings).
+        """
+        char_id = await self.director.get_char_id()
+        if not char_id:
+            return self.error_orchestrator.view_session_expired(user.id, "CombatMenu")
+
+        # 1. LOG PAGINATION / REFRESH
+        if callback_data.action == "page" or callback_data.action == "refresh":
+            page = int(callback_data.value) if callback_data.value else 0
+
+            # Запрашиваем логи
+            task_logs = self.client.get_data(char_id, "logs", {"page": page})
+
+            # Если это Refresh, то обновляем и Дашборд тоже
+            task_snapshot = None
+            if callback_data.action == "refresh":
+                task_snapshot = self.client.get_snapshot(char_id)
+
+            if task_snapshot:
+                snapshot_res, logs_res = await asyncio.gather(task_snapshot, task_logs)
+
+                switch_result = await self.check_and_switch_state(snapshot_res)
+                if switch_result:
+                    return switch_result
+
+                if not snapshot_res.payload or not logs_res.payload:
+                    raise ValueError("Incomplete data")
+
+                snapshot = snapshot_res.payload
+
+                # Рендерим оба с учетом статуса
+                if snapshot.status == "waiting":
+                    content_view = await self.flow_ui.render_waiting_screen(snapshot)
+                elif snapshot.player.is_dead and snapshot.status == "active":
+                    content_view = await self.flow_ui.render_spectator_mode(snapshot)
+                else:
+                    manager = CombatStateManager(self.director.state)
+                    draft = await manager.get_payload()
+                    content_view = await self.content_ui.render_content("main", snapshot, draft)
+
+                menu_view = await self.menu_ui.render_menu("log", logs_res.payload)
+                return UnifiedViewDTO(content=content_view, menu=menu_view)
             else:
-                result.content = ViewResultDTO(text="Ошибка загрузки локации.")
+                # Только логи (пагинация)
+                response = await task_logs
+                if not response.payload:
+                    raise ValueError("No logs data")
+                menu_view = await self.menu_ui.render_menu("log", response.payload)
+                return UnifiedViewDTO(menu=menu_view)
 
-        menu_service = MenuService(
-            game_stage="in_game", state_data=state_data, session=session, account_manager=self.account_manager
+        # 2. INFO (Target Info)
+        elif callback_data.action == "info":
+            target_id = callback_data.value
+            response = await self.client.get_data(char_id, "info", {"target_id": target_id})
+
+            menu_view = await self.menu_ui.render_menu("info", response.payload)
+            return UnifiedViewDTO(menu=menu_view)
+
+        # 3. SETTINGS (Toggle Grid / Auto)
+        elif callback_data.action == "settings":
+            pass
+
+        return UnifiedViewDTO()
+
+    async def handle_control_event(
+        self, user: User, callback_data: CombatControlCallback, manager: CombatStateManager
+    ) -> UnifiedViewDTO:
+        """
+        Единая точка входа для событий 'c_ctrl' (Нижнее сообщение).
+        Маршрутизирует действие в зависимости от action.
+        """
+
+        # 1. CLICKS ON GRID (Зоны атаки/защиты)
+        if callback_data.action == "zone":
+            return await self._handle_zone_click(user, callback_data, manager)
+
+        # 2. NAVIGATION (Смена вкладок клавиатуры)
+        elif callback_data.action == "nav":
+            return await self._handle_navigation(user, callback_data, manager)
+
+        # 3. PICKING ITEMS/SKILLS (Выбор внутри вкладки)
+        elif callback_data.action == "pick":
+            return await self._handle_entity_pick(user, callback_data, manager)
+
+        # 4. FALLBACK / ERROR
+        return self.error_orchestrator.create_error_view(
+            error_key=ErrorKeys.UNKNOWN_ERROR, user_id=user.id, source=f"combat_control:{callback_data.action}"
         )
-        m_text, m_kb = await menu_service.get_data_menu()
-        result.menu = ViewResultDTO(text=m_text, kb=m_kb)
 
-        return result
-
-    async def use_item(self, session_id: str, char_id: int, item_id: int, state_data: dict) -> CombatViewDTO:
-        """Использование предмета в бою."""
-        success, msg = await self.client.use_consumable(session_id, char_id, item_id)
-
-        ui = self._get_ui(state_data)
-        snapshot = await self.client.get_snapshot(session_id, char_id)
-
-        menu_view = await ui.render_items_menu(snapshot)
-
-        return CombatViewDTO(menu=menu_view, alert_text=msg)
-
-    async def toggle_zone(
-        self, session_id: str, char_id: int, layer: str, zone_id: str, state_data: dict
-    ) -> CombatViewDTO:
-        """Переключение зоны атаки/защиты."""
-        selection: dict[str, list[str]] = state_data.get("combat_selection", {"atk": [], "def": []})
-        import copy
-
-        new_selection = copy.deepcopy(selection)
-
-        current_list = new_selection.get(layer, [])
-
-        if zone_id in current_list:
-            current_list.remove(zone_id)
-        else:
-            current_list.clear()
-            current_list.append(zone_id)
-
-        new_selection[layer] = current_list
-
-        ui = self._get_ui(state_data)
-        snapshot = await self.client.get_snapshot(session_id, char_id)
-        content_view = await self._render_by_status(snapshot, new_selection, ui)
-
-        return CombatViewDTO(content=content_view, fsm_update={"combat_selection": new_selection})
-
-    async def select_ability(self, session_id: str, char_id: int, ability_id: str, state_data: dict) -> CombatViewDTO:
-        """Выбор способности."""
-        ui = self._get_ui(state_data)
-        snapshot = await self.client.get_snapshot(session_id, char_id)
-        menu_view = await ui.render_skills_menu(snapshot)
-
-        return CombatViewDTO(menu=menu_view, fsm_update={"combat_selected_ability": ability_id})
-
-    async def get_dashboard_view(
-        self, session_id: str, char_id: int, selection: dict, state_data: dict
-    ) -> CombatViewDTO:
+    async def handle_flow_event(self, user: User, callback_data: CombatFlowCallback) -> tuple[UnifiedViewDTO, bool]:
         """
-        Точка входа для Refresh и первого отображения.
+        Обработка глобальных действий (Submit, Leave).
+        Возвращает (UnifiedViewDTO, is_waiting).
         """
-        ui = self._get_ui(state_data)
-        snapshot = await self.client.get_snapshot(session_id, char_id)
+        char_id = await self.director.get_char_id()
+        if not char_id:
+            return self.error_orchestrator.view_session_expired(user.id, "CombatFlow"), False
 
-        content_view = await self._render_by_status(snapshot, selection, ui)
-        log_view = await ui.render_combat_log(snapshot, page=0)
+        if callback_data.action == "submit":
+            # 1. Сбор данных из FSM (Draft)
+            manager = CombatStateManager(self.director.state)
+            move_data = await manager.get_move_data()
 
-        target_id = snapshot.current_target.char_id if snapshot.current_target else None
+            # 2. Отправка хода
+            response = await self.client.register_move(char_id, 0, move_data)
 
-        return CombatViewDTO(target_id=target_id, content=content_view, menu=log_view)
+            # 3. Проверка смены стейта
+            switch_result = await self.check_and_switch_state(response)
+            if switch_result:
+                return switch_result, False
 
-    async def handle_submit(
-        self, session_id: str, char_id: int, move: CombatMoveDTO, state_data: dict
-    ) -> CombatViewDTO:
-        """
-        Логика подтверждения хода.
-        """
-        ui = self._get_ui(state_data)
-        await self.client.register_move(session_id, char_id, move.target_id, move.model_dump())
-        snapshot = await self.client.get_snapshot(session_id, char_id)
+            if not response.payload:
+                raise ValueError("No snapshot data")
 
-        content_view = await self._render_by_status(snapshot, {}, ui)
-        log_view = await ui.render_combat_log(snapshot, page=0)
+            snapshot = response.payload
 
-        target_id = snapshot.current_target.char_id if snapshot.current_target else None
+            # Очистка драфта после успешного хода
+            await manager.clear_draft()
 
-        return CombatViewDTO(target_id=target_id, content=content_view, menu=log_view)
+            # Если статус waiting -> возвращаем Waiting View и флаг True
+            if snapshot.status == "waiting":
+                view = await self.flow_ui.render_waiting_screen(snapshot)
+                return UnifiedViewDTO(content=view), True
+            else:
+                # Если статус active -> показываем новый ход и флаг False
+                # Проверка на смерть
+                if snapshot.player.is_dead:
+                    content_view = await self.flow_ui.render_spectator_mode(snapshot)
+                else:
+                    content_view = await self.content_ui.render_content("main", snapshot, {})
+                return UnifiedViewDTO(content=content_view), False
 
-    async def check_combat_status(self, session_id: str, char_id: int, state_data: dict) -> CombatViewDTO | None:
+        elif callback_data.action == "leave":
+            # Выход из боя (сдаться или просто выйти, если бой окончен)
+            # Пока просто переключаем стейт на LOBBY (заглушка)
+            return await self.director.set_scene(GameState.LOBBY, None), False
+
+        return UnifiedViewDTO(), False
+
+    async def check_combat_status(self) -> tuple[UnifiedViewDTO, bool]:
         """
         Метод для поллинга.
+        Возвращает (UnifiedViewDTO, is_waiting).
         """
-        snapshot = await self.client.get_snapshot(session_id, char_id)
+        char_id = await self.director.get_char_id()
+        if not char_id:
+            return UnifiedViewDTO(), False  # Error
 
-        if snapshot.status == "waiting":
-            return None
+        # Запрашиваем снапшот и логи
+        task_snapshot = self.client.get_snapshot(char_id)
+        task_logs = self.client.get_data(char_id, "logs", {"page": 0})
 
-        ui = self._get_ui(state_data)
-        content_view = await self._render_by_status(snapshot, {}, ui)
-        log_view = await ui.render_combat_log(snapshot, page=0)
+        snapshot_res, logs_res = await asyncio.gather(task_snapshot, task_logs)
 
-        target_id = snapshot.current_target.char_id if snapshot.current_target else None
+        # Проверка смены стейта
+        switch_result = await self.check_and_switch_state(snapshot_res)
+        if switch_result:
+            return switch_result, False
 
-        return CombatViewDTO(target_id=target_id, content=content_view, menu=log_view)
+        if not snapshot_res.payload or not logs_res.payload:
+            # Если данных нет, считаем что ждем (или ошибка)
+            return UnifiedViewDTO(), True
 
-    async def get_menu_view(self, session_id: str, char_id: int, menu_type: str, state_data: dict) -> ViewResultDTO:
-        """Отрисовка подменю (скиллы/вещи)."""
-        ui = self._get_ui(state_data)
-        snapshot = await self.client.get_snapshot(session_id, char_id)
-        if menu_type == "skills":
-            return await ui.render_skills_menu(snapshot)
+        snapshot = snapshot_res.payload
+
+        if snapshot.status == "active":
+            # Бой активен -> рендерим Main (или Spectator)
+            if snapshot.player.is_dead:
+                content_view = await self.flow_ui.render_spectator_mode(snapshot)
+            else:
+                content_view = await self.content_ui.render_content("main", snapshot, {})
+
+            menu_view = await self.menu_ui.render_menu("log", logs_res.payload)
+            return UnifiedViewDTO(content=content_view, menu=menu_view), False
+
+        # Waiting -> рендерим Waiting (с обновленным логом)
+        content_view = await self.flow_ui.render_waiting_screen(snapshot)
+        menu_view = await self.menu_ui.render_menu("log", logs_res.payload)
+        return UnifiedViewDTO(content=content_view, menu=menu_view), True
+
+    def get_submit_poller(
+        self, user: User, callback: CombatFlowCallback
+    ) -> Callable[[], Awaitable[tuple[UnifiedViewDTO, bool]]]:
+        """
+        Возвращает функцию-поллер для анимации.
+        Первый вызов -> Submit.
+        Последующие -> Check Status.
+        """
+        is_first_run = True
+
+        async def poller() -> tuple[UnifiedViewDTO, bool]:
+            nonlocal is_first_run
+            if is_first_run:
+                is_first_run = False
+                return await self.handle_flow_event(user, callback)
+            else:
+                return await self.check_combat_status()
+
+        return poller
+
+    # --- Internal Logic ---
+
+    async def _handle_zone_click(
+        self, user: User, event: CombatControlCallback, manager: CombatStateManager
+    ) -> UnifiedViewDTO:
+        """
+        Обработка клика по зоне.
+        Обновляет FSM -> Запрашивает Snapshot/Logs -> Рендерит Main Dashboard.
+        """
+        # 1. WRITE (Redis): Мгновенная фиксация выбора (Draft)
+        await manager.toggle_zone(layer=event.layer, zone_id=event.value)
+
+        # Подготовка данных
+        char_id = await self.director.get_char_id()
+        if not char_id:
+            return self.error_orchestrator.view_session_expired(user.id, "CombatZone")
+
+        # 2. NETWORK (Parallel Fetch)
+        task_snapshot = self.client.get_snapshot(char_id)
+        task_logs = self.client.get_data(char_id, "logs", {"page": 0})
+
+        snapshot_res, logs_res = await asyncio.gather(task_snapshot, task_logs)
+
+        # Проверка смены стейта
+        switch_result = await self.check_and_switch_state(snapshot_res)
+        if switch_result:
+            return switch_result
+
+        if not snapshot_res.payload or not logs_res.payload:
+            raise ValueError("Incomplete data from backend")
+
+        # 3. UI RENDER
+        draft_state = await manager.get_payload()
+
+        snapshot = snapshot_res.payload
+        if snapshot.player.is_dead and snapshot.status == "active":
+            content_view = await self.flow_ui.render_spectator_mode(snapshot)
         else:
-            return await ui.render_items_menu(snapshot)
+            content_view = await self.content_ui.render_content(screen="main", snapshot=snapshot, selection=draft_state)
 
-    async def get_log_view(self, session_id: str, char_id: int, page: int, state_data: dict) -> ViewResultDTO:
-        """Отрисовка лога боя."""
-        ui = self._get_ui(state_data)
-        snapshot = await self.client.get_snapshot(session_id, char_id)
-        return await ui.render_combat_log(snapshot, page)
+        menu_view = await self.menu_ui.render_menu(view_type="log", data=logs_res.payload)
 
-    async def start_new_battle(
-        self, players: list[int], enemies: list[int], state_data: dict
-    ) -> tuple[str, int | None, str, InlineKeyboardMarkup]:
-        """Начинает новый бой и возвращает начальный дашборд."""
-        ui = self._get_ui(state_data)
-        snapshot = await self.client.start_battle(players, enemies)
+        return UnifiedViewDTO(content=content_view, menu=menu_view)
 
-        view = await self._render_by_status(snapshot, {}, ui)
-
-        target_id = snapshot.current_target.char_id if snapshot.current_target else None
-        # Здесь возвращаем кортеж, так как это фабричный метод
-        # Mypy ругался на Optional[InlineKeyboardMarkup], но ViewResultDTO.kb может быть None.
-        # Однако, сигнатура требует InlineKeyboardMarkup.
-        # Если view.kb is None, это проблема.
-        # Но в start_battle мы ожидаем, что клавиатура будет.
-        # Если нет, вернем пустую или заглушку.
-        kb = view.kb if view.kb else InlineKeyboardMarkup(inline_keyboard=[])
-        return snapshot.session_id, target_id, view.text, kb
-
-    async def _render_by_status(
-        self, snapshot: CombatDashboardDTO, selection: dict, ui: CombatUIService
-    ) -> ViewResultDTO:
+    async def _handle_navigation(
+        self, user: User, event: CombatControlCallback, manager: CombatStateManager
+    ) -> UnifiedViewDTO:
         """
-        Внутренний 'решала'. Возвращает DTO.
+        Обработка навигации (Main <-> Skills <-> Items).
+        Запрашивает Snapshot/Logs -> Рендерит нужный экран.
         """
-        if snapshot.status == "finished":
-            return await ui.render_results(snapshot)
-        elif snapshot.player.hp_current <= 0:
-            return await ui.render_spectator_mode(snapshot)
-        elif snapshot.status == "waiting":
-            return await ui.render_waiting_screen(snapshot)
-        else:
-            return await ui.render_dashboard(snapshot, selection)
+        char_id = await self.director.get_char_id()
+        if not char_id:
+            return self.error_orchestrator.view_session_expired(user.id, "CombatNav")
+
+        # 2. NETWORK (Parallel Fetch)
+        task_snapshot = self.client.get_snapshot(char_id)
+        task_logs = self.client.get_data(char_id, "logs", {"page": 0})
+
+        snapshot_res, logs_res = await asyncio.gather(task_snapshot, task_logs)
+
+        switch_result = await self.check_and_switch_state(snapshot_res)
+        if switch_result:
+            return switch_result
+
+        if not snapshot_res.payload or not logs_res.payload:
+            raise ValueError("Incomplete data from backend")
+
+        # 3. UI RENDER
+        draft_state = await manager.get_payload()
+
+        content_view = await self.content_ui.render_content(
+            screen=event.value, snapshot=snapshot_res.payload, selection=draft_state
+        )
+
+        menu_view = await self.menu_ui.render_menu(view_type="log", data=logs_res.payload)
+
+        return UnifiedViewDTO(content=content_view, menu=menu_view)
+
+    async def _handle_entity_pick(
+        self, user: User, event: CombatControlCallback, manager: CombatStateManager
+    ) -> UnifiedViewDTO:
+        """
+        Обработка выбора скилла или предмета.
+        Skill -> FSM -> Main.
+        Item -> Instant Action -> Main.
+        """
+        char_id = await self.director.get_char_id()
+        if not char_id:
+            return self.error_orchestrator.view_session_expired(user.id, "CombatPick")
+
+        if event.layer == "abil":
+            # Выбор скилла (Draft)
+            await manager.set_ability(event.value)
+
+            # Запрашиваем данные для возврата на главную
+            task_snapshot = self.client.get_snapshot(char_id)
+            task_logs = self.client.get_data(char_id, "logs", {"page": 0})
+
+            snapshot_res, logs_res = await asyncio.gather(task_snapshot, task_logs)
+
+            switch_result = await self.check_and_switch_state(snapshot_res)
+            if switch_result:
+                return switch_result
+
+            if not snapshot_res.payload or not logs_res.payload:
+                raise ValueError("Incomplete data")
+
+            # Рендер Main
+            draft_state = await manager.get_payload()
+            content_view = await self.content_ui.render_content("main", snapshot_res.payload, draft_state)
+            menu_view = await self.menu_ui.render_menu("log", logs_res.payload)
+
+            return UnifiedViewDTO(content=content_view, menu=menu_view)
+
+        elif event.layer == "item":
+            # Используем предмет (Instant Action)
+            item_id = int(event.value)
+            response = await self.client.perform_action(char_id, "use_item", {"item_id": item_id})
+
+            if not response.payload:
+                raise ValueError("No action result")
+
+            # Запрашиваем логи
+            task_logs = self.client.get_data(char_id, "logs", {"page": 0})
+            logs_res = await task_logs
+
+            # Рендер Main
+            snapshot = response.payload.updated_snapshot
+            if not snapshot:
+                snap_res = await self.client.get_snapshot(char_id)
+                snapshot = snap_res.payload
+
+            if not snapshot:
+                raise ValueError("No snapshot")
+
+            draft_state = await manager.get_payload()
+            content_view = await self.content_ui.render_content("main", snapshot, draft_state)
+            menu_view = await self.menu_ui.render_menu("log", logs_res.payload)
+
+            return UnifiedViewDTO(content=content_view, menu=menu_view)
+
+        return UnifiedViewDTO()

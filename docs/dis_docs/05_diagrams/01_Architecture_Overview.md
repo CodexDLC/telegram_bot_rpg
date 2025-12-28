@@ -1,141 +1,200 @@
-# Architecture Overview
+# Architecture Overview: Entity Map & Data Flow
 
-## 1. The Big Picture (Global Flow)
-Общая схема взаимодействия слоев. Каждый слой изолирован и общается только с соседями.
+Этот документ описывает структуру проекта и потоки данных.
+
+---
+
+## 1. General Architecture (Общая Схема)
+Глобальные потоки данных между слоями.
 
 ```mermaid
 graph TD
-    %% --- GLOBAL BLOCKS ---
-    Bot["Bot App Layer"]
-    Client["Client Bridge Layer"]
-    Core["Game Core Layer"]
-    Data["Data Layer (Redis/DB)"]
+    %% --- BLOCKS ---
+    Bot["1. Bot Application Layer"]
+    Gateway["2. Gateway Layer"]
+    Core["3. Game Core Layer"]
+    Data["4. Data Access Layer"]
 
-    %% --- CONNECTIONS ---
-    Bot -->|"1. User Action"| Client
-    Client -->|"2. Business Request"| Core
+    %% --- DOWNSTREAM (Request) ---
+    Bot -->|"1. Action Request"| Gateway
+    Gateway -->|"2. Routed Request"| Core
     Core -->|"3. CRUD Operations"| Data
-    
-    Data -.->|"4. Data"| Core
-    Core -.->|"5. Result DTO"| Client
-    Client -.->|"6. View Model"| Bot
+
+    %% --- UPSTREAM (Response) ---
+    Data -.->|"4. Domain Entities"| Core
+    Core -.->|"5. CoreResponseDTO"| Gateway
+    Gateway -.->|"6. CoreResponseDTO"| Bot
 ```
 
 ---
 
-## 2. Layer Details (Current Monolith)
+## 2. Layer Details (Детализация Слоев)
 
-### 2.1. Bot Layer (Presentation)
-Отвечает за Telegram API, FSM и отрисовку (View).
+### 2.1. Bot Application Layer (Presentation)
+Слой представления.
 
 ```mermaid
 graph TD
-    Input["Telegram Update"]
+    %% --- INPUT ---
+    User((User)) -->|"1. Input"| Handler["Handler"]
+    
+    %% --- LOGIC ---
+    subgraph Logic_Scope ["Logic & Transport"]
+        direction TB
+        Handler -->|"2. handle()"| BotOrch["BotOrchestrator"]
+        BotOrch <-->|"3. Request/Response"| Gateway["Gateway Layer"]
+    end
 
+    %% --- RENDERING ---
+    subgraph Render_Scope ["Rendering Engine"]
+        direction TB
+        BotOrch -->|"4. Check State"| Decision{Changed?}
+        
+        Decision -->|Yes| Director["GameDirector"]
+        Director -->|"5a. Switch & Render"| UIService["UIService"]
+        
+        Decision -->|"No: 5b. Update View"| UIService
+    end
+
+    %% --- OUTPUT ---
+    UIService -.->|"6. ViewDTO"| BotOrch
+    BotOrch -.->|"7. UnifiedViewDTO"| Handler
+    Handler -->|"8. send()"| Sender["ViewSender"]
+    Sender -->|"9. Update UI"| User
+```
+
+### 2.2. Gateway Layer (Transport Bridge)
+Слой транспорта.
+
+#### Phase 1: Current Implementation (Monolith)
+Клиент выступает абстрактной прослойкой.
+
+```mermaid
+graph TD
+    %% --- TOP: BOT ---
     subgraph Bot_Layer ["Bot Layer"]
-        Handler["Handler / Middleware"]
-        Orch["Bot Orchestrator"]
-        UI["UI Service (Renderer)"]
+        BotOrch["BotOrchestrator"]
     end
 
-    Output["NEXT: Client Layer"]
-
-    Input --> Handler
-    Handler --> Orch
-    Orch -->|"Call Client"| Output
-    
-    Output -.->|"DTO"| Orch
-    Orch -->|"Render"| UI
-    UI -.->|"Message"| Handler
-```
-
-### 2.2. Client Layer (The Bridge)
-Изолирует Бот от Ядра. Скрывает сложность DI и преобразует данные.
-
-```mermaid
-graph TD
-    Input["PREV: Bot Layer"]
-
-    subgraph Client_Layer ["Client Layer"]
-        Client["Core Client"]
-        DTO["DTO Converter"]
+    %% --- MIDDLE: CLIENT (The Bridge) ---
+    subgraph Client_Interface ["Client Interface (Abstract Bridge)"]
+        style Client_Interface fill:#eee,stroke:#999,stroke-dasharray: 5 5
+        ApiClient["ApiClient"]
     end
 
-    Output["NEXT: Game Core Layer"]
-
-    Input -->|"Method Call"| Client
-    Client -->|"Prepare Args"| DTO
-    Client -->|"Call Core"| Output
-    
-    Output -.->|"Result"| Client
-    Client -.->|"Return"| Input
-```
-
-### 2.3. Game Core Layer (Business Logic)
-Чистая бизнес-логика. Правила игры, расчеты, управление состоянием.
-
-```mermaid
-graph TD
-    Input["PREV: Client Layer"]
-
-    subgraph Core_Layer ["Game Core Layer"]
-        CoreOrch["Core Orchestrator"]
-        Service["Domain Service"]
-        Logic["Logic / Calculator"]
-        Manager["Manager / Repo"]
-    end
-
-    Output["NEXT: Data Layer"]
-
-    Input --> CoreOrch
-    CoreOrch --> Service
-    Service --> Logic
-    Service --> Manager
-    Manager -->|"Read/Write"| Output
-    
-    Output -.->|"Data"| Manager
-    Service -.->|"Result"| CoreOrch
-    CoreOrch -.->|"Response DTO"| Input
-```
-
----
-
-## 3. Target Architecture (HTTP API Microservices)
-Целевая архитектура при разделении на микросервисы (Bot + Core API).
-
-```mermaid
-graph TD
-    %% --- BOT SIDE ---
-    subgraph Bot_App ["Bot Application"]
-        Handler["Handler"]
-        BotOrch["Bot Orchestrator"]
-        HttpClient["HTTP Client (httpx)"]
-    end
-
-    %% --- NETWORK ---
-    Network["HTTP / JSON"]
-
-    %% --- CORE SIDE ---
-    subgraph Core_App ["Core Application (FastAPI)"]
-        Router["API Router (Controller)"]
-        CoreOrch["Core Orchestrator"]
-        Logic["Business Logic"]
+    %% --- BOTTOM: CORE ---
+    subgraph Core_Layer ["Core Layer"]
+        CoreRouter["CoreRouter"]
+        CoreOrch["CoreOrchestrator"]
     end
 
     %% --- FLOW ---
-    Handler -->|"Action"| BotOrch
-    BotOrch -->|"call_api()"| HttpClient
-    HttpClient -->|"POST /domain/action"| Network
+    BotOrch -->|"1. await client.method()"| ApiClient
     
-    Network -->|"Request"| Router
-    Router -->|"Validate DTO"| Router
-    Router -->|"handle_action()"| CoreOrch
-    CoreOrch -->|"Execute"| Logic
+    ApiClient -->|"2. Direct Call"| CoreRouter
+    CoreRouter -->|"3. Route"| CoreOrch
     
-    Logic -.->|"Result"| CoreOrch
-    CoreOrch -.->|"Response DTO"| Router
-    Router -.->|"JSON Response"| Network
+    CoreOrch -.->|"4. Return DTO"| CoreRouter
+    CoreRouter -.->|"5. Return DTO"| ApiClient
     
-    Network -.->|"Response"| HttpClient
-    HttpClient -.->|"DTO"| BotOrch
+    ApiClient -.->|"6. Return DTO"| BotOrch
+```
+
+#### Phase 2: Target Architecture (Microservices)
+Сетевое взаимодействие через HTTP.
+
+```mermaid
+graph LR
+    %% --- CLIENT SIDE ---
+    subgraph Bot_Side ["Bot Service"]
+        direction TB
+        ApiClient["ApiClient"] -->|"1. Call"| HttpClient["HTTP Client"]
+    end
+
+    %% --- NETWORK ---
+    HttpClient <-->|"2. JSON / HTTP"| Network((Internet))
+
+    %% --- SERVER SIDE ---
+    subgraph Core_Side ["Core Service"]
+        direction TB
+        Network <-->|"3. Request"| FastAPI["FastAPI Router"]
+        FastAPI <-->|"4. Call Logic"| CoreOrch["CoreOrchestrator"]
+    end
+```
+
+### 2.3. Game Core Layer (Business Logic)
+Слой бизнес-логики.
+
+#### A. Structure (Компоненты и Зависимости)
+Кто кого содержит и использует.
+
+```mermaid
+graph TD
+    subgraph Core_Module ["Domain Module (e.g. Combat)"]
+        CoreOrch["CoreOrchestrator<br/>(Facade)"]
+        
+        subgraph Data_Mgmt ["Data Management"]
+            SessMgr["SessionManager"]
+            RedisMgr["SpecificRedisManager<br/>(Singleton from Common)"]
+        end
+        
+        Service["DomainService<br/>(Pure Logic)"]
+    end
+    
+    CoreRouter["CoreRouter<br/>(Mediator)"]
+    Repo["Repository<br/>(DB)"]
+
+    %% Dependencies
+    CoreOrch --> SessMgr
+    CoreOrch --> Service
+    CoreOrch -.-> CoreRouter
+    
+    SessMgr --> RedisMgr
+    SessMgr --> Repo
+```
+
+#### B. Execution Flow (Поток выполнения)
+Как обрабатывается один запрос.
+
+```mermaid
+graph TD
+    %% --- ACTORS ---
+    Gateway["Gateway"]
+    CoreOrch["CoreOrchestrator"]
+    SessMgr["SessionManager"]
+    Service["DomainService"]
+    
+    %% --- 1. LOAD ---
+    Gateway -->|"1. Action"| CoreOrch
+    CoreOrch -->|"2. get_session()"| SessMgr
+    SessMgr <-->|"3. Load (Redis/DB)"| Data[("Data Layer")]
+    SessMgr -.->|"4. Session Object"| CoreOrch
+    
+    %% --- 2. EXECUTE ---
+    CoreOrch -->|"5. Execute Logic"| Service
+    Service -.->|"6. Result"| CoreOrch
+    
+    %% --- 3. SAVE ---
+    CoreOrch -->|"7. save_session()"| SessMgr
+    SessMgr -->|"8. Persist (Redis/DB)"| Data
+    
+    %% --- 4. RETURN ---
+    CoreOrch -.->|"9. CoreResponseDTO"| Gateway
+```
+
+### 2.4. Data Access Layer (Persistence)
+Слой данных.
+
+```mermaid
+graph TD
+    subgraph Data_Layer ["Data Access Layer"]
+        Repo["Repository"]
+        Redis["RedisService"]
+    end
+
+    DB[("PostgreSQL")]
+    Cache[("Redis")]
+
+    Repo <-->|"SQL / Rows"| DB
+    Redis <-->|"Get / Set"| Cache
 ```

@@ -3,7 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.bot.core_client.exploration import ExplorationClient
 from apps.bot.ui_service.auth.dto.auth_view_dto import AuthViewDTO
-from apps.bot.ui_service.combat.combat_bot_orchestrator import CombatBotOrchestrator
+
+# from apps.bot.ui_service.combat.combat_bot_orchestrator import CombatBotOrchestrator
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.mesage_menu.menu_service import MenuService
@@ -115,25 +116,28 @@ class AuthBotOrchestrator:
             combat_session_id = ac_data.get(Af.COMBAT_SESSION_ID) if ac_data else None
 
             if combat_session_id:
-                combat_orchestrator = CombatBotOrchestrator(
-                    client=self.combat_client,
-                    account_manager=self.account_manager,
-                    exploration_client=self.exploration_client,
-                    arena_manager=self.arena_manager,
-                    combat_manager=self.combat_manager,
-                    world_manager=self.world_manager,
-                )
+                # combat_orchestrator = CombatBotOrchestrator(
+                #     client=self.combat_client,
+                #     account_manager=self.account_manager,
+                #     exploration_client=self.exploration_client,
+                #     arena_manager=self.arena_manager,
+                #     combat_manager=self.combat_manager,
+                #     world_manager=self.world_manager,
+                # )
 
                 # Получаем вид боя
-                combat_view = await combat_orchestrator.get_dashboard_view(combat_session_id, char_id, {}, state_data)
+                # combat_view = await combat_orchestrator.get_dashboard_view(combat_session_id, char_id, {}, state_data)
 
-                result.content = combat_view.content
-                result.menu = combat_view.menu  # Переопределяем меню, так как в бою оно свое (лог)
+                # result.content = combat_view.content
+                # result.menu = combat_view.menu  # Переопределяем меню, так как в бою оно свое (лог)
                 result.new_state = "InGame:combat"
                 result.fsm_update = {Af.COMBAT_SESSION_ID: combat_session_id}
 
-                if combat_view.target_id:
-                    result.fsm_update["combat_target_id"] = combat_view.target_id
+                # if combat_view.target_id:
+                #     result.fsm_update["combat_target_id"] = combat_view.target_id
+
+                # Заглушка для восстановления боя (пока не перепишем Auth)
+                result.content = ViewResultDTO(text="⚔️ <b>Бой продолжается!</b>\nНажмите 'Обновить' или 'В атаку'.")
 
         # ИСПРАВЛЕНИЕ: Добавлена проверка на "exploration" (и "world" для совместимости)
         elif game_stage in ("in_game", "world", GameState.EXPLORATION) or (

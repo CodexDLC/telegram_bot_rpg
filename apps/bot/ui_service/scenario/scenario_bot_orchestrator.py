@@ -1,103 +1,75 @@
-from aiogram.fsm.context import FSMContext
-from loguru import logger as log
+from typing import Any
+
+from aiogram.types import User
 
 from apps.bot.core_client.scenario_client import ScenarioClient
-from apps.bot.resources.keyboards.callback_data import ScenarioCallback
-from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
-from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
-from apps.bot.ui_service.scenario.dto.scenario_view_dto import ScenarioViewDTO
+from apps.bot.ui_service.base_bot_orchestrator import BaseBotOrchestrator
+from apps.bot.ui_service.dto.view_dto import UnifiedViewDTO
+from apps.bot.ui_service.error.error_bot_orchestrator import ErrorBotOrchestrator
 from apps.bot.ui_service.scenario.scenario_ui_service import ScenarioUIService
-from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.common.schemas_dto.game_state_enum import GameState
+from apps.common.schemas_dto.scenario_dto import ScenarioPayloadDTO
 
 
-class ScenarioBotOrchestrator:
+class ScenarioBotOrchestrator(BaseBotOrchestrator):
     """
     Оркестратор UI для системы сценариев.
     Координирует получение данных от Core и их отрисовку через UI-сервис.
     """
 
-    def __init__(self, client: ScenarioClient, account_manager: AccountManager):
+    def __init__(self, client: ScenarioClient):
+        super().__init__(expected_state=GameState.SCENARIO)
         self._client = client
-        self._account_manager = account_manager
+        self._ui_service = ScenarioUIService()
+        self._error_orchestrator = ErrorBotOrchestrator()
 
-    def get_content_coords(self, state_data: dict) -> MessageCoordsDTO | None:
-        """Возвращает координаты сообщения из FSM."""
-        session_context = state_data.get(FSM_CONTEXT_KEY, {})
-        if isinstance(session_context, dict):
-            message_content = session_context.get("message_content")
-            if isinstance(message_content, dict):
-                chat_id = message_content.get("chat_id")
-                message_id = message_content.get("message_id")
-                if chat_id and message_id:
-                    return MessageCoordsDTO(chat_id=chat_id, message_id=message_id)
-        return None
-
-    async def initialize_view(
-        self, char_id: int, callback_data: ScenarioCallback, state: FSMContext
-    ) -> ScenarioViewDTO:
+    async def process_entry_point(self, user: User, quest_key: str | None = None) -> Any:
         """
-        Запускает сценарий и возвращает его первую сцену.
+        Точка входа в сценарий.
         """
-        log.info(
-            f"ScenarioBotOrchestrator | action=initialize_view char_id={char_id} quest='{callback_data.quest_key}'"
-        )
+        # Получаем char_id из сессии через Директора
+        char_id = await self.director.get_char_id()
+        if not char_id:
+            return self._error_orchestrator.view_session_expired(user.id, "ScenarioEntry")
 
-        # 1. Получаем "обратный адрес"
-        prev_state = await state.get_state()
-        account_data = await self._account_manager.get_account_data(char_id)
+        if quest_key:
+            response = await self._client.initialize_scenario(char_id, quest_key)
+        else:
+            response = await self._client.resume_scenario(char_id)
 
-        prev_loc = "unknown"
-        if account_data:
-            prev_loc = str(account_data.get("location_id", "unknown"))
+        if result := await self.check_and_switch_state(response):
+            return result
 
-        # 2. Вызываем Core-оркестратор
-        response_dto = await self._client.initialize_scenario(
-            char_id, str(callback_data.quest_key), str(prev_state), prev_loc
-        )
+        return await self.render(response.payload)
 
-        if response_dto.status != "success":
-            error_content = ViewResultDTO(text=f"Ошибка запуска сценария: {response_dto.payload}")
-            return ScenarioViewDTO(content=error_content, is_terminal=True)
-
-        # 3. Рендерим сцену
-        ui_service = ScenarioUIService()
-        view_result = ui_service.render_scene(response_dto.payload)
-
-        return ScenarioViewDTO(
-            content=view_result,
-            is_terminal=response_dto.payload.is_terminal,
-            node_key=response_dto.payload.node_key,
-            extra_data=response_dto.payload.extra_data,
-        )
-
-    async def step_view(self, char_id: int, action_id: str) -> ScenarioViewDTO:
+    async def handle_action(self, user: User, action_id: str) -> Any:
         """
-        Обрабатывает выбор игрока и возвращает следующую сцену.
+        Обработка выбора игрока.
         """
-        log.info(f"ScenarioBotOrchestrator | action=step_view char_id={char_id} action_id='{action_id}'")
+        char_id = await self.director.get_char_id()
+        if not char_id:
+            return self._error_orchestrator.view_session_expired(user.id, "ScenarioAction")
 
-        response_dto = await self._client.step_scenario(char_id, action_id)
+        response = await self._client.step_scenario(char_id, action_id)
 
-        if response_dto.status != "success":
-            error_content = ViewResultDTO(text=f"Ошибка шага в сценарии: {response_dto.payload}")
-            return ScenarioViewDTO(content=error_content, is_terminal=True)
+        if result := await self.check_and_switch_state(response):
+            return result
 
-        ui_service = ScenarioUIService()
-        view_result = ui_service.render_scene(response_dto.payload)
+        return await self.render(response.payload)
 
-        return ScenarioViewDTO(
-            content=view_result,
-            is_terminal=response_dto.payload.is_terminal,
-            node_key=response_dto.payload.node_key,
-            extra_data=response_dto.payload.extra_data,
-        )
-
-    async def finalize_view(self, char_id: int) -> dict:
+    async def render(self, payload: Any) -> UnifiedViewDTO:
         """
-        Завершает сценарий и возвращает данные для возврата в мир.
+        Превращает ScenarioPayloadDTO в UnifiedViewDTO.
         """
-        log.info(f"ScenarioBotOrchestrator | action=finalize_view char_id={char_id}")
+        if isinstance(payload, ScenarioPayloadDTO):
+            view_result = self._ui_service.render_scene(payload)
+            return UnifiedViewDTO(menu=None, content=view_result, clean_history=False)
 
-        response_dict = await self._client.finalize_scenario(char_id)
+        if isinstance(payload, User):
+            # Пытаемся восстановить сессию
+            return await self.process_entry_point(payload)
 
-        return response_dict
+        # Если пришел неизвестный тип payload, возвращаем ошибку
+        # (но нам нужен user_id для генерации ошибки, а в render(payload) его может не быть)
+        # В этом случае кидаем исключение, так как это баг разработки, а не рантайм юзера
+        raise ValueError(f"Scenario render received invalid payload: {type(payload)}")

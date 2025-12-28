@@ -47,17 +47,18 @@ class ExplorationBotOrchestrator:
         if isinstance(result, EncounterDTO):
             # Автоматический вход в бой при засаде
             if result.status == DetectionStatus.AMBUSH:
-                try:
-                    enemy_id = int(result.encounter_id)
-                    snapshot = await self._combat_client.start_battle(players=[char_id], enemies=[enemy_id])
-                    return ExplorationViewDTO(
-                        new_state="InGame.combat",
-                        combat_session_id=snapshot.session_id,
-                        combat_target_id=snapshot.current_target.char_id if snapshot.current_target else None,
-                        alert_text="⚔️ ВАС АТАКОВАЛИ!",
-                    )
-                except ValueError:
-                    pass  # Если ID не число, показываем как обычную встречу
+                # try:
+                # enemy_id = int(result.encounter_id)
+                # snapshot = await self._combat_client.start_battle(players=[char_id], enemies=[enemy_id])
+                # return ExplorationViewDTO(
+                #     new_state="InGame.combat",
+                #     combat_session_id=snapshot.session_id,
+                #     combat_target_id=snapshot.current_target.char_id if snapshot.current_target else None,
+                #     alert_text="⚔️ ВАС АТАКОВАЛИ!",
+                # )
+                pass  # TODO: Fix start_battle call
+                # except ValueError:
+                #     pass  # Если ID не число, показываем как обычную встречу
 
             view = ui.render_encounter(result)
             return ExplorationViewDTO(content=view, encounter_id=result.encounter_id)
@@ -92,15 +93,16 @@ class ExplorationBotOrchestrator:
 
         if action == "attack":
             try:
-                enemy_id = int(target_id)
-                snapshot = await self._combat_client.start_battle(players=[char_id], enemies=[enemy_id])
+                # enemy_id = int(target_id)
+                # snapshot = await self._combat_client.start_battle(players=[char_id], enemies=[enemy_id])
 
-                return ExplorationViewDTO(
-                    new_state="InGame.combat",
-                    combat_session_id=snapshot.session_id,
-                    combat_target_id=snapshot.current_target.char_id if snapshot.current_target else None,
-                    alert_text="⚔️ Бой начинается!",
-                )
+                # return ExplorationViewDTO(
+                #     new_state="InGame.combat",
+                #     combat_session_id=snapshot.session_id,
+                #     combat_target_id=snapshot.current_target.char_id if snapshot.current_target else None,
+                #     alert_text="⚔️ Бой начинается!",
+                # )
+                return ExplorationViewDTO(content=ViewResultDTO(text="Ошибка: Бой временно недоступен (Refactoring)"))
 
             except (ValueError, TypeError):
                 return ExplorationViewDTO(content=ViewResultDTO(text="Ошибка ID цели"))

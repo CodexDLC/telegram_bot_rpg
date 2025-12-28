@@ -61,6 +61,22 @@ class RedisKeys:
         """
         return f"inv:session:{char_id}:data"
 
+    @staticmethod
+    def get_lobby_session_key(user_id: int) -> str:
+        """
+        Генерирует ключ для хранения данных сессии лобби (список персонажей).
+        Тип: STRING (JSON)
+        """
+        return f"lobby_session:{user_id}"
+
+    @staticmethod
+    def get_onboarding_draft_key(char_id: int) -> str:
+        """
+        Генерирует ключ для хранения черновика создания персонажа.
+        Тип: STRING (JSON)
+        """
+        return f"onboarding_draft:{char_id}"
+
     # --- Legacy Keys ---
 
     @staticmethod

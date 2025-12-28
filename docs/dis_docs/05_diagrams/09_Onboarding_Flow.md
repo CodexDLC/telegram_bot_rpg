@@ -1,148 +1,114 @@
 # Onboarding & Character Creation Flow
 
-## 1. Current Architecture (AS IS)
-Текущая реализация: "FSM as Database". Бот хранит черновик персонажа (имя, пол) в своем FSM и собирает итоговый объект через Payload Factory.
-**Проблема:** При смене клиента (например, на Web) прогресс создания потеряется, так как он привязан к FSM бота.
+Этот документ описывает архитектуру модуля **Onboarding** (Создание персонажа).
+Модуль следует стандарту "Тонкий Клиент" (см. `01_Architecture_Overview.md`).
+
+---
+
+## 1. Entity Map (Карта Сущностей)
+
+### 1.1. Bot Application Layer
+*   **Handler**: `onboarding_handler.py`. Обрабатывает колбэки и текстовый ввод (имя).
+*   **Orchestrator**: `OnboardingBotOrchestrator`. Управляет флагами рендеринга (нужно ли обновлять меню).
+*   **UI Service**: `OnboardingUIService`. Строит экраны (Приветствие, Ввод имени, Выбор пола).
+*   **Client**: `OnboardingClient`. Интерфейс для общения с Core.
+
+### 1.2. Game Core Layer
+*   **Orchestrator**: `OnboardingCoreOrchestrator`. Фасад модуля. Управляет шагами (Step Machine).
+*   **Session Manager**: `OnboardingSessionManager`. Хранит временный черновик (`OnboardingDraftDTO`) в Redis.
+*   **Domain Service**: `OnboardingService`. Отвечает за создание записи в БД (`create_shell`, `finalize`).
+*   **Router**: `CoreRouter`. Используется для перехода в Сценарий после завершения.
+
+---
+
+## 2. Data Flow: Step Transition (Смена шага)
+
+Пример: Пользователь вводит имя "Hero".
 
 ```mermaid
 graph TD
-    %% --- СЛОИ ---
-    subgraph Bot_Layer ["Bot Layer (Fat Logic)"]
-        Handler["OnboardingHandler"]
-        Orch["OnboardingBotOrchestrator"]
-        FSM["Aiogram FSM (Storage)"]
-        
-        subgraph UI_Components ["UI Components"]
-            UI["OnboardingUIService"]
-        end
-        
-        PayloadFactory["Payload Factory"]
-    end
-
-    subgraph Client_Layer ["Client Layer"]
-        Client["OnboardingClient"]
-    end
-
-    subgraph Core_Layer ["Core Layer (Stateless)"]
-        Service["OnboardingService"]
-        Factory["CharacterFactory"]
-    end
-
-    subgraph Data_Layer ["Data Layer"]
-        Repo["CharacterRepository"]
-    end
+    %% --- ACTORS ---
+    User((User))
+    Handler["Handler<br/>(text_handler)"]
+    BotOrch["OnboardingBotOrchestrator"]
+    Client["OnboardingClient"]
+    
+    CoreOrch["OnboardingCoreOrchestrator"]
+    SessMgr["OnboardingSessionManager"]
+    Redis["RedisService"]
 
     %% --- FLOW ---
+    User -->|"1. Text: 'Hero'"| Handler
+    Handler -->|"2. handle_text_input()"| BotOrch
+    BotOrch -->|"3. send_action('set_name', 'Hero')"| Client
     
-    %% 1. Input Handling
-    Handler -->|"Input: Name='Hero'"| Orch
-    Orch -->|"Save 'Hero'"| FSM
+    Client -->|"4. handle_action()"| CoreOrch
     
-    %% 2. Finalization (The Problem)
-    Handler -->|"Action: Finalize"| Orch
-    Orch -->|"Read All Data"| FSM
-    FSM -.->|"Name, Gender..."| Orch
-    Orch -->|"Construct Dict"| PayloadFactory
-    PayloadFactory -.->|"DTO"| Orch
+    %% --- LOGIC ---
+    CoreOrch -->|"5. get_draft()"| SessMgr
+    SessMgr -.->|"6. Draft (Step=NAME)"| CoreOrch
     
-    %% 3. Core Call
-    Orch -->|"create(DTO)"| Client
-    Client -->|"create"| Service
-    Service --> Factory
-    Factory --> Repo
-
-    %% --- Вертикальное выравнивание ---
-    Orch ~~~ Client ~~~ Service ~~~ Factory
+    CoreOrch -->|"7. Validate & Update Step"| CoreOrch
+    CoreOrch -->|"8. update_draft(Step=GENDER)"| SessMgr
+    SessMgr -->|"9. SET onboarding_draft:{uid}"| Redis
+    
+    %% --- RESPONSE ---
+    CoreOrch -.->|"10. CoreResponseDTO<br/>(State=ONBOARDING, Payload=ViewDTO)"| Client
+    Client -.->|"11. DTO"| BotOrch
+    
+    BotOrch -->|"12. render_view()"| BotOrch
+    BotOrch -.->|"13. UnifiedViewDTO"| Handler
+    Handler -->|"14. Send Message"| User
 ```
 
-## 2. Ideal Architecture (TO BE)
-Целевая архитектура: "Core Draft Session". Черновик персонажа хранится в Core (Redis). Бот просто отправляет инпуты.
-**Преимущество:** Мультиплатформенность. Можно начать создавать в Telegram, продолжить в Web.
+---
+
+## 3. Data Flow: Finalization (Завершение)
+
+Пользователь подтверждает создание. Происходит переход в игру.
 
 ```mermaid
 graph TD
-    %% --- СЛОИ ---
-    subgraph Bot_Layer ["Bot Layer (Thin Input)"]
-        Handler["OnboardingHandler"]
-        Orch["OnboardingBotOrchestrator"]
-        UI["OnboardingUIService"]
-    end
-
-    subgraph Client_Layer ["Client Layer"]
-        Client["OnboardingClient"]
-    end
-
-    subgraph Core_Layer ["Core Layer (Stateful Draft)"]
-        CoreOrch["OnboardingCoreOrchestrator"]
-        DraftMgr["DraftSessionManager"]
-        Validator["InputValidator"]
-        Factory["CharacterFactory"]
-    end
-
-    subgraph Data_Layer ["Data Layer"]
-        Redis["Redis - Draft Session"]
-        DB["PostgreSQL"]
-    end
+    %% --- ACTORS ---
+    User((User))
+    BotOrch["OnboardingBotOrchestrator"]
+    Director["GameDirector"]
+    Client["OnboardingClient"]
+    
+    CoreOrch["OnboardingCoreOrchestrator"]
+    Service["OnboardingService"]
+    Router["CoreRouter"]
+    ScenarioOrch["ScenarioCoreOrchestrator"]
 
     %% --- FLOW ---
+    User -->|"1. Click 'Confirm'"| BotOrch
+    BotOrch -->|"2. send_action('finalize')"| Client
+    Client -->|"3. handle_action()"| CoreOrch
     
-    %% 1. Input Handling
-    Handler -->|"Input: Name='Hero'"| Orch
-    Orch -->|"send_input('name', 'Hero')"| Client
-    Client -->|"input"| CoreOrch
+    %% --- PERSISTENCE ---
+    CoreOrch -->|"4. finalize_character()"| Service
+    Service -->|"5. UPDATE characters DB"| Service
     
-    %% 2. Core Logic
-    CoreOrch -->|"Validate"| Validator
-    CoreOrch -->|"Save to Draft"| DraftMgr
-    DraftMgr -->|"Update Hash"| Redis
+    %% --- ROUTING ---
+    CoreOrch -->|"6. router.get_initial_view(SCENARIO)"| Router
+    Router -->|"7. get_entry_point()"| ScenarioOrch
+    ScenarioOrch -.->|"8. ScenarioPayload"| Router
+    Router -.->|"9. Payload"| CoreOrch
     
-    %% 3. Finalization
-    Handler -->|"Action: Finalize"| Orch
-    Orch -->|"finalize()"| Client
-    Client -->|"finalize()"| CoreOrch
+    %% --- RESPONSE ---
+    CoreOrch -.->|"10. CoreResponseDTO<br/>(State=SCENARIO, Payload=ScenarioPayload)"| Client
+    Client -.->|"11. DTO"| BotOrch
     
-    CoreOrch -->|"Get Full Draft"| DraftMgr
-    DraftMgr -.->|"Draft Data"| CoreOrch
-    
-    CoreOrch -->|"Create"| Factory
-    Factory -->|"Save"| DB
-    CoreOrch -->|"Clear Draft"| DraftMgr
-
-    %% --- Вертикальное выравнивание ---
-    Orch ~~~ Client ~~~ CoreOrch ~~~ Redis
+    %% --- TRANSITION ---
+    BotOrch -->|"12. check_and_switch_state()"| BotOrch
+    BotOrch -->|"13. set_scene(SCENARIO)"| Director
+    Director -->|"14. ScenarioOrchestrator.render()"| Director
 ```
 
-## 3. API Optimization Strategy (Action Dispatcher)
-Как избежать создания сотен роутов. Используем один универсальный эндпоинт с полиморфным DTO.
+---
 
-```mermaid
-graph TD
-    subgraph Client_Side ["Client Side"]
-        Request["POST /onboarding/action"]
-        Body["Body: { action: 'set_name', value: 'Hero' }"]
-    end
+## 4. Key Decisions (Ключевые решения)
 
-    subgraph Core_API ["Core API Layer"]
-        Controller["OnboardingController"]
-        Dispatcher["ActionDispatcher"]
-    end
-
-    subgraph Handlers ["Internal Handlers"]
-        H1["SetNameHandler"]
-        H2["SetGenderHandler"]
-        H3["FinalizeHandler"]
-    end
-
-    %% --- FLOW ---
-    Request --> Controller
-    Body -.-> Controller
-    
-    Controller -->|"Validate Action Enum"| Dispatcher
-    
-    Dispatcher -->|"Switch(action)"| Dispatcher
-    Dispatcher -->|"Case 'set_name'"| H1
-    Dispatcher -->|"Case 'set_gender'"| H2
-    Dispatcher -->|"Case 'finalize'"| H3
-    
-    H1 -->|"Logic"| CoreOrch["Core Orchestrator"]
-```
+1.  **Draft Storage**: Черновик хранится в Redis (`onboarding_draft:{user_id}`) и живет 24 часа. Это позволяет не мусорить в основной БД недосозданными персонажами.
+2.  **Shell Creation**: При старте создается "болванка" персонажа в БД (`create_shell`), чтобы зарезервировать ID. Если пользователь бросит процесс, болванка останется (можно чистить кроном).
+3.  **Core Router**: Онбординг не знает деталей Сценария. Он просто просит Роутер: "Дай мне начальный экран Сценария для этого персонажа".

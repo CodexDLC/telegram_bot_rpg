@@ -1,11 +1,13 @@
 # apps/game_core/game_service/scenario_orchestrator/scenario_core_orchestrator.py
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.schemas_dto.scenario_dto import ScenarioPayloadDTO, ScenarioResponseDTO
+from apps.common.schemas_dto.core_response_dto import CoreResponseDTO, GameStateHeader
+from apps.common.schemas_dto.game_state_enum import GameState
+from apps.common.schemas_dto.scenario_dto import ScenarioPayloadDTO
 from apps.common.services.core_service.redis_fields import AccountFields as Af
 from apps.common.services.core_service.redis_key import RedisKeys
 
@@ -15,6 +17,9 @@ from apps.game_core.game_service.scenario_orchestrator.logic.scenario_director i
 from apps.game_core.game_service.scenario_orchestrator.logic.scenario_evaluator import ScenarioEvaluator
 from apps.game_core.game_service.scenario_orchestrator.logic.scenario_formatter import ScenarioFormatter
 from apps.game_core.game_service.scenario_orchestrator.logic.scenario_manager import ScenarioManager
+
+if TYPE_CHECKING:
+    from apps.game_core.game_service.core_router import CoreRouter
 
 
 class ScenarioCoreOrchestrator:
@@ -30,36 +35,42 @@ class ScenarioCoreOrchestrator:
         scenario_evaluator: ScenarioEvaluator,
         scenario_director: ScenarioDirector,
         scenario_formatter: ScenarioFormatter,
+        core_router: "CoreRouter | None" = None,
     ):
         self.manager = scenario_manager
         self.evaluator = scenario_evaluator
         self.director = scenario_director
         self.formatter = scenario_formatter
+        self.core_router = core_router
 
-    # --- 1. initialize_scenario (Старт) ---
+    # --- Protocol Implementation ---
 
-    async def initialize_scenario(
+    async def get_entry_point(self, char_id: int, action: str, context: dict[str, Any]) -> Any:
+        """
+        Единая точка входа (CoreOrchestratorProtocol).
+        """
+        if action == "initialize":
+            return await self.initialize_scenario_payload(
+                char_id, context.get("quest_key", ""), context.get("prev_state"), context.get("prev_loc")
+            )
+        elif action == "resume":
+            return await self.resume_scenario_payload(char_id)
+
+        raise ValueError(f"Unknown action for Scenario: {action}")
+
+    # --- Internal Logic (Returns Payload) ---
+
+    async def initialize_scenario_payload(
         self, char_id: int, quest_key: str, prev_state: str | None = None, prev_loc: str | None = None
-    ) -> ScenarioResponseDTO:
-        """Запуск сценария через Handler."""
+    ) -> ScenarioPayloadDTO:
+        """Внутренняя логика инициализации (возвращает Payload)."""
         log.info(f"Orchestrator | action=init char={char_id} quest={quest_key}")
 
         quest_master = await self.manager.get_quest_master(quest_key)
         if not quest_master:
             raise ValueError(f"Quest {quest_key} not found")
 
-        # Получаем сессию БД через репозиторий менеджера
         db_session = getattr(self.manager.repo, "session", None)
-        if not isinstance(db_session, AsyncSession):
-            # Если сессии нет или она не того типа, это проблема конфигурации
-            # Но для тестов или моков может быть None.
-            # Попробуем обработать это, но get_handler требует AsyncSession.
-            # Если repo это ORM репозиторий, у него есть session.
-            pass
-
-        # Фабрика хендлеров
-        # Мы предполагаем, что db_session валидна, если нет - get_handler может упасть или вернуть None
-        # Mypy ругается на Any | None, поэтому явно кастим или проверяем
         if db_session is None:
             raise ValueError("Database session is not available in ScenarioManager repo")
 
@@ -67,92 +78,41 @@ class ScenarioCoreOrchestrator:
         if not handler:
             raise ValueError(f"Scenario Handler for '{quest_key}' not found")
 
-        # Хендлер создает начальный контекст и регистрирует сессию
-        context = await handler.on_initialize(char_id, quest_master, prev_state, prev_loc)
+        # Генерируем session_id
+        session_id = uuid.uuid4()
+        quest_master["session_id"] = str(session_id)
 
-        # Инициализируем список посещенных нод
+        context = await handler.on_initialize(char_id, quest_master, prev_state, prev_loc)
         context["visited_nodes"] = []
 
-        # Получаем данные стартовой ноды
         start_node_key = str(context.get("current_node_key"))
         node_data = await self.manager.get_node(quest_key, start_node_key)
-
-        # Добавляем стартовую ноду в посещенные
         context["visited_nodes"].append(start_node_key)
 
-        # Первичный бэкап (теперь обязателен при старте)
-        session_id_str = str(context.get("scenario_session_id"))
-        session_id = uuid.UUID(session_id_str) if session_id_str else uuid.uuid4()
+        # Регистрируем состояние аккаунта
+        await self.manager.update_account_state(char_id, quest_key, str(session_id))
+
+        # Сохраняем в Redis
+        await self.manager.save_session_context(char_id, context)
+
+        # Бэкап
         await self.manager.backup_progress(char_id, quest_key, start_node_key, context, session_id)
 
-        # Сборка DTO
         actions = self.director.get_available_actions(node_data.get("actions_logic", {}) if node_data else {}, context)
-        return self.formatter.build_dto(node_data or {}, actions, context, quest_master)
+        dto = self.formatter.build_dto(node_data or {}, actions, context, quest_master)
 
-    # --- 2. step_scenario (Ход) ---
+        # Извлекаем payload из обертки ScenarioResponseDTO
+        payload = dto.payload
 
-    async def step_scenario(self, char_id: int, action_id: str, task_executor: Any = None) -> ScenarioResponseDTO:
-        """Обработка действия игрока."""
-        # Умная загрузка: если Redis пуст, подтянет из БД
-        context = await self.manager.load_session(char_id)
-        if not context:
-            raise ValueError(f"Session for char {char_id} not found and cannot be restored")
+        # ДОБАВЛЯЕМ CHAR_ID В EXTRA_DATA
+        if payload.extra_data is None:
+            payload.extra_data = {}
+        payload.extra_data["char_id"] = char_id
 
-        quest_key = str(context.get("quest_key"))
-        current_node_key = str(context.get("current_node_key"))
+        return payload
 
-        # --- ПРОВЕРКА НА FINISH_QUEST ---
-        current_node = await self.manager.get_node(quest_key, current_node_key)
-        if current_node:
-            action_data = current_node.get("actions_logic", {}).get(action_id, {})
-            if action_data.get("type") == "finish_quest":
-                # Завершаем квест
-                finalize_result = await self.finalize_scenario(char_id)
-
-                # Формируем терминальный ответ
-                return ScenarioResponseDTO(
-                    status="success",
-                    payload=ScenarioPayloadDTO(
-                        node_key="terminal", text="Квест завершен.", is_terminal=True, extra_data=finalize_result
-                    ),
-                )
-        # --------------------------------
-
-        # Директор исполняет всю логику: Math -> Branching -> Logic Gates
-        new_context, next_node_data = await self.director.execute_step(quest_key, current_node_key, action_id, context)
-
-        # Сохранение прогресса
-        new_context["current_node_key"] = next_node_data.get("node_key")
-        # ИСПРАВЛЕНО: Управляем total_steps, а step_counter управляется из JSON
-        new_context["total_steps"] = new_context.get("total_steps", 0) + 1
-
-        # Добавляем текущую ноду в список посещенных
-        if "visited_nodes" not in new_context:
-            new_context["visited_nodes"] = []
-
-        node_key = next_node_data.get("node_key")
-        if node_key and node_key not in new_context["visited_nodes"]:
-            new_context["visited_nodes"].append(node_key)
-
-        await self.manager.save_session_context(char_id, new_context)
-
-        # Бэкап в БД (Раз в 5 шагов или по флагу из ноды)
-        # ИСПРАВЛЕНО: Проверяем total_steps
-        if new_context["total_steps"] % 5 == 0 or next_node_data.get("force_backup"):
-            await self._handle_backup(
-                char_id, quest_key, str(new_context["current_node_key"]), new_context, task_executor
-            )
-
-        # Сборка DTO
-        quest_master = await self.manager.get_quest_master(quest_key)
-        available_actions = self.director.get_available_actions(next_node_data.get("actions_logic", {}), new_context)
-
-        return self.formatter.build_dto(next_node_data, available_actions, new_context, quest_master or {})
-
-    # --- 3. resume_scenario (Восстановление) ---
-
-    async def resume_scenario(self, char_id: int) -> ScenarioResponseDTO:
-        """Просто пересобирает DTO текущего состояния."""
+    async def resume_scenario_payload(self, char_id: int) -> ScenarioPayloadDTO:
+        """Внутренняя логика восстановления (возвращает Payload)."""
         context = await self.manager.load_session(char_id)
         if not context:
             raise ValueError("No session found")
@@ -164,98 +124,153 @@ class ScenarioCoreOrchestrator:
         quest_master = await self.manager.get_quest_master(quest_key)
 
         actions = self.director.get_available_actions(node_data.get("actions_logic", {}) if node_data else {}, context)
-        return self.formatter.build_dto(node_data or {}, actions, context, quest_master or {})
+        dto = self.formatter.build_dto(node_data or {}, actions, context, quest_master or {})
 
-    # --- 4. finalize_scenario (Завершение) ---
+        payload = dto.payload
 
-    async def finalize_scenario(self, char_id: int) -> dict[str, Any]:
-        """Завершение квеста через экспорт в Handler."""
+        # ДОБАВЛЯЕМ CHAR_ID
+        if payload.extra_data is None:
+            payload.extra_data = {}
+        payload.extra_data["char_id"] = char_id
+
+        return payload
+
+    async def step_scenario_payload(self, char_id: int, action_id: str) -> ScenarioPayloadDTO | CoreResponseDTO:
+        """
+        Внутренняя логика шага.
+        Может вернуть Payload (следующая сцена) или CoreResponseDTO (если произошла финализация и переход).
+        """
+        context = await self.manager.load_session(char_id)
+        if not context:
+            raise ValueError(f"Session for char {char_id} not found")
+
+        quest_key = str(context.get("quest_key"))
+        current_node_key = str(context.get("current_node_key"))
+
+        # --- ПРОВЕРКА НА FINISH_QUEST ---
+        current_node = await self.manager.get_node(quest_key, current_node_key)
+        if current_node:
+            action_data = current_node.get("actions_logic", {}).get(action_id, {})
+            if action_data.get("type") == "finish_quest":
+                # Завершаем квест и возвращаем результат перехода (CoreResponseDTO)
+                return await self.finalize_scenario(char_id)
+        # --------------------------------
+
+        new_context, next_node_data = await self.director.execute_step(quest_key, current_node_key, action_id, context)
+
+        new_context["current_node_key"] = next_node_data.get("node_key")
+        new_context["total_steps"] = new_context.get("total_steps", 0) + 1
+
+        if "visited_nodes" not in new_context:
+            new_context["visited_nodes"] = []
+
+        node_key = next_node_data.get("node_key")
+        if node_key and node_key not in new_context["visited_nodes"]:
+            new_context["visited_nodes"].append(node_key)
+
+        await self.manager.save_session_context(char_id, new_context)
+
+        if new_context["total_steps"] % 5 == 0 or next_node_data.get("force_backup"):
+            await self._handle_backup(char_id, quest_key, str(new_context["current_node_key"]), new_context, None)
+
+        quest_master = await self.manager.get_quest_master(quest_key)
+        available_actions = self.director.get_available_actions(next_node_data.get("actions_logic", {}), new_context)
+
+        dto = self.formatter.build_dto(next_node_data, available_actions, new_context, quest_master or {})
+
+        payload = dto.payload
+
+        # ДОБАВЛЯЕМ CHAR_ID
+        if payload.extra_data is None:
+            payload.extra_data = {}
+        payload.extra_data["char_id"] = char_id
+
+        return payload
+
+    # --- Public API (Returns CoreResponseDTO) ---
+
+    async def initialize_scenario(
+        self, char_id: int, quest_key: str, prev_state: str | None = None, prev_loc: str | None = None
+    ) -> CoreResponseDTO[ScenarioPayloadDTO]:
+        payload = await self.initialize_scenario_payload(char_id, quest_key, prev_state, prev_loc)
+        return CoreResponseDTO(header=GameStateHeader(current_state=GameState.SCENARIO), payload=payload)
+
+    async def resume_scenario(self, char_id: int) -> CoreResponseDTO[ScenarioPayloadDTO]:
+        payload = await self.resume_scenario_payload(char_id)
+        return CoreResponseDTO(header=GameStateHeader(current_state=GameState.SCENARIO), payload=payload)
+
+    async def step_scenario(self, char_id: int, action_id: str) -> CoreResponseDTO[ScenarioPayloadDTO]:
+        result = await self.step_scenario_payload(char_id, action_id)
+
+        # Если вернулся уже готовый CoreResponseDTO (из finalize), возвращаем его
+        if isinstance(result, CoreResponseDTO):
+            return result
+
+        # Иначе оборачиваем payload
+        return CoreResponseDTO(header=GameStateHeader(current_state=GameState.SCENARIO), payload=result)
+
+    async def finalize_scenario(self, char_id: int) -> CoreResponseDTO:
+        """
+        Завершение квеста.
+        Делегирует логику перехода Хендлеру через CoreRouter.
+        """
+        # Берем контекст только из Redis. Если его нет - это ошибка логики.
         context = await self.manager.get_session_context(char_id)
         if not context:
-            # Если в Redis пусто, пробуем достать из БД последний бэкап для финализации
-            db_state = await self.manager.get_backup(char_id)
-            context = db_state.get("context", {}) if db_state else {}
+            raise ValueError(f"Cannot finalize scenario: Session not found for char {char_id}")
 
         quest_key = str(context.get("quest_key", ""))
-
         db_session = getattr(self.manager.repo, "session", None)
+
         if db_session is None:
-            raise ValueError("Database session is not available in ScenarioManager repo")
+            raise ValueError("Database session is not available")
 
         handler = get_handler(quest_key, self.manager, self.manager.account_manager, db_session)
         if not handler:
-            raise ValueError(f"Handler for {quest_key} not found for finalization")
+            raise ValueError(f"Handler for {quest_key} not found")
 
-        handler_result = {}
+        if not self.core_router:
+            raise RuntimeError("CoreRouter is not initialized in ScenarioCoreOrchestrator")
+
         try:
-            # 1. Логика выдачи наград и статов (внутри хендлера)
-            # ИСПРАВЛЕНО: Получаем результат от хендлера
-            result = await handler.on_finalize(char_id, context)
-            if isinstance(result, dict):
-                handler_result = result
+            # 1. Логика хендлера (награды, статы, переход)
+            # Хендлер сам вызывает router.get_initial_view и возвращает CoreResponseDTO
+            response_dto = await handler.on_finalize(char_id, context, self.core_router)
 
-            # 2. Очистка временных данных
+            # 2. Очистка (делаем после успешной финализации)
             await self.manager.clear_account_state(char_id)
             await self.manager.clear_session(char_id)
             await self.manager.delete_backup(char_id)
 
-            log.success(f"Orchestrator | char={char_id} quest completed and cleaned")
+            log.success(f"Orchestrator | char={char_id} quest completed")
+
+            return response_dto
 
         except Exception as e:
             log.error(f"Orchestrator | finalize_failed char={char_id} error={e}")
             raise
 
-        return {
-            "status": "success",
-            "message": "Scenario finalized",
-            "next_state": context.get("prev_state", "world"),
-            "target_location_id": context.get("prev_loc"),
-            **handler_result,  # Подмешиваем результат хендлера (например, combat_session_id)
-        }
+    # --- Backup (Legacy/System) ---
 
     async def backup_session(self, char_id: int, db: AsyncSession) -> None:
-        """
-        Реализация метода для SessionSyncDispatcher.
-        Собирает контекст из Redis и делает холодный бэкап в Postgres.
-        """
-        # 1. Загружаем текущий контекст из Redis через менеджер
+        # (Код без изменений)
         context = await self.manager.get_session_context(char_id)
         if not context:
-            log.warning(f"Scenario | No session to backup for {char_id}")
             return
-
-        # 2. Вытаскиваем метаданные для репозитория
         quest_key = context.get("quest_key")
         node_key = context.get("current_node_key")
         session_id_str = context.get("scenario_session_id")
-
         if not all([quest_key, node_key, session_id_str]):
-            log.error(f"Scenario | Incomplete context for backup: {char_id}")
             return
-
         session_id = uuid.UUID(str(session_id_str))
-
-        # 3. Делаем холодный бэкап в БД (IScenarioRepository)
-        # Передаем session напрямую, так как мы в FastAPI контексте
-        # Mypy fix: ensure quest_key and node_key are strings
         await self.manager.repo.upsert_state(char_id, str(quest_key), str(node_key), context, session_id)
-
-        # 4. СТАВИМ TTL (Теплая сессия)
-        # Предоставляем данные в Redis на 1 час, чтобы игрок мог вернуться
         await self.manager.redis.expire(RedisKeys.get_scenario_session_key(char_id), 3600)
-
-        # 5. ОТЦЕПЛЯЕМ СЕССИЮ ОТ ЯДРА
-        # Удаляем только ссылку, чтобы Диспетчер больше не считал эту сессию активной
         await self.manager.account_manager.delete_account_field(char_id, Af.SCENARIO_SESSION_ID)
 
-        log.info(f"Scenario | Session backed up and unlinked for {char_id}")
-
-    # --- Вспомогательные методы ---
-
     async def _handle_backup(self, char_id, quest_key, node_key, context, executor):
+        # (Код без изменений)
         session_id_str = await self.manager.get_session_id(char_id)
         session_id = uuid.UUID(session_id_str) if session_id_str else uuid.uuid4()
-
         if executor and hasattr(executor, "add_task"):
             executor.add_task(self.manager.backup_progress, char_id, quest_key, node_key, context, session_id)
         else:

@@ -1,15 +1,13 @@
 from .states import (
     ArenaState,
+    BotState,
     CharacterCreation,
-    CharacterLobby,
-    InGame,
     StartTutorial,
 )
 
 __all__ = [
     "ArenaState",
     "CharacterCreation",
-    "CharacterLobby",
-    "InGame",
+    "BotState",
     "StartTutorial",
 ]

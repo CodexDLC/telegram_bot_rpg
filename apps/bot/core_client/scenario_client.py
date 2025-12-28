@@ -1,70 +1,51 @@
-from typing import Any
+from typing import TYPE_CHECKING
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from apps.common.schemas_dto.core_response_dto import CoreResponseDTO
+from apps.common.schemas_dto.scenario_dto import ScenarioPayloadDTO
 
-from apps.common.database.repositories.ORM.scenario_repository import ScenarioRepositoryORM
-from apps.common.schemas_dto.scenario_dto import ScenarioResponseDTO
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.redis_service import RedisService
-
-# Исправленные импорты
-from apps.game_core.game_service.scenario_orchestrator.logic.scenario_director import ScenarioDirector
-from apps.game_core.game_service.scenario_orchestrator.logic.scenario_evaluator import ScenarioEvaluator
-from apps.game_core.game_service.scenario_orchestrator.logic.scenario_formatter import ScenarioFormatter
-from apps.game_core.game_service.scenario_orchestrator.logic.scenario_manager import ScenarioManager
-from apps.game_core.game_service.scenario_orchestrator.scenario_core_orchestrator import ScenarioCoreOrchestrator
+if TYPE_CHECKING:
+    from apps.game_core.core_container import CoreContainer
 
 
 class ScenarioClient:
     """
     Клиент-адаптер для взаимодействия UI-слоя с ScenarioCoreOrchestrator.
-    Предоставляет простой интерфейс для управления жизненным циклом сценариев.
+    Использует CoreContainer для доступа к бэкенду и управления сессией БД.
     """
 
-    def __init__(self, session: AsyncSession, redis_service: RedisService, account_manager: AccountManager):
-        # Инициализация зависимостей Core-слоя
-        repo = ScenarioRepositoryORM(session)
-
-        # Manager теперь принимает repo и account_manager
-        manager = ScenarioManager(redis_service, repo, account_manager)
-
-        evaluator = ScenarioEvaluator()
-
-        # Director теперь принимает manager
-        director = ScenarioDirector(evaluator, manager)
-
-        formatter = ScenarioFormatter()
-
-        # Orchestrator теперь принимает только саппорт-классы
-        self._orchestrator = ScenarioCoreOrchestrator(
-            scenario_manager=manager,
-            scenario_evaluator=evaluator,
-            scenario_director=director,
-            scenario_formatter=formatter,
-        )
+    def __init__(self, core_container: "CoreContainer"):
+        self.core = core_container
 
     async def initialize_scenario(
         self, char_id: int, quest_key: str, prev_state: str | None = None, prev_loc: str | None = None
-    ) -> ScenarioResponseDTO:
+    ) -> CoreResponseDTO[ScenarioPayloadDTO]:
         """
         Запускает новый сценарий для персонажа.
         """
-        return await self._orchestrator.initialize_scenario(char_id, quest_key, prev_state, prev_loc)
+        async with self.core.get_session_context() as session:
+            orchestrator = self.core.get_scenario_core_orchestrator(session)
+            return await orchestrator.initialize_scenario(char_id, quest_key, prev_state, prev_loc)
 
-    async def step_scenario(self, char_id: int, action_id: str) -> ScenarioResponseDTO:
+    async def step_scenario(self, char_id: int, action_id: str) -> CoreResponseDTO[ScenarioPayloadDTO]:
         """
-        Выполняет следующий шаг в сценарии на основе выбора игрока.
+        Выполняет следующий шаг в сценарии.
         """
-        return await self._orchestrator.step_scenario(char_id, action_id)
+        async with self.core.get_session_context() as session:
+            orchestrator = self.core.get_scenario_core_orchestrator(session)
+            return await orchestrator.step_scenario(char_id, action_id)
 
-    async def resume_scenario(self, char_id: int) -> ScenarioResponseDTO:
+    async def resume_scenario(self, char_id: int) -> CoreResponseDTO[ScenarioPayloadDTO]:
         """
         Восстанавливает прерванную сессию сценария.
         """
-        return await self._orchestrator.resume_scenario(char_id)
+        async with self.core.get_session_context() as session:
+            orchestrator = self.core.get_scenario_core_orchestrator(session)
+            return await orchestrator.resume_scenario(char_id)
 
-    async def finalize_scenario(self, char_id: int) -> dict[str, Any]:
+    async def finalize_scenario(self, char_id: int) -> CoreResponseDTO:
         """
-        Завершает сценарий и экспортирует результаты.
+        Завершает сценарий.
         """
-        return await self._orchestrator.finalize_scenario(char_id)
+        async with self.core.get_session_context() as session:
+            orchestrator = self.core.get_scenario_core_orchestrator(session)
+            return await orchestrator.finalize_scenario(char_id)

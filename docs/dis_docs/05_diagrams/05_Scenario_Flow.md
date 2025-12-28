@@ -1,197 +1,140 @@
 # Scenario & Quest Flow
 
-Реализация Session-Based архитектуры для диалоговой системы.
+Этот документ описывает архитектуру модуля **Scenario** (Квесты, Диалоги, Данжи).
+Модуль реализует сложную логику управления состоянием и кэширования статических данных.
 
-## 1. High-Level Process (Dialogue Step)
-Алгоритм обработки шага сценария.
+---
+
+## 1. Entity Map (Карта Сущностей)
+
+### 1.1. Bot Application Layer
+*   **Orchestrator**: `ScenarioBotOrchestrator`. Презентер. Получает `ScenarioPayloadDTO` и отдает его в UI.
+*   **UI Service**: `ScenarioUIService`. Строит экраны диалогов (текст, картинка, кнопки действий).
+*   **Client**: `ScenarioClient`. Интерфейс API.
+
+### 1.2. Game Core Layer
+*   **Orchestrator**: `ScenarioCoreOrchestrator`. Фасад. Координирует работу компонентов.
+*   **Data Manager**: `ScenarioManager`.
+    *   **User Session**: Хранит прогресс игрока в Redis (`scenario_session:{char_id}`) с бэкапом в БД.
+    *   **Static Cache**: Кэширует структуру квеста в Redis (`scenario:static:{quest_key}`).
+*   **Logic Engine**:
+    *   `ScenarioDirector`: Определяет доступные действия и следующую ноду.
+    *   `ScenarioEvaluator`: Проверяет условия (Requirements) и выполняет эффекты (Rewards).
+*   **Formatter**: `ScenarioFormatter`. Собирает `ScenarioPayloadDTO`.
+*   **Quest Handlers**: Специализированные классы для кастомной логики квестов (награды, сложные переходы).
+
+---
+
+## 2. Data Flow: Initialization (Start Quest)
+
+Запуск квеста. Система должна загрузить структуру квеста и создать сессию.
 
 ```mermaid
 graph TD
-    %% --- BLOCKS ---
-    Input["1. User Choice (Option ID)"]
-    Context["2. Load Context (Redis)"]
-    Logic["3. Logic Engine (Director)"]
-    State["4. State Update (Next Node)"]
-    Output["5. Render View (DTO)"]
+    %% --- ACTORS ---
+    Client["ScenarioClient"]
+    CoreOrch["ScenarioCoreOrchestrator"]
+    SessMgr["ScenarioManager"]
+    Repo["Repository"]
+    Redis["RedisService"]
+    Director["ScenarioDirector"]
 
     %% --- FLOW ---
-    Input --> Context
-    Context --> Logic
+    Client -->|"1. initialize(quest_key)"| CoreOrch
     
-    Logic -->|"Check Conditions"| Logic
-    Logic -->|"Execute Actions"| State
+    %% --- STATIC CACHE ---
+    CoreOrch -->|"2. get_quest_master()"| SessMgr
+    SessMgr -->|"3. Check Cache (scenario:static)"| Redis
+    Redis -.->|"4. Miss"| SessMgr
+    SessMgr -->|"5. Load Full Quest"| Repo
+    SessMgr -->|"6. Cache Quest (TTL 1h)"| Redis
     
-    State --> Output
-    Output -.->|"New Message"| Input
+    %% --- SESSION CREATION ---
+    CoreOrch -->|"7. register_new_session()"| SessMgr
+    SessMgr -->|"8. Update Account (State=SCENARIO)"| Redis
+    SessMgr -->|"9. Save Context (scenario_session)"| Redis
+    SessMgr -->|"10. Backup to DB"| Repo
+    
+    %% --- LOGIC ---
+    CoreOrch -->|"11. get_available_actions()"| Director
+    
+    %% --- RESPONSE ---
+    CoreOrch -.->|"12. CoreResponseDTO"| Client
 ```
 
 ---
 
-## 2. Layer Details
+## 3. Data Flow: Step Execution (Player Choice)
 
-### 2.1. Bot Layer (Presentation)
-Отвечает за отрисовку диалогов и кнопок.
-
-```mermaid
-graph TD
-    Input["User Callback"]
-
-    subgraph Bot_Layer ["Bot Layer"]
-        Handler["ScenarioHandler"]
-        Orch["ScenarioBotOrchestrator"]
-        UI["ScenarioUIService"]
-    end
-
-    Output["NEXT: Client Layer"]
-
-    Input -->|"Click Option"| Handler
-    Handler -->|"handle_action"| Orch
-    Orch -->|"step_scenario"| Output
-    
-    Output -.->|"ScenarioViewDTO"| Orch
-    Orch -->|"Render"| UI
-    UI -.->|"Message"| Handler
-```
-
-### 2.2. Client Layer (The Bridge)
-Изолирует Бот от логики сценариев.
+Игрок выбирает вариант ответа.
 
 ```mermaid
 graph TD
-    Input["PREV: Bot Layer"]
-
-    subgraph Client_Layer ["Client Layer"]
-        Client["ScenarioClient"]
-    end
-
-    Output["NEXT: Game Core Layer"]
-
-    Input -->|"step_scenario"| Client
-    Client -->|"Call Core Orchestrator"| Output
-    
-    Output -.->|"Response DTO"| Client
-    Client -.->|"Return"| Input
-```
-
-### 2.3. Game Core Layer (Business Logic)
-Разделение на API (Оркестратор) и Движок (Director/Manager).
-
-```mermaid
-graph TD
-    Input["PREV: Client Layer"]
-
-    subgraph Core_Layer ["Game Core Layer"]
-        
-        %% Entity 1: API Interface
-        subgraph Orchestrator_Entity ["1. ScenarioCoreOrchestrator (API)"]
-            Orch["Orchestrator"]
-            Formatter["ScenarioFormatter"]
-        end
-        
-        %% Entity 2: Logic Engine
-        subgraph Engine_Entity ["2. Scenario Engine (Logic)"]
-            Director["ScenarioDirector"]
-            Evaluator["ScenarioEvaluator"]
-            Manager["ScenarioManager"]
-        end
-        
-        subgraph Side_Effects ["3. Side Effects"]
-            Actions["ActionExecutor"]
-            Sync["SessionSyncDispatcher"]
-        end
-    end
-
-    Output["NEXT: Data Layer"]
+    %% --- ACTORS ---
+    Client["ScenarioClient"]
+    CoreOrch["ScenarioCoreOrchestrator"]
+    SessMgr["ScenarioManager"]
+    Director["ScenarioDirector"]
+    Evaluator["ScenarioEvaluator"]
 
     %% --- FLOW ---
-    Input -->|"step_scenario"| Orch
+    Client -->|"1. step(action_id)"| CoreOrch
     
-    %% 1. Load Context
-    Orch -->|"load_session"| Manager
-    Manager -->|"Read Redis/DB"| Output
+    %% --- LOAD ---
+    CoreOrch -->|"2. load_session()"| SessMgr
+    SessMgr -.->|"3. Context"| CoreOrch
     
-    %% 2. Execute Logic
-    Orch -->|"execute_step"| Director
-    Director -->|"Get Node Data"| Manager
-    Manager -->|"Read Global Cache"| Output
+    %% --- EXECUTE ---
+    CoreOrch -->|"4. execute_step()"| Director
+    Director -->|"5. check_requirements()"| Evaluator
+    Director -->|"6. apply_effects()"| Evaluator
+    Director -.->|"7. New Node & Context"| CoreOrch
     
-    Director -->|"Check Conditions"| Evaluator
-    Director -->|"Execute Actions"| Actions
-    Actions -->|"Give Reward"| Output
+    %% --- SAVE ---
+    CoreOrch -->|"8. save_session_context()"| SessMgr
     
-    %% 3. Save State
-    Director -.->|"New Context"| Orch
-    Orch -->|"save_session"| Manager
-    Manager -->|"Write Redis"| Output
-    
-    %% 4. Backup (Lazy)
-    Orch -.->|"Check Backup Rule"| Orch
-    Orch -.->|"If needed -> sync()"| Sync
-    Sync -->|"Commit to DB"| Output
-    
-    %% 5. Response
-    Orch -->|"Build DTO"| Formatter
-    Formatter -.->|"DTO"| Input
-```
-
-### 2.4. Data Layer (Storage)
-Глобальный кэш для статики и сессии для пользователей.
-
-```mermaid
-graph TD
-    Input["PREV: Game Core Layer"]
-
-    subgraph Data_Layer ["Data Layer"]
-        subgraph Redis_Storage ["Redis"]
-            GlobalCache["Hash: Static Quest Data (1h TTL)"]
-            UserSession["Hash: User Context (State)"]
-        end
-        
-        subgraph DB_Storage ["PostgreSQL"]
-            Scenarios["Table: Scenarios (JSON)"]
-            Progress["Table: QuestProgress"]
-        end
-    end
-
-    %% Flow
-    Input -->|"Read Node"| GlobalCache
-    GlobalCache -.->|"Miss -> Load"| Scenarios
-    
-    Input -->|"Read/Write State"| UserSession
-    Input -->|"Backup State"| Progress
+    %% --- RESPONSE ---
+    CoreOrch -.->|"9. CoreResponseDTO"| Client
 ```
 
 ---
 
-## 3. API Optimization Strategy
-Единый роут для управления сценарием.
+## 4. Data Flow: Finalization (Quest Complete)
+
+Квест завершен. Нужно выдать награду и вернуть игрока в мир.
 
 ```mermaid
 graph TD
-    subgraph Client_Side ["Client Side"]
-        Request["POST /scenario/action"]
-        Body["Body: { action: 'step', option_id: 'opt_1' }"]
-    end
-
-    subgraph Core_API ["Core API Layer"]
-        Controller["ScenarioController"]
-        Dispatcher["ActionDispatcher"]
-    end
-
-    subgraph Logic ["Logic Layer"]
-        Orch["ScenarioCoreOrchestrator"]
-    end
+    %% --- ACTORS ---
+    CoreOrch["ScenarioCoreOrchestrator"]
+    Handler["QuestHandler (Custom Logic)"]
+    Router["CoreRouter"]
+    SessMgr["ScenarioManager"]
 
     %% --- FLOW ---
-    Request --> Controller
-    Body -.-> Controller
+    CoreOrch -->|"1. Detect 'finish_quest'"| CoreOrch
+    CoreOrch -->|"2. finalize_scenario()"| CoreOrch
     
-    Controller -->|"Validate DTO"| Dispatcher
+    %% --- HANDLER ---
+    CoreOrch -->|"3. on_finalize()"| Handler
+    Handler -->|"4. Give Rewards (XP, Items)"| Handler
     
-    Dispatcher -->|"Switch(action)"| Dispatcher
-    Dispatcher -->|"Case 'start'"| Orch
-    Dispatcher -->|"Case 'step'"| Orch
-    Dispatcher -->|"Case 'resume'"| Orch
+    %% --- ROUTING ---
+    Handler -->|"5. router.get_initial_view(SCENARIO/EXPLORATION)"| Router
+    Router -.->|"6. CoreResponseDTO"| Handler
     
-    Orch -->|"Update Redis"| Redis["Redis"]
+    %% --- CLEANUP ---
+    CoreOrch -->|"7. clear_session()"| SessMgr
+    CoreOrch -->|"8. delete_backup()"| SessMgr
+    
+    %% --- RETURN ---
+    CoreOrch -.->|"9. CoreResponseDTO"| Client["Client"]
 ```
+
+---
+
+## 5. Key Decisions (Ключевые решения)
+
+1.  **Static Content Caching**: Структура квеста (тексты, связи) не меняется часто. Мы загружаем весь квест из БД один раз и храним в Redis (`scenario:static:{key}`) с TTL 1 час. Это снижает нагрузку на БД при каждом шаге.
+2.  **Session Resilience**: Сессия игрока живет в Redis. Если Redis падает или очищается, `ScenarioManager` умеет восстанавливать сессию из БД (`get_active_state`), где хранится бэкап.
+3.  **Handler Registry**: Логика конкретных квестов (особенно финальные награды) вынесена из ядра в отдельные классы-хендлеры. Это позволяет писать уникальные скрипты для каждого квеста, не загрязняя общий движок.

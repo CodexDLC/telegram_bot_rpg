@@ -7,7 +7,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.keyboards.callback_data import EncounterCallback
 from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as Err
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -59,7 +59,7 @@ async def handle_encounter_action(
             await Err.generic_error(call)
             return
 
-        await state.set_state(InGame.combat)
+        await state.set_state(BotState.combat)
 
         # Атомарное обновление FSM
         session_context["combat_session_id"] = result_dto.combat_session_id
@@ -73,20 +73,30 @@ async def handle_encounter_action(
         await state.update_data(update_data)
 
         # Для отрисовки боя используем CombatBotOrchestrator
-        combat_orchestrator = container.get_combat_bot_orchestrator(session)
+        # combat_orchestrator = container.get_combat_bot_orchestrator(session)
 
         # Получаем первый кадр боя
-        combat_view = await combat_orchestrator.get_dashboard_view(
-            result_dto.combat_session_id, char_id, {}, state_data
-        )
+        # combat_view = await combat_orchestrator.get_dashboard_view(
+        #     result_dto.combat_session_id, char_id, {}, state_data
+        # )
 
         # Обновляем контент (Дашборд)
-        if combat_view.content and (coords := expl_orchestrator.get_content_coords(state_data)):
+        # if combat_view.content and (coords := expl_orchestrator.get_content_coords(state_data)):
+        #     await bot.edit_message_text(
+        #         chat_id=coords.chat_id,
+        #         message_id=coords.message_id,
+        #         text=combat_view.content.text,
+        #         reply_markup=combat_view.content.kb,
+        #         parse_mode="HTML",
+        #     )
+
+        # Заглушка
+        if coords := expl_orchestrator.get_content_coords(state_data):
             await bot.edit_message_text(
                 chat_id=coords.chat_id,
                 message_id=coords.message_id,
-                text=combat_view.content.text,
-                reply_markup=combat_view.content.kb,
+                text="⚔️ <b>Бой начинается!</b>\n(Переход в новую систему боя...)",
+                reply_markup=None,
                 parse_mode="HTML",
             )
 

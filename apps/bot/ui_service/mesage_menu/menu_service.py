@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.bot.resources.keyboards.callback_data import LobbySelectionCallback, MeinMenuCallback
 from apps.bot.resources.keyboards.status_callback import StatusNavCallback
 from apps.bot.resources.texts.menu_data.buttons_text import ButtonsTextData
+from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.common.services.core_service.manager.account_manager import AccountManager
@@ -30,6 +31,8 @@ class MenuService(BaseUIService):
         self.gs = game_stage
         self.session = session
         self.account_manager = account_manager
+        # Используем дефолтное имя, так как в BaseUIService его больше нет
+        self.actor_name = DEFAULT_ACTOR_NAME
 
         session_context = self.state_data.get(FSM_CONTEXT_KEY, {})
         self.char_name = session_context.get("char_name", f"Персонаж {self.char_id}")

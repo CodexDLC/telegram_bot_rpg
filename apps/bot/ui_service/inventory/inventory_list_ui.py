@@ -6,6 +6,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
 
 from apps.bot.resources.keyboards.inventory_callback import InventoryCallback
+from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 from apps.bot.ui_service.inventory.formatters.inventory_formatters import InventoryFormatter
@@ -29,6 +30,8 @@ class InventoryListUI(BaseUIService):
         super().__init__(char_id=char_id, state_data=state_data)
         self.user_id = user_id
         self.InvF = InventoryFormatter
+        # Используем дефолтное имя, так как в BaseUIService его больше нет
+        self.actor_name = DEFAULT_ACTOR_NAME
         log.debug(f"InventoryListUI | status=initialized char_id={char_id}")
 
     def render(

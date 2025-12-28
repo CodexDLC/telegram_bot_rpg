@@ -3,6 +3,15 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class ScenarioInitDTO(BaseModel):
+    """
+    DTO для инициализации сценария (переход из другого режима).
+    """
+
+    quest_key: str = Field(..., description="Ключ квеста/сценария для запуска")
+    node_id: str | None = Field(None, description="Опциональный ID стартовой ноды")
+
+
 class ScenarioButtonDTO(BaseModel):
     """Схема кнопки действия."""
 

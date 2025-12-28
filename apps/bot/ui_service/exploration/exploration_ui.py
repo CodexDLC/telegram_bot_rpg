@@ -4,6 +4,7 @@ from typing import Any
 
 from loguru import logger as log
 
+from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.exploration.encounter_ui import EncounterUI
 from apps.bot.ui_service.exploration.navigation_ui import NavigationUI
@@ -20,6 +21,8 @@ class ExplorationUIService(BaseUIService):
     def __init__(self, state_data: dict[str, Any], char_id: int | None = None):
         super().__init__(state_data, char_id)
         self._encounter_ui = EncounterUI
+        # Используем дефолтное имя, так как в BaseUIService его больше нет
+        self.actor_name = DEFAULT_ACTOR_NAME
         log.debug(f"ExplorationUIService | Initialized for char_id={self.char_id}")
 
     def render_navigation(self, dto: WorldNavigationDTO) -> ViewResultDTO:

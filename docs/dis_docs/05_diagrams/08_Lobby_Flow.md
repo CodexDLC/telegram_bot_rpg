@@ -1,136 +1,115 @@
 # Lobby & Entry Flow
 
-## 1. Current Architecture (AS IS)
-Текущая реализация: "Толстый Бот". Оркестратор сам управляет зависимостями и восстанавливает состояние, обращаясь к разным клиентам.
+Этот документ описывает архитектуру модуля **Lobby** (Вход в игру и выбор персонажа).
+Модуль следует стандарту "Тонкий Клиент" (см. `01_Architecture_Overview.md`).
+
+---
+
+## 1. Entity Map (Карта Сущностей)
+
+### 1.1. Bot Application Layer
+*   **Handlers**:
+    *   `start_login_handler` (в `lobby.py`): Вход в лобби (кнопка "Adventure").
+    *   `select_or_delete_character_handler` (в `lobby_character_selection.py`): Действия внутри (выбор, удаление, логин).
+*   **Orchestrator**: `LobbyBotOrchestrator`. Управляет логикой отображения лобби.
+*   **UI Service**: `LobbyService`. Строит меню выбора персонажей и статус.
+*   **Client**: `LobbyClient`. Интерфейс для общения с Core.
+
+### 1.2. Game Core Layer
+*   **Orchestrator**: `LobbyCoreOrchestrator`. Фасад модуля. Управляет списком персонажей.
+*   **Session Manager**: `LobbySessionManager`. Реализует паттерн Cache-Aside для списка персонажей.
+*   **Data Access**:
+    *   `CharacterRepository` (PostgreSQL).
+    *   `RedisService` + `RedisKeys` (Redis Cache).
+
+---
+
+## 2. Data Flow: Initialization (Вход в Лобби)
+
+Пользователь нажимает "Adventure". Система проверяет наличие персонажей.
 
 ```mermaid
 graph TD
-    %% --- СЛОИ ---
-    subgraph Bot_Layer ["Bot Layer"]
-        LobbyHandler["LobbyHandler"]
-        LobbyOrch["LobbyBotOrchestrator"]
-        LobbyUI["LobbyService - View"]
-        
-        AuthOrch["AuthBotOrchestrator - Router"]
-        
-        subgraph Target_Orchestrators ["Target Orchestrators"]
-            CombatOrch["CombatBotOrchestrator"]
-            ExplOrch["ExplorationBotOrchestrator"]
-            TutUI["TutorialService"]
-        end
-    end
-
-    subgraph Client_Layer ["Client Layer"]
-        LobbyClient["LobbyClient"]
-        CombatClient["CombatRBCClient"]
-        ExplClient["ExplorationClient"]
-    end
-
-    subgraph Core_Layer ["Core Layer"]
-        LoginService["LoginService"]
-        GameSync["GameSyncService"]
-    end
-
-    subgraph Data_Layer ["Data Layer"]
-        AccountMgr["AccountManager"]
-        DB["Database"]
-    end
+    %% --- ACTORS ---
+    User((User))
+    Handler["Handler<br/>(start_login_handler)"]
+    BotOrch["LobbyBotOrchestrator"]
+    Client["LobbyClient"]
+    
+    CoreOrch["LobbyCoreOrchestrator"]
+    SessMgr["LobbySessionManager"]
+    Repo["CharacterRepository"]
+    Redis["RedisService"]
 
     %% --- FLOW ---
+    User -->|"1. Click 'Adventure'"| Handler
+    Handler -->|"2. process_entry_point()"| BotOrch
+    BotOrch -->|"3. get_initial_lobby_state()"| Client
     
-    %% 1. Lobby (Character Selection)
-    LobbyHandler -->|"/start"| LobbyOrch
-    LobbyOrch -->|"get_characters"| LobbyClient
-    LobbyClient --> DB
-    LobbyOrch -->|"Render List"| LobbyUI
-    LobbyUI -.->|"Message"| LobbyHandler
-
-    %% 2. Login Request
-    LobbyHandler -->|"Select Char"| AuthOrch
-    AuthOrch -->|"handle_login"| LoginService
-    LoginService -->|"Check State"| AccountMgr
-    LoginService -.->|"GameStage"| AuthOrch
-
-    %% 3. Routing Logic (The Switch)
-    AuthOrch -->|"If COMBAT"| CombatOrch
-    CombatOrch -->|"Restore View"| CombatClient
+    Client -->|"4. initialize_session()"| CoreOrch
+    CoreOrch -->|"5. get_characters()"| SessMgr
     
-    AuthOrch -->|"If EXPLORATION"| ExplOrch
-    ExplOrch -->|"Get Location"| ExplClient
-    AuthOrch -->|"Sync State"| GameSync
+    %% --- CACHE ASIDE ---
+    SessMgr -->|"6. GET lobby_session:{uid}"| Redis
+    Redis -.->|"7. Miss"| SessMgr
+    SessMgr -->|"8. SELECT * FROM chars"| Repo
+    Repo -.->|"9. List[Character]"| SessMgr
+    SessMgr -->|"10. SET lobby_session:{uid}"| Redis
     
-    AuthOrch -->|"If TUTORIAL"| TutUI
+    %% --- LOGIC ---
+    SessMgr -.->|"11. Characters"| CoreOrch
+    CoreOrch -->|"12. Check Count"| CoreOrch
     
-    %% 4. Final Render
-    CombatOrch -.->|"Combat View"| AuthOrch
-    ExplOrch -.->|"Exploration View"| AuthOrch
-    TutUI -.->|"Tutorial View"| AuthOrch
+    %% --- RESPONSE ---
+    CoreOrch -.->|"13. CoreResponseDTO<br/>(State=LOBBY, Payload=LobbyInitDTO)"| Client
+    Client -.->|"14. DTO"| BotOrch
     
-    AuthOrch -->|"Render Target UI"| LobbyHandler
-
-    %% --- Вертикальное выравнивание ---
-    LobbyOrch ~~~ AuthOrch ~~~ LoginService ~~~ AccountMgr
+    BotOrch -->|"15. render_lobby()"| BotOrch
+    BotOrch -.->|"16. UnifiedViewDTO"| Handler
+    Handler -->|"17. Send Message"| User
 ```
 
-## 2. Ideal Architecture (TO BE)
-Целевая архитектура: "Тонкий Бот". Вся логика восстановления состояния инкапсулирована в Core. Бот получает полиморфный DTO и просто выбирает рендерер.
+---
+
+## 3. Data Flow: Enter Game (Вход в мир)
+
+Пользователь выбирает персонажа и нажимает "Войти".
 
 ```mermaid
 graph TD
-    %% --- СЛОИ ---
-    subgraph Bot_Layer ["Bot Layer (Thin View)"]
-        Handler["LobbyHandler"]
-        AuthOrch["AuthBotOrchestrator"]
-        
-        subgraph Renderers ["UI Renderers"]
-            CombatUI["CombatUIService"]
-            ExplUI["ExplorationUIService"]
-            MenuUI["MenuUIService"]
-        end
-    end
-
-    subgraph Client_Layer ["Client Layer"]
-        SessionClient["SessionClient"]
-    end
-
-    subgraph Core_Layer ["Core Layer (Smart Logic)"]
-        SessionMgr["SessionManager - Facade"]
-        
-        subgraph Core_Services ["Domain Services"]
-            CombatSvc["CombatService"]
-            WorldSvc["WorldService"]
-            TutSvc["TutorialService"]
-        end
-    end
+    %% --- ACTORS ---
+    User((User))
+    Handler["Handler<br/>(select_or_delete_character_handler)"]
+    BotOrch["LobbyBotOrchestrator"]
+    Director["GameDirector"]
+    Client["LobbyClient"]
+    CoreOrch["LobbyCoreOrchestrator"]
 
     %% --- FLOW ---
+    User -->|"1. Click 'Enter Game'"| Handler
+    Handler -->|"2. handle_enter_game()"| BotOrch
     
-    %% 1. Request
-    Handler -->|"Login"| AuthOrch
-    AuthOrch -->|"restore_session"| SessionClient
-    SessionClient -->|"restore_session"| SessionMgr
+    BotOrch -->|"3. set_char_id(123)"| Director
+    BotOrch -->|"4. enter_game(char_id=123)"| Client
     
-    %% 2. Core Decision (Hidden from Bot)
-    SessionMgr -->|"Check State"| SessionMgr
+    Client -->|"5. enter_game()"| CoreOrch
     
-    SessionMgr -->|"If Combat -> Get Snapshot"| CombatSvc
-    SessionMgr -->|"If World -> Get Loc"| WorldSvc
+    %% --- LOGIC ---
+    CoreOrch -->|"6. Determine Target State"| CoreOrch
+    CoreOrch -.->|"7. CoreResponseDTO<br/>(State=EXPLORATION)"| Client
     
-    %% 3. Polymorphic Response
-    CombatSvc -.->|"Data"| SessionMgr
-    WorldSvc -.->|"Data"| SessionMgr
+    %% --- TRANSITION ---
+    Client -.->|"8. DTO"| BotOrch
+    BotOrch -->|"9. check_and_switch_state()"| BotOrch
+    BotOrch -->|"10. set_scene(EXPLORATION)"| Director
     
-    SessionMgr -.->|"GameStateDTO (type=combat, data={...})"| SessionClient
-    SessionClient -.->|"DTO"| AuthOrch
-    
-    %% 4. Dumb Rendering
-    AuthOrch -->|"Switch type"| AuthOrch
-    AuthOrch -->|"type=combat"| CombatUI
-    AuthOrch -->|"type=world"| ExplUI
-    
-    CombatUI -.->|"View"| AuthOrch
-    AuthOrch -->|"Message"| Handler
-
-    %% --- Вертикальное выравнивание ---
-    AuthOrch ~~~ SessionClient ~~~ SessionMgr ~~~ CombatSvc
+    Director -->|"11. ExplorationOrchestrator.render()"| Director
 ```
+
+---
+
+## 4. Key Decisions (Ключевые решения)
+
+1.  **Cache-Aside**: Список персонажей кэшируется в Redis (`lobby_session:{user_id}`) на 1 час. При создании/удалении персонажа кэш инвалидируется.
+2.  **State Switching**: `LobbyCoreOrchestrator` сам решает, куда отправить пользователя. Если персонажей нет — он возвращает `header.current_state = ONBOARDING`. Бот просто подчиняется.
+3.  **Session Context**: ID выбранного персонажа сохраняется в FSM (`GameDirector.set_char_id`) только на момент входа в игру. В самом лобби `char_id` передается в аргументах колбэка.

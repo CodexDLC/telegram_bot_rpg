@@ -4,9 +4,11 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.common.schemas_dto.core_response_dto import CoreResponseDTO
 from apps.common.services.core_service.manager.account_manager import AccountManager
 
 if TYPE_CHECKING:
+    from apps.game_core.game_service.core_router import CoreRouter
     from apps.game_core.game_service.scenario_orchestrator.logic.scenario_manager import ScenarioManager
 
 
@@ -35,9 +37,12 @@ class BaseScenarioHandler(ABC):
         pass
 
     @abstractmethod
-    async def on_finalize(self, char_id: int, context: dict[str, Any]):
+    async def on_finalize(self, char_id: int, context: dict[str, Any], router: "CoreRouter") -> CoreResponseDTO:
         """
         Логика завершения сценария.
-        Должен перенести накопленные данные из контекста в постоянное хранилище (AccountManager/DB).
+        Должен:
+        1. Перенести накопленные данные из контекста в постоянное хранилище.
+        2. Использовать router для перехода в следующий стейт.
+        3. Вернуть CoreResponseDTO.
         """
         pass

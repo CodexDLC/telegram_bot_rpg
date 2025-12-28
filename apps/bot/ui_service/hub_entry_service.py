@@ -3,8 +3,9 @@ from aiogram.utils.keyboard import InlineKeyboardMarkup
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.bot.resources.fsm_states.states import InGame
+from apps.bot.resources.fsm_states.states import BotState
 from apps.bot.resources.hub_config import HUB_CONFIGS
+from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
@@ -45,7 +46,7 @@ class HubEntryService(BaseUIService):
         возвращая готовый контент и новое FSM-состояние.
         """
         config = HUB_CONFIGS.get(self.target_loc)
-        default_fsm_state = InGame.exploration  # ИСПРАВЛЕНО: InGame.exploration
+        default_fsm_state = BotState.exploration  # ИСПРАВЛЕНО: InGame.exploration
 
         if not config:
             log.warning(f"HubEntryService | status=failed reason='Config not found' target_loc='{self.target_loc}'")
@@ -72,7 +73,8 @@ class HubEntryService(BaseUIService):
                 "account_manager": self.account_manager,
                 "arena_manager": self.arena_manager,
                 "combat_manager": self.combat_manager,
-                "actor_name": self.state_data.get(FSM_CONTEXT_KEY, {}).get("symbiote_name", "Симбиот"),
+                # Используем дефолтное имя, так как в BaseUIService его больше нет
+                "actor_name": self.state_data.get(FSM_CONTEXT_KEY, {}).get("symbiote_name", DEFAULT_ACTOR_NAME),
                 "title": config.get("title", "Хаб"),  # <-- Добавляем title из конфига
             }
 

@@ -107,6 +107,7 @@ class ActorSnapshotDTO(BaseModel):
     is_dead: bool
     effects: list[str] = []  # Названия активных эффектов/иконок
     tokens: dict[str, int] = {}  # Текущие боевые токены
+    weapon_layout: str = "1h"  # '1h' (2 колонки) или 'dual' (3 колонки)
 
 
 class CombatDashboardDTO(BaseModel):
@@ -121,6 +122,21 @@ class CombatDashboardDTO(BaseModel):
     queue_count: int = 0
     switch_charges: int = 0
     belt_items: list[dict] = []
-    last_logs: list[str] = []
     winner_team: str | None = None
     rewards: dict = {}
+
+
+class CombatLogDTO(BaseModel):
+    """DTO для логов боя (пагинация)."""
+
+    logs: list[str]
+    page: int
+    total_pages: int = 1
+
+
+class CombatActionResultDTO(BaseModel):
+    """Результат мгновенного действия (Instant Action)."""
+
+    success: bool
+    message: str
+    updated_snapshot: CombatDashboardDTO | None = None  # Опционально: обновленный дашборд

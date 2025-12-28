@@ -6,8 +6,9 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, User
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger as log
 
-from apps.bot.resources.keyboards.callback_data import LobbySelectionCallback
+from apps.bot.resources.keyboards.callback_data import LobbySelectionCallback, SystemCallback
 from apps.bot.resources.texts.buttons_callback import Buttons
+from apps.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 from apps.bot.ui_service.base_service import BaseUIService
 from apps.bot.ui_service.lobby.formatters.lobby_formatters import LobbyFormatter
 from apps.common.schemas_dto import CharacterReadDTO
@@ -26,6 +27,7 @@ class LobbyService(BaseUIService):
     ):
         super().__init__(state_data=state_data, char_id=char_id or 0)
         self.user_id = user.id
+        self.actor_name = DEFAULT_ACTOR_NAME
         log.debug(f"Инициализирован {self.__class__.__name__} для user_id={self.user_id}.")
 
     def get_message_delete(self, char_name: str) -> tuple[str, InlineKeyboardMarkup]:
@@ -87,6 +89,7 @@ class LobbyService(BaseUIService):
 
         kb.adjust(2, 2)
 
+        # Добавляем кнопки управления
         buttons = self._down_button()
         for button in buttons:
             kb.row(button)
@@ -99,10 +102,21 @@ class LobbyService(BaseUIService):
         buttons = []
 
         for key, value in lobby_buttons_dawn.items():
+            # Если персонаж не выбран, показываем только Logout
+            if (not self.char_id or self.char_id == 0) and key != "logout":
+                continue
+
+            # Если персонаж выбран, показываем всё (включая Logout)
+
+            if key == "logout":
+                callback_data = SystemCallback(action="logout").pack()
+            else:
+                callback_data = LobbySelectionCallback(action=key, char_id=self.char_id).pack()
+
             buttons.append(
                 InlineKeyboardButton(
                     text=value,
-                    callback_data=LobbySelectionCallback(action=key, char_id=self.char_id).pack(),
+                    callback_data=callback_data,
                 )
             )
 

@@ -1,13 +1,10 @@
-# app/services/game_service/world/game_world_service.py (Финальная версия с логикой)
+# app/services/game_service/world/game_world_service.py
 import json
 from typing import Any
 
 from loguru import logger as log
 
 from apps.common.services.core_service.manager.world_manager import WorldManager
-
-# Мы предполагаем, что WorldManager имеет метод для чтения данных из Redis, например:
-# async def get_location_hash(self, loc_id: str) -> Dict[str, str] | None:
 
 
 class GameWorldService:
@@ -19,45 +16,70 @@ class GameWorldService:
     def __init__(self, world_manager: WorldManager):
         self.world_manager = world_manager
 
-    async def get_location_for_navigation(self, loc_id: str) -> dict[str, Any] | None:
+    # --- Private Helpers ---
+
+    async def _get_raw_data(self, loc_id: str) -> dict[str, str] | None:
         """
-        Получает данные локации, проводя необходимые проверки для навигации.
+        Приватный метод: читает сырые данные из Redis.
         """
-        # 1. Получаем "сырые" данные (hash) из WorldManager (который идет в Redis)
         raw_data = await self.world_manager.get_location_meta(loc_id)
-
         if not raw_data:
-            log.warning(f"GameWorldService | status=failed reason='Location not found in Redis' loc_id={loc_id}")
+            log.warning(f"GameWorldService | status=failed reason='Location not found' loc_id={loc_id}")
             return None
+        return raw_data
 
-        # 2. 🔥 Валидация и защита от падения (ваша логика!)
+    def _parse_json_fields(self, loc_id: str, raw_data: dict[str, str]) -> dict[str, Any] | None:
+        """
+        Приватный метод: парсит JSON-поля и собирает полный словарь.
+        """
         try:
-            # Преобразуем JSON-строки, которые WorldLoaderService записал в Redis, обратно в dict
-            # Нам нужны: exits, flags, tags, name, description, service
             exits = json.loads(raw_data.get("exits", "{}"))
             flags = json.loads(raw_data.get("flags", "{}"))
+            tags = json.loads(raw_data.get("tags", "[]"))
 
-            # Добавляем другие поля, которые могут быть в JSON
-            # Если поле не JSON, оно просто вернется как строка (например, name, description)
-            # Если поле может отсутствовать, используем .get() с дефолтным значением
-
-            # 3. Собираем чистый DTO/Dict для NavigationService
             return {
                 "name": raw_data.get("name"),
                 "description": raw_data.get("description"),
                 "exits": exits,
                 "flags": flags,
-                "service": raw_data.get("service"),  # Добавлено поле service
-                # Добавьте другие поля по мере необходимости, например, 'tags'
+                "tags": tags,
+                "service": raw_data.get("service"),
+                "zone_id": raw_data.get("zone_id"),
+                "terrain": raw_data.get("terrain"),
             }
-
         except json.JSONDecodeError as e:
-            log.error(
-                f"GameWorldService | status=critical reason='Corrupted JSON data in Redis' loc_id={loc_id} error={e}"
-            )
-            return None  # Защита от падения при поврежденных данных
-        except (TypeError, KeyError) as e:
-            log.error(
-                f"GameWorldService | status=error reason='Unexpected error during location data processing' loc_id={loc_id} error={e}"
-            )
+            log.error(f"GameWorldService | status=critical reason='Corrupted JSON' loc_id={loc_id} error={e}")
             return None
+        except Exception as e:  # noqa: BLE001
+            log.error(f"GameWorldService | status=error reason='Parse error' loc_id={loc_id} error={e}")
+            return None
+
+    # --- Public API ---
+
+    async def get_location_for_navigation(self, loc_id: str) -> dict[str, Any] | None:
+        """
+        Возвращает полные данные локации (для навигации и отображения).
+        Сохраняет старое название для совместимости.
+        """
+        raw_data = await self._get_raw_data(loc_id)
+        if not raw_data:
+            return None
+        return self._parse_json_fields(loc_id, raw_data)
+
+    async def get_location_encounter_params(self, loc_id: str) -> dict[str, Any] | None:
+        """
+        Возвращает только параметры для энкаунтеров (Tier, Biome, Tags).
+        """
+        # Можно оптимизировать: читать только нужные поля из Redis (HMGET),
+        # но пока используем общий метод для простоты.
+        data = await self.get_location_for_navigation(loc_id)
+        if not data:
+            return None
+
+        flags = data.get("flags", {})
+
+        return {
+            "tier": int(flags.get("threat_tier", 1)),
+            "biome": data.get("terrain", "wasteland"),
+            "tags": data.get("tags", []),
+        }

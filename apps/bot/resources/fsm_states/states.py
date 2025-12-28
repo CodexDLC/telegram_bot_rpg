@@ -2,15 +2,40 @@
 Модуль содержит определения состояний FSM (Finite State Machine) для бота.
 
 Каждый класс `StatesGroup` инкапсулирует набор состояний,
-соответствующих определенному этапу взаимодействия пользователя с ботом
-(например, создание персонажа, прохождение туториала, игровой процесс).
+соответствующих определенному этапу взаимодействия пользователя с ботом.
 """
 
 from aiogram.fsm.state import State, StatesGroup
 
 
+class BotState(StatesGroup):
+    """
+    Единый контейнер состояний игрового процесса.
+    Порядок отражает типичный путь игрока.
+    """
+
+    # 1. Вход и создание
+    lobby = State()  # Техническое состояние перехода из Лобби
+    onboarding = State()  # Создание персонажа (Био, Класс)
+
+    # 2. Мир и Сюжет
+    exploration = State()  # Навигация, Хабы, Перемещение
+    scenario = State()  # Диалоги, Квесты, Туториал
+
+    # 3. Активные режимы
+    combat = State()  # Боевая система
+    arena = State()  # PvP/PvE Арена
+
+    # 4. Меню и Управление
+    inventory = State()  # Инвентарь, Экипировка
+    status = State()  # Профиль, Навыки, Статы
+
+
+# --- Legacy / Deprecated (Кандидаты на удаление) ---
+
+
 class CharacterCreation(StatesGroup):
-    """Состояния для "квеста" создания персонажа."""
+    """[DEPRECATED] Заменено на InGame.onboarding"""
 
     choosing_gender = State()
     choosing_name = State()
@@ -18,7 +43,7 @@ class CharacterCreation(StatesGroup):
 
 
 class StartTutorial(StatesGroup):
-    """Состояния для "квеста" старта туториала."""
+    """[DEPRECATED] Заменено на InGame.scenario"""
 
     start = State()
     in_progress = State()
@@ -27,12 +52,14 @@ class StartTutorial(StatesGroup):
     skill_confirm = State()
 
 
-class CharacterLobby(StatesGroup):
-    """Состояния для лобби персонажей."""
+class ArenaState(StatesGroup):
+    """[DEPRECATED] Заменено на InGame.arena"""
 
-    selection = State()
-    start_logging = State()
-    confirm_delete = State()
+    menu = State()
+    waiting = State()
+
+
+# --- System States ---
 
 
 class BugReport(StatesGroup):
@@ -40,19 +67,6 @@ class BugReport(StatesGroup):
 
     choosing_type = State()
     awaiting_report_text = State()
-
-
-class InGame(StatesGroup):
-    """Состояния, когда игрок находится в игровом мире."""
-
-    lobby = State()
-    onboarding = State()  # <-- Новый этап: создание "Био"
-    exploration = State()  # <-- Бывший navigation
-    inventory = State()
-    combat = State()
-    status = State()
-    scenario = State()
-    arena = State()
 
 
 class AdminMode(StatesGroup):
@@ -64,40 +78,36 @@ class AdminMode(StatesGroup):
     teleport = State()
 
 
-class ArenaState(StatesGroup):
-    """Состояния для Арены (Legacy, будет заменено на InGame.arena)."""
+# --- Configuration Lists ---
 
-    menu = State()
-    waiting = State()
-
-
-# ЛЕЧИЛКА: Расширенный список состояний, в которых разрешена работа меню Статуса (2 и 3 уровни вложенности)
+# Список состояний, в которых разрешена работа меню Статуса
 FSM_CONTEX_CHARACTER_STATUS = [
     # Лобби
-    CharacterLobby.start_logging,
-    CharacterLobby.selection,
-    CharacterLobby.confirm_delete,
-    # Основной игровой цикл
-    InGame.exploration,  # <-- Обновлено
-    InGame.inventory,
-    InGame.combat,
-    InGame.status,
-    InGame.scenario,
-    InGame.arena,
-    # Арена (Legacy)
+    # Основной игровой цикл (InGame)
+    BotState.exploration,
+    BotState.scenario,
+    BotState.combat,
+    BotState.arena,
+    BotState.inventory,
+    BotState.status,
+    BotState.onboarding,
+    # Legacy (пока не удалим код)
     ArenaState.menu,
     ArenaState.waiting,
 ]
 
+# Список состояний, где текстовые сообщения от юзера считаются мусором (удаляются)
 GARBAGE_TEXT_STATES = [
+    # Лобби
+    # InGame (где нет ввода текста)
+    BotState.exploration,
+    BotState.inventory,
+    BotState.combat,
+    BotState.status,
+    BotState.arena,
+    # Legacy
     StartTutorial.start,
-    StartTutorial.confirmation,
     StartTutorial.in_progress,
-    StartTutorial.in_skills_progres,
-    StartTutorial.skill_confirm,
-    CharacterLobby.selection,
-    CharacterLobby.start_logging,
-    CharacterLobby.confirm_delete,
     CharacterCreation.choosing_gender,
     CharacterCreation.confirm,
 ]

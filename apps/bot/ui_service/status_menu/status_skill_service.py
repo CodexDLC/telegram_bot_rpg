@@ -36,6 +36,7 @@ class CharacterSkillStatusService(BaseUIService):
         symbiotic_name: str | None = None,
     ):
         super().__init__(char_id=callback_data.char_id, state_data=state_data)
+        # Используем переданное имя или дефолтное
         self.actor_name = symbiotic_name or DEFAULT_ACTOR_NAME
         self.data_skills = SKILL_HIERARCHY
         self.key = callback_data.key
