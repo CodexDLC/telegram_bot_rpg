@@ -1,4 +1,5 @@
 from contextlib import AbstractAsyncContextManager
+from typing import TYPE_CHECKING
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,25 +14,31 @@ from apps.common.services.core_service import (
     RedisService,
     WorldManager,
 )
+from apps.game_core.modules.exploration.encounter_service import EncounterService
+from apps.game_core.modules.exploration.exploration_orchestrator import ExplorationOrchestrator
+from apps.game_core.modules.exploration.game_world_service import GameWorldService
+from apps.game_core.modules.exploration.movement_service import MovementService
+from apps.game_core.modules.inventory.inventory_orchestrator import InventoryOrchestrator
+from apps.game_core.modules.inventory.logic.inventory_session_manager import InventorySessionManager
+from apps.game_core.modules.lobby.lobby_orchestrator import LobbyCoreOrchestrator
+from apps.game_core.modules.onboarding.onboarding_orchestrator import OnboardingCoreOrchestrator
+from apps.game_core.modules.scenario_orchestrator.logic.scenario_director import ScenarioDirector
+from apps.game_core.modules.scenario_orchestrator.logic.scenario_evaluator import ScenarioEvaluator
+from apps.game_core.modules.scenario_orchestrator.logic.scenario_formatter import ScenarioFormatter
+from apps.game_core.modules.scenario_orchestrator.logic.scenario_manager import ScenarioManager
+from apps.game_core.modules.scenario_orchestrator.scenario_core_orchestrator import ScenarioCoreOrchestrator
 
-# from apps.game_core.game_service.combat.combat_core_orchestrator import CombatCoreOrchestrator
-# from apps.game_core.game_service.combat.combat_initialization_service import CombatInitializationService
-# from apps.game_core.game_service.combat.combat_runtime_service import CombatRuntimeService
-from apps.game_core.game_service.core_router import CoreRouter
-from apps.game_core.game_service.exploration.encounter_service import EncounterService
-from apps.game_core.game_service.exploration.exploration_orchestrator import ExplorationOrchestrator
-from apps.game_core.game_service.exploration.movement_service import MovementService
-from apps.game_core.game_service.inventory.inventory_orchestrator import InventoryOrchestrator
-from apps.game_core.game_service.inventory.logic.inventory_session_manager import InventorySessionManager
-from apps.game_core.game_service.lobby.lobby_orchestrator import LobbyCoreOrchestrator
-from apps.game_core.game_service.onboarding.onboarding_orchestrator import OnboardingCoreOrchestrator
-from apps.game_core.game_service.scenario_orchestrator.logic.scenario_director import ScenarioDirector
-from apps.game_core.game_service.scenario_orchestrator.logic.scenario_evaluator import ScenarioEvaluator
-from apps.game_core.game_service.scenario_orchestrator.logic.scenario_formatter import ScenarioFormatter
-from apps.game_core.game_service.scenario_orchestrator.logic.scenario_manager import ScenarioManager
-from apps.game_core.game_service.scenario_orchestrator.scenario_core_orchestrator import ScenarioCoreOrchestrator
-from apps.game_core.game_service.world.game_world_service import GameWorldService
-from apps.game_core.game_service.world.world_loader_service import WorldLoaderService
+# from apps.game_core.modules.combat.combat_core_orchestrator import CombatCoreOrchestrator
+# from apps.game_core.modules.combat.combat_initialization_service import CombatInitializationService
+# from apps.game_core.modules.combat.combat_runtime_service import CombatRuntimeService
+from apps.game_core.system.core_router import CoreRouter
+from apps.game_core.system.factories.world.world_loader_service import WorldLoaderService
+
+if TYPE_CHECKING:
+    from apps.game_core.modules.combat.combat_entry_orchestrator import CombatEntryOrchestrator
+    from apps.game_core.modules.combat.combat_interaction_orchestrator import CombatInteractionOrchestrator
+    from apps.game_core.modules.combat.combat_turn_orchestrator import CombatTurnOrchestrator
+    from apps.game_core.modules.combat.session.combat_session_service import CombatSessionService
 
 
 class CoreContainer:
@@ -130,15 +137,55 @@ class CoreContainer:
             movement_service=self.movement_service,
         )
 
-    # def get_combat_core_orchestrator(self, session: AsyncSession) -> CombatCoreOrchestrator:
-    #     router = self.get_core_router()
-    #
-    #     # Создаем сервисы здесь (DI)
-    #     init_service = CombatInitializationService(session, self.combat_manager, self.account_manager)
-    #     runtime_service = CombatRuntimeService(self.combat_manager, self.account_manager)
-    #
-    #     return CombatCoreOrchestrator(
-    #         init_service=init_service,
-    #         runtime_service=runtime_service,
-    #         core_router=router
-    #     )
+    # --- Combat Services (New Architecture) ---
+
+    def _get_combat_session_service(self) -> "CombatSessionService":
+        from apps.game_core.modules.combat.mechanics.combat_consumable_service import CombatConsumableService
+        from apps.game_core.modules.combat.session.combat_session_service import CombatSessionService
+        from apps.game_core.modules.combat.session.runtime.combat_turn_manager import CombatTurnManager
+        from apps.game_core.modules.combat.session.runtime.combat_view_service import CombatViewService
+        from apps.game_core.modules.combat.supervisor.task_dispatcher import LocalAsyncioDispatcher
+
+        view_service = CombatViewService()  # Removed self.combat_manager argument
+
+        # Создаем диспетчер задач (Local Asyncio)
+        dispatcher = LocalAsyncioDispatcher(self.combat_manager, self.account_manager)
+
+        turn_manager = CombatTurnManager(self.combat_manager, self.account_manager, dispatcher)
+        consumable_service = CombatConsumableService(self.combat_manager)
+
+        return CombatSessionService(
+            account_manager=self.account_manager,
+            combat_manager=self.combat_manager,
+            turn_manager=turn_manager,
+            view_service=view_service,
+            consumable_service=consumable_service,
+        )
+
+    def get_combat_turn_orchestrator(self) -> "CombatTurnOrchestrator":
+        from apps.game_core.modules.combat.combat_turn_orchestrator import CombatTurnOrchestrator
+
+        session_service = self._get_combat_session_service()
+
+        return CombatTurnOrchestrator(session_service)
+
+    def get_combat_interaction_orchestrator(self) -> "CombatInteractionOrchestrator":
+        from apps.game_core.modules.combat.combat_interaction_orchestrator import CombatInteractionOrchestrator
+
+        session_service = self._get_combat_session_service()
+        return CombatInteractionOrchestrator(session_service)
+
+    def get_combat_entry_orchestrator(self, session: AsyncSession) -> "CombatEntryOrchestrator":
+        from apps.game_core.modules.combat.combat_entry_orchestrator import CombatEntryOrchestrator
+        from apps.game_core.modules.combat.session.initialization.combat_lifecycle_service import (
+            CombatLifecycleService,
+        )
+        from apps.game_core.modules.combat.session.runtime.combat_view_service import CombatViewService
+
+        lifecycle = CombatLifecycleService(self.combat_manager, self.account_manager)
+        session_service = self._get_combat_session_service()
+        view_service = CombatViewService()  # Removed self.combat_manager argument
+
+        return CombatEntryOrchestrator(
+            lifecycle_service=lifecycle, session_service=session_service, view_service=view_service, db_session=session
+        )

@@ -4,7 +4,7 @@ from typing import Any
 from loguru import logger as log
 
 from apps.common.schemas_dto import SkillDisplayDTO, SkillProgressDTO
-from apps.game_core.game_service.skill.calculator_service import SkillCalculatorService as SkillCal
+from apps.game_core.modules.skill.calculator_service import SkillCalculatorService as SkillCal
 
 
 class SkillFormatters:

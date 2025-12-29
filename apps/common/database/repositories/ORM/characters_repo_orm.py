@@ -140,6 +140,19 @@ class CharacterStatsRepoORM(ICharacterStatsRepo):
             log.exception(f"CharacterStatsRepoORM | action=get_stats status=failed char_id={character_id}")
             raise
 
+    async def get_stats_batch(self, character_ids: list[int]) -> list[CharacterStatsReadDTO]:
+        log.debug(f"CharacterStatsRepoORM | action=get_stats_batch count={len(character_ids)}")
+        if not character_ids:
+            return []
+        stmt = select(CharacterStats).where(CharacterStats.character_id.in_(character_ids))
+        try:
+            result = await self.session.execute(stmt)
+            orm_stats_list = result.scalars().all()
+            return [CharacterStatsReadDTO.model_validate(orm_stats) for orm_stats in orm_stats_list]
+        except SQLAlchemyError:
+            log.exception("CharacterStatsRepoORM | action=get_stats_batch status=failed")
+            raise
+
     async def update_stats(self, character_id: int, stats_data: CharacterStatsUpdateDTO) -> None:
         log.debug(f"CharacterStatsRepoORM | action=update_stats char_id={character_id}")
         stmt = (

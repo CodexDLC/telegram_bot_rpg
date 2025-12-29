@@ -28,6 +28,13 @@ class IMonsterRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_monsters_batch(self, monster_ids: list[str]) -> list[GeneratedMonsterORM]:
+        """
+        Возвращает список монстров по списку ID.
+        """
+        pass
+
+    @abstractmethod
     async def get_all_clans(self) -> list[GeneratedClanORM]:
         pass
 

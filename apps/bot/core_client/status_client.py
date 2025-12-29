@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.schemas_dto.status_dto import FullCharacterDataDTO
-from apps.game_core.game_service.status.status_orchestrator import StatusCoreOrchestrator
+from apps.game_core.modules.status.status_orchestrator import StatusCoreOrchestrator
 
 
 class StatusClient:

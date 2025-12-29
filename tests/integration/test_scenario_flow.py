@@ -6,11 +6,11 @@ from apps.common.database.repositories.ORM.users_repo_orm import UsersRepoORM
 from apps.common.schemas_dto.character_dto import CharacterShellCreateDTO
 from apps.common.schemas_dto.user_dto import UserUpsertDTO
 from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.game_core.game_service.scenario_orchestrator.logic.scenario_director import ScenarioDirector
-from apps.game_core.game_service.scenario_orchestrator.logic.scenario_evaluator import ScenarioEvaluator
-from apps.game_core.game_service.scenario_orchestrator.logic.scenario_formatter import ScenarioFormatter
-from apps.game_core.game_service.scenario_orchestrator.logic.scenario_manager import ScenarioManager
-from apps.game_core.game_service.scenario_orchestrator.scenario_core_orchestrator import ScenarioCoreOrchestrator
+from apps.game_core.modules.scenario_orchestrator.logic.scenario_director import ScenarioDirector
+from apps.game_core.modules.scenario_orchestrator.logic.scenario_evaluator import ScenarioEvaluator
+from apps.game_core.modules.scenario_orchestrator.logic.scenario_formatter import ScenarioFormatter
+from apps.game_core.modules.scenario_orchestrator.logic.scenario_manager import ScenarioManager
+from apps.game_core.modules.scenario_orchestrator.scenario_core_orchestrator import ScenarioCoreOrchestrator
 from apps.game_core.utils.scenario_loader import ScenarioLoader
 
 

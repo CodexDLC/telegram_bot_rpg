@@ -1,7 +1,7 @@
 # apps/bot/core_client/exploration.py
 
 from apps.common.schemas_dto.exploration_dto import EncounterDTO, WorldNavigationDTO
-from apps.game_core.game_service.exploration.exploration_orchestrator import ExplorationOrchestrator
+from apps.game_core.modules.exploration.exploration_orchestrator import ExplorationOrchestrator
 
 
 class ExplorationClient:

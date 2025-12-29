@@ -16,11 +16,6 @@ from apps.common.database.model_orm.base import Base  # noqa: E402
 from apps.common.database.model_orm.world import WorldRegion, WorldZone  # noqa: E402
 from apps.common.database.repositories.ORM.world_repo import WorldRepoORM  # noqa: E402
 from apps.common.database.session import async_engine, async_session_factory  # noqa: E402
-from apps.game_core.game_service.monster.clan_factory import ClanFactory  # noqa: E402
-from apps.game_core.game_service.world.content_gen_service import ContentGenerationService  # noqa: E402
-from apps.game_core.game_service.world.gen_utils.path_finder import PathFinder  # noqa: E402
-from apps.game_core.game_service.world.threat_service import ThreatService  # noqa: E402
-from apps.game_core.game_service.world.zone_orchestrator import ZoneOrchestrator  # noqa: E402
 from apps.game_core.resources.game_data.graf_data_world.start_vilage import STATIC_LOCATIONS  # noqa: E402
 from apps.game_core.resources.game_data.graf_data_world.world_config import (  # noqa: E402
     BIOME_DEFINITIONS,
@@ -32,6 +27,11 @@ from apps.game_core.resources.game_data.graf_data_world.world_config import (  #
     ZONE_SIZE,
     TerrainMeta,
 )
+from apps.game_core.system.factories.monster.clan_factory import ClanFactory  # noqa: E402
+from apps.game_core.system.factories.world.content_gen_service import ContentGenerationService  # noqa: E402
+from apps.game_core.system.factories.world.gen_utils.path_finder import PathFinder  # noqa: E402
+from apps.game_core.system.factories.world.threat_service import ThreatService  # noqa: E402
+from apps.game_core.system.factories.world.zone_orchestrator import ZoneOrchestrator  # noqa: E402
 
 
 class WorldGenerator:

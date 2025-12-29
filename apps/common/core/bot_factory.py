@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
@@ -5,15 +7,17 @@ from loguru import logger as log
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from apps.bot.middlewares.db_session_middleware import DbSessionMiddleware
-from apps.common.core.container import AppContainer
+
+if TYPE_CHECKING:
+    from apps.game_core.core_container import CoreContainer
 
 
-async def build_app(container: AppContainer) -> tuple[Bot, Dispatcher]:
+async def build_app(container: "CoreContainer") -> tuple[Bot, Dispatcher]:
     """
     Создает и конфигурирует экземпляры Bot и Dispatcher, используя DI-контейнер.
 
     Args:
-        container: Экземпляр AppContainer с зависимостями.
+        container: Экземпляр CoreContainer с зависимостями.
 
     Returns:
         Кортеж с готовыми к работе экземплярами `Bot` и `Dispatcher`.

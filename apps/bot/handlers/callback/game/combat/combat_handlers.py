@@ -36,9 +36,11 @@ async def on_combat_control(
     if not call.bot:
         return
 
-    client = container.get_combat_rbc_client(session)
+    # Получаем клиент без сессии (она не нужна для Redis-операций)
+    client = container.get_combat_rbc_client()
     orchestrator = CombatBotOrchestrator(client)
 
+    # Директору сессия нужна для навигации (CoreRouter)
     director = GameDirector(container, state, session)
     orchestrator.set_director(director)
 
@@ -66,7 +68,7 @@ async def on_combat_menu(
     if not call.bot:
         return
 
-    client = container.get_combat_rbc_client(session)
+    client = container.get_combat_rbc_client()
     orchestrator = CombatBotOrchestrator(client)
 
     director = GameDirector(container, state, session)
@@ -98,7 +100,7 @@ async def on_combat_flow(
     if not call.bot:
         return
 
-    client = container.get_combat_rbc_client(session)
+    client = container.get_combat_rbc_client()
     orchestrator = CombatBotOrchestrator(client)
 
     director = GameDirector(container, state, session)
