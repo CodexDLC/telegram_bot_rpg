@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import Any
 
 from loguru import logger as log
@@ -261,4 +262,22 @@ class SkillProgressRepo(ISkillProgressRepo):
             return [SkillProgressDTO.model_validate(orm_progress) for orm_progress in orm_progress_list]
         except SQLAlchemyError:
             log.exception(f"SkillProgressRepo | action=get_all_skills_progress status=failed char_id={character_id}")
+            raise
+
+    async def get_all_skills_progress_batch(self, character_ids: list[int]) -> dict[int, list[SkillProgressDTO]]:
+        log.debug(f"SkillProgressRepo | action=get_all_skills_progress_batch count={len(character_ids)}")
+        if not character_ids:
+            return {}
+        stmt = select(CharacterSkillProgress).where(CharacterSkillProgress.character_id.in_(character_ids))
+        try:
+            result = await self.session.scalars(stmt)
+            orm_progress_list = result.all()
+
+            grouped_skills = defaultdict(list)
+            for skill in orm_progress_list:
+                grouped_skills[skill.character_id].append(SkillProgressDTO.model_validate(skill))
+
+            return dict(grouped_skills)
+        except SQLAlchemyError:
+            log.exception("SkillProgressRepo | action=get_all_skills_progress_batch status=failed")
             raise

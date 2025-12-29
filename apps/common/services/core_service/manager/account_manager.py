@@ -96,6 +96,34 @@ class AccountManager:
             log.error(f"AccountManager | action=get_account_json status=failed_decode char_id={char_id} field={field}")
             return None
 
+    async def get_accounts_json_batch(self, char_ids: list[int], field: str) -> list[Any | None]:
+        """
+        Массовое получение JSON-поля для списка аккаунтов.
+        Использует Pipeline для оптимизации сетевых запросов.
+        """
+        if not char_ids:
+            return []
+
+        # Доступ к redis_client через сервис
+        async with self.redis_service.redis_client.pipeline() as pipe:
+            for char_id in char_ids:
+                key = Rk.get_account_key(char_id)
+                pipe.hget(key, field)
+            results = await pipe.execute()
+
+        parsed_results = []
+        for res in results:
+            if res:
+                try:
+                    parsed_results.append(json.loads(res))
+                except json.JSONDecodeError:
+                    log.error(f"AccountManager | batch_decode_fail field={field}")
+                    parsed_results.append(None)
+            else:
+                parsed_results.append(None)
+
+        return parsed_results
+
     async def delete_account_field(self, char_id: int, field: str) -> None:
         """
         Удаляет поле.

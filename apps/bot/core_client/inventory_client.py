@@ -1,7 +1,7 @@
 from typing import Any
 
 from apps.common.schemas_dto import InventoryItemDTO
-from apps.game_core.game_service.inventory.inventory_orchestrator import InventoryOrchestrator
+from apps.game_core.modules.inventory.inventory_orchestrator import InventoryOrchestrator
 
 
 class InventoryClient:

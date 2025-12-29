@@ -1,3 +1,5 @@
+from typing import Any
+
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
@@ -7,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.bot.resources.keyboards.status_callback import StatusNavCallback
 
 # from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY, fsm_clean_core_state
-from apps.common.core.container import AppContainer
+# from apps.common.core.container import AppContainer
 
 router = Router(name="character_status_menu")
 
@@ -21,7 +23,7 @@ async def show_status_tab_logic(
     char_id: int,
     key: str,
     session: AsyncSession,
-    container: AppContainer | None = None,
+    container: Any | None = None,  # AppContainer | None = None
 ) -> None:
     """
     Отображает указанную вкладку меню статуса персонажа.
@@ -33,8 +35,8 @@ async def show_status_tab_logic(
     user_id = call.from_user.id
     log.info(f"StatusMenu | event=show_tab user_id={user_id} char_id={char_id} tab='{key}'")
 
-    if not container:
-        container = AppContainer()  # Fallback, если не передан
+    # if not container:
+    #     container = AppContainer()  # Fallback, если не передан
 
     # orchestrator = container.get_status_bot_orchestrator(session)
     # state_data = await state.get_data()
@@ -87,7 +89,7 @@ async def status_menu_router_handler(
     bot: Bot,
     callback_data: StatusNavCallback,
     session: AsyncSession,
-    container: AppContainer,
+    container: Any,  # AppContainer
 ) -> None:
     """
     Главный роутер для навигации по вкладкам меню статуса персонажа.

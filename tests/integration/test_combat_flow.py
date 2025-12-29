@@ -19,7 +19,7 @@ from apps.bot.resources.fsm_states import BotState
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.common.database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from apps.common.schemas_dto import CharacterOnboardingUpdateDTO, CharacterShellCreateDTO, UserUpsertDTO
-from apps.game_core.game_service.combat.session.combat_lifecycle_service import CombatLifecycleService
+from apps.game_core.modules.combat.session.initialization.combat_lifecycle_service import CombatLifecycleService
 
 TEST_USER_ID = 777
 TEST_CHAT_ID = 777

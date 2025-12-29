@@ -17,8 +17,8 @@ from apps.common.services.core_service.manager.arena_manager import ArenaManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
 from apps.common.services.core_service.manager.world_manager import WorldManager
 from apps.common.services.core_service.redis_fields import AccountFields as Af
-from apps.game_core.game_service.auth.login_service import LoginService
-from apps.game_core.game_service.game_sync.game_sync_service import GameSyncService
+from apps.game_core.modules.auth.login_service import LoginService
+from apps.game_core.system.game_sync.game_sync_service import GameSyncService
 
 
 class AuthBotOrchestrator:

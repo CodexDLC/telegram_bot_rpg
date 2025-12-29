@@ -44,6 +44,14 @@ class CombatManager:
         key = Rk.get_combat_exchanges_key(session_id, char_id)
         return await self.redis_service.get_list_length(key)
 
+    async def get_exchange_queue_list(self, session_id: str, char_id: int) -> list[str]:
+        """
+        Возвращает полный список ID противников из очереди обменов.
+        Используется для ViewService.
+        """
+        key = Rk.get_combat_exchanges_key(session_id, char_id)
+        return await self.redis_service.get_list_range(key, 0, -1)
+
     async def pop_from_exchange_queue(self, session_id: str, char_id: int) -> str | None:
         """Извлекает первого противника из очереди обменов."""
         key = Rk.get_combat_exchanges_key(session_id, char_id)

@@ -18,7 +18,7 @@ from apps.common.database.repositories import (
 from apps.common.database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from apps.common.schemas_dto import CharacterStatsReadDTO
 from apps.common.schemas_dto.auth_dto import GameStage
-from apps.game_core.game_service.skill.skill_service import CharacterSkillsService
+from apps.game_core.modules.skill.skill_service import CharacterSkillsService
 
 
 class TutorialServiceStats:

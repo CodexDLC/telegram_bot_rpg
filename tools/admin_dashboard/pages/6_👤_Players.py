@@ -16,7 +16,7 @@ from apps.common.database.repositories import (
     get_user_repo,
     get_wallet_repo,
 )
-from apps.game_core.game_service.status.stats_aggregation_service import StatsAggregationService
+from apps.game_core.modules.status.stats_aggregation_service import StatsAggregationService
 
 # Заменили импорт
 from tools.admin_dashboard.ui_core import (

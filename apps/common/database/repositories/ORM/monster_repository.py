@@ -70,6 +70,25 @@ class MonsterRepository(IMonsterRepository):
         result = await self.session.execute(query)
         return result.scalars().first()
 
+    async def get_monsters_batch(self, monster_ids: list[str]) -> list[GeneratedMonsterORM]:
+        """Возвращает список монстров по списку ID."""
+        if not monster_ids:
+            return []
+
+        try:
+            # Преобразуем строки в UUID
+            uuids = [UUID(mid) for mid in monster_ids]
+        except ValueError:
+            log.warning(f"GetMonstersBatchFail | reason=invalid_uuid_in_list ids='{monster_ids}'")
+            return []
+
+        query = (
+            select(GeneratedMonsterORM).where(GeneratedMonsterORM.id.in_(uuids))
+            # .options(selectinload(GeneratedMonsterORM.clan)) # Если нужен клан
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
     async def get_monster_for_combat(self, monster_id: UUID | str) -> GeneratedMonsterDTO | None:
         monster_orm = await self.get_monster_by_id(monster_id)
         if not monster_orm:

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import Any
 
 from loguru import logger as log
@@ -140,6 +141,31 @@ class InventoryRepo(IInventoryRepo):
             log.exception(
                 f"InventoryRepo | action=get_items_by_location status=failed char_id={character_id} location='{location}'"
             )
+            raise
+
+    async def get_items_by_location_batch(
+        self, character_ids: list[int], location: str
+    ) -> dict[int, list[InventoryItemDTO]]:
+        log.debug(
+            f"InventoryRepo | action=get_items_by_location_batch count={len(character_ids)} location='{location}'"
+        )
+        if not character_ids:
+            return {}
+        stmt = select(InventoryItem).where(
+            InventoryItem.character_id.in_(character_ids), InventoryItem.location == location
+        )
+        try:
+            result = await self.session.execute(stmt)
+            items = result.scalars().all()
+
+            # Группируем по character_id
+            grouped_items = defaultdict(list)
+            for item in items:
+                grouped_items[item.character_id].append(self._to_dto(item))
+
+            return dict(grouped_items)
+        except SQLAlchemyError:
+            log.exception("InventoryRepo | action=get_items_by_location_batch status=failed")
             raise
 
     async def get_equipped_items(self, character_id: int) -> list[InventoryItemDTO]:

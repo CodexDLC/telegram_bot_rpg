@@ -42,6 +42,22 @@ class IInventoryRepo(ABC):
         pass
 
     @abstractmethod
+    async def get_items_by_location_batch(
+        self, character_ids: list[int], location: str
+    ) -> dict[int, list[InventoryItemDTO]]:
+        """
+        Возвращает предметы для списка персонажей в указанной локации.
+
+        Args:
+            character_ids: Список ID персонажей.
+            location: Локация предметов (inventory, equipped).
+
+        Returns:
+            Словарь {character_id: [items]}.
+        """
+        pass
+
+    @abstractmethod
     async def get_equipped_items(self, character_id: int) -> list[InventoryItemDTO]:
         """
         Возвращает все экипированные предметы персонажа.

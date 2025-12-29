@@ -122,6 +122,19 @@ class ICharacterStatsRepo(ABC):
         pass
 
     @abstractmethod
+    async def get_stats_batch(self, character_ids: list[int]) -> list[CharacterStatsReadDTO]:
+        """
+        Возвращает характеристики для списка персонажей.
+
+        Args:
+            character_ids: Список идентификаторов персонажей.
+
+        Returns:
+            Список DTO `CharacterStatsReadDTO`.
+        """
+        pass
+
+    @abstractmethod
     async def update_stats(self, character_id: int, stats_data: CharacterStatsUpdateDTO) -> None:
         """
         Полностью перезаписывает все характеристики персонажа.

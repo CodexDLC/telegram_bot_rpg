@@ -184,7 +184,7 @@ class CombatBotOrchestrator(BaseBotOrchestrator):
             move_data = await manager.get_move_data()
 
             # 2. Отправка хода
-            response = await self.client.register_move(char_id, 0, move_data)
+            response = await self.client.process_turn(char_id, "register_move", move_data)
 
             # 3. Проверка смены стейта
             switch_result = await self.check_and_switch_state(response)

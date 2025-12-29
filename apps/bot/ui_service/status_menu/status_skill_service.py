@@ -19,7 +19,7 @@ from apps.bot.ui_service.status_menu.formatters.skill_formatters import (
 from apps.common.database.model_orm.skill import SkillProgressState
 from apps.common.schemas_dto import SkillProgressDTO
 from apps.common.schemas_dto.status_dto import FullCharacterDataDTO
-from apps.game_core.game_service.skill.calculator_service import (
+from apps.game_core.modules.skill.calculator_service import (
     SkillCalculatorService as SkillCal,
 )
 

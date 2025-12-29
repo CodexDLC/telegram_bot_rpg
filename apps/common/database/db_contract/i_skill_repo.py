@@ -129,3 +129,16 @@ class ISkillProgressRepo(ABC):
             Возвращает пустой список, если записи отсутствуют.
         """
         pass
+
+    @abstractmethod
+    async def get_all_skills_progress_batch(self, character_ids: list[int]) -> dict[int, list[SkillProgressDTO]]:
+        """
+        Возвращает прогресс навыков для списка персонажей.
+
+        Args:
+            character_ids: Список ID персонажей.
+
+        Returns:
+            Словарь {character_id: [skills]}.
+        """
+        pass
