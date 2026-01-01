@@ -1,12 +1,13 @@
-from typing import TYPE_CHECKING
+# apps/game_core/modules/combat/combat_entry_orchestrator.py
+import uuid
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from loguru import logger as log
 
-from apps.common.schemas_dto.combat_source_dto import CombatDashboardDTO
-from apps.common.schemas_dto.core_response_dto import CoreResponseDTO, GameStateHeader
-from apps.common.schemas_dto.game_state_enum import GameState
+from apps.common.schemas_dto.game_state_enum import CoreDomain
 from apps.game_core.modules.combat.session.initialization.combat_lifecycle_service import CombatLifecycleService
-from apps.game_core.modules.combat.session.runtime.combat_view_service import CombatViewService
+from apps.game_core.system.context_assembler.dtos import ContextRequestDTO, ContextResponseDTO
+from apps.game_core.system.core_router import CoreRouter
 
 if TYPE_CHECKING:
     from apps.game_core.modules.combat.session.combat_session_service import CombatSessionService
@@ -14,50 +15,209 @@ if TYPE_CHECKING:
 
 class CombatEntryOrchestrator:
     """
-    Оркестратор входа в бой и инициализации.
-    Отвечает за создание сессии, загрузку участников и формирование первого ответа.
+    Оркестратор входа в бой (v2.0).
+    Диспетчер сценариев создания боевых сессий.
+    Работает как Redis-bound сервис (не требует прямой сессии БД, использует CoreRouter).
     """
 
     def __init__(
         self,
         lifecycle_service: CombatLifecycleService,
         session_service: "CombatSessionService",
-        view_service: CombatViewService,
-        db_session: AsyncSession,
+        core_router: CoreRouter,
     ):
         self.lifecycle = lifecycle_service
         self.session_service = session_service
-        self.view_service = view_service
-        self.db_session = db_session
+        self.core_router = core_router
 
-    async def initialize_pve(self, char_id: int, monster_id: str) -> CoreResponseDTO[CombatDashboardDTO]:
+    async def get_entry_point(self, char_id: int, action: str, context: dict[str, Any]) -> dict[str, Any]:
         """
-        Инициализирует PvE бой (Игрок vs Монстр).
+        Единая точка входа для создания боя.
+        Выбирает сценарий на основе action.
+        Возвращает результат операции (success).
         """
-        # 1. Создаем сессию (Lifecycle)
-        session_id = await self.lifecycle.start_pve_battle(char_id, monster_id, self.db_session)
+        log.info(f"CombatEntry | action='{action}' context={context}")
 
-        if not session_id:
-            return CoreResponseDTO(
-                header=GameStateHeader(current_state=GameState.EXPLORATION, error="Failed to start battle"),
-                payload=None,
-            )
+        try:
+            if action == "standard_pve":
+                return await self._handle_standard_pve(context)
+            elif action == "shadow_duel":
+                # char_id может прийти как аргумент или в контексте
+                target_char_id = context.get("char_id") or char_id
+                if not target_char_id:
+                    raise ValueError("char_id is required for shadow_duel")
+                return await self._handle_shadow_duel(int(target_char_id))
+            elif action == "arena_match":
+                return await self._handle_arena_match(context)
+            elif action == "tutorial":
+                # TODO: Реализовать туториал
+                return {"success": False, "error": "Tutorial not implemented"}
+            else:
+                log.error(f"CombatEntry | Unknown action: {action}")
+                return {"success": False, "error": f"Unknown action: {action}"}
+        except Exception as e:  # noqa: BLE001
+            log.exception(f"CombatEntry | Failed to initialize combat: {e}")
+            return {"success": False, "error": str(e)}
 
-        # 2. Получаем Snapshot (View)
-        # SessionService сам найдет активную сессию по char_id
-        snapshot = await self.session_service.get_snapshot(char_id)
+    # --- Сценарии (Pipelines) ---
 
-        if not snapshot:
-            return CoreResponseDTO(
-                header=GameStateHeader(current_state=GameState.EXPLORATION, error="Failed to get battle snapshot"),
-                payload=None,
-            )
-
-        return CoreResponseDTO(header=GameStateHeader(current_state=GameState.COMBAT), payload=snapshot)
-
-    async def restore_active_battles(self) -> None:
+    async def _handle_standard_pve(self, context: dict[str, Any]) -> dict[str, Any]:
         """
-        Восстанавливает активные бои после перезагрузки (заглушка).
+        Сценарий: Стандартный PvE бой.
+        Вход: context["teams"] (список команд).
         """
-        # TODO: Реализовать восстановление супервизоров для активных сессий из Redis
-        pass
+        # 1. Prepare: Разбор команд и рандом цветов
+        teams_data = context.get("teams", [])
+        if not teams_data:
+            raise ValueError("No teams provided for standard_pve")
+
+        colors = ["blue", "red", "green", "yellow"]
+        # TODO: Добавить shuffle(colors) если нужен рандом
+
+        player_ids = []
+        monster_ids = []
+        team_map = []
+
+        for i, team in enumerate(teams_data):
+            color = colors[i] if i < len(colors) else f"team_{i}"
+            t_players = team.get("players", [])
+            t_monsters = team.get("monsters", [])
+
+            player_ids.extend(t_players)
+            monster_ids.extend(t_monsters)
+
+            team_map.append({"color": color, "players": t_players, "monsters": t_monsters})
+
+        # 2. Assemble: Получение UUID от Ассемблера через Router
+        # Дедупликация ID перед запросом
+        unique_player_ids = list(set(player_ids))
+        unique_monster_ids = list(set(monster_ids))
+
+        data_refs = await self._assemble_data_refs(unique_player_ids, unique_monster_ids)
+
+        # 3. Build: Сборка сессии
+        session_teams_config: dict[str, dict[str, list]] = {}
+
+        for team in team_map:
+            color = team["color"]
+            session_teams_config[color] = {"players": [], "monsters": []}
+
+            for pid in team["players"]:
+                if pid in data_refs.player:
+                    session_teams_config[color]["players"].append({"id": pid, "ref": data_refs.player[pid]})
+
+            for mid in team["monsters"]:
+                if mid in data_refs.monster:
+                    session_teams_config[color]["monsters"].append({"id": mid, "ref": data_refs.monster[mid]})
+
+        return await self._finalize_session_creation("standard", session_teams_config, player_ids)
+
+    async def _handle_shadow_duel(self, char_id: int) -> dict[str, Any]:
+        """
+        Сценарий: Бой с тенью.
+        Вход: char_id.
+        """
+        # 1. Prepare & Assemble
+        data_refs = await self._assemble_data_refs([char_id], [])
+
+        if char_id not in data_refs.player:
+            raise ValueError(f"Failed to assemble context for player {char_id}")
+
+        player_ref = data_refs.player[char_id]
+
+        # 2. Build
+        session_teams_config: dict[str, dict[str, list]] = {
+            "blue": {"players": [{"id": char_id, "ref": player_ref}], "monsters": []},
+            "red": {
+                "players": [{"id": char_id, "ref": player_ref}],  # Тот же ref!
+                "monsters": [],
+            },
+        }
+
+        return await self._finalize_session_creation("shadow", session_teams_config, [char_id])
+
+    async def _handle_arena_match(self, context: dict[str, Any]) -> dict[str, Any]:
+        """
+        Сценарий: Арена.
+        Вход: context["teams"] (словарь {color: [ids]}).
+        """
+        # 1. Prepare
+        teams_dict = context.get("teams", {})
+
+        player_ids = []
+        monster_ids = []
+
+        for _color, members in teams_dict.items():
+            player_ids.extend(members.get("players", []))
+            monster_ids.extend(members.get("monsters", []))
+
+        # 2. Assemble
+        # Дедупликация ID перед запросом
+        unique_player_ids = list(set(player_ids))
+        unique_monster_ids = list(set(monster_ids))
+
+        data_refs = await self._assemble_data_refs(unique_player_ids, unique_monster_ids)
+
+        # 3. Build
+        session_teams_config: dict[str, dict[str, list]] = {}
+        for color, members in teams_dict.items():
+            session_teams_config[color] = {"players": [], "monsters": []}
+
+            for pid in members.get("players", []):
+                if pid in data_refs.player:
+                    session_teams_config[color]["players"].append({"id": pid, "ref": data_refs.player[pid]})
+
+            for mid in members.get("monsters", []):
+                if mid in data_refs.monster:
+                    session_teams_config[color]["monsters"].append({"id": mid, "ref": data_refs.monster[mid]})
+
+        return await self._finalize_session_creation("arena", session_teams_config, player_ids)
+
+    # --- Helpers ---
+
+    async def _assemble_data_refs(self, player_ids: list[int], monster_ids: list[str]) -> ContextResponseDTO:
+        """
+        Вызывает ContextAssembler (через CoreRouter) для подготовки данных в Redis.
+        Возвращает маппинг ID -> RedisKey.
+        """
+        request = ContextRequestDTO(player_ids=player_ids, monster_ids=monster_ids, scope="combat")
+        # Используем CoreRouter для вызова ассемблера
+        # НЕ передаем сессию, так как CoreRouter сам создаст её для ContextAssembler
+        response = await self.core_router.route(
+            domain=CoreDomain.CONTEXT_ASSEMBLER,
+            action="assemble",  # Используем правильный action для ContextAssembler
+            context=request.model_dump(),
+            session=None,  # <--- Важно: сессия не нужна
+        )
+
+        # response может быть None, если что-то пошло не так в роутере
+        if not response:
+            raise RuntimeError("Failed to get response from ContextAssembler")
+
+        if response.errors["player"] or response.errors["monster"]:
+            log.warning(f"CombatEntry | Assembly errors: {response.errors}")
+
+        return response
+
+    async def _finalize_session_creation(
+        self, mode: str, teams_config: dict, active_player_ids: list[int]
+    ) -> dict[str, Any]:
+        """
+        Общий финал: Создание сессии в Lifecycle, линковка и возврат результата.
+        """
+        session_id = str(uuid.uuid4())
+
+        try:
+            # Вызываем Lifecycle для создания сессии
+            await self.lifecycle.create_battle(session_id, {"mode": mode, "teams_config": teams_config})
+
+            # Линковка игроков через SessionService (Facade)
+            if active_player_ids:
+                await self.session_service.link_players_to_session(active_player_ids, session_id)
+
+            return {"success": True}
+
+        except Exception as e:  # noqa: BLE001
+            log.exception(f"CombatEntry | Finalize error: {e}")
+            # TODO: Rollback (delete session)
+            return {"success": False, "error": str(e)}

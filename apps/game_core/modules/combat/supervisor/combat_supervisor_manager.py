@@ -1,3 +1,4 @@
+# apps/game_core/modules/combat/supervisor/combat_supervisor_manager.py
 """
 Файл: apps/game_core/modules/combat/supervisor/combat_supervisor_manager.py
 """

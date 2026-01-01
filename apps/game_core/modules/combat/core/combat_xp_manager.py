@@ -1,3 +1,4 @@
+# apps/game_core/modules/combat/core/combat_xp_manager.py
 from loguru import logger as log
 
 from apps.common.schemas_dto import CombatSessionContainerDTO

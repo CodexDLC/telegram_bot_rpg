@@ -1,5 +1,6 @@
 # apps/game_core/system/context_assembler/service.py
 import asyncio
+from typing import Any
 
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,14 +17,29 @@ class ContextAssemblerOrchestrator:
     Главный оркестратор сборки контекста.
     """
 
-    def __init__(self, session: AsyncSession, account_manager: AccountManager):
-        # Инициализируем ContextRedisManager, используя redis клиент из account_manager.redis_service
-        self.context_manager = ContextRedisManager(account_manager.redis_service.redis_client)
-
+    def __init__(
+        self,
+        session: AsyncSession,
+        account_manager: AccountManager,
+        context_manager: ContextRedisManager,
+    ):
+        self.context_manager = context_manager
         self.strategies = {
             "player": PlayerAssembler(session, account_manager, self.context_manager),
             "monster": MonsterAssembler(session, account_manager, self.context_manager),
         }
+
+    async def get_entry_point(self, action: str, context: dict[str, Any]) -> ContextResponseDTO:
+        """
+        Единая точка входа для соответствия протоколу CoreOrchestratorProtocol.
+        """
+        if action == "assemble":
+            # Превращаем dict context в DTO
+            request = ContextRequestDTO(**context)
+            return await self.prepare_bulk_context(request)
+
+        log.error(f"ContextAssembler | Unknown action: {action}")
+        raise ValueError(f"Unknown action for ContextAssembler: {action}")
 
     async def prepare_bulk_context(self, request: ContextRequestDTO) -> ContextResponseDTO:
         """

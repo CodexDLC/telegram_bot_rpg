@@ -1,3 +1,4 @@
+# apps/game_core/modules/combat/combat_redis_fields.py
 class CombatSessionFields:
     """
     Константы полей для метаданных боевой сессии (RBC).

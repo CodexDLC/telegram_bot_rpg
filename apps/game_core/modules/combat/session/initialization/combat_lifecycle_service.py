@@ -1,483 +1,277 @@
-import asyncio
+# apps/game_core/modules/combat/session/initialization/combat_lifecycle_service.py
 import json
+import random
 import time
-from datetime import date
-from typing import Any
+from collections import defaultdict
+from typing import Any, NamedTuple
 
 from loguru import logger as log
-from pydantic import ValidationError
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession
+from redis.asyncio.client import Pipeline
 
-from apps.common.database.model_orm.monster import GeneratedMonsterORM
-from apps.common.database.repositories import (
-    get_character_stats_repo,
-    get_skill_progress_repo,
-    get_skill_rate_repo,
-)
-from apps.common.database.session import async_session_factory
-from apps.common.schemas_dto import (
-    CombatSessionContainerDTO,
-    FighterStateDTO,
-    StatSourceData,
-)
-from apps.common.services.analytics.analytics_service import analytics_service
 from apps.common.services.core_service import CombatManager
 from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.redis_fields import AccountFields as Af
-from apps.game_core.modules.combat.combat_redis_fields import CombatSessionFields as Csf
-from apps.game_core.modules.combat.core.combat_stats_calculator import StatsCalculator
-from apps.game_core.modules.combat.session.initialization.combat_aggregator import CombatAggregator
-from apps.game_core.modules.combat.session.initialization.monster_factory import MonsterFactory
-from apps.game_core.modules.skill.skill_service import CharacterSkillsService
+from apps.common.services.core_service.manager.context_manager import ContextRedisManager
+from apps.common.services.core_service.redis_key import RedisKeys as Rk
 
-SWITCH_CHARGES_BASE = 1
-SWITCH_CHARGES_PER_ENEMY = 0.5
-SWITCH_CHARGES_CAP_MULTIPLIER = 5
+
+class SessionDataDTO(NamedTuple):
+    """DTO for transferring assembled data to the persistence method."""
+
+    meta: dict[str, Any]
+    actors: dict[str, dict[str, Any]]  # final_id -> {field: value} (HASH fields)
+    queues: dict[str, list[str]]  # final_id -> [enemy_id, ...]
 
 
 class CombatLifecycleService:
     """
-    Сервис управления жизненным циклом боевых сессий.
-
-    Отвечает за создание, инициализацию, добавление участников и завершение боя,
-    включая распределение опыта и сохранение состояния персонажей.
+    Service for managing the lifecycle of combat sessions.
+    Responsible for creation (assembling from templates) and finalization (cleanup) of the session.
     """
 
-    def __init__(self, combat_manager: CombatManager, account_manager: AccountManager):
-        """
-        Инициализирует сервис.
-
-        Args:
-            combat_manager: Менеджер боя (Redis).
-            account_manager: Менеджер аккаунта (Redis).
-        """
+    def __init__(
+        self,
+        combat_manager: CombatManager,
+        account_manager: AccountManager,
+        context_manager: ContextRedisManager,
+    ):
         self.combat_manager = combat_manager
         self.account_manager = account_manager
-        log.debug("CombatLifecycleServiceInit")
+        self.context_manager = context_manager
 
-    async def start_pve_battle(self, char_id: int, monster_id: str, session: AsyncSession) -> str | None:
-        """
-        Запускает PvE бой.
-        Временная заглушка для совместимости с CombatEntryOrchestrator.
-        TODO: Реализовать полноценную логику создания боя здесь.
-        """
-        # Пока возвращаем None, чтобы оркестратор использовал свою логику (если она там есть)
-        # Или можно перенести логику из оркестратора сюда.
-        # Учитывая, что в оркестраторе я написал логику вручную, этот метод может быть просто интерфейсом.
-        # Но оркестратор вызывает его.
-        # Давай вернем None, чтобы оркестратор обработал ошибку, или (лучше) реализуем минимально.
-
-        # В текущей реализации оркестратора (которую я написал в предыдущем шаге),
-        # он вызывает lifecycle.create_battle и т.д. САМ.
-        # А метод start_pve_battle он вызывает как альтернативу.
-        # Стоп. В оркестраторе я написал:
-        # session_id = await self.lifecycle.start_pve_battle(...)
-        # Значит, этот метод ДОЛЖЕН возвращать session_id.
-
-        # Реализуем базовую версию, используя методы этого же класса.
-        import uuid
-
-        session_id = str(uuid.uuid4())
-
-        try:
-            # 1. Create Battle
-            await self.create_battle(session_id, {"is_pve": 1, "mode": "pve"})
-
-            # 2. Add Player
-            # Имя игрока нужно получить.
-            name = await self.account_manager.get_account_field(char_id, "name") or "Player"
-            await self.add_participant(session, session_id, char_id, "blue", name, is_ai=False)
-
-            # 3. Add Monster
-            # Тут сложнее, нужен доступ к репозиторию монстров.
-            # Но у нас есть session.
-            from apps.common.database.repositories.ORM.monster_repository import MonsterRepository
-
-            repo = MonsterRepository(session)
-            monster_orm = await repo.get_monster_by_id(monster_id)
-
-            if not monster_orm:
-                log.error(f"StartPvE | Monster {monster_id} not found")
-                return None
-
-            await self.add_db_monster_participant(session_id, -1, monster_orm, "red")
-
-            # 4. Init
-            await self.initialize_battle_state(session_id)
-            await self.initialize_exchange_queues(session_id, [char_id])
-
-            return session_id
-
-        except Exception as e:  # noqa: BLE001
-            log.exception(f"StartPvE | Failed: {e}")
-            return None
+    # --- Public API ---
 
     async def create_battle(self, session_id: str, config: dict[str, Any]) -> None:
         """
-        Создает новую боевую сессию в Redis с полными метаданными.
+        Main method for creating a session.
+        Orchestrates loading, assembly, and persistence.
 
         Args:
-            session_id: Уникальный ID сессии.
-            config: Словарь с параметрами боя (battle_type, mode, is_pve и т.д.).
+            session_id: Unique Session UUID.
+            config: Configuration containing 'mode' and 'teams_config'.
         """
-        meta_data = {
-            Csf.START_TIME: int(time.time()),
-            Csf.ACTIVE: 1,
-            Csf.TEAMS: json.dumps({}),  # Инициализируем пустые команды
-            Csf.ACTORS_INFO: json.dumps({}),  # Инициализируем пустые роли
-            Csf.DEAD_ACTORS: json.dumps([]),  # Инициализируем пустой список мертвых
-            **config,  # Распаковываем весь конфиг сразу
-        }
-        # RBC: Пишем в новую мету
-        await self.combat_manager.create_rbc_session_meta(session_id, meta_data)
-        log.info(f"BattleCreate | session_id='{session_id}' config={config}")
+        mode = config.get("mode", "standard")
+        teams_payload = config.get("teams_config", {})
+        ttl = config.get("ttl", 3600)
 
-    async def add_participant(
-        self, session: AsyncSession, session_id: str, char_id: int, team: str, name: str, is_ai: bool = False
-    ) -> None:
+        log.info(f"Lifecycle | create_session id={session_id} mode={mode}")
+
+        # 1. Load Templates (MGET)
+        templates_map = await self._load_templates(teams_payload)
+
+        # 2. Assemble Teams and Actors (In-Memory)
+        session_data = self._assemble_session_data(session_id, mode, teams_payload, templates_map)
+
+        # 3. Persist to Redis (Pipeline)
+        await self._persist_session(session_id, session_data, ttl)
+
+    async def complete_session(self, session_id: str, results: dict) -> None:
         """
-        Добавляет участника в боевую сессию.
-
-        Собирает все данные персонажа, рассчитывает HP/Energy и сохраняет в Redis.
+        Finalizes the session, cleans up Redis, and unlinks players.
         """
-        log.info(f"AddParticipant | session_id='{session_id}' char_id={char_id} team='{team}' is_ai={is_ai}")
-        try:
-            aggregator = CombatAggregator(session, self.account_manager)
-            container = await aggregator.collect_session_container(char_id)
-            container.team, container.name, container.is_ai = team, name, is_ai
+        log.info(f"Lifecycle | complete_session id={session_id} results={results}")
 
-            final_stats = StatsCalculator.aggregate_all(container.stats)
-            current_hp = int(final_stats.get("hp_max", 100))
-            current_energy = int(final_stats.get("energy_max", 40))
-
-            container.state = FighterStateDTO(
-                hp_current=current_hp,
-                energy_current=current_energy,
-                targets=[],
-                switch_charges=0,
-                max_switch_charges=0,
-                xp_buffer={},
-            )
-
-            # RBC: Пишем ТОЛЬКО в Hash акторов
-            await self.combat_manager.set_rbc_actor_state_json(session_id, char_id, container.model_dump_json())
-
-            # ВАЖНО: Привязываем сессию к аккаунту игрока (Mapping)
-            if not is_ai:
-                await self.account_manager.update_account_fields(char_id, {Af.COMBAT_SESSION_ID: session_id})
-
-            log.debug(f"AddParticipant | event=success session_id='{session_id}' char_id={char_id}")
-        except (SQLAlchemyError, ValidationError, json.JSONDecodeError) as e:
-            log.exception(f"AddParticipantError | session_id='{session_id}' char_id={char_id} error='{e}'")
-
-    async def add_dummy_participant(self, session_id: str, char_id: int, hp: int, energy: int, name: str) -> None:
-        """
-        Добавляет "манекен" в боевую сессию с заданными параметрами.
-        """
-        log.info(f"AddDummy | session_id='{session_id}' char_id={char_id} name='{name}'")
-        container = CombatSessionContainerDTO(char_id=char_id, team="red", name=name, is_ai=True)
-        container.state = FighterStateDTO(
-            hp_current=hp, energy_current=energy, targets=[], switch_charges=0, max_switch_charges=0, xp_buffer={}
-        )
-        container.stats["hp_max"] = StatSourceData(base=float(hp))
-        container.stats["energy_max"] = StatSourceData(base=float(energy))
-        container.stats["hp_regen"] = StatSourceData(base=0.0)
-
-        # RBC: Пишем ТОЛЬКО в Hash акторов
-        await self.combat_manager.set_rbc_actor_state_json(session_id, char_id, container.model_dump_json())
-        log.debug(f"AddDummy | event=success session_id='{session_id}' char_id={char_id}")
-
-    async def add_monster_participant(
-        self, session_id: str, char_id: int, monster_data: dict[str, Any], team: str = "red"
-    ) -> None:
-        """
-        Создает полноценного боевого участника из шаблона монстра (MonsterVariant).
-        Использует MonsterFactory для корректной сборки статов и экипировки.
-        """
-        log.info(f"AddMonster | session_id='{session_id}' char_id={char_id}")
-
-        try:
-            # Используем фабрику для создания контейнера
-            container = MonsterFactory.create_from_data(monster_data, char_id, team)
-
-            # Сохраняем
-            await self.combat_manager.set_rbc_actor_state_json(session_id, char_id, container.model_dump_json())
-            log.debug(f"AddMonster | event=success session_id='{session_id}' char_id={char_id} name='{container.name}'")
-        except Exception as e:  # noqa: BLE001
-            log.exception(f"AddMonsterError | session_id='{session_id}' char_id={char_id} error='{e}'")
-
-    async def add_db_monster_participant(
-        self, session_id: str, char_id: int, monster_orm: GeneratedMonsterORM, team: str = "red"
-    ) -> None:
-        """
-        Создает полноценного боевого участника из ORM-объекта монстра.
-        """
-        log.info(f"AddDBMonster | session_id='{session_id}' char_id={char_id} monster_id='{monster_orm.id}'")
-
-        try:
-            # Используем фабрику для создания контейнера из ORM
-            container = MonsterFactory.create_from_db(monster_orm, char_id, team)
-
-            # Сохраняем
-            await self.combat_manager.set_rbc_actor_state_json(session_id, char_id, container.model_dump_json())
-            log.debug(
-                f"AddDBMonster | event=success session_id='{session_id}' char_id={char_id} name='{container.name}'"
-            )
-        except Exception as e:  # noqa: BLE001
-            log.exception(f"AddDBMonsterError | session_id='{session_id}' char_id={char_id} error='{e}'")
-
-    async def create_shadow_copy(self, session_id: str, original_char_id: int) -> None:
-        """
-        Создает теневую копию участника (клон) для режима arena_shadow.
-        """
-        player_json = await self.combat_manager.get_rbc_actor_state_json(session_id, original_char_id)
-
-        if not player_json:
-            log.warning(
-                f"CreateShadowCopy | reason=original_not_found session_id='{session_id}' original_id={original_char_id}"
-            )
-            return
-
-        try:
-            player_data = CombatSessionContainerDTO.model_validate_json(player_json)
-            shadow_id = -original_char_id
-
-            # Клонируем данные
-            shadow_data = player_data.model_copy(deep=True)
-            shadow_data.char_id = shadow_id
-            shadow_data.name = f"👥 Тень ({player_data.name})"
-            shadow_data.team = "red"
-            shadow_data.is_ai = True
-
-            # RBC: Пишем ТОЛЬКО в Hash акторов
-            await self.combat_manager.set_rbc_actor_state_json(session_id, shadow_id, shadow_data.model_dump_json())
-            log.info(f"CreateShadowCopy | event=success session_id='{session_id}' shadow_id={shadow_id}")
-        except (ValidationError, json.JSONDecodeError) as e:
-            log.exception(f"CreateShadowCopyError | session_id='{session_id}' error='{e}'")
-
-    async def initialize_exchange_queues(self, session_id: str, players: list[int]) -> None:
-        """
-        Наполняет очереди обменов для игроков.
-        """
-        actors_data = await self.combat_manager.get_rbc_all_actors_json(session_id)
-        actors_teams = {}
-        if actors_data:
-            for aid, data in actors_data.items():
-                container = CombatSessionContainerDTO.model_validate_json(data)
-                actors_teams[int(aid)] = container.team
-
-        for p_id in players:
-            player_team = actors_teams.get(p_id)
-            enemies_ids = [str(aid) for aid, team in actors_teams.items() if team != player_team]
-
-            if enemies_ids:
-                # ИСПРАВЛЕНО: Используем метод менеджера вместо прямого доступа к Redis
-                await self.combat_manager.add_enemies_to_exchange_queue(session_id, p_id, enemies_ids)
-        log.debug(f"InitializeExchangeQueues | session_id='{session_id}' players={players}")
-
-    async def initialize_battle_state(self, session_id: str) -> None:
-        """
-        Выполняет финальную настройку состояния боя перед его началом.
-
-        Рассчитывает цели для каждого участника и инициализирует заряды тактики.
-        Также обновляет метаданные сессии (teams, actors_info).
-        """
-        log.info(f"InitializeBattle | session_id='{session_id}'")
-        # Теперь читаем всех актеров сразу из RBC хэша
-        actors_data = await self.combat_manager.get_rbc_all_actors_json(session_id)
-
-        if not actors_data:
-            log.warning(f"InitializeBattle | status=empty session_id='{session_id}'")
-            return
-
-        actors_cache: dict[int, CombatSessionContainerDTO] = {}
-        teams_map: dict[str, list[int]] = {}
-        actors_info: dict[str, str] = {}
-
-        for aid_str, data in actors_data.items():
-            pid = int(aid_str)
-            try:
-                actor = CombatSessionContainerDTO.model_validate_json(data)
-                actors_cache[pid] = actor
-
-                # Заполняем teams и actors_info
-                if actor.team not in teams_map:
-                    teams_map[actor.team] = []
-                teams_map[actor.team].append(pid)
-
-                actors_info[str(pid)] = "ai" if actor.is_ai else "player"
-
-            except (json.JSONDecodeError, ValidationError) as e:
-                log.exception(
-                    f"InitializeBattleError | reason=actor_parse_fail session_id='{session_id}' pid={pid} error='{e}'"
-                )
-                continue
-
-        # Обновляем метаданные сессии
-        meta_update = {Csf.TEAMS: json.dumps(teams_map), Csf.ACTORS_INFO: json.dumps(actors_info)}
-        await self.combat_manager.create_rbc_session_meta(session_id, meta_update)
-
-        for pid, actor in actors_cache.items():
-            if not actor.state:
-                continue
-
-            enemies = sorted(
-                [
-                    other_pid
-                    for other_pid, other_actor in actors_cache.items()
-                    if pid != other_pid and other_actor.team != actor.team
-                ]
-            )
-            actor.state.targets = enemies
-
-            enemy_count = len(enemies)
-            charges = SWITCH_CHARGES_BASE + int(enemy_count * SWITCH_CHARGES_PER_ENEMY)
-            cap = enemy_count * SWITCH_CHARGES_CAP_MULTIPLIER
-            final_charges = min(charges, cap) if cap > 0 else charges
-            actor.state.switch_charges = final_charges
-            actor.state.max_switch_charges = cap
-
-            # Сохраняем обратно в RBC ключ
-            await self.combat_manager.set_rbc_actor_state_json(session_id, pid, actor.model_dump_json())
-            log.debug(
-                f"InitializeBattle | event=actor_state_init session_id='{session_id}' actor_id={pid} targets={enemies} charges={final_charges}"
-            )
-        log.info(f"InitializeBattle | event=success session_id='{session_id}' participants={len(actors_cache)}")
-
-    async def finish_battle(self, session_id: str, winner_team: str) -> None:
-        """
-        Завершает боевую сессию, распределяет опыт и сохраняет состояние персонажей.
-        """
-        log.info(f"FinishBattle | session_id='{session_id}' winner_team='{winner_team}'")
-        end_time = int(time.time())
-        # RBC: Читаем из новой меты
+        # 1. Get participant list from Meta (actors_info)
         meta = await self.combat_manager.get_rbc_session_meta(session_id)
-        start_time = int(meta.get(Csf.START_TIME, end_time)) if meta else end_time
-        duration = max(0, end_time - start_time)
+        participant_ids = []
 
-        # Читаем участников из RBC хэша
-        actors_data = await self.combat_manager.get_rbc_all_actors_json(session_id)
-        if not actors_data:
-            log.warning(f"FinishBattle | reason=no_actors_found session_id='{session_id}'")
-            return
+        if meta and "actors_info" in meta:
+            try:
+                actors_info = json.loads(meta["actors_info"])
+                participant_ids = list(actors_info.keys())
+            except json.JSONDecodeError:
+                log.error(f"Lifecycle | Failed to decode actors_info for session {session_id}")
 
-        # Собираем награды (rewards) для каждого игрока
-        # В будущем здесь может быть логика лута, пока только опыт
-        rewards_map = {}
-
-        stats_payload: dict[str, Any] = {
-            "timestamp": end_time,
-            "date_iso": date.today().isoformat(),
-            "session_id": session_id,
-            "winner_team": winner_team,
-            "duration_sec": duration,
-            "total_rounds": 0,
-        }
-
-        try:
-            async with async_session_factory() as session:
-                stats_repo, rate_repo, prog_repo = (
-                    get_character_stats_repo(session),
-                    get_skill_rate_repo(session),
-                    get_skill_progress_repo(session),
-                )
-                skill_service = CharacterSkillsService(stats_repo, rate_repo, prog_repo)
-
-                p_counter = 1
-                for pid_str, data in actors_data.items():
-                    pid = int(pid_str)
-                    try:
-                        actor = CombatSessionContainerDTO.model_validate_json(data)
-                        if not actor.state:
-                            log.warning(
-                                f"FinishBattle | reason=actor_state_missing session_id='{session_id}' pid={pid}"
-                            )
-                            continue
-
-                        if actor.state.exchange_count > int(stats_payload["total_rounds"]):
-                            stats_payload["total_rounds"] = actor.state.exchange_count
-
-                        if p_counter <= 2:
-                            prefix = f"p{p_counter}"
-                            s = actor.state.stats
-                            stats_payload.update(
-                                {
-                                    f"{prefix}_id": actor.char_id,
-                                    f"{prefix}_name": actor.name,
-                                    f"{prefix}_team": actor.team,
-                                    f"{prefix}_hp_left": actor.state.hp_current,
-                                    f"{prefix}_energy_left": actor.state.energy_current,
-                                    f"{prefix}_dmg_dealt": s.damage_dealt,
-                                    f"{prefix}_dmg_taken": s.damage_taken,
-                                    f"{prefix}_healing": s.healing_done,
-                                    f"{prefix}_blocks": s.blocks_success,
-                                    f"{prefix}_dodges": s.dodges_success,
-                                    f"{prefix}_crits": s.crits_landed,
-                                }
-                            )
-                            p_counter += 1
-
-                        # Обработка опыта
-                        xp_gained = 0
-                        if not actor.is_ai and actor.state.xp_buffer:
-                            log.info(
-                                f"FinishBattle | event=saving_xp char_id={pid} xp_count={len(actor.state.xp_buffer)}"
-                            )
-                            # Суммируем опыт для отображения в UI
-                            xp_gained = sum(actor.state.xp_buffer.values())
-                            await skill_service.apply_combat_xp_batch(pid, actor.state.xp_buffer)
-
-                        # Формируем структуру наград для UI
-                        rewards_map[str(pid)] = {
-                            "xp": xp_gained,
-                            "gold": 0,  # Пока заглушка
-                            "items": [],
-                        }
-
-                        if pid > 0:
-                            # Получаем текущее состояние, чтобы узнать prev_state
-                            # ИСПРАВЛЕНО: Используем get_account_field для одного поля
-                            prev_state = await self.account_manager.get_account_field(pid, Af.PREV_STATE)
-                            if not prev_state:
-                                prev_state = "exploration"
-
-                            # ВАЖНО: Очищаем combat_session_id и возвращаем игрока в prev_state
-                            await self.account_manager.update_account_fields(
-                                pid,
-                                {
-                                    Af.HP_CURRENT: actor.state.hp_current,
-                                    Af.ENERGY_CURRENT: actor.state.energy_current,
-                                    Af.LAST_UPDATE: time.time(),
-                                    Af.COMBAT_SESSION_ID: "",
-                                    Af.STATE: prev_state,  # <--- АВТОМАТИЧЕСКИЙ ВЫХОД ИЗ БОЯ
-                                },
-                            )
-                            log.info(
-                                f"FinishBattle | event=global_state_update char_id={pid} hp={actor.state.hp_current} state={prev_state}"
-                            )
-
-                    except (json.JSONDecodeError, ValidationError) as e:
-                        log.exception(
-                            f"FinishBattleError | reason=actor_parse_fail session_id='{session_id}' pid={pid} error='{e}'"
-                        )
-                        continue
-                await session.commit()
-        except SQLAlchemyError as e:
-            log.exception(f"FinishBattleError | reason=db_error session_id='{session_id}' error='{e}'")
-
-        # Сохраняем rewards в метаданные сессии, чтобы UI мог их прочитать
-        new_meta = {
-            Csf.ACTIVE: 0,
-            Csf.WINNER: winner_team,
-            Csf.END_TIME: end_time,
-            Csf.REWARDS: json.dumps(rewards_map),  # <--- Добавили сохранение наград
-        }
-        # RBC: Обновляем новую мету
-        await self.combat_manager.create_rbc_session_meta(session_id, new_meta)
-
-        # RBC: Очистка сессии (удаление очередей, пуль и установка TTL на историю)
+        # 2. Cleanup Redis (queues, bullets, set history TTL)
         await self.combat_manager.cleanup_rbc_session(session_id)
 
-        asyncio.create_task(analytics_service.log_combat_result(stats_payload))
-        log.info(f"FinishBattle | event=analytics_task_created session_id='{session_id}'")
+        # 3. Unlink players (release them for new battles)
+        if participant_ids:
+            await self.account_manager.bulk_unlink_combat_session(
+                [int(pid) for pid in participant_ids if pid.isdigit()]
+            )
+
+    # --- Private Helpers ---
+
+    async def _load_templates(self, teams_payload: dict) -> dict[str, dict]:
+        """
+        Collects all 'ref' UUIDs and performs a single MGET request.
+        """
+        unique_refs = set()
+        for members in teams_payload.values():
+            for member in members:
+                unique_refs.add(member["ref"])
+
+        if not unique_refs:
+            log.warning("Lifecycle | No participants in payload")
+            return {}
+
+        # MGET via ContextManager
+        templates = await self.context_manager.get_context_batch(list(unique_refs))
+
+        # Integrity check
+        if len(templates) != len(unique_refs):
+            missing = unique_refs - set(templates.keys())
+            log.error(f"Lifecycle | Missing templates for refs: {missing}")
+            # We raise an error because we cannot build a valid session without source data
+            raise ValueError(f"Missing templates for refs: {missing}")
+
+        return templates
+
+    def _assemble_session_data(
+        self, session_id: str, mode: str, teams_payload: dict, templates_map: dict
+    ) -> SessionDataDTO:
+        """
+        Core assembly logic: cloning, naming, matchups.
+        """
+        final_teams = {}  # {"blue": ["id1", "id2"]}
+        actors_data = {}  # {"id1": {HASH_FIELDS}}
+        all_ids = []  # ["id1", "id2", ...]
+
+        # Mapping dictionary: who is in which team (for queue generation)
+        id_to_team = {}
+
+        # 1. Iterate through teams
+        for color, members in teams_payload.items():
+            team_ids = []
+            name_counter: dict[str, int] = defaultdict(int)
+
+            for member in members:
+                ref = member["ref"]
+                tpl_id = str(member["id"])
+
+                if ref not in templates_map:
+                    continue
+
+                # Increment counter for this template
+                name_counter[tpl_id] += 1
+                count = name_counter[tpl_id]
+
+                # --- ID Generation Logic ---
+                if tpl_id.isdigit():
+                    # Player
+                    final_id = f"-{tpl_id}" if mode == "shadow" and color == "red" else tpl_id
+                else:
+                    # Monster/AI
+                    final_id = tpl_id if tpl_id.startswith("-") and tpl_id[1:].isdigit() else f"{tpl_id}_{count}"
+
+                # --- JSON Patching & Structuring ---
+                source_json = templates_map[ref]
+
+                # Используем CombatActorReadDTO для валидации и фильтрации
+                from apps.common.schemas_dto.combat_context_read import CombatActorReadDTO
+
+                try:
+                    actor_dto = CombatActorReadDTO.model_validate(source_json)
+                except Exception as e:  # noqa: BLE001
+                    log.error(f"Lifecycle | Invalid template data for {ref}: {e}")
+                    continue
+
+                # Name Patching
+                original_name = actor_dto.meta.get("name", "Unknown")
+                new_name = original_name
+                if mode == "shadow" and color == "red":
+                    new_name = f"Shadow {original_name}"
+                elif count > 1:
+                    new_name = f"{original_name} {count}"
+
+                # Determine AI flag
+                is_ai = not final_id.isdigit()  # Negative or String -> AI
+
+                # --- Build Actor Hash Fields (RBC v2.0 Schema) ---
+
+                # 1. v:raw (Math Model) - Source of Truth
+                math_model = actor_dto.math_model
+
+                # 2. Vitals
+                vitals = actor_dto.vitals
+
+                # 3. Loadout
+                loadout = actor_dto.loadout
+
+                # Объединяем скиллы и абилки в единый список действий
+                skills_list = loadout.get("skills", [])
+                abilities_list = loadout.get("abilities", [])
+                combined_actions = skills_list + abilities_list
+
+                # 4. Meta (Lightweight for UI/Listing)
+                actor_meta = {
+                    "name": new_name,
+                    "is_ai": is_ai,
+                    "team": color,
+                    "template_id": tpl_id,
+                    "type": actor_dto.meta.get("type", "unknown"),
+                }
+
+                actor_fields = {
+                    "v:raw": json.dumps(math_model),
+                    "v:req_ver": 1,
+                    "v:cache_ver": 0,  # Force calculation
+                    "s:hp": vitals.get("hp_current", 100),
+                    "s:en": vitals.get("energy_current", 100),
+                    "s:belt": json.dumps(loadout.get("belt", [])),
+                    "s:skills": json.dumps(combined_actions),
+                    "meta": json.dumps(actor_meta),
+                }
+
+                # Store
+                actors_data[final_id] = actor_fields
+                team_ids.append(final_id)
+                all_ids.append(final_id)
+                id_to_team[final_id] = color
+
+            final_teams[color] = team_ids
+
+        # 2. Queue Generation (Matchups)
+        queues = {}
+        for my_id in all_ids:
+            my_team = id_to_team[my_id]
+            enemies = []
+            for other_id in all_ids:
+                if id_to_team[other_id] != my_team:
+                    enemies.append(other_id)
+
+            random.shuffle(enemies)
+            queues[my_id] = enemies
+
+        # 3. Meta Assembly
+        actors_info_map = {}
+        for aid in all_ids:
+            if aid.isdigit():
+                actors_info_map[aid] = "player"
+            else:
+                actors_info_map[aid] = "ai"
+
+        meta = {
+            "mode": mode,
+            "teams": json.dumps(final_teams),
+            "active": 1,
+            "start_time": int(time.time()),
+            "actors_info": json.dumps(actors_info_map),
+        }
+
+        return SessionDataDTO(meta=meta, actors=actors_data, queues=queues)
+
+    async def _persist_session(self, session_id: str, data: SessionDataDTO, ttl: int) -> None:
+        """
+        Writes data to Redis via Pipeline using RedisService.
+        """
+
+        def _fill_pipe(pipe: Pipeline) -> None:
+            # 1. Meta
+            pipe.hset(Rk.get_rbc_meta_key(session_id), mapping=data.meta)
+            pipe.expire(Rk.get_rbc_meta_key(session_id), ttl)
+
+            # 2. Actors (Each actor gets their own HASH key)
+            for aid, fields in data.actors.items():
+                key = Rk.get_rbc_actor_key(session_id, str(aid))
+                pipe.hset(key, mapping=fields)
+                pipe.expire(key, ttl)
+
+            # 3. Queues
+            for aid, enemies in data.queues.items():
+                if enemies:
+                    key = Rk.get_combat_exchanges_key(session_id, str(aid))
+                    pipe.rpush(key, *enemies)
+                    pipe.expire(key, ttl)
+
+        await self.combat_manager.redis_service.execute_pipeline(_fill_pipe)

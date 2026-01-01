@@ -49,6 +49,28 @@ class SymbioteRepoORM(ISymbioteRepo):
             log.exception(f"SymbioteRepoORM | action=get_symbiote status=failed char_id={character_id}")
             raise
 
+    async def get_symbiotes_batch(self, character_ids: list[int]) -> list[CharacterSymbiote]:
+        """
+        Получает список Симбиотов для списка персонажей.
+
+        Args:
+            character_ids: Список идентификаторов персонажей.
+
+        Returns:
+            Список объектов `CharacterSymbiote`.
+        """
+        log.debug(f"SymbioteRepoORM | action=get_symbiotes_batch count={len(character_ids)}")
+        if not character_ids:
+            return []
+        stmt = select(CharacterSymbiote).where(CharacterSymbiote.character_id.in_(character_ids))
+        try:
+            result = await self.session.execute(stmt)
+            symbiotes = result.scalars().all()
+            return list(symbiotes)
+        except SQLAlchemyError:
+            log.exception("SymbioteRepoORM | action=get_symbiotes_batch status=failed")
+            raise
+
     async def update_name(self, character_id: int, new_name: str) -> None:
         """
         Обновляет имя Симбиота для указанного персонажа.

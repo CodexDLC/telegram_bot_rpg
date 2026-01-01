@@ -1,6 +1,6 @@
 # apps/game_core/system/context_assembler/logic/monster_assembler.py
 import uuid
-from typing import Any, cast
+from typing import Any
 
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +9,7 @@ from apps.common.database.repositories.ORM.monster_repository import MonsterRepo
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.context_manager import ContextRedisManager
 from apps.game_core.system.context_assembler.logic.base_assembler import BaseAssembler
-from apps.game_core.system.context_assembler.logic.helpers.monster_data_helper import get_equipment_modifiers
+from apps.game_core.system.context_assembler.schemas.monster_temp_context import MonsterTempContextSchema
 
 
 class MonsterAssembler(BaseAssembler):
@@ -54,7 +54,21 @@ class MonsterAssembler(BaseAssembler):
                 continue
 
             try:
-                context_data = self._transform_to_rbc_format(m_id, monster_orm)
+                # Используем MonsterTempContextSchema
+                context_schema = MonsterTempContextSchema(
+                    core_stats=monster_orm.scaled_base_stats,
+                    core_loadout=monster_orm.loadout_ids,
+                    core_skills=monster_orm.skills_snapshot,
+                    core_meta={
+                        "id": m_id,
+                        "name": monster_orm.name_ru,  # Используем name_ru как основное имя
+                        "role": monster_orm.role,
+                        "threat": monster_orm.threat_rating,
+                        "clan_id": str(monster_orm.clan_id),
+                    },
+                )
+
+                context_data = context_schema.model_dump(by_alias=True)
 
                 redis_key = f"temp:setup:{uuid.uuid4()}"
                 success_map[m_id] = redis_key
@@ -69,72 +83,3 @@ class MonsterAssembler(BaseAssembler):
 
         log.info(f"MonsterAssembler | batch processed. success={len(success_map)}, errors={len(error_list)}")
         return success_map, error_list
-
-    def _transform_to_rbc_format(self, m_id: str, orm_obj) -> dict[str, Any]:
-        """
-        Превращает GeneratedMonsterORM в Action-Based Strings JSON.
-        """
-        math_model: dict[str, Any] = {"attributes": {}, "modifiers": {}, "tags": ["monster", orm_obj.role]}
-
-        # 1. Атрибуты (Internal)
-        raw_stats = orm_obj.scaled_base_stats
-        if raw_stats and isinstance(raw_stats, dict):
-            # Mypy теперь точно знает, что raw_stats это dict
-            for stat, val in raw_stats.items():
-                if val:
-                    math_model["attributes"][stat] = {"base": str(val), "flats": {}, "percents": {}}
-
-        # 2. Модификаторы (External)
-        equipment_modifiers = get_equipment_modifiers(orm_obj.loadout_ids)
-
-        for stat, data in equipment_modifiers.items():
-            # Явно кастим data к словарю, чтобы Mypy не ругался на .items()
-            data_dict = cast(dict[str, Any], data)
-            sources = data_dict.get("sources", {})
-
-            if not isinstance(sources, dict):
-                continue
-
-            if stat in math_model["attributes"]:
-                for source, val_str in sources.items():
-                    math_model["attributes"][stat]["flats"][source] = val_str
-            else:
-                if stat not in math_model["modifiers"]:
-                    math_model["modifiers"][stat] = {"sources": {}}
-
-                for source, val_str in sources.items():
-                    math_model["modifiers"][stat]["sources"][source] = val_str
-
-        # 3. Абилки
-        abilities = []
-        raw_skills = orm_obj.skills_snapshot
-
-        if raw_skills:
-            if isinstance(raw_skills, dict):
-                for s in raw_skills:
-                    # Предполагаем, что ключи - это строки или объекты с id
-                    if isinstance(s, dict) and "id" in s:
-                        abilities.append(str(s["id"]))
-                    else:
-                        abilities.append(str(s))
-            elif isinstance(raw_skills, list):
-                for s in raw_skills:
-                    if isinstance(s, dict) and "id" in s:
-                        abilities.append(str(s["id"]))
-                    else:
-                        abilities.append(str(s))
-
-        # TODO: Добавить бонусы Клана (когда появятся в БД)
-
-        return {
-            "meta": {"entity_id": m_id, "type": "monster", "timestamp": 0},
-            "math_model": math_model,
-            "loadout": {
-                "belt": [],
-                "abilities": abilities,  # У монстров абилки, а не скиллы
-            },
-            "vitals": {
-                "hp_current": -1,  # -1 означает "рассчитать и установить максимум"
-                "energy_current": -1,
-            },
-        }

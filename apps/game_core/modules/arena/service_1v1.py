@@ -7,7 +7,8 @@ from apps.common.services.core_service import CombatManager
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.arena_manager import ArenaManager
 from apps.game_core.modules.arena.matchmaking_service import MatchmakingService
-from apps.game_core.modules.combat.combat_orchestrator_rbc import CombatOrchestratorRBC
+
+# from apps.game_core.modules.combat.combat_orchestrator_rbc import CombatOrchestratorRBC
 
 
 class Arena1v1Service:
@@ -31,7 +32,7 @@ class Arena1v1Service:
         self.combat_manager = combat_manager
 
         # Оставляем только RBC Оркестратор
-        self.rbc_orchestrator = CombatOrchestratorRBC(session, combat_manager, account_manager)
+        # self.rbc_orchestrator = CombatOrchestratorRBC(session, combat_manager, account_manager)
         log.debug(f"Arena1v1Service | status=initialized char_id={char_id}")
 
     async def join_queue(self) -> int:
@@ -94,10 +95,11 @@ class Arena1v1Service:
 
     async def _create_pvp_battle(self, opponent_id: int) -> str:
         """Создает PvP бой через единую точку входа RBC."""
-        dashboard_dto = await self.rbc_orchestrator.start_battle(
-            players=[self.char_id], enemies=[opponent_id], config={"battle_type": "pvp", "mode": self.mode}
-        )
-        session_id = dashboard_dto.session_id
+        # dashboard_dto = await self.rbc_orchestrator.start_battle(
+        #     players=[self.char_id], enemies=[opponent_id], config={"battle_type": "pvp", "mode": self.mode}
+        # )
+        # session_id = dashboard_dto.session_id
+        session_id = "mock_session_id"  # Placeholder to avoid UnboundLocalError if called
 
         await self._set_player_status(self.char_id, session_id)
         await self._set_player_status(opponent_id, session_id)
@@ -109,10 +111,11 @@ class Arena1v1Service:
         """Создает бой с Тенью."""
         await self.cancel_queue()
 
-        dashboard_dto = await self.rbc_orchestrator.start_battle(
-            players=[self.char_id], config={"battle_type": "arena_shadow", "mode": self.mode}
-        )
-        session_id = dashboard_dto.session_id
+        # dashboard_dto = await self.rbc_orchestrator.start_battle(
+        #     players=[self.char_id], config={"battle_type": "arena_shadow", "mode": self.mode}
+        # )
+        # session_id = dashboard_dto.session_id
+        session_id = "mock_session_id"  # Placeholder
 
         await self._set_player_status(self.char_id, session_id)
         log.info(f"Arena1v1 | event=shadow_battle_started session_id={session_id}")

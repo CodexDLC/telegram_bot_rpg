@@ -1,8 +1,18 @@
-from typing import Any
+# apps/game_core/modules/combat/combat_interaction_orchestrator.py
+from typing import TYPE_CHECKING, Any
+
+from loguru import logger as log
 
 from apps.common.schemas_dto.core_response_dto import CoreResponseDTO, GameStateHeader
 from apps.common.schemas_dto.game_state_enum import GameState
 from apps.game_core.modules.combat.session.combat_session_service import CombatSessionService
+
+if TYPE_CHECKING:
+    from apps.common.schemas_dto.combat_source_dto import (
+        CombatActionResultDTO,
+        CombatDashboardDTO,
+        CombatLogDTO,
+    )
 
 
 class CombatInteractionOrchestrator:
@@ -17,34 +27,54 @@ class CombatInteractionOrchestrator:
     def __init__(self, session_service: CombatSessionService):
         self.session_service = session_service
 
-    # --- 1. SNAPSHOT (Content) ---
+    async def get_entry_point(self, char_id: int, action: str, context: dict[str, Any]) -> Any:
+        """
+        Единая точка входа для CoreRouter.
+        Возвращает чистый Payload (DTO), без обертки CoreResponseDTO.
+        """
+        log.info(f"CombatInteraction | action='{action}' char_id={char_id}")
 
-    async def get_snapshot_wrapped(self, char_id: int) -> CoreResponseDTO:
+        try:
+            if action == "get_snapshot":
+                return await self._get_snapshot(char_id)
+
+            elif action == "get_logs":
+                page = int(context.get("page", 0))
+                return await self._get_logs(char_id, page)
+
+            elif action == "use_item":
+                item_id = int(context.get("item_id", 0))
+                return await self._use_item(char_id, item_id)
+
+            else:
+                log.error(f"CombatInteraction | Unknown action: {action}")
+                return None
+
+        except Exception as e:  # noqa: BLE001
+            log.exception(f"CombatInteraction | Error processing {action}: {e}")
+            return None
+
+    # --- Public Client Facade (Returns CoreResponseDTO) ---
+
+    async def get_snapshot(self, char_id: int) -> CoreResponseDTO:
         """
-        Прямой вызов дашборда.
+        Прямой вызов дашборда (для клиента).
         """
-        # SessionService сам зарезолвит ID и вернет DTO
-        snapshot_dto = await self.session_service.get_snapshot(char_id)
+        snapshot_dto = await self._get_snapshot(char_id)
         return CoreResponseDTO(header=GameStateHeader(current_state=GameState.COMBAT), payload=snapshot_dto)
-
-    # --- 2. GET DATA (Menu: Logs, Info, etc.) ---
 
     async def get_data(self, char_id: int, data_type: str, params: dict[str, Any]) -> CoreResponseDTO:
         """
-        Маршрутизатор типов данных.
-        Превращает строковый data_type в вызов конкретного метода сервиса.
+        Маршрутизатор типов данных (для клиента).
         """
         payload = None
 
         if data_type == "logs":
-            # Извлекаем параметры для логов
             page = int(params.get("page", 0))
-            payload = await self.session_service.get_logs(char_id, page)
+            payload = await self._get_logs(char_id, page)
 
         elif data_type == "target_info":
-            # Заготовка под просмотр инфо о враге
-            # target_id = params.get("target_id")
-            # payload = await self.session_service.get_target_info(char_id, target_id)
+            # TODO: Implement target info
             pass
 
         else:
@@ -55,22 +85,15 @@ class CombatInteractionOrchestrator:
 
         return CoreResponseDTO(header=GameStateHeader(current_state=GameState.COMBAT), payload=payload)
 
-    # --- 3. PERFORM ACTION (Instant: Items, Tactics) ---
-
     async def perform_action(self, char_id: int, action_type: str, payload: dict[str, Any]) -> CoreResponseDTO:
         """
-        Проксирует действие в сервис.
-        Диспетчеризирует action_type в конкретные методы сервиса.
+        Проксирует действие в сервис (для клиента).
         """
         result_dto = None
 
         if action_type == "use_item":
             item_id = int(payload.get("item_id", 0))
-            result_dto = await self.session_service.use_item(char_id, item_id)
-
-        # elif action_type == "switch_target":
-        #     target_id = int(payload.get("target_id", 0))
-        #     result_dto = await self.session_service.switch_target(char_id, target_id)
+            result_dto = await self._use_item(char_id, item_id)
 
         else:
             return CoreResponseDTO(
@@ -79,3 +102,14 @@ class CombatInteractionOrchestrator:
             )
 
         return CoreResponseDTO(header=GameStateHeader(current_state=GameState.COMBAT), payload=result_dto)
+
+    # --- Private Business Logic (Returns Pure DTO) ---
+
+    async def _get_snapshot(self, char_id: int) -> "CombatDashboardDTO":
+        return await self.session_service.get_snapshot(char_id)
+
+    async def _get_logs(self, char_id: int, page: int) -> "CombatLogDTO":
+        return await self.session_service.get_logs(char_id, page)
+
+    async def _use_item(self, char_id: int, item_id: int) -> "CombatActionResultDTO":
+        return await self.session_service.use_item(char_id, item_id)

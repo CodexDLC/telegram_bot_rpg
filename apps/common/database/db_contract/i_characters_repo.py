@@ -78,6 +78,19 @@ class ICharactersRepo(ABC):
         pass
 
     @abstractmethod
+    async def get_characters_batch(self, character_ids: list[int]) -> list[CharacterReadDTO]:
+        """
+        Возвращает список персонажей по списку их ID.
+
+        Args:
+            character_ids: Список идентификаторов персонажей.
+
+        Returns:
+            Список DTO `CharacterReadDTO` персонажей.
+        """
+        pass
+
+    @abstractmethod
     async def delete_characters(self, character_id: int) -> None:
         """
         Удаляет персонажа и все связанные с ним данные.

@@ -1,3 +1,4 @@
+# apps/game_core/modules/combat/core/combat_log_builder.py
 import random
 from typing import Any
 
