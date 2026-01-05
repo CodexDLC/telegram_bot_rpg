@@ -1,3 +1,4 @@
+# apps/game_core/modules/combat/supervisor/combat_supervisor.py
 import asyncio
 import time
 from typing import Any
@@ -6,7 +7,8 @@ from loguru import logger as log
 
 from apps.common.services.core_service.manager.account_manager import AccountManager
 from apps.common.services.core_service.manager.combat_manager import CombatManager
-from apps.game_core.modules.combat.mechanics.combat_service import CombatService
+from apps.common.services.core_service.manager.context_manager import ContextRedisManager
+from apps.game_core.modules.combat.mechanics.combat_service import CombatExchangeOrchestrator
 from apps.game_core.modules.combat.supervisor.combat_supervisor_manager import remove_supervisor_task
 
 
@@ -23,10 +25,17 @@ class CombatSupervisor:
     - Stateful Runner: Метод `run` крутит цикл (для локального запуска).
     """
 
-    def __init__(self, session_id: str, combat_manager: CombatManager, account_manager: AccountManager):
+    def __init__(
+        self,
+        session_id: str,
+        combat_manager: CombatManager,
+        account_manager: AccountManager,
+        context_manager: ContextRedisManager,
+    ):
         self.session_id = session_id
         self.combat_manager = combat_manager
         self.account_manager = account_manager
+        self.context_manager = context_manager
         self._running = True
 
     async def run(self):
@@ -117,7 +126,9 @@ class CombatSupervisor:
                     log.info(f"Supervisor | Match found: {actor_id} <-> {target_id}")
 
                     # Вызываем механику
-                    service = CombatService(self.session_id, self.combat_manager, self.account_manager)
+                    service = CombatExchangeOrchestrator(
+                        self.session_id, self.combat_manager, self.account_manager, self.context_manager
+                    )
 
                     # Parse JSON moves to dicts
                     import json
@@ -168,7 +179,9 @@ class CombatSupervisor:
 
                         # Форсируем обмен (Враг не ответил)
                         # Генерируем заглушку для врага
-                        service = CombatService(self.session_id, self.combat_manager, self.account_manager)
+                        service = CombatExchangeOrchestrator(
+                            self.session_id, self.combat_manager, self.account_manager, self.context_manager
+                        )
 
                         # Since process_timeout_exchange is missing, we simulate a dummy move for the target
                         # or implement process_timeout_exchange in CombatService.

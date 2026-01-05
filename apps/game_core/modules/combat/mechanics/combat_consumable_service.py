@@ -1,4 +1,4 @@
-# app/services/modules/combat/combat_consumable_service.py
+# apps/game_core/modules/combat/mechanics/combat_consumable_service.py
 from loguru import logger as log
 
 from apps.common.schemas_dto import CombatActionResultDTO, CombatSessionContainerDTO

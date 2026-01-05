@@ -2,7 +2,9 @@ import json
 from typing import Any
 
 from loguru import logger as log
-from redis.asyncio import Redis
+from redis.asyncio.client import Pipeline
+
+from apps.common.services.core_service.redis_service import RedisService
 
 
 class ContextRedisManager:
@@ -11,8 +13,8 @@ class ContextRedisManager:
     Используется ContextAssembler для сохранения результатов сборки.
     """
 
-    def __init__(self, redis: Redis):
-        self.redis = redis
+    def __init__(self, redis_service: RedisService):
+        self.redis_service = redis_service
 
     async def save_context_batch(self, data_map: dict[int | str, tuple[str, dict[str, Any]]], ttl: int = 90) -> None:
         """
@@ -25,7 +27,7 @@ class ContextRedisManager:
         if not data_map:
             return
 
-        async with self.redis.pipeline() as pipe:
+        def _fill_pipeline(pipe: Pipeline) -> None:
             for _, (key, data) in data_map.items():
                 try:
                     json_data = json.dumps(data)
@@ -33,13 +35,12 @@ class ContextRedisManager:
                 except (TypeError, ValueError) as e:
                     log.error(f"ContextRedisManager | serialization failed key={key} error={e}")
 
-            await pipe.execute()
-
+        await self.redis_service.execute_pipeline(_fill_pipeline)
         log.debug(f"ContextRedisManager | saved batch count={len(data_map)}")
 
     async def get_context(self, key: str) -> dict[str, Any] | None:
         """Получение контекста по ключу."""
-        data = await self.redis.get(key)
+        data = await self.redis_service.get_value(key)
         if not data:
             return None
         try:
@@ -47,3 +48,26 @@ class ContextRedisManager:
         except json.JSONDecodeError:
             log.error(f"ContextRedisManager | decode failed key={key}")
             return None
+
+    async def get_context_batch(self, keys: list[str]) -> dict[str, dict[str, Any]]:
+        """
+        Массовое получение контекстов по списку ключей.
+        """
+        if not keys:
+            return {}
+
+        def _fill_get_pipe(pipe: Pipeline) -> None:
+            for key in keys:
+                pipe.get(key)
+
+        values = await self.redis_service.execute_pipeline(_fill_get_pipe)
+        result = {}
+
+        for key, val in zip(keys, values, strict=False):
+            if val:
+                try:
+                    result[key] = json.loads(val)
+                except json.JSONDecodeError:
+                    log.error(f"ContextRedisManager | decode failed key={key}")
+
+        return result

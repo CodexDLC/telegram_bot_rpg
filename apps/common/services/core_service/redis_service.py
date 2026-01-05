@@ -1,8 +1,10 @@
 import json
+from collections.abc import Callable
 from typing import Any
 
 from loguru import logger as log
 from redis.asyncio import Redis
+from redis.asyncio.client import Pipeline  # Нужно для аннотации типов
 from redis.exceptions import RedisError
 
 
@@ -23,6 +25,47 @@ class RedisService:
         """
         self.redis_client = client
         log.debug(f"RedisService | status=initialized client={client}")
+
+    async def execute_pipeline(self, builder_func: Callable[[Pipeline], None]) -> list[Any]:
+        """
+        Выполняет последовательность команд в пайплайне Redis.
+
+        Args:
+            builder_func: Функция, принимающая объект Pipeline и наполняющая его командами.
+                          Важно: команды внутри builder_func не должны использовать await,
+                          так как методы pipeline в redis-py возвращают сам pipeline.
+
+        Returns:
+            Список результатов выполнения команд. Возвращает пустой список в случае ошибки.
+        """
+        try:
+            async with self.redis_client.pipeline() as pipe:
+                # Менеджер наполняет пайплайн
+                builder_func(pipe)
+                # Сервис выполняет пайплайн
+                results = await pipe.execute()
+
+            log.debug(f"RedisPipeline | action=execute status=success commands_count={len(results)}")
+            return results
+
+        except RedisError:
+            log.exception("RedisPipeline | action=execute status=failed reason='Redis error'")
+            return []
+        except Exception as e:  # noqa: BLE001
+            # Ловим ошибки, которые могли возникнуть внутри builder_func (например, сериализация)
+            log.exception(f"RedisPipeline | action=execute status=failed reason='Builder error' error='{e}'")
+            return []
+
+    async def eval_script(self, script: str, keys: list[str], args: list[Any]) -> Any:
+        """
+        Выполняет Lua-скрипт.
+        """
+        try:
+            result = await self.redis_client.eval(script, len(keys), *keys, *args)  # type: ignore
+            return result
+        except RedisError:
+            log.exception("RedisService | action=eval status=failed reason='Redis error'")
+            return None
 
     async def expire(self, key: str, time: int) -> bool:
         """

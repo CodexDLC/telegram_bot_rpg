@@ -140,3 +140,22 @@ class CombatActionResultDTO(BaseModel):
     success: bool
     message: str
     updated_snapshot: CombatDashboardDTO | None = None  # Опционально: обновленный дашборд
+
+
+class CombatTeamDTO(BaseModel):
+    """
+    Описание одной команды для инициализации боя.
+    """
+
+    players: list[int] = Field(default_factory=list)
+    pets: list[int] = Field(default_factory=list)
+    monsters: list[str] = Field(default_factory=list)
+
+
+class CombatInitContextDTO(BaseModel):
+    """
+    Контекст инициализации боя, передаваемый от Caller к Orchestrator.
+    """
+
+    mode: str = "standard"  # "standard", "shadow", "arena"
+    teams: list[CombatTeamDTO]

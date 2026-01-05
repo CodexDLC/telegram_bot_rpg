@@ -1,3 +1,4 @@
+# apps/game_core/modules/combat/session/combat_session_service.py
 """
 Файл: app/game_core/modules/combat/session/combat_session_service.py
 """
@@ -87,3 +88,19 @@ class CombatSessionService:
         session_id = await self._resolve_session_id(char_id)
         # Делегируем ConsumableService (Mechanics)
         return await self.consumable_service.use_item(session_id, char_id, item_id)
+
+    # --- SESSION MANAGEMENT (Facade for AccountManager) ---
+
+    async def link_players_to_session(self, char_ids: list[int], session_id: str) -> None:
+        """
+        Привязывает игроков к боевой сессии.
+        Используется оркестратором при входе в бой.
+        """
+        await self.account_manager.bulk_link_combat_session(char_ids, session_id)
+
+    async def unlink_players_from_session(self, char_ids: list[int]) -> None:
+        """
+        Отвязывает игроков от боевой сессии.
+        Используется при завершении боя.
+        """
+        await self.account_manager.bulk_unlink_combat_session(char_ids)

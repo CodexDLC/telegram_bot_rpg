@@ -78,6 +78,19 @@ class CharactersRepoORM(ICharactersRepo):
             log.exception(f"CharactersRepoORM | action=get_characters status=failed user_id={user_id}")
             raise
 
+    async def get_characters_batch(self, character_ids: list[int]) -> list[CharacterReadDTO]:
+        log.debug(f"CharactersRepoORM | action=get_characters_batch count={len(character_ids)}")
+        if not character_ids:
+            return []
+        stmt = select(Character).where(Character.character_id.in_(character_ids))
+        try:
+            result = await self.session.scalars(stmt)
+            orm_characters_list = result.all()
+            return [CharacterReadDTO.model_validate(orm_char) for orm_char in orm_characters_list]
+        except SQLAlchemyError:
+            log.exception("CharactersRepoORM | action=get_characters_batch status=failed")
+            raise
+
     async def delete_characters(self, character_id: int) -> None:
         log.debug(f"CharactersRepoORM | action=delete_characters char_id={character_id}")
         stmt = delete(Character).where(Character.character_id == character_id)

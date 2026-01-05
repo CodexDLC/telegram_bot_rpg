@@ -9,15 +9,24 @@ class RedisKeys:
 
     # RBC (Reactive Burst Combat) Keys
     @staticmethod
+    def get_rbc_actor_key(session_id: str, char_id: int | str) -> str:
+        """
+        RBC: Генерирует ключ для HASH конкретного актора.
+        Содержит поля v:raw, s:hp, s:belt и т.д.
+        """
+        return f"combat:rbc:{session_id}:actor:{char_id}"
+
+    @staticmethod
     def get_combat_actors_key(session_id: str) -> str:
         """
-        RBC: Генерирует ключ для HASH, хранящего состояния всех акторов (FighterStateDTO).
-        Поле: char_id, Значение: JSON DTO.
+        RBC: (DEPRECATED/UNUSED in v2.0)
+        В новой схеме каждый актор имеет свой ключ.
+        Оставляем для совместимости, если где-то еще используется, но лучше удалить.
         """
         return f"combat:rbc:{session_id}:actors"
 
     @staticmethod
-    def get_combat_moves_key(session_id: str, char_id: int) -> str:
+    def get_combat_moves_key(session_id: str, char_id: int | str) -> str:
         """
         RBC: Генерирует ключ для HASH, хранящего "пули" одного игрока (CombatMoveDTO).
         Поле: target_id, Значение: JSON DTO.
@@ -25,7 +34,7 @@ class RedisKeys:
         return f"combat:rbc:{session_id}:moves:{char_id}"
 
     @staticmethod
-    def get_combat_exchanges_key(session_id: str, char_id: int) -> str:
+    def get_combat_exchanges_key(session_id: str, char_id: int | str) -> str:
         """
         RBC: Генерирует ключ для LIST, хранящего очередь ID противников для одного игрока.
         """

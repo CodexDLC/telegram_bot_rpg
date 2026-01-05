@@ -1,3 +1,4 @@
+# apps/game_core/modules/combat/session/runtime/combat_view_service.py
 """
 Файл: app/game_core/modules/combat/session/combat_view_service.py
 """

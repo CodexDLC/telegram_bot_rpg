@@ -45,6 +45,12 @@ class CharacterReadDTO(BaseModel):
     name: str  # Имя персонажа.
     gender: Gender  # Пол персонажа.
     game_stage: str  # Текущая стадия игры персонажа.
+
+    # Расширенные поля для контекста и навигации
+    prev_game_stage: str | None = None
+    location_id: str = "52_52"
+    prev_location_id: str | None = None
+
     created_at: datetime  # Дата и время создания персонажа.
     updated_at: datetime  # Дата и время последнего обновления данных персонажа.
 

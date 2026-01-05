@@ -1,6 +1,7 @@
 from typing import Any
 
 from loguru import logger as log
+from redis.asyncio.client import Pipeline
 
 from apps.common.services.core_service.redis_key import RedisKeys as Rk
 from apps.common.services.core_service.redis_service import RedisService
@@ -73,12 +74,20 @@ class CombatManager:
     async def add_enemies_to_exchange_queue(self, session_id: str, char_id: int, enemies_ids: list[str]) -> None:
         """
         RBC: Добавляет список противников в конец очереди обменов.
+        Оптимизировано через Pipeline (Batch RPUSH).
         """
         if not enemies_ids:
             return
+
         key = Rk.get_combat_exchanges_key(session_id, char_id)
-        for enemy_id in enemies_ids:
-            await self.redis_service.push_to_list(key, enemy_id)
+
+        # Функция-сборщик для пайплайна
+        def _fill_queue(pipe: Pipeline) -> None:
+            # RPUSH в Redis умеет принимать много значений сразу (*args)
+            pipe.rpush(key, *enemies_ids)
+
+        # Отправляем в сервис
+        await self.redis_service.execute_pipeline(_fill_queue)
 
     async def create_rbc_session_meta(self, session_id: str, data: dict[str, Any]) -> None:
         """RBC: Создает или обновляет метаданные сессии."""
@@ -93,35 +102,32 @@ class CombatManager:
     async def cleanup_rbc_session(self, session_id: str, history_ttl: int = 86400) -> None:
         """
         RBC: Очищает оперативные данные сессии и выставляет TTL для исторических данных.
-
-        Args:
-            session_id: ID сессии.
-            history_ttl: Время жизни истории (мета, логи, акторы) в секундах (по умолчанию 24 часа).
+        Оптимизировано через Pipeline.
         """
         log.info(f"CombatManager | action=cleanup_rbc_session session_id='{session_id}'")
 
-        # 1. Получаем всех участников для очистки их очередей и пуль
-        # Теперь берем их из ключей хеша actors
+        # 1. Читаем список участников (GET запрос делаем отдельно, т.к. результат нужен для логики ниже)
         actors_data = await self.get_rbc_all_actors_json(session_id)
 
-        if actors_data:
-            for pid_str in actors_data:
-                try:
-                    pid = int(pid_str)
-                    # Удаляем очереди обменов (они больше не нужны)
-                    await self.redis_service.delete_key(Rk.get_combat_exchanges_key(session_id, pid))
-                    # Удаляем пули (они больше не нужны)
-                    await self.redis_service.delete_key(Rk.get_combat_moves_key(session_id, pid))
-                except ValueError:
-                    continue
+        # 2. Наполняем пайплайн командами удаления и продления жизни
+        def _fill_cleanup(pipe: Pipeline) -> None:
+            # Удаляем очереди и мувы участников
+            if actors_data:
+                for pid_str in actors_data:
+                    try:
+                        pid = int(pid_str)
+                        pipe.delete(Rk.get_combat_exchanges_key(session_id, pid))
+                        pipe.delete(Rk.get_combat_moves_key(session_id, pid))
+                    except ValueError:
+                        continue
 
-        # 2. Выставляем TTL для данных, которые нужны для просмотра результатов (история)
-        # Метаданные
-        await self.redis_service.expire(Rk.get_rbc_meta_key(session_id), history_ttl)
-        # Состояния акторов (для рендера итогов)
-        await self.redis_service.expire(Rk.get_combat_actors_key(session_id), history_ttl)
-        # Логи боя
-        await self.redis_service.expire(Rk.get_combat_log_key(session_id), history_ttl)
+            # Выставляем TTL для исторических данных (мета, акторы, логи)
+            pipe.expire(Rk.get_rbc_meta_key(session_id), history_ttl)
+            pipe.expire(Rk.get_combat_actors_key(session_id), history_ttl)
+            pipe.expire(Rk.get_combat_log_key(session_id), history_ttl)
+
+        # 3. Выполняем всё разом
+        await self.redis_service.execute_pipeline(_fill_cleanup)
 
     async def get_all_active_session_ids(self) -> list[str]:
         """

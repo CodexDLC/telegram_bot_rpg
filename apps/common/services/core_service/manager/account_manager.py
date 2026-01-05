@@ -2,114 +2,127 @@ import json
 from typing import Any
 
 from loguru import logger as log
+from redis.asyncio.client import Pipeline
 
+from apps.common.services.core_service.redis_fields import AccountFields as Af
 from apps.common.services.core_service.redis_key import RedisKeys as Rk
 from apps.common.services.core_service.redis_service import RedisService
 
 
 class AccountManager:
     """
-    Менеджер для управления данными аккаунтов персонажей в Redis.
-
-    Предоставляет методы для создания, получения, обновления и проверки
-    существования данных аккаунта, используя хеши Redis с ключом 'ac:{char_id}'.
-    Автоматически обрабатывает сериализацию сложных типов данных (JSON).
+    Менеджер для управления данными аккаунтов в Redis.
+    Использует RedisService для выполнения операций.
     """
 
     def __init__(self, redis_service: RedisService):
         self.redis_service = redis_service
 
-    def _serialize_value(self, value: Any) -> str:
-        """
-        Приватный метод: превращает любое значение в строку для Redis.
-        - dict/list -> JSON string
-        - bool -> 'true'/'false'
-        - None -> '' (или можно пропускать)
-        - Остальное -> str(value)
-        """
-        if isinstance(value, (dict, list)):
-            return json.dumps(value, ensure_ascii=False)
-        if isinstance(value, bool):
-            return str(value).lower()
-        return str(value)
+    def _serialize_value(self, value: Any) -> str | int | float:
+        """Сериализует значение для сохранения в Redis."""
+        if isinstance(value, (dict, list, bool)):
+            return json.dumps(value)
+        return value
 
-    def _prepare_data_for_redis(self, data: dict[str, Any]) -> dict[str, str]:
+    async def create_account(self, char_id: int, initial_data: dict[str, Any]) -> None:
         """
-        Приватный метод: подготавливает словарь для массовой записи.
-        """
-        return {k: self._serialize_value(v) for k, v in data.items()}
-
-    async def create_account(self, char_id: int, data: dict[str, Any]) -> None:
-        """
-        Создает или полностью перезаписывает хеш аккаунта.
-        Автоматически сериализует значения.
+        Создает запись аккаунта в Redis.
         """
         key = Rk.get_account_key(char_id)
-        prepared_data = self._prepare_data_for_redis(data)
-        await self.redis_service.set_hash_fields(key, prepared_data)
+        serialized_data = {k: self._serialize_value(v) for k, v in initial_data.items()}
+        await self.redis_service.set_hash_fields(key, serialized_data)
+        log.info(f"AccountManager | action=create status=success char_id={char_id}")
 
-    async def update_account_fields(self, char_id: int, data: dict[str, Any]) -> None:
+    async def account_exists(self, char_id: int) -> bool:
         """
-        Массовое обновление полей.
-        Автоматически сериализует значения.
+        Проверяет существование аккаунта.
         """
         key = Rk.get_account_key(char_id)
-        prepared_data = self._prepare_data_for_redis(data)
-        await self.redis_service.set_hash_fields(key, prepared_data)
+        return await self.redis_service.key_exists(key)
 
-    async def set_account_field(self, char_id: int, field: str, value: Any) -> None:
+    async def get_account_data(self, char_id: int) -> dict[str, Any] | None:
         """
-        Точечное обновление одного поля.
-        Сам определяет тип value (str, int, dict, list) и сериализует его при необходимости.
+        Получает все данные аккаунта и десериализует их.
         """
         key = Rk.get_account_key(char_id)
-        serialized_value = self._serialize_value(value)
-        # Используем update_account_fields или прямой вызов redis_service,
-        # но для консистентности проще вызвать set_hash_fields с одним полем.
-        await self.redis_service.set_hash_fields(key, {field: serialized_value})
-
-    async def get_account_data(self, char_id: int) -> dict[str, str] | None:
-        """
-        Получает все данные аккаунта (значения остаются строками, как в Redis).
-        """
-        key = Rk.get_account_key(char_id)
-        return await self.redis_service.get_all_hash(key)
-
-    async def get_account_field(self, char_id: int, field: str) -> str | None:
-        """
-        Получает значение поля как строку.
-        """
-        key = Rk.get_account_key(char_id)
-        return await self.redis_service.get_hash_field(key, field)
-
-    async def get_account_json(self, char_id: int, field: str) -> Any | None:
-        """
-        Получает значение поля и пытается десериализовать его из JSON.
-        Использовать, если вы точно знаете, что там лежит dict или list.
-        """
-        raw_data = await self.get_account_field(char_id, field)
+        raw_data = await self.redis_service.get_all_hash(key)
         if not raw_data:
             return None
-        try:
-            return json.loads(raw_data)
-        except json.JSONDecodeError:
-            log.error(f"AccountManager | action=get_account_json status=failed_decode char_id={char_id} field={field}")
+
+        deserialized_data = {}
+        for k, v in raw_data.items():
+            try:
+                # Пытаемся десериализовать JSON
+                if v and (v.startswith("{") or v.startswith("[") or v in ("true", "false")):
+                    deserialized_data[k] = json.loads(v)
+                else:
+                    deserialized_data[k] = v
+            except (json.JSONDecodeError, TypeError):
+                deserialized_data[k] = v
+        return deserialized_data
+
+    async def get_account_field(self, char_id: int, field: str) -> Any | None:
+        """
+        Получает значение одного поля аккаунта.
+        Автоматически десериализует JSON, если это возможно.
+        """
+        key = Rk.get_account_key(char_id)
+        value = await self.redis_service.get_hash_field(key, field)
+
+        if value is None:
             return None
+
+        # Пытаемся определить, является ли значение JSON-ом
+        if value and (value.startswith("{") or value.startswith("[") or value in ("true", "false")):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                pass
+
+        # Пытаемся привести к числу
+        if value.isdigit():
+            return int(value)
+        try:
+            return float(value)
+        except ValueError:
+            return value
+
+    async def get_account_json(self, char_id: int, field: str) -> dict | list | None:
+        """
+        Получает JSON-поле аккаунта (явная десериализация).
+        """
+        key = Rk.get_account_key(char_id)
+        return await self.redis_service.get_hash_json(key, field)
+
+    async def update_account_fields(self, char_id: int, updates: dict[str, Any]) -> None:
+        """
+        Обновляет несколько полей аккаунта.
+        """
+        key = Rk.get_account_key(char_id)
+        serialized_updates = {k: self._serialize_value(v) for k, v in updates.items()}
+        await self.redis_service.set_hash_fields(key, serialized_updates)
+        log.debug(f"AccountManager | action=update char_id={char_id} fields={list(updates.keys())}")
+
+    async def delete_account_field(self, char_id: int, field: str) -> None:
+        """
+        Удаляет одно поле из аккаунта.
+        """
+        key = Rk.get_account_key(char_id)
+        await self.redis_service.delete_hash_field(key, field)
 
     async def get_accounts_json_batch(self, char_ids: list[int], field: str) -> list[Any | None]:
         """
-        Массовое получение JSON-поля для списка аккаунтов.
-        Использует Pipeline для оптимизации сетевых запросов.
+        Массовое получение JSON-поля для списка аккаунтов через сервис.
         """
         if not char_ids:
             return []
 
-        # Доступ к redis_client через сервис
-        async with self.redis_service.redis_client.pipeline() as pipe:
+        def _fill_pipeline(pipe: Pipeline) -> None:
             for char_id in char_ids:
                 key = Rk.get_account_key(char_id)
                 pipe.hget(key, field)
-            results = await pipe.execute()
+
+        results = await self.redis_service.execute_pipeline(_fill_pipeline)
 
         parsed_results = []
         for res in results:
@@ -124,16 +137,32 @@ class AccountManager:
 
         return parsed_results
 
-    async def delete_account_field(self, char_id: int, field: str) -> None:
+    async def bulk_link_combat_session(self, char_ids: list[int], session_id: str) -> None:
         """
-        Удаляет поле.
+        Массово устанавливает поле combat_session_id у списка игроков.
         """
-        key = Rk.get_account_key(char_id)
-        await self.redis_service.delete_hash_field(key, field)
+        if not char_ids:
+            return
 
-    async def account_exists(self, char_id: int) -> bool:
+        def _fill_link(pipe: Pipeline) -> None:
+            for pid in char_ids:
+                key = Rk.get_account_key(pid)
+                pipe.hset(key, Af.COMBAT_SESSION_ID, session_id)
+
+        await self.redis_service.execute_pipeline(_fill_link)
+        log.debug(f"AccountManager | linked combat session {session_id} for {len(char_ids)} chars")
+
+    async def bulk_unlink_combat_session(self, char_ids: list[int]) -> None:
         """
-        Проверяет существование аккаунта.
+        Массово удаляет поле combat_session_id у списка игроков.
         """
-        key = Rk.get_account_key(char_id)
-        return await self.redis_service.key_exists(key)
+        if not char_ids:
+            return
+
+        def _fill_unlink(pipe: Pipeline) -> None:
+            for pid in char_ids:
+                key = Rk.get_account_key(pid)
+                pipe.hdel(key, Af.COMBAT_SESSION_ID)
+
+        await self.redis_service.execute_pipeline(_fill_unlink)
+        log.debug(f"AccountManager | unlinked combat session for {len(char_ids)} chars")

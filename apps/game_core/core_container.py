@@ -14,6 +14,7 @@ from apps.common.services.core_service import (
     RedisService,
     WorldManager,
 )
+from apps.common.services.core_service.manager.context_manager import ContextRedisManager
 from apps.game_core.modules.exploration.encounter_service import EncounterService
 from apps.game_core.modules.exploration.exploration_orchestrator import ExplorationOrchestrator
 from apps.game_core.modules.exploration.game_world_service import GameWorldService
@@ -27,6 +28,7 @@ from apps.game_core.modules.scenario_orchestrator.logic.scenario_evaluator impor
 from apps.game_core.modules.scenario_orchestrator.logic.scenario_formatter import ScenarioFormatter
 from apps.game_core.modules.scenario_orchestrator.logic.scenario_manager import ScenarioManager
 from apps.game_core.modules.scenario_orchestrator.scenario_core_orchestrator import ScenarioCoreOrchestrator
+from apps.game_core.system.context_assembler.service import ContextAssemblerOrchestrator
 
 # from apps.game_core.modules.combat.combat_core_orchestrator import CombatCoreOrchestrator
 # from apps.game_core.modules.combat.combat_initialization_service import CombatInitializationService
@@ -68,6 +70,7 @@ class CoreContainer:
         self.arena_manager = ArenaManager(self.redis_service)
         self.combat_manager = CombatManager(self.redis_service)
         self.world_manager = WorldManager(self.redis_service)
+        self.context_redis_manager = ContextRedisManager(self.redis_service)
 
         # 3. Глобальные сервисы (Singleton)
         self.game_world_service = GameWorldService(self.world_manager)
@@ -97,6 +100,11 @@ class CoreContainer:
 
     def get_core_router(self) -> CoreRouter:
         return CoreRouter(self)
+
+    # --- System Services ---
+
+    def get_context_assembler(self, session: AsyncSession) -> ContextAssemblerOrchestrator:
+        return ContextAssemblerOrchestrator(session, self.account_manager, self.context_redis_manager)
 
     # --- Фабрики Core Orchestrators (Scoped) ---
 
@@ -149,7 +157,7 @@ class CoreContainer:
         view_service = CombatViewService()  # Removed self.combat_manager argument
 
         # Создаем диспетчер задач (Local Asyncio)
-        dispatcher = LocalAsyncioDispatcher(self.combat_manager, self.account_manager)
+        dispatcher = LocalAsyncioDispatcher(self.combat_manager, self.account_manager, self.context_redis_manager)
 
         turn_manager = CombatTurnManager(self.combat_manager, self.account_manager, dispatcher)
         consumable_service = CombatConsumableService(self.combat_manager)
@@ -169,23 +177,27 @@ class CoreContainer:
 
         return CombatTurnOrchestrator(session_service)
 
-    def get_combat_interaction_orchestrator(self) -> "CombatInteractionOrchestrator":
+    def get_combat_interaction_orchestrator(
+        self, session: AsyncSession | None = None
+    ) -> "CombatInteractionOrchestrator":
+        # session не используется, но может быть передан роутером
         from apps.game_core.modules.combat.combat_interaction_orchestrator import CombatInteractionOrchestrator
 
         session_service = self._get_combat_session_service()
         return CombatInteractionOrchestrator(session_service)
 
-    def get_combat_entry_orchestrator(self, session: AsyncSession) -> "CombatEntryOrchestrator":
+    def get_combat_entry_orchestrator(self) -> "CombatEntryOrchestrator":
         from apps.game_core.modules.combat.combat_entry_orchestrator import CombatEntryOrchestrator
         from apps.game_core.modules.combat.session.initialization.combat_lifecycle_service import (
             CombatLifecycleService,
         )
-        from apps.game_core.modules.combat.session.runtime.combat_view_service import CombatViewService
 
-        lifecycle = CombatLifecycleService(self.combat_manager, self.account_manager)
+        lifecycle = CombatLifecycleService(self.combat_manager, self.account_manager, self.context_redis_manager)
         session_service = self._get_combat_session_service()
-        view_service = CombatViewService()  # Removed self.combat_manager argument
+        core_router = self.get_core_router()
 
         return CombatEntryOrchestrator(
-            lifecycle_service=lifecycle, session_service=session_service, view_service=view_service, db_session=session
+            lifecycle_service=lifecycle,
+            session_service=session_service,
+            core_router=core_router,
         )

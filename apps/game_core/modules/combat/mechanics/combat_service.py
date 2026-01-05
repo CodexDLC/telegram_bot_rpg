@@ -1,3 +1,4 @@
+# apps/game_core/modules/combat/mechanics/combat_service.py
 import json
 import time
 from typing import Any
@@ -8,6 +9,7 @@ from pydantic import ValidationError
 from apps.common.schemas_dto import CombatSessionContainerDTO
 from apps.common.services.core_service import CombatManager
 from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.common.services.core_service.manager.context_manager import ContextRedisManager
 from apps.game_core.modules.combat.core.combat_calculator import CombatCalculator
 from apps.game_core.modules.combat.core.combat_log_builder import CombatLogBuilder
 from apps.game_core.modules.combat.core.combat_stats_calculator import StatsCalculator
@@ -17,16 +19,22 @@ from apps.game_core.modules.combat.mechanics.combat_consumable_service import Co
 from apps.game_core.modules.combat.session.initialization.combat_lifecycle_service import CombatLifecycleService
 
 
-class CombatService:
+class CombatExchangeOrchestrator:
     """
     Runtime-сервис боя, отвечающий за обработку ходов и расчет результатов.
     """
 
-    def __init__(self, session_id: str, combat_manager: CombatManager, account_manager: AccountManager):
+    def __init__(
+        self,
+        session_id: str,
+        combat_manager: CombatManager,
+        account_manager: AccountManager,
+        context_manager: ContextRedisManager,
+    ):
         self.session_id = session_id
         self.combat_manager = combat_manager
         self.account_manager = account_manager
-        self.lifecycle_service = CombatLifecycleService(combat_manager, account_manager)
+        self.lifecycle_service = CombatLifecycleService(combat_manager, account_manager, context_manager)
 
     async def use_consumable(self, actor_id: int, item_id: int) -> tuple[bool, str]:
         actor = await self._get_actor(actor_id)
@@ -188,7 +196,7 @@ class CombatService:
                 self.session_id, {"dead_actors": json.dumps(list(dead_actors))}
             )
 
-            await self.lifecycle_service.finish_battle(self.session_id, winner)
+            await self.lifecycle_service.complete_session(self.session_id, {"winner": winner})
         else:
             # БОЙ ПРОДОЛЖАЕТСЯ: Просто обновляем список трупов
             log.info(f"CombatService | Casualty update session_id='{self.session_id}' new_dead={new_dead_ids}")
@@ -298,7 +306,7 @@ class CombatService:
 
     @staticmethod
     def _register_xp_events(actor: CombatSessionContainerDTO, outgoing: dict, incoming: dict) -> None:
-        outcome = CombatService._determine_xp_outcome(outgoing)
+        outcome = CombatExchangeOrchestrator._determine_xp_outcome(outgoing)
 
         # 1. Оружие (или кулаки)
         # Пытаемся найти оружие в экипировке
@@ -316,12 +324,12 @@ class CombatService:
 
         # 2. Броня (при получении урона)
         if incoming["damage_total"] > 0:
-            armor_subtype = CombatService._get_item_subtype_by_type(actor, "armor")
+            armor_subtype = CombatExchangeOrchestrator._get_item_subtype_by_type(actor, "armor")
             if armor_subtype:
                 CombatXPManager.register_action(actor, armor_subtype, "success")
 
         # 3. Щит (при блоке)
         if incoming["is_blocked"]:
-            shield_subtype = CombatService._get_item_subtype_by_type(actor, "shield")
+            shield_subtype = CombatExchangeOrchestrator._get_item_subtype_by_type(actor, "shield")
             if shield_subtype == "shield" or incoming["block_type"] == "passive":
                 CombatXPManager.register_action(actor, "shield", "success")

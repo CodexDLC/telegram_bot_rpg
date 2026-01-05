@@ -27,7 +27,7 @@ class CombatRBCClient:
 
     async def get_snapshot(self, char_id: int) -> CoreResponseDTO[CombatDashboardDTO]:
         """Запрашивает текущее состояние боя (Snapshot)."""
-        return await self.interaction_orchestrator.get_snapshot_wrapped(char_id=char_id)
+        return await self.interaction_orchestrator.get_snapshot(char_id=char_id)
 
     # --- 2. GET DATA (Menu Message: Logs, Info) ---
 

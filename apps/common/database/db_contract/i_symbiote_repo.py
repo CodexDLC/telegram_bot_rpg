@@ -25,6 +25,19 @@ class ISymbioteRepo(ABC):
         pass
 
     @abstractmethod
+    async def get_symbiotes_batch(self, character_ids: list[int]) -> list[CharacterSymbiote]:
+        """
+        Получает список Симбиотов для списка персонажей.
+
+        Args:
+            character_ids: Список идентификаторов персонажей.
+
+        Returns:
+            Список объектов `CharacterSymbiote`.
+        """
+        pass
+
+    @abstractmethod
     async def update_name(self, character_id: int, new_name: str) -> None:
         """
         Обновляет имя Симбиота для указанного персонажа.
