@@ -1,4 +1,4 @@
-# Weapon Mastery Specification (RBC v3.1)
+ну да# Weapon Mastery Specification (RBC v3.1)
 
 ## 1. Система навыков владения (Mastery)
 Навык — это значение от 0.0 до 100.0, которое выступает основным модификатором для расчетов.

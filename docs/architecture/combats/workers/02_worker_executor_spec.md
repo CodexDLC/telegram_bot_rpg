@@ -1,62 +1,45 @@
-# Worker Executor Specification
+# Worker Executor Specification (RBC v3.1)
 
-**Role:** The Muscle.
-**Responsibility:** Выполнение расчетов, применение механик, сохранение результатов.
-
----
-
-## 1. Workflow
-
-### A. Trigger
-Запускается Коллектором (`combat_collector_task`).
-Задача: `WorkerBatchJobDTO(session_id, batch_size)`.
-
-### B. Context Loading (Heavy)
-Загружает **полный контекст** боя:
-*   `Meta` (глобальные флаги).
-*   `Actors` (State, Raw, Loadout, Active Abilities, XP).
-*   `Queue` (список задач `q:actions`).
-
-### C. Lock Acquisition (Optimistic)
-1.  Генерирует уникальный `worker_uuid`.
-2.  Пытается захватить лок `sys:busy`.
-    *   Если там "pending" (от Коллектора) -> Перезаписывает на `worker_uuid`.
-    *   Если там чужой UUID -> Выход (Race Condition).
-
-### D. Batch Processing Loop
-Итерирует по задачам из очереди (до `batch_size`).
-
-Для каждой задачи (`CombatActionDTO`):
-1.  **Normalization:** Превращает Action в список `Impacts` (1 или 2).
-2.  **Pipeline Execution:**
-    *   `Pre-Calc`: Валидация (Cost, Stun).
-    *   `Calculator`: Математика (Hit, Crit, Dmg).
-    *   `Mechanics`: Применение (HP, Buffs).
-    *   `Post-Calc`: Реакции (Counter).
-3.  **Result Accumulation:** Собирает логи и изменения стейта в памяти.
-
-### E. Commit (Atomic Batch with Zombie Check)
-Перед сохранением проверяет лок:
-*   Если `sys:busy` != `worker_uuid` -> **ABORT** (Мы зомби, лок истек).
-*   Если `sys:busy` == `worker_uuid` -> **COMMIT**.
-
-Использует `CombatManager.commit_battle_results`:
-1.  Применяет все изменения `State` (HINCRBY / HSET).
-2.  Обновляет `Active Abilities` (JSON).
-3.  Добавляет логи в `Log` (RPUSH).
-4.  Удаляет обработанные задачи из `Queue` (LTRIM).
-5.  Все это в одном Pipeline.
-
-### F. Feedback Loop (Ping-Pong)
-В конце работы (независимо от результата) отправляет сигнал `heartbeat` Коллектору.
-Это гарантирует, что Коллектор перепроверит состояние боя (например, смерть цели) и запустит AI или новый цикл Исполнителя.
+## 1. Назначение
+**Executor** — это "мозг" обработки очереди. Он берет пары действий (Exchange) и превращает их в задачи для вычислений.
+В версии v3.1 его роль расширена: он не просто диспетчер, он **Арбитр Конфликтов** (Interference Arbiter).
 
 ---
 
-## 2. Key Features
+## 2. Процесс Обработки (Execution Flow)
 
-*   **Optimistic Locking:** Использует `sys:busy` (Fencing Token) для защиты от параллельного запуска.
-*   **Zombie Protection:** Не сохраняет данные, если потерял лок.
-*   **Stateless:** Не хранит состояние между запусками.
-*   **Bulk Processing:** Обрабатывает задачи пачками для снижения оверхеда на I/O.
-*   **Error Isolation:** Ошибка в одной задаче не роняет весь батч (try/except внутри цикла).
+### Шаг 1: Получение Задачи
+Executor забирает из Redis пару интентов: `Intent_A` и `Intent_B`.
+
+### Шаг 2: Interference Pre-Check (НОВОЕ)
+Перед тем как считать урон, Executor проверяет, не пытаются ли игроки "сломать" друг другу атаку (контроль, стан, сбитие).
+
+**Алгоритм:**
+1.  **Scan:** Executor смотрит на ключи приемов (`action_id`) в обоих интентах.
+2.  **Lookup:** Проверяет в `FeintsLibrary` (облегченная версия), есть ли у этих приемов флаг `is_interference` (или `type: CONTROL`).
+3.  **Conflict Resolution:**
+    *   **Нет контроля:** Оба бьют как обычно. `Mods_A = {}`, `Mods_B = {}`.
+    *   **Один контроль (А станит Б):**
+        *   Проверка шанса (Roll).
+        *   Успех -> `Mods_B = {"disable_attack": True}`.
+        *   Провал -> `Mods_B = {}`.
+    *   **Двойной контроль (Clash):**
+        *   Оба кидают шансы.
+        *   Если оба прошли -> Сравнение **Инициативы** (Speed).
+        *   Победитель накладывает мод, проигравший получает.
+
+### Шаг 3: Формирование Задач (Task Generation)
+Executor создает две задачи для `Gatherer` (вычислительного ядра), внедряя полученные модификаторы.
+
+*   **Task 1:** `Process(Actor_A, Intent_A, Target_B, ExternalMods=Mods_A)`
+*   **Task 2:** `Process(Actor_B, Intent_B, Target_A, ExternalMods=Mods_B)`
+
+> **Важно:** Если `Mods_B` содержит `disable_attack`, то Пайплайн Б будет "кастрирован" (без фазы калькуляции), но все равно запущен для обновления статусов.
+
+### Шаг 4: Агрегация и Сохранение
+После выполнения задач Executor собирает результаты, формирует логи боя и сохраняет обновленный стейт в Redis.
+
+---
+
+## 3. Обработка Ошибок
+Если один из интентов невалиден (игрок умер до начала хода, но интент остался), Executor превращает его в `Skip Turn` и не проводит Pre-Check.
