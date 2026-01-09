@@ -13,15 +13,8 @@
 *   **`shield_block_chance`**: Шанс блока (Щитом).
 *   **`shield_block_cap`**: Кап блока.
 
-## CritStatsDTO (Anti-Crit)
-*   **`anti_crit_chance`**: Общее снижение шанса получить крит.
-*   **`anti_physical_crit_chance`**: Только от физ. атак.
-*   **`anti_magical_crit_chance`**: Только от маг. атак.
-*   **`immune_to_crit`** (bool): Полный иммунитет к критам.
-
 ## MitigationStatsDTO (Damage Reduction)
 *   **`physical_resistance`**: Сопротивление физ. урону (%).
 *   **`magical_resistance`**: Сопротивление магии (%).
 *   **`resistance_cap`**: Кап резистов.
 *   **`damage_reduction_flat`**: Плоское снижение урона (Armor).
-*   **`incoming_damage_reduction`**: Мультипликатор входящего урона (0.9 = -10%).

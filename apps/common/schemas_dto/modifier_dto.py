@@ -56,9 +56,16 @@ class CombatSkillsDTO(BaseModel):
 class SecondarySkillsDTO(BaseModel):
     """Второстепенные навыки."""
 
+    # Crafting & Trade
     skill_crafting: float = 0.0
     skill_trading: float = 0.0
     skill_gathering: float = 0.0
+
+    # Survival
+    skill_taming: float = 0.0
+    skill_adaptation: float = 0.0
+    skill_scouting: float = 0.0
+    skill_pathfinder: float = 0.0
 
 
 class MainHandStatsDTO(BaseModel):
@@ -74,12 +81,6 @@ class MainHandStatsDTO(BaseModel):
 
     # Crit
     main_hand_crit_chance: float = 0.0
-    main_hand_crit_power: float = 1.5
-    main_hand_crit_cap: float = 0.75
-
-    # Pierce
-    main_hand_pierce_chance: float = 0.0
-    main_hand_pierce_cap: float = 0.50
 
 
 class OffHandStatsDTO(BaseModel):
@@ -95,12 +96,6 @@ class OffHandStatsDTO(BaseModel):
 
     # Crit
     off_hand_crit_chance: float = 0.0
-    off_hand_crit_power: float = 1.5
-    off_hand_crit_cap: float = 0.75
-
-    # Pierce
-    off_hand_pierce_chance: float = 0.0
-    off_hand_pierce_cap: float = 0.50
 
 
 class PhysicalStatsDTO(BaseModel):
@@ -125,21 +120,6 @@ class MagicalStatsDTO(BaseModel):
 
     # Magical Crit (Пока общий)
     magical_crit_chance: float = 0.0
-    magical_crit_power_float: float = 1.5
-    magical_crit_cap: float = 0.75
-
-
-class CritStatsDTO(BaseModel):
-    """
-    Защита от крита (Anti-Crit).
-    Атакующий крит переехал в HandStats.
-    """
-
-    # Anti-Crit (Defense)
-    anti_crit_chance: float = 0.0  # Общий
-    anti_physical_crit_chance: float = 0.0
-    anti_magical_crit_chance: float = 0.0
-    immune_to_crit: bool = False
 
 
 class DefensiveStatsDTO(BaseModel):
@@ -174,9 +154,6 @@ class MitigationStatsDTO(BaseModel):
 
     # Armor (Flat)
     damage_reduction_flat: float = 0.0
-
-    # Multipliers
-    incoming_damage_reduction: float = 1.0
 
 
 class ElementalStatsDTO(BaseModel):
@@ -240,15 +217,13 @@ class SpecialStatsDTO(BaseModel):
     counter_attack_cap: float = 0.50
 
     vampiric_power: float = 0.0
-    vampiric_power_cap: float = 0.50
     vampiric_trigger_chance: float = 0.0
     vampiric_trigger_cap: float = 1.0
 
     healing_power: float = 0.0
     received_healing_bonus: float = 0.0
 
-    pet_damage_bonus: float = 0.0
-    pet_health_bonus: float = 0.0
+    pet_efficiency_mult: float = 1.0
 
     damage_mult: float = 1.0
 
@@ -276,7 +251,6 @@ class CombatModifiersDTO(
     OffHandStatsDTO,
     PhysicalStatsDTO,
     MagicalStatsDTO,
-    CritStatsDTO,
     DefensiveStatsDTO,
     MitigationStatsDTO,
     ElementalStatsDTO,

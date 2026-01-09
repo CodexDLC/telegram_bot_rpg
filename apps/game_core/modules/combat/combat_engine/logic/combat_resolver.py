@@ -33,20 +33,28 @@ class CombatResolver:
         if not context.phases.run_calculator:
             return result
 
+        # 1. Accuracy (Попали ли вообще?)
         if not cls._step_accuracy_roll(attacker_stats, context, result):
             return result
 
+        # 2. Crit / Trigger Roll (Сработал ли спец-эффект оружия?)
+        # Перенесено ДО уворота, чтобы крит мог влиять на уворот (Undodgeable)
+        cls._step_crit_roll(attacker_stats, defender_stats, context, result)
+
+        # 3. Evasion (Увернулся ли враг?)
         if cls._step_evasion_roll(attacker_stats, defender_stats, context, result):
             return result
 
+        # 4. Parry (Спарировал?)
         if cls._step_parry_roll(attacker_stats, defender_stats, context, result):
             return result
 
+        # 5. Block (Заблокировал?)
         # Блок теперь работает как полный эвейжен (0 урона)
         if cls._step_block_roll(attacker_stats, defender_stats, context, result):
             return result
 
-        cls._step_crit_roll(attacker_stats, defender_stats, context, result)
+        # 6. Damage Calculation
         cls._step_calculate_damage(attacker_stats, defender_stats, context, result)
 
         return result
@@ -226,7 +234,7 @@ class CombatResolver:
 
         if ctx.flags.force.crit:
             res.is_crit = True
-            res.crit_mult = CombatResolver._get_offensive_val(atk_stats, ctx, "crit_power")
+            # Множитель крита теперь считается в calculate_damage
             CombatResolver._resolve_triggers(ctx, res, "ON_CRIT")
             return
 
@@ -244,28 +252,46 @@ class CombatResolver:
 
         if is_magic:
             my_crit_chance = atk_stats.magical_crit_chance
-        elif ctx.flags.damage.physical:
-            my_crit_chance = CombatResolver._get_offensive_val(atk_stats, ctx, "crit_chance")
         else:
             my_crit_chance = CombatResolver._get_offensive_val(atk_stats, ctx, "crit_chance")
 
-        target_anti_crit = def_stats.anti_crit_chance
+        # Получаем значение навыка оружия (если есть)
+        skill_multiplier = 1.0
+        if ctx.flags.meta.weapon_class:
+            skill_key = f"skill_{ctx.flags.meta.weapon_class}"
+            skill_val = getattr(atk_stats.skills, skill_key, 0.0)
+            # Пример формулы: +1% шанса за каждое очко навыка (x2 на 100)
+            # TODO: Вынести коэффициент в конфиг
+            skill_multiplier = 1.0 + (skill_val / 100.0)
+
+        final_chance = my_crit_chance * skill_multiplier
         crit_cap = CombatResolver._get_offensive_val(atk_stats, ctx, "crit_cap")
-
-        final_chance = 0.0
-        if ctx.flags.formula.crit_ignore_anticrit:
-            final_chance = my_crit_chance
-            final_chance = min(final_chance, crit_cap)
-        else:
-            final_chance = my_crit_chance - target_anti_crit
-            final_chance = min(final_chance, crit_cap)
+        final_chance = min(final_chance, crit_cap)
 
         if final_chance > 0 and MathCore.check_chance(final_chance):
             res.is_crit = True
-            res.crit_mult = CombatResolver._get_offensive_val(atk_stats, ctx, "crit_power")
+            # Множитель крита теперь считается в calculate_damage
             CombatResolver._resolve_triggers(ctx, res, "ON_CRIT")
         else:
             CombatResolver._resolve_triggers(ctx, res, "ON_CRIT_FAIL")
+
+    @staticmethod
+    def _calculate_crit_multiplier(ctx: PipelineContextDTO) -> float:
+        """
+        Определяет множитель урона при крите.
+        """
+        # 1. Магия всегда x3.0
+        elements = ["fire", "water", "air", "earth", "light", "darkness", "arcane", "nature"]
+        is_magic = any(getattr(ctx.flags.damage, elem, False) for elem in elements)
+        if is_magic:
+            return 3.0
+
+        # 2. Физика: Если активен буст (от оружия/абилки) -> берем значение из модов
+        if ctx.flags.formula.crit_damage_boost:
+            return ctx.mods.weapon_effect_value
+
+        # 3. По умолчанию крит не увеличивает урон (только триггеры)
+        return 1.0
 
     @staticmethod
     def _step_calculate_damage(
@@ -290,6 +316,12 @@ class CombatResolver:
         raw_damage = MathCore.random_range(min_d, max_d)
         total_damage = 0.0
 
+        # Определяем множитель крита один раз
+        crit_multiplier = 1.0
+        if res.is_crit:
+            crit_multiplier = CombatResolver._calculate_crit_multiplier(ctx)
+            res.crit_mult = crit_multiplier  # Сохраняем для логов
+
         # 2. РАСЧЕТ ПО ТИПАМ
 
         # --- PHYSICAL ---
@@ -297,11 +329,18 @@ class CombatResolver:
             phys_dmg = raw_damage
 
             if res.is_crit:
-                crit_pow = CombatResolver._get_offensive_val(atk_stats, ctx, "crit_power")
+                # Применяем множитель крита
+                phys_dmg *= crit_multiplier
+
+                # Снижение урона от крита тяжелой броней
                 heavy_skill = def_stats.skills.skill_heavy_armor
                 if heavy_skill > 0:
-                    crit_pow *= 1.0 - (heavy_skill * 0.5)
-                phys_dmg *= crit_pow
+                    # Снижаем эффективность множителя (если он > 1.0)
+                    # Логика: если множитель 2.0, то бонус = 1.0. Мы режем бонус.
+                    bonus_part = crit_multiplier - 1.0
+                    if bonus_part > 0:
+                        # Оставим простую логику снижения всего крит урона
+                        phys_dmg *= 1.0 - (heavy_skill * 0.2)  # Пример: -20% крит урона на мастере
 
             phys_res_pct = def_stats.physical_resistance
             phys_pen_pct = CombatResolver._get_offensive_val(atk_stats, ctx, "penetration")
@@ -309,17 +348,8 @@ class CombatResolver:
             phys_dmg *= 1.0 - mitigation_pct
 
             armor_flat = def_stats.damage_reduction_flat
-            # shield_block_power удален, так как блок теперь полностью предотвращает урон (return True в _step_block_roll)
 
-            # PIERCE CHECK (Игнор брони)
-            if ctx.flags.formula.can_pierce:
-                pierce_chance = CombatResolver._get_offensive_val(atk_stats, ctx, "pierce_chance")
-                pierce_cap = CombatResolver._get_offensive_val(atk_stats, ctx, "pierce_cap")
-                final_pierce = min(pierce_chance, pierce_cap)
-
-                if MathCore.check_chance(final_pierce):
-                    armor_flat = 0.0
-                    res.tokens_awarded_attacker.append("PIERCE")
+            # PIERCE CHECK удален (теперь это часть механики крита/триггеров)
 
             phys_dmg = max(0.0, phys_dmg - armor_flat)
 
@@ -334,7 +364,8 @@ class CombatResolver:
         if ctx.flags.damage.pure:
             pure_dmg = raw_damage
             if res.is_crit:
-                pure_dmg *= 1.5
+                pure_dmg *= 1.5  # Pure damage crit is fixed? Или тоже через helper?
+                # Пусть пока будет 1.5, так как чистый урон редкий
             total_damage += pure_dmg
 
         # --- ELEMENTAL ---
@@ -344,10 +375,8 @@ class CombatResolver:
                 elem_dmg = raw_damage
 
                 if res.is_crit:
-                    crit_pow = 1.5
-                    if atk_stats.magic:
-                        crit_pow = atk_stats.magical_crit_power_float
-                    elem_dmg *= crit_pow
+                    # Для магии хелпер вернет 3.0
+                    elem_dmg *= crit_multiplier
 
                 resist_pct = getattr(def_stats, f"{elem}_resistance", 0.0)
                 pen_pct = 0.0
@@ -420,7 +449,7 @@ class CombatResolver:
         Достает значение стата из нужной руки (с префиксом).
         stat_name: "damage_base", "accuracy", "crit_chance" (без префикса).
         """
-        current_source = ctx.source_type
+        current_source = ctx.flags.meta.source_type
 
         prefix = ""
         if current_source == "off_hand":
