@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.common.database.repositories import get_character_repo
 from apps.common.schemas_dto.auth_dto import GameStage
 from apps.common.schemas_dto.game_state_enum import GameState
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.redis_fields import AccountFields as Af
+from apps.common.services.redis.manager.account_manager import AccountManager
+from apps.common.services.redis.redis_fields import AccountFields as Af
 
 
 class LoginService:

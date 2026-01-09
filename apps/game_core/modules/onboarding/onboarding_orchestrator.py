@@ -9,7 +9,7 @@ from apps.common.schemas_dto.onboarding_dto import (
     OnboardingStepEnum,
     OnboardingViewDTO,
 )
-from apps.common.services.core_service.redis_service import RedisService
+from apps.common.services.redis.redis_service import RedisService
 from apps.common.services.validators.character_validator import validate_character_name
 from apps.game_core.modules.onboarding.onboarding_service import OnboardingService
 from apps.game_core.modules.onboarding.onboarding_session_manager import OnboardingSessionManager

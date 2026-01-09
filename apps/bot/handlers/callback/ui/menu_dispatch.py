@@ -98,7 +98,7 @@ async def main_menu_dispatcher(
             # Статус не меняет стейт FSM (обычно), или меняет на InGame.status?
             # В character_status.py стейт не меняется явно, но лучше задать контекст.
             # Пока оставим текущий стейт или зададим InGame.status (если он есть).
-            # В states.py есть FSM_CONTEX_CHARACTER_STATUS = [InGame.exploration, InGame.inventory, InGame.combat]
+            # В states.py есть FSM_CONTEX_CHARACTER_STATUS = [InGame.exploration, InGame.inventory, InGame.combats]
             # Значит, статус доступен из любого стейта.
             # Но лучше переключить на InGame.exploration (как дефолт) или оставить как есть.
 

@@ -1,9 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.schemas_dto.game.arena_dto import ArenaMatchResponse, ArenaQueueResponse
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.manager.arena_manager import ArenaManager
-from apps.common.services.core_service.manager.combat_manager import CombatManager
+from apps.common.services.redis.manager.account_manager import AccountManager
+from apps.common.services.redis.manager.arena_manager import ArenaManager
+from apps.common.services.redis.manager.combat_manager import CombatManager
 from apps.game_core.modules.arena.arena_orchestrator import ArenaCoreOrchestrator
 
 

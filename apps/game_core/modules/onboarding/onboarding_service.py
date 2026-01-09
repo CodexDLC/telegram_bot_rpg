@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.common.database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from apps.common.schemas_dto.character_dto import CharacterOnboardingUpdateDTO, CharacterShellCreateDTO, Gender
 from apps.common.schemas_dto.game_state_enum import GameState
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.redis_service import RedisService
+from apps.common.services.redis.manager.account_manager import AccountManager
+from apps.common.services.redis.redis_service import RedisService
 
 
 class OnboardingService:

@@ -1,5 +1,4 @@
 from collections import defaultdict
-from typing import Any
 
 from loguru import logger as log
 from sqlalchemy import select, update
@@ -7,80 +6,10 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.database.db_contract.i_skill_repo import ISkillProgressRepo, ISkillRateRepo
-from apps.common.database.model_orm.skill import CharacterSkillProgress, CharacterSkillRate, SkillProgressState
-from apps.common.schemas_dto.skill import SkillProgressDTO, SkillRateDTO
-from apps.game_core.resources.game_data.skill_library import SKILL_RECIPES
-
-
-class SkillRateRepo(ISkillRateRepo):
-    """
-    ORM-реализация репозитория для ставок развития навыков (БСО).
-
-    Предоставляет методы для массового создания/обновления и получения
-    ставок опыта для навыков персонажа.
-    """
-
-    def __init__(self, session: AsyncSession):
-        """
-        Инициализирует SkillRateRepo.
-
-        Args:
-            session: Асинхронная сессия SQLAlchemy.
-        """
-        self.session = session
-        log.debug(f"SkillRateRepo | status=initialized session={session}")
-
-    async def upsert_skill_rates(self, rates_data: list[dict[str, Any]]) -> None:
-        """
-        Массово создает или обновляет ставки опыта для навыков персонажа.
-
-        Использует Postgres UPSERT для атомарной операции.
-
-        Args:
-            rates_data: Список словарей с данными для UPSERT.
-        """
-        if not rates_data:
-            log.warning("SkillRateRepo | action=upsert_skill_rates reason='Empty data list'")
-            return
-
-        char_id = rates_data[0].get("character_id")
-        log.debug(f"SkillRateRepo | action=upsert_skill_rates count={len(rates_data)} char_id={char_id}")
-
-        stmt = pg_insert(CharacterSkillRate).values(rates_data)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=[CharacterSkillRate.character_id, CharacterSkillRate.skill_key],
-            set_={"xp_per_tick": stmt.excluded.xp_per_tick},
-        )
-        try:
-            await self.session.execute(stmt)
-            log.info(f"SkillRateRepo | action=upsert_skill_rates status=success char_id={char_id}")
-        except SQLAlchemyError:
-            log.exception(f"SkillRateRepo | action=upsert_skill_rates status=failed char_id={char_id}")
-            raise
-
-    async def get_all_skill_rates(self, character_id: int) -> list[SkillRateDTO]:
-        """
-        Возвращает все рассчитанные ставки опыта для навыков одного персонажа.
-
-        Args:
-            character_id: Идентификатор персонажа.
-
-        Returns:
-            Список DTO `SkillRateDTO` со ставками навыков.
-        """
-        log.debug(f"SkillRateRepo | action=get_all_skill_rates char_id={character_id}")
-        stmt = select(CharacterSkillRate).where(CharacterSkillRate.character_id == character_id)
-        try:
-            result = await self.session.scalars(stmt)
-            orm_rates_list = result.all()
-            log.debug(
-                f"SkillRateRepo | action=get_all_skill_rates status=found count={len(orm_rates_list)} char_id={character_id}"
-            )
-            return [SkillRateDTO.model_validate(orm_rate) for orm_rate in orm_rates_list]
-        except SQLAlchemyError:
-            log.exception(f"SkillRateRepo | action=get_all_skill_rates status=failed char_id={character_id}")
-            raise
+from apps.common.database.db_contract.i_skill_repo import ISkillProgressRepo
+from apps.common.database.model_orm.skill import CharacterSkillProgress, SkillProgressState
+from apps.common.schemas_dto.skill import SkillProgressDTO
+from apps.game_core.resources.game_data.skills.skill_library import SKILL_RECIPES
 
 
 class SkillProgressRepo(ISkillProgressRepo):
@@ -110,7 +39,7 @@ class SkillProgressRepo(ISkillProgressRepo):
         """
         log.debug(f"SkillProgressRepo | action=initialize_all_base_skills char_id={character_id}")
         base_skills = [
-            {"character_id": character_id, "skill_key": key, "total_xp": 0}
+            {"character_id": character_id, "skill_key": key, "total_xp": 0.0}
             for key, recipe in SKILL_RECIPES.items()
             if isinstance(recipe, dict) and recipe.get("prerequisite_skill") is None
         ]
@@ -133,14 +62,14 @@ class SkillProgressRepo(ISkillProgressRepo):
             log.exception(f"SkillProgressRepo | action=initialize_all_base_skills status=failed char_id={character_id}")
             raise
 
-    async def add_skill_xp(self, character_id: int, skill_key: str, xp_to_add: int) -> SkillProgressDTO | None:
+    async def add_skill_xp(self, character_id: int, skill_key: str, xp_to_add: float) -> SkillProgressDTO | None:
         """
         Атомарно добавляет опыт к указанному навыку персонажа и возвращает обновленный прогресс.
 
         Args:
             character_id: Идентификатор персонажа.
             skill_key: Ключ навыка.
-            xp_to_add: Количество опыта для добавления.
+            xp_to_add: Количество опыта для добавления (Float).
 
         Returns:
             Обновленный DTO `SkillProgressDTO` прогресса навыка,

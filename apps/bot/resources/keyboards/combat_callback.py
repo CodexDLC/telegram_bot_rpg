@@ -1,5 +1,5 @@
 """
-Файл: app/bot/handlers/combat/callbacks.py
+Файл: app/bot/handlers/combats/callbacks.py
 Описание: Структуры данных (CallbackData) для боевой системы.
 Архитектура: Разделение по типу нагрузки и ответственности (Menu vs Controls vs Flow).
 """

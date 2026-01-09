@@ -3,7 +3,7 @@ from aiogram import Router
 
 # from apps.bot.handlers.callback.game.exploration.navigation import router as navigation_router
 # from .arena import arena_router_group
-# from .combat import combat_router
+# from .combats import combat_router
 # from .exploration import exploration_router_group
 # from .hub_entry import router as hub_entry_router
 from .scenario_handler import router as scenario_handler_router

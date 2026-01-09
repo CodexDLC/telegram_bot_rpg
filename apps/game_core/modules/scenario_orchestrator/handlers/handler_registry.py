@@ -2,7 +2,7 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.common.services.redis.manager.account_manager import AccountManager
 from apps.game_core.modules.scenario_orchestrator.logic.scenario_manager import ScenarioManager
 
 from .base_handler import BaseScenarioHandler

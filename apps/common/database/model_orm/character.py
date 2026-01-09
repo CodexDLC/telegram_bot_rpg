@@ -10,7 +10,7 @@ from apps.common.database.model_orm.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from .inventory import InventoryItem, ResourceWallet
-    from .skill import CharacterSkillProgress, CharacterSkillRate
+    from .skill import CharacterSkillProgress
     from .symbiote import CharacterSymbiote
     from .user import User
 
@@ -35,12 +35,12 @@ class Character(Base, TimestampMixin):
     prev_location_id: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="Предыдущая локация.")
 
     user: Mapped[User] = relationship(back_populates="characters")
-    stats: Mapped[CharacterStats] = relationship(
-        "CharacterStats", back_populates="character", cascade="all, delete-orphan"
+
+    # Renamed stats -> attributes
+    attributes: Mapped[CharacterAttributes] = relationship(
+        "CharacterAttributes", back_populates="character", cascade="all, delete-orphan"
     )
-    skill_rate: Mapped[list[CharacterSkillRate]] = relationship(
-        "CharacterSkillRate", back_populates="character", cascade="all, delete-orphan"
-    )
+
     skill_progress: Mapped[list[CharacterSkillProgress]] = relationship(
         "CharacterSkillProgress", back_populates="character", cascade="all, delete-orphan"
     )
@@ -58,8 +58,13 @@ class Character(Base, TimestampMixin):
         return f"<Character(id={self.character_id}, name='{self.name}', user_id={self.user_id})>"
 
 
-class CharacterStats(Base, TimestampMixin):
-    __tablename__ = "character_stats"
+class CharacterAttributes(Base, TimestampMixin):
+    """
+    Таблица атрибутов персонажа (ранее CharacterStats).
+    Хранит базовые параметры: Сила, Ловкость и т.д.
+    """
+
+    __tablename__ = "character_attributes"  # Renamed from character_stats
 
     character_id: Mapped[int] = mapped_column(
         ForeignKey("characters.character_id", ondelete="CASCADE"), primary_key=True
@@ -75,7 +80,11 @@ class CharacterStats(Base, TimestampMixin):
     charisma: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     luck: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
 
-    character: Mapped[Character] = relationship("Character", back_populates="stats")
+    character: Mapped[Character] = relationship("Character", back_populates="attributes")
 
     def __repr__(self) -> str:
-        return f"<CharacterStats(character_id={self.character_id})>"
+        return f"<CharacterAttributes(character_id={self.character_id})>"
+
+
+# Alias for backward compatibility (Optional)
+CharacterStats = CharacterAttributes

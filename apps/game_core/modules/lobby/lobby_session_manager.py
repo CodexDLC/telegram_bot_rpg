@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.database.repositories import get_character_repo
 from apps.common.schemas_dto import CharacterReadDTO, CharacterShellCreateDTO
-from apps.common.services.core_service.redis_key import RedisKeys
-from apps.common.services.core_service.redis_service import RedisService
+from apps.common.services.redis.redis_key import RedisKeys
+from apps.common.services.redis.redis_service import RedisService
 
 
 class LobbySessionManager:

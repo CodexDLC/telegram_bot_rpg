@@ -3,12 +3,12 @@ import time
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.services.core_service import CombatManager
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.manager.arena_manager import ArenaManager
+from apps.common.services.redis import CombatManager
+from apps.common.services.redis.manager.account_manager import AccountManager
+from apps.common.services.redis.manager.arena_manager import ArenaManager
 from apps.game_core.modules.arena.matchmaking_service import MatchmakingService
 
-# from apps.game_core.modules.combat.combat_orchestrator_rbc import CombatOrchestratorRBC
+# from apps.game_core.modules.combats.combat_orchestrator_rbc import CombatOrchestratorRBC
 
 
 class Arena1v1Service:
@@ -126,7 +126,7 @@ class Arena1v1Service:
         Проверяет, участвует ли персонаж уже в активном бою.
         """
         val = await self.combat_manager.get_player_status(self.char_id)
-        if val and val.startswith("combat:"):
+        if val and val.startswith("combats:"):
             return val.split(":")[1]
         return None
 
@@ -134,5 +134,5 @@ class Arena1v1Service:
         """
         Устанавливает статус игрока в Redis.
         """
-        await self.combat_manager.set_player_status(char_id, f"combat:{session_id}", ttl=600)
-        log.debug(f"Arena1v1 | event=player_status_set char_id={char_id} status='combat:{session_id}'")
+        await self.combat_manager.set_player_status(char_id, f"combats:{session_id}", ttl=600)
+        log.debug(f"Arena1v1 | event=player_status_set char_id={char_id} status='combats:{session_id}'")

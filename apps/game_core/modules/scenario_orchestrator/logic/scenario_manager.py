@@ -7,10 +7,10 @@ from loguru import logger as log
 
 from apps.common.database.db_contract.i_scenario_repo import IScenarioRepository
 from apps.common.schemas_dto.game_state_enum import GameState
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.redis_fields import AccountFields as Af
-from apps.common.services.core_service.redis_key import RedisKeys
-from apps.common.services.core_service.redis_service import RedisService
+from apps.common.services.redis.manager.account_manager import AccountManager
+from apps.common.services.redis.redis_fields import AccountFields as Af
+from apps.common.services.redis.redis_key import RedisKeys
+from apps.common.services.redis.redis_service import RedisService
 
 
 class ScenarioManager:

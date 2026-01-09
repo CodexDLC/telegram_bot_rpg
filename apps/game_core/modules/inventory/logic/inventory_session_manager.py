@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.common.database.repositories import get_inventory_repo, get_wallet_repo
 from apps.common.schemas_dto.inventory_dto import InventorySessionDTO, WalletDTO
 from apps.common.schemas_dto.item_dto import InventoryItemDTO, InventoryItemTypeAdapter
-from apps.common.services.core_service.redis_service import RedisService
+from apps.common.services.redis.redis_service import RedisService
 
 
 class InventorySessionManager:

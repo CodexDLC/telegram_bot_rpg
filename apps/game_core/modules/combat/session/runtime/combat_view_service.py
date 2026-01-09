@@ -1,170 +1,151 @@
-# apps/game_core/modules/combat/session/runtime/combat_view_service.py
+# apps/game_core/modules/combats/session/runtime/combat_view_service.py
 """
-Файл: app/game_core/modules/combat/session/combat_view_service.py
+Файл: app/game_core/modules/combats/session/combat_view_service.py
 """
 
-import json
-import math
-
-from loguru import logger as log
+import contextlib
 
 from apps.common.schemas_dto.combat_source_dto import (
-    ActorSnapshotDTO,
+    ActorFullInfo,
+    ActorShortInfo,
     CombatDashboardDTO,
     CombatLogDTO,
+    CombatLogEntryDTO,
 )
-from apps.game_core.modules.combat.combat_redis_fields import CombatSessionFields as Csf
-from apps.game_core.modules.combat.core.combat_stats_calculator import StatsCalculator
+from apps.game_core.modules.combat.dto.combat_internal_dto import ActorSnapshot, BattleContext
 
 
 class CombatViewService:
     """
-    Read Model (Pure Mapper).
-    Преобразует сырые данные (dict, list) в DTO.
+    Read Model (Pure Mapper) v3.0.
+    Преобразует BattleContext (из ActorManager) в DTO для клиента.
     Не имеет зависимостей от Redis/Manager.
     """
 
-    def build_dashboard_dto(
-        self,
-        session_id: str,
-        char_id: int,
-        meta: dict[str, str],
-        actors_data: dict[str, str],
-        queue_list: list[str],
-    ) -> CombatDashboardDTO:
+    def build_dashboard_dto_from_context(self, char_id: int, context: BattleContext) -> CombatDashboardDTO:
         """
-        Собирает CombatDashboardDTO из сырых данных.
+        Собирает CombatDashboardDTO из BattleContext.
         """
-        # 1. Определяем статус
-        is_active = int(meta.get(Csf.ACTIVE, 0)) == 1
-        winner = meta.get(Csf.WINNER)
+        # 1. Находим себя
+        me = context.actors.get(char_id)
+        if not me:
+            raise ValueError(f"Player {char_id} not found in context")
 
+        my_team = me.team
+
+        # 2. Определяем статус и цель
         status = "active"
-        if not is_active or winner:
+        target_info: ActorFullInfo | None = None
+
+        # Глобальный статус
+        if context.meta.active == 0 or context.meta.teams.get("winner"):
             status = "finished"
-        elif len(queue_list) == 0:
-            status = "waiting"
+        elif me.state.is_dead:
+            # Если мертв - статус active (зритель), но цели нет
+            status = "active"
+        else:
+            # Проверка: Есть ли цель в очереди?
+            # targets: {char_id: [target_id, ...]}
+            my_targets = context.targets.get(char_id, [])
 
-        # 2. Парсим акторов
-        player_dto = None
-        allies = []
-        enemies = []
-        belt_items = []
-
-        # Сначала ищем себя
-        my_raw = actors_data.get(str(char_id))
-        if not my_raw:
-            # Если игрока нет в сессии (ошибка данных), возвращаем пустой DTO или кидаем ошибку
-            # Лучше кинуть, чтобы SessionService обработал
-            raise ValueError(f"Player {char_id} not found in session actors")
-
-        my_data = json.loads(my_raw)
-        my_team = my_data.get("team")
-
-        # Извлекаем поясную сумку
-        raw_belt = my_data.get("belt_items", [])
-        belt_items = raw_belt  # Уже dict
-
-        # Извлекаем switch_charges из state
-        switch_charges = 0
-        if "state" in my_data and "switch_charges" in my_data["state"]:
-            switch_charges = my_data["state"]["switch_charges"]
-
-        for aid_str, raw in actors_data.items():
-            data = json.loads(raw)
-            dto = self._map_actor(data)
-
-            aid = int(aid_str)
-            if aid == char_id:
-                player_dto = dto
-            elif data.get("team") == my_team:
-                allies.append(dto)
+            if not my_targets:
+                status = "waiting"
             else:
-                enemies.append(dto)
+                # Цель есть -> Active
+                target_id = my_targets[0]
+                target_actor = context.actors.get(target_id)
 
-        # 3. Награды
-        rewards = {}
-        if meta.get(Csf.REWARDS):
-            try:
-                all_rewards = json.loads(meta[Csf.REWARDS])
-                rewards = all_rewards.get(str(char_id), {})
-            except json.JSONDecodeError:
-                log.warning(f"Failed to parse rewards for session {session_id}")
+                if target_actor:
+                    target_info = self._map_actor_full(target_actor)
+                else:
+                    # Цель в очереди есть, но данные не загружены (странно, но бывает)
+                    # Считаем waiting
+                    status = "waiting"
 
-        # 4. Текущая цель
-        current_target = None
-        if queue_list:
-            target_id = int(queue_list[0])
-            for e in enemies:
-                if e.char_id == target_id:
-                    current_target = e
-                    break
+        # 3. Парсим списки (Allies / Enemies)
+        allies: list[ActorShortInfo] = []
+        enemies: list[ActorShortInfo] = []
 
-        # Ensure player_dto is not None before passing to CombatDashboardDTO
-        if player_dto is None:
-            raise ValueError(f"Player {char_id} DTO could not be created")
+        # Текущий ID цели (для подсветки в списке)
+        current_target_id = target_info.char_id if target_info else None
 
+        for aid, actor in context.actors.items():
+            if aid == char_id:
+                continue  # Себя в списки не добавляем
+
+            is_target = aid == current_target_id
+            short_dto = self._map_actor_short(actor, is_target)
+
+            if actor.team == my_team:
+                allies.append(short_dto)
+            else:
+                enemies.append(short_dto)
+
+        # Сортировка: Живые выше, Мертвые ниже
+        allies.sort(key=lambda x: (x.is_dead, -x.hp_percent))
+        enemies.sort(key=lambda x: (x.is_dead, -x.hp_percent))
+
+        # 4. Собираем DTO
         return CombatDashboardDTO(
-            session_id=session_id,
+            turn_number=context.meta.step_counter,
             status=status,
-            queue_count=len(queue_list),
-            player=player_dto,
-            current_target=current_target,
+            hero=self._map_actor_full(me),
+            target=target_info,
             allies=allies,
             enemies=enemies,
-            winner_team=winner,
-            rewards=rewards,
-            belt_items=belt_items,
-            switch_charges=switch_charges,
+            winner_team=context.meta.teams.get("winner"),
+            logs=[],  # Логи грузятся отдельно
         )
 
     def build_logs_dto(self, raw_logs: list[str], page: int = 0) -> CombatLogDTO:
         """
         Собирает CombatLogDTO из списка сырых логов.
         """
-        page_size = 5
+        page_size = 20
         total = len(raw_logs)
-        total_pages = math.ceil(total / page_size)
-        if total_pages == 0:
-            total_pages = 1
 
-        end_idx = total - (page * page_size)
-        start_idx = max(0, end_idx - page_size)
+        start = (page - 1) * page_size
+        end = start + page_size
 
-        chunk = []
-        if end_idx > 0:
-            chunk = raw_logs[start_idx:end_idx]
+        chunk_raw = raw_logs[start:end]
+        chunk_parsed = []
 
-        return CombatLogDTO(logs=chunk, page=page, total_pages=total_pages)
+        for log_json in chunk_raw:
+            with contextlib.suppress(Exception):
+                entry = CombatLogEntryDTO.model_validate_json(log_json)
+                chunk_parsed.append(entry)
 
-    def _map_actor(self, data: dict) -> ActorSnapshotDTO:
-        """Собирает DTO одного актера с расчетом Max HP."""
-        state = data.get("state", {})
-        stats = data.get("stats", {})
+        return CombatLogDTO(logs=chunk_parsed, page=page, total=total)
 
-        final_stats = StatsCalculator.aggregate_all(stats)
+    # --- MAPPERS ---
 
-        # Определение Layout оружия
-        layout = "1h"
-        equipped = data.get("equipped_items", [])
-        has_offhand = False
-        for item in equipped:
-            if item.get("slot") == "off_hand" and item.get("item_type") == "weapon":
-                has_offhand = True
-                break
-        if has_offhand:
-            layout = "dual"
+    def _map_actor_full(self, actor: ActorSnapshot) -> ActorFullInfo:
+        """Полная инфа (Hero / Target)."""
+        layout = actor.raw.equipment_layout.get("main_hand", "1h")
 
-        return ActorSnapshotDTO(
-            char_id=data["char_id"],
-            name=data.get("name", ""),
-            team=data.get("team", ""),
-            is_dead=state.get("hp_current", 0) <= 0,
-            hp_current=int(state.get("hp_current", 0)),
-            hp_max=int(final_stats.get("hp_max", 100)),
-            energy_current=int(state.get("energy_current", 0)),
-            energy_max=int(final_stats.get("energy_max", 100)),
-            effects=list(state.get("effects", {}).keys()),
-            tokens=state.get("tokens", {}),
-            weapon_layout=layout,
+        return ActorFullInfo(
+            char_id=actor.char_id,
+            name=actor.raw.name,
+            team=actor.team,
+            hp_current=actor.state.hp,
+            hp_max=actor.state.max_hp,
+            energy_current=actor.state.en,
+            energy_max=actor.state.max_en,
+            weapon_type=layout,
+            tokens=actor.state.tokens,
+            effects=[a.ability_id for a in actor.active_abilities],
+        )
+
+    def _map_actor_short(self, actor: ActorSnapshot, is_target: bool) -> ActorShortInfo:
+        """Краткая инфа (Lists)."""
+        hp_pct = 0
+        if actor.state.max_hp > 0:
+            hp_pct = int((actor.state.hp / actor.state.max_hp) * 100)
+
+        return ActorShortInfo(
+            char_id=actor.char_id,
+            name=actor.raw.name,
+            hp_percent=hp_pct,
+            is_dead=actor.state.is_dead,
+            is_target=is_target,
         )

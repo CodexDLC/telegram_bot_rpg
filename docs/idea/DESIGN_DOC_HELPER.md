@@ -48,7 +48,7 @@
         "article_id": 1,
         "title": "Что такое Статы",
         "content": "<html>...",
-        "section": "combat",
+        "section": "combats",
         "keywords": ["статы", "сила", "ловкость"]
       },
       ...

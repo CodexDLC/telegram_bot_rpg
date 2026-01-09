@@ -3,24 +3,67 @@
 # 1. Мы импортируем AsyncSession из SQLAlchemy
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
+from apps.common.database.db_contract.i_characters_repo import (
+    ICharacterAttributesRepo,
+    ICharactersRepo,
+    ICharacterStatsRepo,
+)
 from apps.common.database.db_contract.i_inventory_repo import IInventoryRepo
 from apps.common.database.db_contract.i_leaderboard_repo import ILeaderboardRepo
 from apps.common.database.db_contract.i_monster_repository import IMonsterRepository
-from apps.common.database.db_contract.i_skill_repo import ISkillProgressRepo, ISkillRateRepo
+from apps.common.database.db_contract.i_skill_repo import ISkillProgressRepo
 from apps.common.database.db_contract.i_symbiote_repo import ISymbioteRepo
 from apps.common.database.db_contract.i_users_repo import IUserRepo
 from apps.common.database.db_contract.i_wallet_repo import IWalletRepo
 from apps.common.database.db_contract.i_world_repo import IWorldRepo
-from apps.common.database.repositories.ORM.characters_repo_orm import CharactersRepoORM, CharacterStatsRepoORM
+from apps.common.database.repositories.ORM.characters_repo_orm import (
+    CharacterAttributesRepoORM,
+    CharactersRepoORM,
+)
 from apps.common.database.repositories.ORM.inventory_repo import InventoryRepo
 from apps.common.database.repositories.ORM.leaderboard_repo import LeaderboardRepoORM
 from apps.common.database.repositories.ORM.monster_repository import MonsterRepository
-from apps.common.database.repositories.ORM.skill_repo import SkillProgressRepo, SkillRateRepo
+from apps.common.database.repositories.ORM.skill_repo import SkillProgressRepo
 from apps.common.database.repositories.ORM.symbiote_repo import SymbioteRepoORM
 from apps.common.database.repositories.ORM.users_repo_orm import UsersRepoORM
 from apps.common.database.repositories.ORM.wallet_repo import WalletRepoORM
 from apps.common.database.repositories.ORM.world_repo import WorldRepoORM
+
+# Explicit export to satisfy linter (F401)
+__all__ = [
+    "ICharacterStatsRepo",
+    "ICharacterAttributesRepo",
+    "ICharactersRepo",
+    "IInventoryRepo",
+    "ILeaderboardRepo",
+    "IMonsterRepository",
+    "ISkillProgressRepo",
+    "ISymbioteRepo",
+    "IUserRepo",
+    "IWalletRepo",
+    "IWorldRepo",
+    "CharacterAttributesRepoORM",
+    "CharactersRepoORM",
+    "InventoryRepo",
+    "LeaderboardRepoORM",
+    "MonsterRepository",
+    "SkillProgressRepo",
+    "SymbioteRepoORM",
+    "UsersRepoORM",
+    "WalletRepoORM",
+    "WorldRepoORM",
+    "get_user_repo",
+    "get_character_repo",
+    "get_character_attributes_repo",
+    "get_character_stats_repo",
+    "get_skill_progress_repo",
+    "get_inventory_repo",
+    "get_symbiote_repo",
+    "get_wallet_repo",
+    "get_leaderboard_repo",
+    "get_world_repo",
+    "get_monster_repo",
+]
 
 
 def get_user_repo(session: AsyncSession) -> IUserRepo:
@@ -40,22 +83,17 @@ def get_character_repo(session: AsyncSession) -> ICharactersRepo:
     return CharactersRepoORM(session=session)
 
 
-def get_character_stats_repo(session: AsyncSession) -> ICharacterStatsRepo:
+def get_character_attributes_repo(session: AsyncSession) -> ICharacterAttributesRepo:
     """
     Эта функция - ЕДИНСТВЕННОЕ
     место, которое знает,
-    какую реализацию ICharacterStats мы используем.
+    какую реализацию ICharacterAttributes мы используем.
     """
-    return CharacterStatsRepoORM(session)
+    return CharacterAttributesRepoORM(session)
 
 
-def get_skill_rate_repo(session: AsyncSession) -> ISkillRateRepo:
-    """
-    Эта функция - ЕДИНСТВЕННОЕ
-    место, которое знает,
-    какую реализацию ISkillRateRepo мы используем.
-    """
-    return SkillRateRepo(session=session)
+# Alias for backward compatibility
+get_character_stats_repo = get_character_attributes_repo
 
 
 def get_skill_progress_repo(session: AsyncSession) -> ISkillProgressRepo:

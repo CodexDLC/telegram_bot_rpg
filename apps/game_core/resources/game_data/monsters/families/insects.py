@@ -136,7 +136,7 @@ INSECTS_FAMILY: MonsterFamily = {
             "cost": 50,
             "min_tier": 2,
             "max_tier": 5,
-            "narrative_hint": "An insect with scythe-like forelimbs designed for combat.",
+            "narrative_hint": "An insect with scythe-like forelimbs designed for combats.",
             "extra_tags": ["melee", "sharp"],
             "base_stats": {
                 "strength": 12,

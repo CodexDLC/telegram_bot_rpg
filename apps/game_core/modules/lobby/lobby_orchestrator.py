@@ -4,7 +4,7 @@ from apps.common.schemas_dto import CharacterReadDTO
 from apps.common.schemas_dto.core_response_dto import CoreResponseDTO, GameStateHeader
 from apps.common.schemas_dto.game_state_enum import GameState
 from apps.common.schemas_dto.lobby_dto import LobbyInitDTO
-from apps.common.services.core_service.redis_service import RedisService
+from apps.common.services.redis.redis_service import RedisService
 from apps.game_core.modules.lobby.lobby_session_manager import LobbySessionManager
 
 

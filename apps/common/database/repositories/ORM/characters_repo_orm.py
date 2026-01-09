@@ -4,16 +4,19 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.database.db_contract.i_characters_repo import ICharactersRepo, ICharacterStatsRepo
-from apps.common.database.model_orm.character import Character, CharacterStats
+from apps.common.database.db_contract.i_characters_repo import (
+    ICharacterAttributesRepo,
+    ICharactersRepo,
+)
+from apps.common.database.model_orm.character import Character, CharacterAttributes
 from apps.common.database.model_orm.inventory import ResourceWallet
 from apps.common.database.model_orm.symbiote import CharacterSymbiote
 from apps.common.schemas_dto.character_dto import (
+    CharacterAttributesReadDTO,
+    CharacterAttributesUpdateDTO,
     CharacterOnboardingUpdateDTO,
     CharacterReadDTO,
     CharacterShellCreateDTO,
-    CharacterStatsReadDTO,
-    CharacterStatsUpdateDTO,
 )
 
 
@@ -26,7 +29,7 @@ class CharactersRepoORM(ICharactersRepo):
         log.debug(f"CharactersRepoORM | action=create_character_shell user_id={character_data.user_id}")
         try:
             orm_character = Character(**character_data.model_dump())
-            orm_character.stats = CharacterStats()
+            orm_character.attributes = CharacterAttributes()
             orm_character.symbiote = CharacterSymbiote()
             orm_character.wallet = ResourceWallet()
             self.session.add(orm_character)
@@ -135,58 +138,67 @@ class CharactersRepoORM(ICharactersRepo):
             raise
 
 
-class CharacterStatsRepoORM(ICharacterStatsRepo):
+class CharacterAttributesRepoORM(ICharacterAttributesRepo):
+    """
+    Реализация репозитория атрибутов.
+    """
+
     def __init__(self, session: AsyncSession):
         self.session = session
-        log.debug(f"CharacterStatsRepoORM | status=initialized session={session}")
+        log.debug(f"CharacterAttributesRepoORM | status=initialized session={session}")
 
-    async def get_stats(self, character_id: int) -> CharacterStatsReadDTO | None:
-        log.debug(f"CharacterStatsRepoORM | action=get_stats char_id={character_id}")
-        stmt = select(CharacterStats).where(CharacterStats.character_id == character_id)
+    async def get_attributes(self, character_id: int) -> CharacterAttributesReadDTO | None:
+        log.debug(f"CharacterAttributesRepoORM | action=get_attributes char_id={character_id}")
+        stmt = select(CharacterAttributes).where(CharacterAttributes.character_id == character_id)
         try:
             result = await self.session.execute(stmt)
-            orm_stats = result.scalar_one_or_none()
-            if orm_stats:
-                return CharacterStatsReadDTO.model_validate(orm_stats)
+            orm_attributes = result.scalar_one_or_none()
+            if orm_attributes:
+                return CharacterAttributesReadDTO.model_validate(orm_attributes)
             return None
         except SQLAlchemyError:
-            log.exception(f"CharacterStatsRepoORM | action=get_stats status=failed char_id={character_id}")
+            log.exception(f"CharacterAttributesRepoORM | action=get_attributes status=failed char_id={character_id}")
             raise
 
-    async def get_stats_batch(self, character_ids: list[int]) -> list[CharacterStatsReadDTO]:
-        log.debug(f"CharacterStatsRepoORM | action=get_stats_batch count={len(character_ids)}")
+    async def get_attributes_batch(self, character_ids: list[int]) -> list[CharacterAttributesReadDTO]:
+        log.debug(f"CharacterAttributesRepoORM | action=get_attributes_batch count={len(character_ids)}")
         if not character_ids:
             return []
-        stmt = select(CharacterStats).where(CharacterStats.character_id.in_(character_ids))
+        stmt = select(CharacterAttributes).where(CharacterAttributes.character_id.in_(character_ids))
         try:
             result = await self.session.execute(stmt)
-            orm_stats_list = result.scalars().all()
-            return [CharacterStatsReadDTO.model_validate(orm_stats) for orm_stats in orm_stats_list]
+            orm_attributes_list = result.scalars().all()
+            return [CharacterAttributesReadDTO.model_validate(orm_attr) for orm_attr in orm_attributes_list]
         except SQLAlchemyError:
-            log.exception("CharacterStatsRepoORM | action=get_stats_batch status=failed")
+            log.exception("CharacterAttributesRepoORM | action=get_attributes_batch status=failed")
             raise
 
-    async def update_stats(self, character_id: int, stats_data: CharacterStatsUpdateDTO) -> None:
-        log.debug(f"CharacterStatsRepoORM | action=update_stats char_id={character_id}")
+    async def update_attributes(self, character_id: int, attributes_data: CharacterAttributesUpdateDTO) -> None:
+        log.debug(f"CharacterAttributesRepoORM | action=update_attributes char_id={character_id}")
         stmt = (
-            update(CharacterStats).where(CharacterStats.character_id == character_id).values(**stats_data.model_dump())
+            update(CharacterAttributes)
+            .where(CharacterAttributes.character_id == character_id)
+            .values(**attributes_data.model_dump())
         )
         try:
             await self.session.execute(stmt)
         except SQLAlchemyError:
-            log.exception(f"CharacterStatsRepoORM | action=update_stats status=failed char_id={character_id}")
+            log.exception(f"CharacterAttributesRepoORM | action=update_attributes status=failed char_id={character_id}")
             raise
 
-    async def add_stats(self, character_id: int, stats_to_add: dict[str, int]) -> CharacterStatsReadDTO | None:
-        # ИЗМЕНЕНО: Если словарь пустой, просто возвращаем текущие статы
-        if not stats_to_add:
+    async def add_attributes(
+        self, character_id: int, attributes_to_add: dict[str, int]
+    ) -> CharacterAttributesReadDTO | None:
+        if not attributes_to_add:
             log.debug(
-                f"CharacterStatsRepoORM | action=add_stats reason='Empty stats_to_add', returning current stats for char_id={character_id}"
+                f"CharacterAttributesRepoORM | action=add_attributes reason='Empty attributes_to_add', returning current attributes for char_id={character_id}"
             )
-            return await self.get_stats(character_id)
+            return await self.get_attributes(character_id)
 
-        log.debug(f"CharacterStatsRepoORM | action=add_stats char_id={character_id} stats={stats_to_add}")
-        allowed_stats = {
+        log.debug(
+            f"CharacterAttributesRepoORM | action=add_attributes char_id={character_id} attributes={attributes_to_add}"
+        )
+        allowed_attributes = {
             "strength",
             "agility",
             "endurance",
@@ -198,22 +210,26 @@ class CharacterStatsRepoORM(ICharacterStatsRepo):
             "luck",
         }
         values_to_update = {}
-        for stat, value in stats_to_add.items():
-            if stat in allowed_stats:
-                orm_column = getattr(CharacterStats, stat)
-                values_to_update[stat] = orm_column + value
+        for attr, value in attributes_to_add.items():
+            if attr in allowed_attributes:
+                orm_column = getattr(CharacterAttributes, attr)
+                values_to_update[attr] = orm_column + value
 
         if not values_to_update:
-            return await self.get_stats(character_id)
+            return await self.get_attributes(character_id)
 
-        stmt = update(CharacterStats).where(CharacterStats.character_id == character_id).values(**values_to_update)
+        stmt = (
+            update(CharacterAttributes)
+            .where(CharacterAttributes.character_id == character_id)
+            .values(**values_to_update)
+        )
         try:
             await self.session.execute(stmt)
             await self.session.flush()
-            updated_stats_dto = await self.get_stats(character_id=character_id)
-            if updated_stats_dto:
-                return updated_stats_dto
+            updated_attributes_dto = await self.get_attributes(character_id=character_id)
+            if updated_attributes_dto:
+                return updated_attributes_dto
             return None
         except SQLAlchemyError:
-            log.exception(f"CharacterStatsRepoORM | action=add_stats status=failed char_id={character_id}")
+            log.exception(f"CharacterAttributesRepoORM | action=add_attributes status=failed char_id={character_id}")
             raise

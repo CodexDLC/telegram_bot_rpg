@@ -35,7 +35,7 @@ async def finish_battle(self, session_id: str, winner_team: str):
     meta = await self.combat_manager.get_session_meta(session_id)
     mode = meta.get("mode", CombatMode.ADVENTURE)
     
-    log.info(f"Finalizing combat {session_id} | Mode: {mode} | Winner: {winner_team}")
+    log.info(f"Finalizing combats {session_id} | Mode: {mode} | Winner: {winner_team}")
 
     match mode:
         case CombatMode.TUTORIAL:
@@ -45,7 +45,7 @@ async def finish_battle(self, session_id: str, winner_team: str):
         case CombatMode.ADVENTURE | CombatMode.RIFT:
             await self._finalize_adventure(session_id, winner_team)
         case _:
-            log.warning(f"Unknown combat mode: {mode}")
+            log.warning(f"Unknown combats mode: {mode}")
             
     # Общая очистка (удаление из Redis)
     await self.combat_manager.delete_session(session_id)

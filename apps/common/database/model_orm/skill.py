@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Integer, PrimaryKeyConstraint, String
+from sqlalchemy import Enum, Float, ForeignKey, PrimaryKeyConstraint, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from apps.common.database.model_orm.base import Base, TimestampMixin
@@ -26,39 +26,6 @@ class SkillProgressState(enum.Enum):
     MINUS = "MINUS"
 
 
-class CharacterSkillRate(Base):
-    """
-    ORM-модель для таблицы `character_skill_rate`.
-
-    Хранит "Базовую Ставку Опыта" (БСО) для каждого навыка у персонажа.
-    Это значение определяет, сколько опыта (`xp_per_tick`) начисляется за
-    одно условное действие или "тик" времени, зависящее от характеристик.
-    """
-
-    __tablename__ = "character_skill_rate"
-
-    character_id: Mapped[int] = mapped_column(
-        ForeignKey("characters.character_id", ondelete="CASCADE"),
-        nullable=False,
-        comment="Идентификатор персонажа (часть составного первичного ключа).",
-    )
-    skill_key: Mapped[str] = mapped_column(
-        String(50), nullable=False, comment="Уникальный строковый ключ навыка (часть составного первичного ключа)."
-    )
-    xp_per_tick: Mapped[int] = mapped_column(
-        Integer, default=0, nullable=False, comment="Количество опыта, начисляемого за 'тик' действия."
-    )
-
-    character: Mapped[Character] = relationship(back_populates="skill_rate")
-
-    __table_args__ = (PrimaryKeyConstraint("character_id", "skill_key", name="pk_character_skill_rate"),)
-
-    def __repr__(self) -> str:
-        return (
-            f"<CharacterSkillRate(char_id={self.character_id}, skill='{self.skill_key}', xp_rate={self.xp_per_tick})>"
-        )
-
-
 class CharacterSkillProgress(Base, TimestampMixin):
     """
     ORM-модель для таблицы `character_skill_progress`.
@@ -77,9 +44,13 @@ class CharacterSkillProgress(Base, TimestampMixin):
     skill_key: Mapped[str] = mapped_column(
         String(50), nullable=False, comment="Уникальный строковый ключ навыка (часть составного первичного ключа)."
     )
-    total_xp: Mapped[int] = mapped_column(
-        Integer, default=0, nullable=False, comment="Общее количество опыта, накопленного в навыке."
+
+    # Общий опыт (Float)
+    # Храним только результат. Скорость (Rate) считается динамически и кешируется в Redis.
+    total_xp: Mapped[float] = mapped_column(
+        Float, default=0.0, nullable=False, comment="Общее количество опыта, накопленного в навыке."
     )
+
     is_unlocked: Mapped[bool] = mapped_column(
         default=False, nullable=False, comment="Флаг, указывающий, разблокирован ли навык для использования."
     )
@@ -96,8 +67,4 @@ class CharacterSkillProgress(Base, TimestampMixin):
     __table_args__ = (PrimaryKeyConstraint("character_id", "skill_key", name="pk_character_skill_progress"),)
 
     def __repr__(self) -> str:
-        return (
-            f"<CharacterSkillProgress(char_id={self.character_id}, "
-            f"skill='{self.skill_key}', xp={self.total_xp}, "
-            f"state='{self.progress_state.name}')>"
-        )
+        return f"<CharacterSkillProgress(char_id={self.character_id}, skill='{self.skill_key}', xp={self.total_xp})>"

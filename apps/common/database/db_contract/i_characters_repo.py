@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 
 from apps.common.schemas_dto.character_dto import (
+    CharacterAttributesReadDTO,
+    CharacterAttributesUpdateDTO,
     CharacterOnboardingUpdateDTO,
     CharacterReadDTO,
     CharacterShellCreateDTO,
-    CharacterStatsReadDTO,
-    CharacterStatsUpdateDTO,
 )
 
 
@@ -112,67 +112,74 @@ class ICharactersRepo(ABC):
         pass
 
 
-class ICharacterStatsRepo(ABC):
+class ICharacterAttributesRepo(ABC):
     """
-    Абстрактный базовый класс (интерфейс) для репозитория характеристик персонажа.
+    Абстрактный базовый класс (интерфейс) для репозитория атрибутов персонажа.
+    (Ранее ICharacterStatsRepo)
 
     Определяет контракт для получения, обновления и модификации
-    характеристик персонажа.
+    атрибутов персонажа.
     """
 
     @abstractmethod
-    async def get_stats(self, character_id: int) -> CharacterStatsReadDTO | None:
+    async def get_attributes(self, character_id: int) -> CharacterAttributesReadDTO | None:
         """
-        Возвращает характеристики (статы) персонажа.
+        Возвращает атрибуты персонажа.
 
         Args:
-            character_id: Идентификатор персонажа, чьи характеристики нужны.
+            character_id: Идентификатор персонажа, чьи атрибуты нужны.
 
         Returns:
-            DTO `CharacterStatsReadDTO` с характеристиками, если они найдены,
+            DTO `CharacterAttributesReadDTO` с атрибутами, если они найдены,
             иначе - None.
         """
         pass
 
     @abstractmethod
-    async def get_stats_batch(self, character_ids: list[int]) -> list[CharacterStatsReadDTO]:
+    async def get_attributes_batch(self, character_ids: list[int]) -> list[CharacterAttributesReadDTO]:
         """
-        Возвращает характеристики для списка персонажей.
+        Возвращает атрибуты для списка персонажей.
 
         Args:
             character_ids: Список идентификаторов персонажей.
 
         Returns:
-            Список DTO `CharacterStatsReadDTO`.
+            Список DTO `CharacterAttributesReadDTO`.
         """
         pass
 
     @abstractmethod
-    async def update_stats(self, character_id: int, stats_data: CharacterStatsUpdateDTO) -> None:
+    async def update_attributes(self, character_id: int, attributes_data: CharacterAttributesUpdateDTO) -> None:
         """
-        Полностью перезаписывает все характеристики персонажа.
+        Полностью перезаписывает все атрибуты персонажа.
 
         Args:
             character_id: Идентификатор персонажа для обновления.
-            stats_data: DTO с полным набором новых характеристик.
+            attributes_data: DTO с полным набором новых атрибутов.
         """
         pass
 
     @abstractmethod
-    async def add_stats(self, character_id: int, stats_to_add: dict[str, int]) -> CharacterStatsReadDTO | None:
+    async def add_attributes(
+        self, character_id: int, attributes_to_add: dict[str, int]
+    ) -> CharacterAttributesReadDTO | None:
         """
-        Атомарно добавляет значения к существующим характеристикам.
+        Атомарно добавляет значения к существующим атрибутам.
 
         Реализация должна инкрементально обновлять только переданные
-        характеристики и возвращать их новое полное состояние.
+        атрибуты и возвращать их новое полное состояние.
 
         Args:
             character_id: Идентификатор персонажа.
-            stats_to_add: Словарь, где ключ - название характеристики,
+            attributes_to_add: Словарь, где ключ - название атрибута,
                           а значение - число для добавления (может быть отрицательным).
 
         Returns:
-            DTO `CharacterStatsReadDTO` с обновленными характеристиками
+            DTO `CharacterAttributesReadDTO` с обновленными атрибутами
             персонажа или None, если персонаж не найден.
         """
         pass
+
+
+# Alias for backward compatibility
+ICharacterStatsRepo = ICharacterAttributesRepo

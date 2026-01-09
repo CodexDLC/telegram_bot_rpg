@@ -10,18 +10,21 @@
 - defense_type: 'physical' (для основной брони) или 'magical' (для брони магов).
 - base_power: Показатель защиты (идет в damage_reduction_flat).
 - implicit_bonuses: Врожденные бонусы (резисты, уворот, реген и т.д.).
+- related_skill: Навык, отвечающий за владение этим предметом (XP, бонусы, штрафы).
 """
 
 ARMOR_DB = {
     # ==========================================
     # Тяжелая Броня (Plate)
     # Философия: "Танк". Максимум защиты, штрафы к мобильности.
+    # Skill: heavy_armor
     # ==========================================
     "heavy_armor": {
         "helmet": {
             "id": "helmet",
             "name_ru": "Шлем",
             "slot": "head_armor",
+            "related_skill": "heavy_armor",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["ingots"],
@@ -38,6 +41,7 @@ ARMOR_DB = {
             "id": "plate_chest",
             "name_ru": "Кираса",
             "slot": "chest_armor",
+            "related_skill": "heavy_armor",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["ingots"],
@@ -55,6 +59,7 @@ ARMOR_DB = {
             "id": "gauntlets",
             "name_ru": "Латные рукавицы",
             "slot": "arms_armor",
+            "related_skill": "heavy_armor",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["ingots"],
@@ -71,6 +76,7 @@ ARMOR_DB = {
             "id": "greaves",
             "name_ru": "Поножи",
             "slot": "legs_armor",
+            "related_skill": "heavy_armor",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["ingots"],
@@ -87,6 +93,7 @@ ARMOR_DB = {
             "id": "sabatons",
             "name_ru": "Латные сапоги",
             "slot": "feet_armor",
+            "related_skill": "heavy_armor",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["ingots"],
@@ -103,12 +110,14 @@ ARMOR_DB = {
     # ==========================================
     # Средняя Броня (Leather / Chain)
     # Философия: "Баланс". Защита + Точность/Крит.
+    # Skill: medium_armor
     # ==========================================
     "medium_armor": {
         "leather_cap": {
             "id": "leather_cap",
             "name_ru": "Кожаный шлем",
             "slot": "head_armor",
+            "related_skill": "medium_armor",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["leathers"],
@@ -125,6 +134,7 @@ ARMOR_DB = {
             "id": "goggles",
             "name_ru": "Защитные очки",
             "slot": "head_armor",
+            "related_skill": "medium_armor",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["leathers", "ingots"],
@@ -141,6 +151,7 @@ ARMOR_DB = {
             "id": "jerkin",
             "name_ru": "Куртка",
             "slot": "chest_armor",
+            "related_skill": "medium_armor",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["leathers"],
@@ -158,6 +169,7 @@ ARMOR_DB = {
             "id": "leather_vest",
             "name_ru": "Кожаный жилет",
             "slot": "chest_armor",
+            "related_skill": "medium_armor",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["leathers"],
@@ -173,6 +185,7 @@ ARMOR_DB = {
             "id": "bracers",
             "name_ru": "Наручи",
             "slot": "arms_armor",
+            "related_skill": "medium_armor",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["leathers"],
@@ -189,6 +202,7 @@ ARMOR_DB = {
             "id": "breeches",
             "name_ru": "Штаны",
             "slot": "legs_armor",
+            "related_skill": "medium_armor",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["leathers"],
@@ -205,6 +219,7 @@ ARMOR_DB = {
             "id": "boots",
             "name_ru": "Сапоги",
             "slot": "feet_armor",
+            "related_skill": "medium_armor",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["leathers"],
@@ -221,12 +236,14 @@ ARMOR_DB = {
     # ==========================================
     # Легкая Броня (Cloth)
     # Философия: "Магия и Уворот". Реген, Маг. защита, Спецэффекты.
+    # Skill: light_armor
     # ==========================================
     "light_armor": {
         "hood": {
             "id": "hood",
             "name_ru": "Капюшон",
             "slot": "head_armor",
+            "related_skill": "light_armor",
             "damage_type": None,
             "defense_type": "magical",
             "allowed_materials": ["cloths"],
@@ -243,6 +260,7 @@ ARMOR_DB = {
             "id": "robe",
             "name_ru": "Мантия",
             "slot": "chest_armor",
+            "related_skill": "light_armor",
             "damage_type": None,
             "defense_type": "magical",
             "allowed_materials": ["cloths"],
@@ -260,6 +278,7 @@ ARMOR_DB = {
             "id": "wraps",
             "name_ru": "Обмотки",
             "slot": "arms_armor",
+            "related_skill": "light_armor",
             "damage_type": None,
             "defense_type": "magical",
             "allowed_materials": ["cloths"],
@@ -276,6 +295,7 @@ ARMOR_DB = {
             "id": "leggings",
             "name_ru": "Леггинсы",
             "slot": "legs_armor",
+            "related_skill": "light_armor",
             "damage_type": None,
             "defense_type": "magical",
             "allowed_materials": ["cloths"],
@@ -292,6 +312,7 @@ ARMOR_DB = {
             "id": "sandals",
             "name_ru": "Сандалии",
             "slot": "feet_armor",
+            "related_skill": "light_armor",
             "damage_type": None,
             "defense_type": "magical",
             "allowed_materials": ["cloths", "leathers"],

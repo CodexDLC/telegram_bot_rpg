@@ -16,4 +16,4 @@ class GameStage(StrEnum):
 
     # Состояния для Exploration Loop
     EXPLORATION_PENDING = "exploration_pending"  # Ожидание реакции на энкаунтер
-    COMBAT = "combat"  # Активный бой
+    COMBAT = "combats"  # Активный бой

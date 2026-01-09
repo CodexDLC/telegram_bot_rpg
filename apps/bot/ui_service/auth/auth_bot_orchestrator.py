@@ -4,7 +4,7 @@ from apps.bot.core_client.combat_rbc_client import CombatRBCClient
 from apps.bot.core_client.exploration import ExplorationClient
 from apps.bot.ui_service.auth.dto.auth_view_dto import AuthViewDTO
 
-# from apps.bot.ui_service.combat.combat_bot_orchestrator import CombatBotOrchestrator
+# from apps.bot.ui_service.combats.combat_bot_orchestrator import CombatBotOrchestrator
 from apps.bot.ui_service.helpers_ui.dto.ui_common_dto import MessageCoordsDTO, ViewResultDTO
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.bot.ui_service.mesage_menu.menu_service import MenuService
@@ -12,11 +12,11 @@ from apps.bot.ui_service.tutorial.tutorial_service import TutorialServiceStats
 from apps.bot.ui_service.tutorial.tutorial_service_skill import TutorialServiceSkills
 from apps.common.schemas_dto.auth_dto import GameStage
 from apps.common.schemas_dto.game_state_enum import GameState
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.manager.arena_manager import ArenaManager
-from apps.common.services.core_service.manager.combat_manager import CombatManager
-from apps.common.services.core_service.manager.world_manager import WorldManager
-from apps.common.services.core_service.redis_fields import AccountFields as Af
+from apps.common.services.redis.manager.account_manager import AccountManager
+from apps.common.services.redis.manager.arena_manager import ArenaManager
+from apps.common.services.redis.manager.combat_manager import CombatManager
+from apps.common.services.redis.manager.world_manager import WorldManager
+from apps.common.services.redis.redis_fields import AccountFields as Af
 from apps.game_core.modules.auth.login_service import LoginService
 from apps.game_core.system.game_sync.game_sync_service import GameSyncService
 
@@ -79,7 +79,9 @@ class AuthBotOrchestrator:
         # Общая логика для меню (кроме создания персонажа)
         if game_stage != GameStage.CREATION:
             menu_service = MenuService(
-                game_stage=game_stage if game_stage != "combat" else "in_game",  # Для боя меню специфичное, но пока так
+                game_stage=game_stage
+                if game_stage != "combats"
+                else "in_game",  # Для боя меню специфичное, но пока так
                 state_data=state_data,
                 session=self.session,
                 account_manager=self.account_manager,
@@ -109,7 +111,7 @@ class AuthBotOrchestrator:
                 result.new_state = "StartTutorial:in_skills_progres"
                 result.fsm_update = {"skill_choices_list": skill_choices_list}
 
-        elif game_stage == "combat":
+        elif game_stage == "combats":
             # Восстановление боя
             # Нам нужно получить session_id из аккаунта
             ac_data = await self.account_manager.get_account_data(char_id)
@@ -130,7 +132,7 @@ class AuthBotOrchestrator:
 
                 # result.content = combat_view.content
                 # result.menu = combat_view.menu  # Переопределяем меню, так как в бою оно свое (лог)
-                result.new_state = "InGame:combat"
+                result.new_state = "InGame:combats"
                 result.fsm_update = {Af.COMBAT_SESSION_ID: combat_session_id}
 
                 # if combat_view.target_id:

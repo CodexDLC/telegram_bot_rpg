@@ -5,8 +5,8 @@ from typing import Any
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.manager.context_manager import ContextRedisManager
+from apps.common.services.redis.manager.account_manager import AccountManager
+from apps.common.services.redis.manager.context_manager import ContextRedisManager
 from apps.game_core.system.context_assembler.dtos import ContextRequestDTO, ContextResponseDTO
 from apps.game_core.system.context_assembler.logic.monster_assembler import MonsterAssembler
 from apps.game_core.system.context_assembler.logic.player_assembler import PlayerAssembler
