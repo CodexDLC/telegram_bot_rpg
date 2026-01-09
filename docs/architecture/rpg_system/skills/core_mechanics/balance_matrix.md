@@ -47,12 +47,12 @@
 | :--- | :--- | :--- |
 | **Parrying** | AGI (2) + PER (1) + STR (1) | Реакция (Agi) главная. |
 | **Tactics** | INT (2) + MEM (2) | Интеллект и Память. Сложность тактических схем. |
-| **Anatomy** | INT (2) + PER (2) | Знание и Наблюдение равнозначны. |
-| **First Aid** | MEM (2) + INT (1) + AGI (1) | Память (опыт) важнее теории. Ловкость рук. |
+| **Anatomy** | END (2) + INT (2) | Биология (End) и Управление (Int). |
 
 ### E. Crafting
 | Skill | Weights (Sum 4) | Rationale |
 | :--- | :--- | :--- |
+| **First Aid** | MEM (2) + AGI (1) + INT (1) | Память (опыт) важнее теории. Ловкость рук. |
 | **Alchemy** | INT (2) + MEM (1) + PRED (1) | Наука. Память и Предвидение (Luck). |
 | **Weapon Craft** | STR (2) + AGI (1) + PER (1) | Сила ковки. Точность формы. |
 | **Armor Craft** | STR (2) + END (2) | Тяжелая работа с металлом. |
@@ -73,9 +73,10 @@
 ### G. Survival
 | Skill | Weights (Sum 4) | Rationale |
 | :--- | :--- | :--- |
-| **Scouting** | PER (2) + MEM (1) + AGI (1) | Заметить (Per) главное. |
-| **Taming** | PROJ (2) + MEM (1) + MEN (1) | Проекция (Харизма) главная. |
+| **Taming** | PROJ (2) + MEM (1) + MEN (1) | Проекция (авторитет) и ментальный контроль. |
 | **Adaptation** | END (2) + MEN (2) | Тело и Дух. |
+| **Scouting** | PER (2) + MEM (1) + AGI (1) | Заметить (Per) главное. |
+| **Pathfinder** | PER (2) + END (1) + AGI (1) | Поиск пути и выносливость в дороге. |
 
 ### H. Trade (Mercantile)
 | Skill | Weights (Sum 4) | Rationale |

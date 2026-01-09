@@ -5,16 +5,28 @@
 Специальные механики и взаимодействие со средой.
 
 ## SpecialStatsDTO
+
+### Counter-Attack
 *   **`counter_attack_chance`**: Шанс контратаки.
-*   **`counter_attack_cap`**: Кап контратаки.
+    *   **Источник (Base):** `Memory` (~0.25%/pt) + `Prediction` (~0.15%/pt).
+    *   **Множитель:** Навык `Tactics` (до x5).
+*   **`counter_attack_cap`**: Кап контратаки (Hard Cap).
+
+### Vampiric
 *   **`vampiric_power`**: Сила вампиризма (% от урона в HP).
-*   **`vampiric_power_cap`**: Кап отхила.
+    *   **Источник:** Gift (Дар) или Item Affix.
 *   **`vampiric_trigger_chance`**: Шанс срабатывания вампиризма.
 *   **`vampiric_trigger_cap`**: Кап шанса.
+
+### Healing & Pets
 *   **`healing_power`**: Сила исходящего исцеления.
+    *   **Источник:** Навык `First Aid`.
 *   **`received_healing_bonus`**: Бонус к входящему исцелению.
-*   **`pet_damage_bonus`**: Урон питомцев.
-*   **`pet_health_bonus`**: Здоровье питомцев.
+    *   **Множитель:** Навык `Anatomy`.
+*   **`pet_efficiency_mult`**: Множитель эффективности питомца (HP, DMG, etc).
+    *   **Источник:** Навык `Taming`.
+
+### Misc
 *   **`damage_mult`**: Глобальный множитель исходящего урона.
 *   **`thorns_damage_flat`**: Урон шипами (возврат урона).
 

@@ -68,6 +68,7 @@ class FormulaFlagsDTO(BaseModel):
 
     # Crit
     crit_ignore_anticrit: bool = False
+    crit_damage_boost: bool = False  # Включает повышенный урон при крите
 
     # Damage
     can_pierce: bool = False  # Разрешить проверку на пронзание
@@ -97,6 +98,16 @@ class StateFlagsDTO(BaseModel):
     hit_index: int = 0
 
 
+class MetaFlagsDTO(BaseModel):
+    """Строковые мета-данные и счетчики."""
+
+    source_type: Literal["main_hand", "off_hand", "magic", "item"] = "main_hand"
+    weapon_class: str | None = None  # swords, macing, unarmed...
+    crit_trigger_key: str | None = None  # stun, bleed...
+    attack_index: int = 0
+    combo_stage: int = 0
+
+
 class PipelineFlagsDTO(BaseModel):
     """Группировка всех флагов."""
 
@@ -106,6 +117,7 @@ class PipelineFlagsDTO(BaseModel):
     formula: FormulaFlagsDTO = Field(default_factory=FormulaFlagsDTO)
     damage: DamageTypeFlagsDTO = Field(default_factory=DamageTypeFlagsDTO)
     state: StateFlagsDTO = Field(default_factory=StateFlagsDTO)
+    meta: MetaFlagsDTO = Field(default_factory=MetaFlagsDTO)
 
     enable_counter: bool = False
     can_counter_on_parry: bool = False
@@ -120,6 +132,7 @@ class PipelineModsDTO(BaseModel):
     """Числовые модификаторы."""
 
     accuracy_mult: float = 1.0
+    weapon_effect_value: float = 2.0  # Универсальный бонус оружия (Crit Mult / Pierce %)
 
 
 class PipelineTriggersDTO(BaseModel):
@@ -156,7 +169,6 @@ class PipelineContextDTO(BaseModel):
     stages: PipelineStagesDTO = Field(default_factory=PipelineStagesDTO)
 
     # Meta
-    source_type: Literal["main_hand", "off_hand", "magic", "item"] = "main_hand"
     override_damage: tuple[float, float] | None = None
 
     # Calc Flags
