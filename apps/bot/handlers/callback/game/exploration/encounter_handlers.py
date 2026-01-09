@@ -54,7 +54,7 @@ async def handle_encounter_action(
         await call.answer()
 
     # Если нужно переключить состояние (например, в бой)
-    if result_dto.new_state == "InGame.combat":
+    if result_dto.new_state == "InGame.combats":
         if not result_dto.combat_session_id:
             await Err.generic_error(call)
             return

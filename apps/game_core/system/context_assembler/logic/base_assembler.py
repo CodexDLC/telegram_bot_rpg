@@ -16,7 +16,7 @@ class BaseAssembler(ABC):
 
         Args:
             ids: Список ID сущностей для обработки (int для игроков, str для монстров).
-            scope: Объем данных ('full', 'combat', 'exploration').
+            scope: Объем данных ('full', 'combats', 'exploration').
 
         Returns:
             Кортеж (success_map, error_list):

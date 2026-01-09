@@ -19,7 +19,7 @@ from apps.bot.resources.fsm_states import BotState
 from apps.bot.ui_service.helpers_ui.dto_helper import FSM_CONTEXT_KEY
 from apps.common.database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from apps.common.schemas_dto import CharacterOnboardingUpdateDTO, CharacterShellCreateDTO, UserUpsertDTO
-from apps.game_core.modules.combat.session.initialization.combat_lifecycle_service import CombatLifecycleService
+from apps.game_core.modules.combat.session.initialization import CombatLifecycleService
 
 TEST_USER_ID = 777
 TEST_CHAT_ID = 777
@@ -155,7 +155,7 @@ async def test_combat_flow(get_async_session, fsm_context, mock_bot, mock_callba
         # cb_submit = CombatActionCallback(action="submit") # Unused
 
         # Мокаем UIAnimationService, чтобы не ждать 30 секунд
-        with patch("apps.bot.handlers.callback.game.combat.action_handlers.UIAnimationService") as mock_anim:
+        with patch("apps.bot.handlers.callback.game.combats.action_handlers.UIAnimationService") as mock_anim:
             mock_anim_instance = mock_anim.return_value
             # Эмулируем успешный результат поллинга (возвращаем DTO, как будто бой обновился)
             from apps.bot.ui_service.combat.dto.combat_view_dto import CombatViewDTO

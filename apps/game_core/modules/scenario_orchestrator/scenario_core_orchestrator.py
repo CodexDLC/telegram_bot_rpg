@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.common.schemas_dto.core_response_dto import CoreResponseDTO, GameStateHeader
 from apps.common.schemas_dto.game_state_enum import GameState
 from apps.common.schemas_dto.scenario_dto import ScenarioPayloadDTO
-from apps.common.services.core_service.redis_fields import AccountFields as Af
-from apps.common.services.core_service.redis_key import RedisKeys
+from apps.common.services.redis.redis_fields import AccountFields as Af
+from apps.common.services.redis.redis_key import RedisKeys
 
 # Импорт реестра хендлеров
 from apps.game_core.modules.scenario_orchestrator.handlers.handler_registry import get_handler

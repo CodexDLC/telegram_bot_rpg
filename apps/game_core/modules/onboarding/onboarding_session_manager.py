@@ -2,8 +2,8 @@ import contextlib
 import json
 
 from apps.common.schemas_dto.onboarding_dto import OnboardingDraftDTO
-from apps.common.services.core_service.redis_key import RedisKeys
-from apps.common.services.core_service.redis_service import RedisService
+from apps.common.services.redis.redis_key import RedisKeys
+from apps.common.services.redis.redis_service import RedisService
 
 
 class OnboardingSessionManager:

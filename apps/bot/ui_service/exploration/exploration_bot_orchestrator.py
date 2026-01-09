@@ -51,7 +51,7 @@ class ExplorationBotOrchestrator:
                 # enemy_id = int(result.encounter_id)
                 # snapshot = await self._combat_client.start_battle(players=[char_id], enemies=[enemy_id])
                 # return ExplorationViewDTO(
-                #     new_state="InGame.combat",
+                #     new_state="InGame.combats",
                 #     combat_session_id=snapshot.session_id,
                 #     combat_target_id=snapshot.current_target.char_id if snapshot.current_target else None,
                 #     alert_text="⚔️ ВАС АТАКОВАЛИ!",
@@ -97,7 +97,7 @@ class ExplorationBotOrchestrator:
                 # snapshot = await self._combat_client.start_battle(players=[char_id], enemies=[enemy_id])
 
                 # return ExplorationViewDTO(
-                #     new_state="InGame.combat",
+                #     new_state="InGame.combats",
                 #     combat_session_id=snapshot.session_id,
                 #     combat_target_id=snapshot.current_target.char_id if snapshot.current_target else None,
                 #     alert_text="⚔️ Бой начинается!",

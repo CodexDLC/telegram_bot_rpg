@@ -8,16 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.database.model_orm.symbiote import CharacterSymbiote
 from apps.common.database.repositories import (
+    get_character_attributes_repo,
     get_character_repo,
-    get_character_stats_repo,
     get_inventory_repo,
     get_skill_progress_repo,
     get_symbiote_repo,
 )
-from apps.common.schemas_dto.character_dto import CharacterReadDTO, CharacterStatsReadDTO
+from apps.common.schemas_dto.character_dto import CharacterAttributesReadDTO, CharacterReadDTO
 from apps.common.schemas_dto.skill import SkillProgressDTO
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.manager.context_manager import ContextRedisManager
+from apps.common.services.redis.manager.account_manager import AccountManager
+from apps.common.services.redis.manager.context_manager import ContextRedisManager
 from apps.game_core.system.context_assembler.logic.base_assembler import BaseAssembler
 from apps.game_core.system.context_assembler.schemas.temp_context import TempContextSchema
 
@@ -25,7 +25,7 @@ from apps.game_core.system.context_assembler.schemas.temp_context import TempCon
 class PlayerAssembler(BaseAssembler):
     """
     Стратегия сборки контекста для Игроков.
-    Собирает данные из PostgreSQL (Stats, Inventory, Skills) и формирует JSON для Redis.
+    Собирает данные из PostgreSQL (Attributes, Inventory, Skills) и формирует JSON для Redis.
     """
 
     def __init__(self, session: AsyncSession, account_manager: AccountManager, context_manager: ContextRedisManager):
@@ -33,7 +33,7 @@ class PlayerAssembler(BaseAssembler):
         self.account_manager = account_manager
         self.context_manager = context_manager
         self.char_repo = get_character_repo(session)
-        self.stats_repo = get_character_stats_repo(session)
+        self.attributes_repo = get_character_attributes_repo(session)  # Renamed from stats_repo
         self.inv_repo = get_inventory_repo(session)
         self.skill_repo = get_skill_progress_repo(session)
         self.symbiote_repo = get_symbiote_repo(session)
@@ -54,7 +54,7 @@ class PlayerAssembler(BaseAssembler):
         try:
             # Запускаем запросы параллельно
             char_task = self.char_repo.get_characters_batch(int_ids)
-            stats_task = self.stats_repo.get_stats_batch(int_ids)
+            attributes_task = self.attributes_repo.get_attributes_batch(int_ids)  # Renamed from stats_task
             skills_task = self.skill_repo.get_all_skills_progress_batch(int_ids)
             equip_task = self.inv_repo.get_items_by_location_batch(int_ids, "equipped")
             inv_task = self.inv_repo.get_items_by_location_batch(int_ids, "inventory")
@@ -65,12 +65,12 @@ class PlayerAssembler(BaseAssembler):
 
             # Ждем всех
             fetched_data = await asyncio.gather(
-                char_task, stats_task, skills_task, equip_task, inv_task, symbiote_task, vitals_future
+                char_task, attributes_task, skills_task, equip_task, inv_task, symbiote_task, vitals_future
             )
 
             # Распаковываем результаты с явным приведением типов
             chars_list = cast(list[CharacterReadDTO], fetched_data[0])
-            stats_list = cast(list[CharacterStatsReadDTO], fetched_data[1])
+            attributes_list = cast(list[CharacterAttributesReadDTO], fetched_data[1])  # Renamed from stats_list
             skills_map = cast(dict[int, list[SkillProgressDTO]], fetched_data[2])
             equipped_map = cast(dict[int, list[Any]], fetched_data[3])
             inventory_map = cast(dict[int, list[Any]], fetched_data[4])
@@ -81,9 +81,9 @@ class PlayerAssembler(BaseAssembler):
             log.exception(f"PlayerAssembler | DB fetch failed for batch. Error: {e}")
             return {}, int_ids
 
-        # Преобразуем список статов в словарь для удобства
+        # Преобразуем список атрибутов в словарь для удобства
         chars_map = {char.character_id: char for char in chars_list}
-        stats_map = {stat.character_id: stat for stat in stats_list}
+        attributes_map = {attr.character_id: attr for attr in attributes_list}  # Renamed from stats_map
         symbiotes_map = {s.character_id: s for s in symbiotes_list}
         # vitals_list уже соответствует порядку ids, так как get_accounts_json_batch это гарантирует
         vitals_map = {char_id: vitals for char_id, vitals in zip(int_ids, vitals_list, strict=False)}
@@ -94,12 +94,12 @@ class PlayerAssembler(BaseAssembler):
         contexts_to_save = {}
 
         for char_id in int_ids:
-            if char_id not in stats_map:
+            if char_id not in attributes_map:
                 error_list.append(char_id)
                 continue
 
             char_info = chars_map.get(char_id)
-            stats = stats_map.get(char_id)
+            attributes = attributes_map.get(char_id)  # Renamed from stats
             skills = skills_map.get(char_id, [])
             equipped = equipped_map.get(char_id, [])
             inventory = inventory_map.get(char_id, [])
@@ -107,8 +107,8 @@ class PlayerAssembler(BaseAssembler):
             symbiote = symbiotes_map.get(char_id)
 
             try:
-                # stats гарантированно CharacterStatsReadDTO, так как мы проверили наличие в map
-                if stats and char_info:
+                # attributes гарантированно CharacterAttributesReadDTO, так как мы проверили наличие в map
+                if attributes and char_info:
                     # Маппинг симбиота (ORM -> dict)
                     symbiote_data = None
                     if symbiote:
@@ -123,7 +123,7 @@ class PlayerAssembler(BaseAssembler):
 
                     # Используем TempContextSchema для сборки
                     context_schema = TempContextSchema(
-                        core_stats=stats,
+                        core_stats=attributes,  # Renamed field in TempContextSchema (need to update schema too)
                         core_inventory=equipped + inventory,  # Объединяем для полноты
                         core_skills=skills,
                         core_vitals=vitals if vitals else {},

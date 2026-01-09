@@ -128,7 +128,7 @@ class TutorialScenarioHandler(BaseScenarioHandler):
         monster_dto = await self._find_tutorial_monster(target_exit_loc)
 
         # Обновляем аккаунт (ставим локацию выхода)
-        # State ставим в combat, так как мы идем в бой
+        # State ставим в combats, так как мы идем в бой
         await self.am.update_account_fields(
             char_id,
             {

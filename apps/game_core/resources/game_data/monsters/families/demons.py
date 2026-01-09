@@ -247,7 +247,7 @@ DEMONS_FAMILY: MonsterFamily = {
             "cost": 150,
             "min_tier": 5,
             "max_tier": 7,
-            "narrative_hint": "A massive, four-armed demon. A master of combat.",
+            "narrative_hint": "A massive, four-armed demon. A master of combats.",
             "extra_tags": ["warlord", "abyss", "dual_wield"],
             "base_stats": {
                 "strength": 35,

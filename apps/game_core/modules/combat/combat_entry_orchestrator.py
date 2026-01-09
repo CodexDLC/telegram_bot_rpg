@@ -1,11 +1,11 @@
-# apps/game_core/modules/combat/combat_entry_orchestrator.py
+# apps/game_core/modules/combats/combat_entry_orchestrator.py
 import uuid
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger as log
 
 from apps.common.schemas_dto.game_state_enum import CoreDomain
-from apps.game_core.modules.combat.session.initialization.combat_lifecycle_service import CombatLifecycleService
+from apps.game_core.modules.combat.session.initialization import CombatLifecycleService
 from apps.game_core.system.context_assembler.dtos import ContextRequestDTO, ContextResponseDTO
 from apps.game_core.system.core_router import CoreRouter
 
@@ -56,7 +56,7 @@ class CombatEntryOrchestrator:
                 log.error(f"CombatEntry | Unknown action: {action}")
                 return {"success": False, "error": f"Unknown action: {action}"}
         except Exception as e:  # noqa: BLE001
-            log.exception(f"CombatEntry | Failed to initialize combat: {e}")
+            log.exception(f"CombatEntry | Failed to initialize combats: {e}")
             return {"success": False, "error": str(e)}
 
     # --- Сценарии (Pipelines) ---
@@ -126,10 +126,11 @@ class CombatEntryOrchestrator:
         player_ref = data_refs.player[char_id]
 
         # 2. Build
+        # Lifecycle сам создаст Shadow-версию, передаем ref только раз
         session_teams_config: dict[str, dict[str, list]] = {
             "blue": {"players": [{"id": char_id, "ref": player_ref}], "monsters": []},
             "red": {
-                "players": [{"id": char_id, "ref": player_ref}],  # Тот же ref!
+                "players": [{"id": f"-{char_id}", "ref": player_ref}],  # Явно указываем Shadow ID
                 "monsters": [],
             },
         }
@@ -180,7 +181,7 @@ class CombatEntryOrchestrator:
         Вызывает ContextAssembler (через CoreRouter) для подготовки данных в Redis.
         Возвращает маппинг ID -> RedisKey.
         """
-        request = ContextRequestDTO(player_ids=player_ids, monster_ids=monster_ids, scope="combat")
+        request = ContextRequestDTO(player_ids=player_ids, monster_ids=monster_ids, scope="combats")
         # Используем CoreRouter для вызова ассемблера
         # НЕ передаем сессию, так как CoreRouter сам создаст её для ContextAssembler
         response = await self.core_router.route(
@@ -205,9 +206,10 @@ class CombatEntryOrchestrator:
         """
         Общий финал: Создание сессии в Lifecycle, линковка и возврат результата.
         """
-        session_id = str(uuid.uuid4())
-
         try:
+            # Сначала проверяем данные (если бы была валидация), потом генерируем ID
+            session_id = str(uuid.uuid4())
+
             # Вызываем Lifecycle для создания сессии
             await self.lifecycle.create_battle(session_id, {"mode": mode, "teams_config": teams_config})
 

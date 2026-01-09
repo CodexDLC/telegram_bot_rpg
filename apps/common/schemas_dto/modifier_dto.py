@@ -1,143 +1,329 @@
 """
 Модуль содержит DTO (Data Transfer Objects) для модификаторов характеристик персонажа.
-
-Определяет `CharacterModifiersSaveDto` — глобальное хранилище всех возможных
-модификаторов, используемых для расчетов, UI и передачи данных в бой.
+Определяет структуру боевых и небоевых модификаторов.
 """
 
 from pydantic import BaseModel, ConfigDict
 
+# ==============================================================================
+# 1. ATOMIC BLOCKS (Кирпичики)
+# ==============================================================================
 
-class CharacterModifiersSaveDto(BaseModel):
+
+class VitalsDTO(BaseModel):
+    """Ресурсы (HP, Energy) и Инициатива."""
+
+    hp_max: int = 0
+    hp_regen: float = 0.0
+    energy_max: int = 0
+    energy_regen: float = 0.0
+    resource_cost_reduction: float = 0.0
+    initiative: float = 0.0
+
+
+class CombatSkillsDTO(BaseModel):
     """
-    Глобальное хранилище всех возможных модификаторов персонажа.
-    Используется для расчетов, UI и передачи данных в бой.
+    Боевые навыки (Weapon, Armor, Tactical, Support).
+    Список строго соответствует документации.
+    """
+
+    # Weapon Mastery
+    skill_swords: float = 0.0
+    skill_fencing: float = 0.0
+    skill_polearms: float = 0.0
+    skill_macing: float = 0.0
+    skill_archery: float = 0.0
+    skill_unarmed: float = 0.0
+
+    # Tactical Styles
+    skill_one_handed: float = 0.0
+    skill_two_handed: float = 0.0
+    skill_shield_mastery: float = 0.0
+    skill_dual_wield: float = 0.0
+
+    # Armor Skills
+    skill_light_armor: float = 0.0
+    skill_medium_armor: float = 0.0
+    skill_heavy_armor: float = 0.0
+
+    # Secondary Combat
+    skill_parrying: float = 0.0
+    skill_anatomy: float = 0.0
+    skill_tactics: float = 0.0
+    skill_first_aid: float = 0.0
+
+
+class SecondarySkillsDTO(BaseModel):
+    """Второстепенные навыки."""
+
+    skill_crafting: float = 0.0
+    skill_trading: float = 0.0
+    skill_gathering: float = 0.0
+
+
+class MainHandStatsDTO(BaseModel):
+    """
+    Статы ПРАВОЙ руки (или Двуручного оружия).
+    """
+
+    main_hand_damage_base: float = 0.0
+    main_hand_damage_spread: float = 0.1
+    main_hand_damage_bonus: float = 0.0
+    main_hand_penetration: float = 0.0
+    main_hand_accuracy: float = 0.0
+
+    # Crit
+    main_hand_crit_chance: float = 0.0
+    main_hand_crit_power: float = 1.5
+    main_hand_crit_cap: float = 0.75
+
+    # Pierce
+    main_hand_pierce_chance: float = 0.0
+    main_hand_pierce_cap: float = 0.50
+
+
+class OffHandStatsDTO(BaseModel):
+    """
+    Статы ЛЕВОЙ руки (Второе оружие или Щит).
+    """
+
+    off_hand_damage_base: float = 0.0
+    off_hand_damage_spread: float = 0.1
+    off_hand_damage_bonus: float = 0.0
+    off_hand_penetration: float = 0.0
+    off_hand_accuracy: float = 0.0
+
+    # Crit
+    off_hand_crit_chance: float = 0.0
+    off_hand_crit_power: float = 1.5
+    off_hand_crit_cap: float = 0.75
+
+    # Pierce
+    off_hand_pierce_chance: float = 0.0
+    off_hand_pierce_cap: float = 0.50
+
+
+class PhysicalStatsDTO(BaseModel):
+    """
+    Глобальные физические бонусы (работают на обе руки).
+    """
+
+    physical_damage_bonus: float = 0.0  # Глобальный +DMG
+    physical_accuracy_bonus: float = 0.0  # Глобальная точность
+
+
+class MagicalStatsDTO(BaseModel):
+    """Магическая атака (База)."""
+
+    magical_damage_base: float = 0.0
+    magical_damage_spread: float = 0.1
+    magical_damage_bonus: float = 0.0
+    magical_penetration: float = 0.0
+    magical_accuracy: float = 0.0
+    magical_damage_power: float = 0.0
+    spell_land_chance: float = 0.0
+
+    # Magical Crit (Пока общий)
+    magical_crit_chance: float = 0.0
+    magical_crit_power_float: float = 1.5
+    magical_crit_cap: float = 0.75
+
+
+class CritStatsDTO(BaseModel):
+    """
+    Защита от крита (Anti-Crit).
+    Атакующий крит переехал в HandStats.
+    """
+
+    # Anti-Crit (Defense)
+    anti_crit_chance: float = 0.0  # Общий
+    anti_physical_crit_chance: float = 0.0
+    anti_magical_crit_chance: float = 0.0
+    immune_to_crit: bool = False
+
+
+class DefensiveStatsDTO(BaseModel):
+    """
+    Активная защита (Avoidance).
+    """
+
+    # Dodge
+    dodge_chance: float = 0.0
+    dodge_cap: float = 0.75
+    anti_dodge_chance: float = 0.0
+
+    # Parry
+    parry_chance: float = 0.0
+    parry_cap: float = 0.50
+
+    # Block
+    shield_block_chance: float = 0.0
+    shield_block_cap: float = 0.75
+    # shield_block_power удален
+
+
+class MitigationStatsDTO(BaseModel):
+    """
+    Снижение урона (Reduction).
+    """
+
+    # Resists
+    physical_resistance: float = 0.0
+    magical_resistance: float = 0.0
+    resistance_cap: float = 0.85
+
+    # Armor (Flat)
+    damage_reduction_flat: float = 0.0
+
+    # Multipliers
+    incoming_damage_reduction: float = 1.0
+
+
+class ElementalStatsDTO(BaseModel):
+    """
+    Стихии (8 базовых).
+    """
+
+    fire_damage_bonus: float = 0.0
+    fire_resistance: float = 0.0
+
+    water_damage_bonus: float = 0.0
+    water_resistance: float = 0.0
+
+    air_damage_bonus: float = 0.0
+    air_resistance: float = 0.0
+
+    earth_damage_bonus: float = 0.0
+    earth_resistance: float = 0.0
+
+    light_damage_bonus: float = 0.0
+    light_resistance: float = 0.0
+
+    dark_damage_bonus: float = 0.0
+    dark_resistance: float = 0.0
+
+    arcane_damage_bonus: float = 0.0
+    arcane_resistance: float = 0.0
+
+    nature_damage_bonus: float = 0.0
+    nature_resistance: float = 0.0
+
+
+class StatusStatsDTO(BaseModel):
+    """
+    Сопротивление статусам, контролю и DoT.
+    """
+
+    # Control (Mental)
+    control_chance_bonus: float = 0.0  # NEW: Шанс наложить контроль
+    control_resistance: float = 0.0  # Защита от контроля
+    mental_resistance: float = 0.0  # NEW: Ментальная защита (страх, сон)
+    debuff_avoidance: float = 0.0  # Шанс избежать любого дебаффа
+    shock_resistance: float = 0.0
+
+    # Poison
+    poison_damage_bonus: float = 0.0
+    poison_resistance: float = 0.0
+    poison_efficiency: float = 0.0
+
+    # Bleed
+    bleed_damage_bonus: float = 0.0
+    bleed_resistance: float = 0.0
+
+
+class SpecialStatsDTO(BaseModel):
+    """
+    Спец. механики (Вампиризм, Хил, Отражение).
+    """
+
+    counter_attack_chance: float = 0.0
+    counter_attack_cap: float = 0.50
+
+    vampiric_power: float = 0.0
+    vampiric_power_cap: float = 0.50
+    vampiric_trigger_chance: float = 0.0
+    vampiric_trigger_cap: float = 1.0
+
+    healing_power: float = 0.0
+    received_healing_bonus: float = 0.0
+
+    pet_damage_bonus: float = 0.0
+    pet_health_bonus: float = 0.0
+
+    damage_mult: float = 1.0
+
+    thorns_damage_flat: float = 0.0
+
+
+class EnvironmentalStatsDTO(BaseModel):
+    """Защита от среды."""
+
+    environment_cold_resistance: float = 0.0
+    environment_heat_resistance: float = 0.0
+    environment_gravity_resistance: float = 0.0
+    environment_bio_resistance: float = 0.0
+
+
+# ==============================================================================
+# 2. COMBAT MODIFIERS (Основной DTO)
+# ==============================================================================
+
+
+class CombatModifiersDTO(
+    VitalsDTO,
+    CombatSkillsDTO,
+    MainHandStatsDTO,
+    OffHandStatsDTO,
+    PhysicalStatsDTO,
+    MagicalStatsDTO,
+    CritStatsDTO,
+    DefensiveStatsDTO,
+    MitigationStatsDTO,
+    ElementalStatsDTO,
+    StatusStatsDTO,
+    SpecialStatsDTO,
+    EnvironmentalStatsDTO,
+):
+    """
+    Боевые модификаторы + Боевые навыки.
+    Используются в CombatWorker.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class NonCombatModifiersDTO(SecondarySkillsDTO):
+    """
+    Небоевые модификаторы + Второстепенные навыки.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     # ==========================================================================
-    # 1. ❤️ РЕСУРСЫ (Vitals)
-    # ==========================================================================
-    hp_max: int = 0  # Максимальное здоровье. База + бонусы от предметов и статов.
-    hp_regen: float = 0.0  # Восстановление здоровья в секунду (плоское значение).
-    energy_max: int = 0  # Максимальная энергия/мана.
-    energy_regen: float = 0.0  # Восстановление энергии в секунду (плоское значение).
-    resource_cost_reduction: float = 0.0  # % снижения затрат маны/энергии на способности. 0.1 = 10% скидка.
-
-    # ==========================================================================
-    # 2. ⚔️ ФИЗИЧЕСКАЯ АТАКА (Physical)
-    # ==========================================================================
-    physical_damage_min: float = 0.0  # Минимальный урон от атаки оружием.
-    physical_damage_max: float = 0.0  # Максимальный урон от атаки оружием.
-    physical_damage_bonus: float = 0.0  # Процентный бонус к физическому урону. 0.5 = +50% урона.
-    physical_penetration: float = 0.0  # % игнорирования брони цели. 0.2 = игнорирует 20% брони.
-    physical_accuracy: float = 0.0  # Увеличивает шанс попадания по уворачивающейся цели.
-    physical_crit_chance: float = 0.0  # Шанс нанести критический удар (0.0 до 1.0).
-    physical_crit_power_float: float = 1.5  # Множитель урона при крите. 1.5 = 150% урона.
-    physical_pierce_chance: float = 0.0  # Шанс, что атака полностью проигнорирует броню.
-    physical_pierce_cap: float = 0.50  # Максимальный шанс пронзания (игнора брони).
-    physical_crit_cap: float = 0.75  # Максимально возможный шанс крита.
-
-    # ==========================================================================
-    # 3. 🔮 МАГИЧЕСКАЯ АТАКА (Magical)
-    # ==========================================================================
-    magical_damage_power: float = 0.0  # Плоский бонус к урону заклинаний.
-    magical_damage_bonus: float = 0.0  # Процентный бонус к магическому урону. 0.3 = +30% урона.
-    magical_penetration: float = 0.0  # % игнорирования магического сопротивления цели.
-    magical_accuracy: float = 0.0  # Увеличивает шанс наложения негативных эффектов.
-    spell_land_chance: float = 0.0  # Устаревший стат, лучше использовать magical_accuracy.
-    magical_crit_chance: float = 0.0  # Шанс нанести критический урон заклинанием.
-    magical_crit_power_float: float = 1.5  # Множитель урона при магическом крите.
-    magical_crit_cap: float = 0.75  # Максимально возможный шанс магического крита.
-
-    # ==========================================================================
-    # 4. 🛡️ ЗАЩИТА И ВЫЖИВАНИЕ (Defense)
-    # ==========================================================================
-    physical_resistance: float = 0.0  # % снижения входящего физического урона.
-    magical_resistance: float = 0.0  # % снижения входящего магического урона.
-    damage_reduction_flat: float = 0.0  # Уменьшает входящий урон на фиксированное значение (после резистов).
-
-    # Локальная броня (по слотам)
-    armor_head: float = 0.0
-    armor_chest: float = 0.0
-    armor_arms: float = 0.0
-    armor_legs: float = 0.0
-    armor_feet: float = 0.0
-
-    resistance_cap: float = 0.85  # Максимально возможное снижение урона от сопротивлений (85%).
-    dodge_chance: float = 0.0  # Шанс полностью увернуться от атаки.
-    dodge_cap: float = 0.75  # Максимально возможный шанс уворота.
-    debuff_avoidance: float = 0.0  # Шанс избежать наложения негативных эффектов.
-    parry_chance: float = 0.0  # Шанс парировать атаку (может иметь доп. эффекты).
-    parry_cap: float = 0.50  # Максимально возможный шанс парирования.
-    shield_block_chance: float = 0.0  # Шанс заблокировать атаку щитом.
-    shield_block_power: float = 0.0  # % поглощения урона при успешном блоке.
-    shield_block_cap: float = 0.75  # Максимально возможный шанс блока.
-    anti_crit_chance: float = 0.0  # Снижает шанс противника нанести по нам критический удар.
-    anti_dodge_chance: float = 0.0  # Снижает шанс уворота цели (игнорирует часть dodge_chance врага).
-    anti_physical_crit_chance: float = 0.0  # Снижает шанс получить физический крит.
-    anti_magical_crit_chance: float = 0.0  # Снижает шанс получить магический крит.
-    control_resistance: float = 0.0  # % сопротивления эффектам контроля (стан, сон, страх).
-    shock_resistance: float = 0.0  # % сопротивления оглушению/шоку.
-    incoming_damage_reduction: float = 1.0  # Мультипликатор входящего урона (1.0 = 100%, 0.5 = 50%)
-
-    # ==========================================================================
-    # 5. 🔥 СТИХИИ И ТИПЫ УРОНА (Elemental Mastery)
-    # ==========================================================================
-    fire_damage_bonus: float = 0.0  # % бонус к урону огнем.
-    fire_resistance: float = 0.0  # % сопротивления урону огнем.
-    water_damage_bonus: float = 0.0  # % бонус к урону водой/льдом.
-    water_resistance: float = 0.0  # % сопротивления урону водой/льдом.
-    air_damage_bonus: float = 0.0  # % бонус к урону воздухом/молнией.
-    air_resistance: float = 0.0  # % сопротивления урону воздухом/молнией.
-    earth_damage_bonus: float = 0.0  # % бонус к урону землей.
-    earth_resistance: float = 0.0  # % сопротивления урону землей.
-    light_damage_bonus: float = 0.0  # % бонус к урону светом.
-    light_resistance: float = 0.0  # % сопротивления урону светом.
-    dark_damage_bonus: float = 0.0  # % бонус к урону тьмой.
-    dark_resistance: float = 0.0  # % сопротивления урону тьмой.
-    poison_damage_bonus: float = 0.0  # Усиливает урон от уже наложенного отравления.
-    poison_resistance: float = 0.0  # Снижает входящий урон от ядов.
-    poison_efficiency: float = 0.0  # Увеличивает длительность или шанс наложения яда.
-    bleed_damage_bonus: float = 0.0  # Усиливает урон от кровотечения.
-    bleed_resistance: float = 0.0  # Снижает входящий урон от кровотечения.
-    thorns_damage_flat: float = 0.0  # Фиксированный урон, который возвращается атакующему.
-
-    # ==========================================================================
-    # 6. ✨ СПЕЦИАЛЬНЫЕ БОЕВЫЕ (Special)
-    # ==========================================================================
-    counter_attack_chance: float = 0.0  # Шанс провести контратаку после успешного уворота или парирования.
-    counter_attack_cap: float = 0.50  # Максимальный шанс контратаки.
-    vampiric_power: float = 0.0  # % от нанесенного урона, который превращается в здоровье.
-    vampiric_power_cap: float = 0.50  # Максимальный % отхила от урона.
-    vampiric_trigger_chance: float = 0.0  # Шанс срабатывания вампиризма при атаке.
-    vampiric_trigger_cap: float = 1.0  # Максимальный шанс срабатывания вампиризма.
-    healing_power: float = 0.0  # % бонус к силе исходящего лечения.
-    received_healing_bonus: float = 0.0  # % бонус к силе входящего лечения.
-    pet_damage_bonus: float = 0.0  # % бонус к урону питомцев.
-    pet_health_bonus: float = 0.0  # % бонус к здоровью питомцев.
-
-    # ==========================================================================
-    # 7. 🏞️ ЗАЩИТА ОТ СРЕДЫ (Environmental)с
-    # ==========================================================================
-    environment_cold_resistance: float = 0.0  # Защита от холода (лёд) в разломах.
-    environment_heat_resistance: float = 0.0  # Защита от жары (огонь) в разломах.
-    environment_gravity_resistance: float = 0.0  # Защита от гравитационных аномалий.
-    environment_bio_resistance: float = 0.0  # Защита от биологических угроз (яд, мутации).
-
-    # ==========================================================================
     # 8. 💰 ЭКОНОМИКА И МИР (Utility)
     # ==========================================================================
-    trade_discount: float = 0.0  # % скидки при торговле с NPC. 0.1 = 10% скидка.
-    find_loot_chance: float = 0.0  # % увеличения шанса найти магические предметы (Magic Find).
-    crafting_success_chance: float = 0.0  # % увеличения шанса на успешное создание предмета.
-    crafting_critical_chance: float = 0.0  # % шанса создать предмет с улучшенными характеристиками.
-    crafting_speed: float = 0.0  # % ускорения процесса крафта.
-    skill_gain_bonus: float = 0.0  # % бонус к получаемому опыту для навыков.
-    inventory_slots_bonus: int = 0  # Дополнительные слоты в инвентаре.
-    weight_limit_bonus: float = 0.0  # Увеличение максимального переносимого веса.
-
-    # Множители
+    trade_discount: float = 0.0
+    find_loot_chance: float = 0.0
+    crafting_success_chance: float = 0.0
+    crafting_critical_chance: float = 0.0
+    crafting_speed: float = 0.0
+    skill_gain_bonus: float = 0.0
+    inventory_slots_bonus: int = 0
+    weight_limit_bonus: float = 0.0
     xp_multiplier: float = 1.0
-    damage_mult: float = 1.0
+
+
+class FullModifiersDTO(CombatModifiersDTO, NonCombatModifiersDTO):
+    """
+    Полный набор модификаторов.
+    """
+
+    pass
+
+
+class CharacterModifiersSaveDto(FullModifiersDTO):
+    """
+    Deprecated Alias.
+    """
+
+    pass

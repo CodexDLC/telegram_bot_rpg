@@ -17,11 +17,13 @@
 - base_power: Средний урон (для оружия) или показатель защиты (для щитов).
 - damage_spread: Разброс урона в % (0.1 = +/- 10%).
 - implicit_bonuses: Врожденные бонусы (точность, крит, парирование).
+- related_skill: Навык, отвечающий за владение этим предметом (XP, бонусы, штрафы).
 """
 
 WEAPONS_DB = {
     # ==========================================
     # 1. ЛЕГКОЕ ОДНОРУЧНОЕ (Main Hand / Off Hand)
+    # Skill: light_weapons
     # ==========================================
     "light_1h": {
         "dagger": {
@@ -29,10 +31,11 @@ WEAPONS_DB = {
             "name_ru": "Кинжал",
             "slot": "main_hand",
             "extra_slots": ["off_hand"],
+            "related_skill": "light_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 3,  # Было 6
+            "base_power": 3,
             "damage_spread": 0.05,
             "base_durability": 40,
             "narrative_tags": ["dagger", "swift", "stealth"],
@@ -47,10 +50,11 @@ WEAPONS_DB = {
             "name_ru": "Нож",
             "slot": "main_hand",
             "extra_slots": ["off_hand"],
+            "related_skill": "light_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 2,  # Было 5
+            "base_power": 2,
             "damage_spread": 0.1,
             "base_durability": 35,
             "narrative_tags": ["knife", "tool", "simple"],
@@ -63,10 +67,11 @@ WEAPONS_DB = {
             "name_ru": "Танто",
             "slot": "main_hand",
             "extra_slots": ["off_hand"],
+            "related_skill": "light_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 4,  # Было 7
+            "base_power": 4,
             "damage_spread": 0.05,
             "base_durability": 45,
             "narrative_tags": ["tanto", "samurai", "short"],
@@ -80,10 +85,11 @@ WEAPONS_DB = {
             "name_ru": "Топорик",
             "slot": "main_hand",
             "extra_slots": ["off_hand"],
+            "related_skill": "light_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 4,  # Было 7
+            "base_power": 4,
             "damage_spread": 0.3,
             "base_durability": 50,
             "narrative_tags": ["axe", "light", "chop"],
@@ -97,10 +103,11 @@ WEAPONS_DB = {
             "name_ru": "Вакидзаси",
             "slot": "main_hand",
             "extra_slots": ["off_hand"],
+            "related_skill": "light_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 4,  # Было 8
+            "base_power": 4,
             "damage_spread": 0.1,
             "base_durability": 55,
             "narrative_tags": ["wakizashi", "samurai", "blade"],
@@ -113,16 +120,18 @@ WEAPONS_DB = {
     },
     # ==========================================
     # 2. СРЕДНЕЕ ОДНОРУЧНОЕ (Main Hand Only)
+    # Skill: medium_weapons
     # ==========================================
     "medium_1h": {
         "sword": {
             "id": "sword",
             "name_ru": "Меч",
             "slot": "main_hand",
+            "related_skill": "medium_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 5,  # Было 10
+            "base_power": 5,
             "damage_spread": 0.1,
             "base_durability": 60,
             "narrative_tags": ["sword", "balanced", "blade"],
@@ -135,10 +144,11 @@ WEAPONS_DB = {
             "id": "shortsword",
             "name_ru": "Короткий меч",
             "slot": "main_hand",
+            "related_skill": "medium_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 4,  # Было 8
+            "base_power": 4,
             "damage_spread": 0.1,
             "base_durability": 55,
             "narrative_tags": ["sword", "short", "agile"],
@@ -151,10 +161,11 @@ WEAPONS_DB = {
             "id": "scimitar",
             "name_ru": "Скимитар",
             "slot": "main_hand",
+            "related_skill": "medium_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 6,  # Было 12
+            "base_power": 6,
             "damage_spread": 0.1,
             "base_durability": 60,
             "narrative_tags": ["scimitar", "curved", "slash"],
@@ -167,10 +178,11 @@ WEAPONS_DB = {
             "id": "longsword",
             "name_ru": "Длинный меч",
             "slot": "main_hand",
+            "related_skill": "medium_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 7,  # Было 15
+            "base_power": 7,
             "damage_spread": 0.1,
             "base_durability": 65,
             "narrative_tags": ["sword", "long", "knight"],
@@ -183,10 +195,11 @@ WEAPONS_DB = {
             "id": "battle_axe",
             "name_ru": "Боевой топор",
             "slot": "main_hand",
+            "related_skill": "medium_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 6,  # Было 12
+            "base_power": 6,
             "damage_spread": 0.4,
             "base_durability": 50,
             "narrative_tags": ["axe", "brutal", "chop"],
@@ -199,10 +212,11 @@ WEAPONS_DB = {
             "id": "mace",
             "name_ru": "Булава",
             "slot": "main_hand",
+            "related_skill": "medium_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 6,  # Было 11
+            "base_power": 6,
             "damage_spread": 0.2,
             "base_durability": 80,
             "narrative_tags": ["mace", "crushing", "blunt"],
@@ -215,10 +229,11 @@ WEAPONS_DB = {
             "id": "rapier",
             "name_ru": "Рапира",
             "slot": "main_hand",
+            "related_skill": "medium_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 4,  # Было 8
+            "base_power": 4,
             "damage_spread": 0.05,
             "base_durability": 45,
             "narrative_tags": ["rapier", "fencing", "piercing"],
@@ -231,16 +246,18 @@ WEAPONS_DB = {
     },
     # ==========================================
     # 3. ДВУРУЧНОЕ ОРУЖИЕ (Two Hand)
+    # Skill: heavy_weapons
     # ==========================================
     "melee_2h": {
         "greatsword": {
             "id": "greatsword",
             "name_ru": "Клеймор",
             "slot": "two_hand",
+            "related_skill": "heavy_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 10,  # Было 20
+            "base_power": 10,
             "damage_spread": 0.15,
             "base_durability": 70,
             "narrative_tags": ["greatsword", "massive", "cleave"],
@@ -253,10 +270,11 @@ WEAPONS_DB = {
             "id": "warhammer",
             "name_ru": "Боевой Молот",
             "slot": "two_hand",
+            "related_skill": "heavy_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 12,  # Было 24
+            "base_power": 12,
             "damage_spread": 0.3,
             "base_durability": 90,
             "narrative_tags": ["hammer", "smash", "heavy"],
@@ -269,10 +287,11 @@ WEAPONS_DB = {
             "id": "spear",
             "name_ru": "Копье",
             "slot": "two_hand",
+            "related_skill": "heavy_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots", "woods"],
-            "base_power": 9,  # Было 18
+            "base_power": 9,
             "damage_spread": 0.1,
             "base_durability": 50,
             "narrative_tags": ["spear", "reach", "piercing"],
@@ -286,10 +305,11 @@ WEAPONS_DB = {
             "id": "halberd",
             "name_ru": "Алебарда",
             "slot": "two_hand",
+            "related_skill": "heavy_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots", "woods"],
-            "base_power": 11,  # Было 22
+            "base_power": 11,
             "damage_spread": 0.15,
             "base_durability": 60,
             "narrative_tags": ["halberd", "polearm", "chop"],
@@ -302,10 +322,11 @@ WEAPONS_DB = {
             "id": "katana",
             "name_ru": "Катана",
             "slot": "two_hand",
+            "related_skill": "heavy_weapons",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["ingots"],
-            "base_power": 9,  # Было 19
+            "base_power": 9,
             "damage_spread": 0.1,
             "base_durability": 65,
             "narrative_tags": ["katana", "samurai", "fast_blade"],
@@ -319,10 +340,11 @@ WEAPONS_DB = {
             "id": "quarterstaff",
             "name_ru": "Боевой посох",
             "slot": "two_hand",
+            "related_skill": "heavy_weapons",
             "damage_type": "physical",
             "defense_type": "physical",
             "allowed_materials": ["woods"],
-            "base_power": 6,  # Было 12
+            "base_power": 6,
             "damage_spread": 0.1,
             "base_durability": 100,
             "narrative_tags": ["staff", "monk", "defensive"],
@@ -335,16 +357,18 @@ WEAPONS_DB = {
     },
     # ==========================================
     # 4. ДАЛЬНИЙ БОЙ (Ranged)
+    # Skill: archery
     # ==========================================
     "ranged": {
         "sling": {
             "id": "sling",
             "name_ru": "Праща",
             "slot": "main_hand",
+            "related_skill": "archery",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["leathers"],
-            "base_power": 4,  # Было 8
+            "base_power": 4,
             "damage_spread": 0.2,
             "base_durability": 30,
             "narrative_tags": ["sling", "simple", "stone"],
@@ -357,10 +381,11 @@ WEAPONS_DB = {
             "id": "shortbow",
             "name_ru": "Короткий лук",
             "slot": "two_hand",
+            "related_skill": "archery",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["woods"],
-            "base_power": 6,  # Было 12
+            "base_power": 6,
             "damage_spread": 0.1,
             "base_durability": 40,
             "narrative_tags": ["bow", "ranger", "fast"],
@@ -373,10 +398,11 @@ WEAPONS_DB = {
             "id": "longbow",
             "name_ru": "Длинный лук",
             "slot": "two_hand",
+            "related_skill": "archery",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["woods"],
-            "base_power": 9,  # Было 18
+            "base_power": 9,
             "damage_spread": 0.15,
             "base_durability": 35,
             "narrative_tags": ["bow", "long_range", "sniper"],
@@ -390,10 +416,11 @@ WEAPONS_DB = {
             "id": "crossbow",
             "name_ru": "Арбалет",
             "slot": "two_hand",
+            "related_skill": "archery",
             "damage_type": "physical",
             "defense_type": None,
             "allowed_materials": ["woods", "ingots"],
-            "base_power": 12,  # Было 25
+            "base_power": 12,
             "damage_spread": 0.05,
             "base_durability": 60,
             "narrative_tags": ["crossbow", "heavy", "slow"],
@@ -405,16 +432,18 @@ WEAPONS_DB = {
     },
     # ==========================================
     # 5. ЩИТЫ (Off Hand Only)
+    # Skill: shield_mastery
     # ==========================================
     "shields": {
         "shield": {
             "id": "shield",
             "name_ru": "Щит",
             "slot": "off_hand",
+            "related_skill": "shield_mastery",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["woods", "ingots"],
-            "base_power": 8,  # Было 15
+            "base_power": 8,
             "base_durability": 80,
             "damage_spread": 0.0,
             "narrative_tags": ["shield", "block", "protection"],
@@ -427,10 +456,11 @@ WEAPONS_DB = {
             "id": "buckler",
             "name_ru": "Баклер",
             "slot": "off_hand",
+            "related_skill": "shield_mastery",
             "damage_type": None,
             "defense_type": "physical",
             "allowed_materials": ["woods", "ingots"],
-            "base_power": 3,  # Было 5
+            "base_power": 3,
             "base_durability": 50,
             "damage_spread": 0.0,
             "narrative_tags": ["buckler", "parry", "small_shield"],

@@ -9,7 +9,7 @@ from apps.bot.resources.texts.buttons_callback import Buttons
 from apps.bot.resources.texts.game_messages.lobby_messages import LobbyMessages
 from apps.common.database.repositories.ORM.characters_repo_orm import CharactersRepoORM
 from apps.common.schemas_dto import CharacterOnboardingUpdateDTO
-from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.common.services.redis.manager.account_manager import AccountManager
 
 DEFAULT_SPAWN_POINT = "52_52"
 

@@ -408,8 +408,11 @@ class CombatBotOrchestrator(BaseBotOrchestrator):
             logs_res = await task_logs
 
             # Рендер Main
-            snapshot = response.payload.updated_snapshot
+            # response.payload теперь это CombatDashboardDTO (благодаря изменениям в Gateway)
+            snapshot = response.payload
+
             if not snapshot:
+                # Fallback (на всякий случай, если payload пустой)
                 snap_res = await self.client.get_snapshot(char_id)
                 snapshot = snap_res.payload
 

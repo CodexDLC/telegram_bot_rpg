@@ -12,9 +12,9 @@ from apps.bot.ui_service.helpers_ui.callback_exceptions import UIErrorHandler as
 # from apps.bot.ui_service.helpers_ui.ui_animation_service import UIAnimationService
 from apps.bot.ui_service.hub_entry_service import HubEntryService
 from apps.common.core.container import AppContainer
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.manager.arena_manager import ArenaManager
-from apps.common.services.core_service.manager.combat_manager import CombatManager
+from apps.common.services.redis.manager.account_manager import AccountManager
+from apps.common.services.redis.manager.arena_manager import ArenaManager
+from apps.common.services.redis.manager.combat_manager import CombatManager
 
 router = Router(name="hub_entry_router")
 

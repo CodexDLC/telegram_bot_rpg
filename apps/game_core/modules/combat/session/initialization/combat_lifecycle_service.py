@@ -1,30 +1,22 @@
-# apps/game_core/modules/combat/session/initialization/combat_lifecycle_service.py
+# apps/game_core/modules/combats/session/initialization/combat_lifecycle_service.py
 import json
 import random
 import time
 from collections import defaultdict
-from typing import Any, NamedTuple
+from typing import Any
 
 from loguru import logger as log
-from redis.asyncio.client import Pipeline
 
-from apps.common.services.core_service import CombatManager
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.manager.context_manager import ContextRedisManager
-from apps.common.services.core_service.redis_key import RedisKeys as Rk
-
-
-class SessionDataDTO(NamedTuple):
-    """DTO for transferring assembled data to the persistence method."""
-
-    meta: dict[str, Any]
-    actors: dict[str, dict[str, Any]]  # final_id -> {field: value} (HASH fields)
-    queues: dict[str, list[str]]  # final_id -> [enemy_id, ...]
+from apps.common.core.base_arq import ArqService
+from apps.common.schemas_dto.combat_source_dto import SessionDataDTO
+from apps.common.services.redis import CombatManager
+from apps.common.services.redis.manager.account_manager import AccountManager
+from apps.common.services.redis.manager.context_manager import ContextRedisManager
 
 
 class CombatLifecycleService:
     """
-    Service for managing the lifecycle of combat sessions.
+    Service for managing the lifecycle of combats sessions (RBC v3.0).
     Responsible for creation (assembling from templates) and finalization (cleanup) of the session.
     """
 
@@ -33,10 +25,12 @@ class CombatLifecycleService:
         combat_manager: CombatManager,
         account_manager: AccountManager,
         context_manager: ContextRedisManager,
+        arq_service: ArqService,  # Добавляем ARQ для запуска Хаоса
     ):
         self.combat_manager = combat_manager
         self.account_manager = account_manager
         self.context_manager = context_manager
+        self.arq = arq_service
 
     # --- Public API ---
 
@@ -44,10 +38,6 @@ class CombatLifecycleService:
         """
         Main method for creating a session.
         Orchestrates loading, assembly, and persistence.
-
-        Args:
-            session_id: Unique Session UUID.
-            config: Configuration containing 'mode' and 'teams_config'.
         """
         mode = config.get("mode", "standard")
         teams_payload = config.get("teams_config", {})
@@ -61,8 +51,12 @@ class CombatLifecycleService:
         # 2. Assemble Teams and Actors (In-Memory)
         session_data = self._assemble_session_data(session_id, mode, teams_payload, templates_map)
 
-        # 3. Persist to Redis (Pipeline)
-        await self._persist_session(session_id, session_data, ttl)
+        # 3. Persist to Redis (via Manager)
+        await self.combat_manager.create_session_batch(session_id, session_data, ttl)
+
+        # 4. Start Chaos Relay (First Kick)
+        # Ставим первую проверку через 5 минут
+        await self.arq.enqueue_job("chaos_check_task", session_id, _defer_until=int(time.time() + 300))
 
     async def complete_session(self, session_id: str, results: dict) -> None:
         """
@@ -108,11 +102,8 @@ class CombatLifecycleService:
         # MGET via ContextManager
         templates = await self.context_manager.get_context_batch(list(unique_refs))
 
-        # Integrity check
         if len(templates) != len(unique_refs):
             missing = unique_refs - set(templates.keys())
-            log.error(f"Lifecycle | Missing templates for refs: {missing}")
-            # We raise an error because we cannot build a valid session without source data
             raise ValueError(f"Missing templates for refs: {missing}")
 
         return templates
@@ -122,107 +113,118 @@ class CombatLifecycleService:
     ) -> SessionDataDTO:
         """
         Core assembly logic: cloning, naming, matchups.
+        Generates structure for RBC v3.0.
         """
         final_teams = {}  # {"blue": ["id1", "id2"]}
-        actors_data = {}  # {"id1": {HASH_FIELDS}}
+        actors_data = {}  # {"id1": { "state": {...}, "raw": {...} }}
         all_ids = []  # ["id1", "id2", ...]
-
-        # Mapping dictionary: who is in which team (for queue generation)
         id_to_team = {}
+
+        # Counters for Meta
+        alive_counts = defaultdict(int)
+        actors_info_map = {}
+
+        # Global Name Counter (Unique across teams)
+        global_name_counter: dict[str, int] = defaultdict(int)
 
         # 1. Iterate through teams
         for color, members in teams_payload.items():
             team_ids = []
-            name_counter: dict[str, int] = defaultdict(int)
 
             for member in members:
                 ref = member["ref"]
-                tpl_id = str(member["id"])
+                raw_id = member["id"]
+                tpl_id = str(raw_id)
 
                 if ref not in templates_map:
                     continue
 
-                # Increment counter for this template
-                name_counter[tpl_id] += 1
-                count = name_counter[tpl_id]
+                # Increment counter for this template (Global)
+                global_name_counter[tpl_id] += 1
+                count = global_name_counter[tpl_id]
 
                 # --- ID Generation Logic ---
-                if tpl_id.isdigit():
-                    # Player
+                # Проверяем исходный тип ID (int -> player, str -> monster/template)
+                if isinstance(raw_id, int):
                     final_id = f"-{tpl_id}" if mode == "shadow" and color == "red" else tpl_id
                 else:
-                    # Monster/AI
+                    # Для монстров/шаблонов генерируем уникальный ID
                     final_id = tpl_id if tpl_id.startswith("-") and tpl_id[1:].isdigit() else f"{tpl_id}_{count}"
 
-                # --- JSON Patching & Structuring ---
+                # --- Source Data ---
                 source_json = templates_map[ref]
 
-                # Используем CombatActorReadDTO для валидации и фильтрации
-                from apps.common.schemas_dto.combat_context_read import CombatActorReadDTO
-
-                try:
-                    actor_dto = CombatActorReadDTO.model_validate(source_json)
-                except Exception as e:  # noqa: BLE001
-                    log.error(f"Lifecycle | Invalid template data for {ref}: {e}")
-                    continue
+                # Extract parts from Template (TempContextSchema)
+                math_model = source_json.get("math_model", {})
+                loadout = source_json.get("loadout", {})
+                vitals = source_json.get("vitals", {})
+                meta_info = source_json.get("meta", {})
 
                 # Name Patching
-                original_name = actor_dto.meta.get("name", "Unknown")
+                original_name = meta_info.get("character", {}).get("name", "Unknown")
                 new_name = original_name
                 if mode == "shadow" and color == "red":
                     new_name = f"Shadow {original_name}"
                 elif count > 1:
                     new_name = f"{original_name} {count}"
 
-                # Determine AI flag
-                is_ai = not final_id.isdigit()  # Negative or String -> AI
+                is_ai = not final_id.isdigit()
 
-                # --- Build Actor Hash Fields (RBC v2.0 Schema) ---
+                # --- Build Actor Keys (RBC v3.0) ---
 
-                # 1. v:raw (Math Model) - Source of Truth
-                math_model = actor_dto.math_model
+                # 1. :state (Hash) - Hot Data
+                state_data = {
+                    "hp": vitals.get("hp_current", 100),
+                    "max_hp": vitals.get("hp_current", 100),  # Temporary, will be recalculated
+                    "en": vitals.get("energy_current", 100),
+                    "max_en": vitals.get("energy_current", 100),  # Temporary
+                    "tactics": 0,
+                    "afk_level": 0,
+                    "is_dead": 0,
+                    "tokens": "{}",
+                }
 
-                # 2. Vitals
-                vitals = actor_dto.vitals
+                # 2. :raw (JSON) - Math Model
+                # Берем math_model как есть (attributes, modifiers)
+                raw_data = math_model.copy()
+                raw_data["temp"] = {}  # Добавляем слот для баффов
+                raw_data["name"] = new_name  # Добавляем имя для UI
 
-                # 3. Loadout
-                loadout = actor_dto.loadout
+                # 3. :loadout (JSON) - Config
+                # Берем loadout как есть (belt, skills, layout, tags)
+                loadout_data = loadout.copy()
 
-                # Объединяем скиллы и абилки в единый список действий
-                skills_list = loadout.get("skills", [])
-                abilities_list = loadout.get("abilities", [])
-                combined_actions = skills_list + abilities_list
-
-                # 4. Meta (Lightweight for UI/Listing)
-                actor_meta = {
+                # 4. :meta (JSON) - Static Info
+                actor_meta_data = {
                     "name": new_name,
+                    "type": meta_info.get("type", "unknown"),
+                    "template_id": tpl_id,
                     "is_ai": is_ai,
                     "team": color,
-                    "template_id": tpl_id,
-                    "type": actor_dto.meta.get("type", "unknown"),
                 }
 
-                actor_fields = {
-                    "v:raw": json.dumps(math_model),
-                    "v:req_ver": 1,
-                    "v:cache_ver": 0,  # Force calculation
-                    "s:hp": vitals.get("hp_current", 100),
-                    "s:en": vitals.get("energy_current", 100),
-                    "s:belt": json.dumps(loadout.get("belt", [])),
-                    "s:skills": json.dumps(combined_actions),
-                    "meta": json.dumps(actor_meta),
+                # Store all keys for this actor
+                actors_data[final_id] = {
+                    "state": state_data,
+                    "raw": raw_data,
+                    "loadout": loadout_data,
+                    "meta": actor_meta_data,
+                    "active_abilities": [],
+                    "data_xp": {},
                 }
 
-                # Store
-                actors_data[final_id] = actor_fields
                 team_ids.append(final_id)
                 all_ids.append(final_id)
                 id_to_team[final_id] = color
 
+                # Update Meta Counters
+                alive_counts[color] += 1
+                actors_info_map[final_id] = "player" if not is_ai else "ai"
+
             final_teams[color] = team_ids
 
-        # 2. Queue Generation (Matchups)
-        queues = {}
+        # 2. Queue Generation (Matchups) -> Global Targets
+        targets_map = {}
         for my_id in all_ids:
             my_team = id_to_team[my_id]
             enemies = []
@@ -231,47 +233,24 @@ class CombatLifecycleService:
                     enemies.append(other_id)
 
             random.shuffle(enemies)
-            queues[my_id] = enemies
+            targets_map[my_id] = enemies
 
-        # 3. Meta Assembly
-        actors_info_map = {}
-        for aid in all_ids:
-            if aid.isdigit():
-                actors_info_map[aid] = "player"
-            else:
-                actors_info_map[aid] = "ai"
-
+        # 3. Global Meta Assembly (Optimized for Collector)
         meta = {
-            "mode": mode,
-            "teams": json.dumps(final_teams),
             "active": 1,
+            "step_counter": 0,
             "start_time": int(time.time()),
+            "last_activity_at": int(time.time()),  # Init last activity
+            # Structure
+            "teams": json.dumps(final_teams),
             "actors_info": json.dumps(actors_info_map),
+            # Cache for Collector
+            "dead_actors": "[]",
+            "alive_counts": json.dumps(alive_counts),
+            # Context
+            "battle_type": mode,
+            # "location_id": removed as requested
+            # "rewards": removed as requested
         }
 
-        return SessionDataDTO(meta=meta, actors=actors_data, queues=queues)
-
-    async def _persist_session(self, session_id: str, data: SessionDataDTO, ttl: int) -> None:
-        """
-        Writes data to Redis via Pipeline using RedisService.
-        """
-
-        def _fill_pipe(pipe: Pipeline) -> None:
-            # 1. Meta
-            pipe.hset(Rk.get_rbc_meta_key(session_id), mapping=data.meta)
-            pipe.expire(Rk.get_rbc_meta_key(session_id), ttl)
-
-            # 2. Actors (Each actor gets their own HASH key)
-            for aid, fields in data.actors.items():
-                key = Rk.get_rbc_actor_key(session_id, str(aid))
-                pipe.hset(key, mapping=fields)
-                pipe.expire(key, ttl)
-
-            # 3. Queues
-            for aid, enemies in data.queues.items():
-                if enemies:
-                    key = Rk.get_combat_exchanges_key(session_id, str(aid))
-                    pipe.rpush(key, *enemies)
-                    pipe.expire(key, ttl)
-
-        await self.combat_manager.redis_service.execute_pipeline(_fill_pipe)
+        return SessionDataDTO(meta=meta, actors=actors_data, targets=targets_map)

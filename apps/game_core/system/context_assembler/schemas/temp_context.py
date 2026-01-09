@@ -6,9 +6,24 @@ from pydantic import BaseModel, computed_field
 from apps.common.enums.stats_enum import PrimaryStat
 
 # Импортируем твои существующие DTO (Core Data)
-from apps.common.schemas_dto.character_dto import CharacterReadDTO, CharacterStatsReadDTO
+from apps.common.schemas_dto.character_dto import CharacterAttributesReadDTO, CharacterReadDTO
 from apps.common.schemas_dto.skill import SkillProgressDTO
 from apps.game_core.system.context_assembler.utils import format_value
+
+# Статы, которые зависят от руки (нуждаются в префиксе)
+HAND_DEPENDENT_STATS = {
+    "physical_damage_base",
+    "physical_damage_spread",
+    "physical_damage_bonus",
+    "physical_penetration",
+    "physical_accuracy",
+    "physical_crit_chance",
+    "physical_crit_power",
+    "physical_crit_cap",
+    "physical_pierce_chance",
+    "physical_pierce_cap",
+    # Можно добавить магические, если нужно
+}
 
 
 class TempContextSchema(BaseModel):
@@ -18,13 +33,12 @@ class TempContextSchema(BaseModel):
     """
 
     # --- 1. CORE DATA (Источник правды) ---
-    # Храним полные объекты, чтобы любой сервис мог получить доступ к деталям
-    core_stats: CharacterStatsReadDTO
-    core_inventory: list[Any]  # InventoryItemDTO или dict
+    core_stats: CharacterAttributesReadDTO
+    core_inventory: list[Any]
     core_skills: list[SkillProgressDTO]
-    core_vitals: dict[str, Any]  # {"hp": {"cur": 100}, ...}
+    core_vitals: dict[str, Any]
     core_meta: CharacterReadDTO
-    core_symbiote: dict[str, Any] | None = None  # Сериализованный симбиот
+    core_symbiote: dict[str, Any] | None = None
 
     # --- 2. COMPUTED VIEWS (Готовые проекции) ---
 
@@ -32,12 +46,11 @@ class TempContextSchema(BaseModel):
     def combat_view(self) -> dict[str, Any]:
         """
         Проекция для COMBAT SERVICE (RBC Protocol).
-        Автоматически собирает v:raw матрицу.
+        Чистая математика: Атрибуты и Модификаторы.
         """
         model: dict[str, Any] = {
             "attributes": {},
             "modifiers": {},
-            "tags": ["player", "human"],  # TODO: Race tag
         }
 
         # 1. Attributes Base
@@ -49,71 +62,107 @@ class TempContextSchema(BaseModel):
 
         # 2. Equipment Bonuses
         for item in self.core_inventory:
-            # Обработка Pydantic модели или dict
             item_data = item.model_dump() if hasattr(item, "model_dump") else item
 
+            # Пропускаем не надетые вещи
             loc = item_data.get("location")
-            if loc == "equipped" and item_data.get("data") and item_data["data"].get("bonuses"):
-                for stat, val in item_data["data"]["bonuses"].items():
-                    src = f"item:{item_data.get('item_id')}"
-                    val_str = format_value(stat, val, "external")
+            if loc != "equipped":
+                continue
 
-                    # Распределяем по attributes/modifiers
-                    if stat in model["attributes"]:
-                        model["attributes"][stat]["flats"][src] = val_str
-                    else:
-                        if stat not in model["modifiers"]:
-                            model["modifiers"][stat] = {"sources": {}}
-                        model["modifiers"][stat]["sources"][src] = val_str
+            item_id = item_data.get("item_id")
+            src_key = f"item:{item_id}"
 
-            # Обработка базового урона оружия и брони
-            if loc == "equipped":
-                item_type = item_data.get("item_type")
-                src = f"item:{item_data.get('item_id')}"
+            # Определяем префикс руки
+            equipped_slot = item_data.get("equipped_slot")
+            prefix = ""
+            if equipped_slot == "main_hand":
+                prefix = "main_hand_"
+            elif equipped_slot == "off_hand":
+                prefix = "off_hand_"
+            # Для 2H оружия (если оно занимает main_hand, но имеет тег 2h) - пока считаем как main_hand
+            # Если нужно, можно добавить проверку subtype или tags
 
-                if item_type == "weapon":
-                    dmg_min = item_data["data"].get("damage_min")
-                    dmg_max = item_data["data"].get("damage_max")
-                    if dmg_min:
-                        if "physical_damage_min" not in model["modifiers"]:
-                            model["modifiers"]["physical_damage_min"] = {"sources": {}}
-                        model["modifiers"]["physical_damage_min"]["sources"][src] = format_value(
-                            "physical_damage_min", dmg_min, "external"
-                        )
-                    if dmg_max:
-                        if "physical_damage_max" not in model["modifiers"]:
-                            model["modifiers"]["physical_damage_max"] = {"sources": {}}
-                        model["modifiers"]["physical_damage_max"]["sources"][src] = format_value(
-                            "physical_damage_max", dmg_max, "external"
-                        )
+            # --- A. Обработка Базовых Статов Оружия (Base Power, Spread) ---
+            # Эти данные лежат в item_data["data"] (JSON из базы)
+            data_json = item_data.get("data") or {}  # Это поле item_data из InventoryItem
 
-                if item_type == "armor":
-                    prot = item_data["data"].get("protection")
-                    if prot:
-                        # Упрощенно: все в damage_reduction_flat
-                        if "damage_reduction_flat" not in model["modifiers"]:
-                            model["modifiers"]["damage_reduction_flat"] = {"sources": {}}
-                        model["modifiers"]["damage_reduction_flat"]["sources"][src] = format_value(
-                            "damage_reduction_flat", prot, "external"
-                        )
+            # Если это оружие (или имеет base_power)
+            base_power = data_json.get("base_power")
+            if base_power is not None:
+                stat_key = f"{prefix}physical_damage_base"
+                self._add_modifier(model, stat_key, src_key, base_power)
+
+            damage_spread = data_json.get("damage_spread")
+            if damage_spread is not None:
+                stat_key = f"{prefix}physical_damage_spread"
+                self._add_modifier(model, stat_key, src_key, damage_spread)
+
+            # --- B. Обработка Implicit Bonuses (Встроенные свойства) ---
+            implicit = data_json.get("implicit_bonuses") or {}
+            for stat, val in implicit.items():
+                # Если стат зависимый от руки, добавляем префикс
+                final_stat = f"{prefix}{stat}" if stat in HAND_DEPENDENT_STATS else stat
+                self._add_modifier(model, final_stat, src_key, val)
+
+            # --- C. Обработка Explicit Bonuses (Суффиксы/Заточка) ---
+            # Обычно лежат в data["bonuses"]
+            explicit = data_json.get("bonuses") or {}
+            for stat, val in explicit.items():
+                final_stat = f"{prefix}{stat}" if stat in HAND_DEPENDENT_STATS else stat
+                self._add_modifier(model, final_stat, src_key, val)
+
+            # --- D. Обработка Брони (Protection) ---
+            # Броня обычно глобальная, префикс не нужен (или нужен defensive_?)
+            protection = data_json.get("protection")
+            if protection:
+                self._add_modifier(model, "damage_reduction_flat", src_key, protection)
 
         return model
+
+    def _add_modifier(self, model: dict, stat_key: str, source_key: str, value: Any):
+        """Helper для добавления модификатора в структуру."""
+        if stat_key not in model["modifiers"]:
+            model["modifiers"][stat_key] = {"sources": {}}
+
+        # Форматируем значение (превращаем в строку для simpleeval)
+        val_str = format_value(stat_key, value, "external")
+        model["modifiers"][stat_key]["sources"][source_key] = val_str
 
     @computed_field(alias="loadout")
     def loadout_view(self) -> dict[str, Any]:
         """
-        Проекция для UI/Inventory Service.
+        Проекция для UI/Inventory Service и Валидации.
+        Содержит: Пояс, Скиллы, Лейаут оружия, Теги.
         """
         belt = []
+        equipment_layout = {}
+
+        # TODO: Implement Ability Extraction Logic
+
         for item in self.core_inventory:
             item_data = item.model_dump() if hasattr(item, "model_dump") else item
+
+            # Belt
             if item_data.get("quick_slot_position"):
                 belt.append(item_data)
 
+            # Layout
+            if item_data.get("location") == "equipped":
+                # Используем equipped_slot как приоритет
+                slot = item_data.get("equipped_slot") or item_data.get("data", {}).get("slot") or "unknown"
+
+                skill_key = item_data.get("data", {}).get("related_skill")
+                if skill_key:
+                    equipment_layout[slot] = skill_key
+                else:
+                    equipment_layout[slot] = "unknown"
+
         return {
             "belt": belt,
-            "skills": [s.skill_key for s in self.core_skills if s.is_unlocked],
-            "abilities": [],  # Заглушка
+            "known_abilities": [s.skill_key for s in self.core_skills if s.is_unlocked],
+            "equipment_layout": equipment_layout,
+            "tags": ["player", "human"],
+            "abilities": [],
         }
 
     @computed_field(alias="vitals")

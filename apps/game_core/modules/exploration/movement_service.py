@@ -3,8 +3,8 @@ from typing import Any
 
 from loguru import logger as log
 
-from apps.common.services.core_service.manager.account_manager import AccountManager
-from apps.common.services.core_service.manager.world_manager import WorldManager
+from apps.common.services.redis.manager.account_manager import AccountManager
+from apps.common.services.redis.manager.world_manager import WorldManager
 from apps.game_core.modules.exploration.game_world_service import GameWorldService
 
 

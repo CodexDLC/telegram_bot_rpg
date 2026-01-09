@@ -4,7 +4,7 @@ from typing import Any
 
 from loguru import logger as log
 
-from apps.common.services.core_service.manager.world_manager import WorldManager
+from apps.common.services.redis.manager.world_manager import WorldManager
 
 
 class GameWorldService:

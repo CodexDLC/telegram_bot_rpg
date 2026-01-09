@@ -1,1 +1,1 @@
-# apps/game_core/modules/combat/core/__init__.py
+# apps/game_core/modules/combats/core/__init__.py

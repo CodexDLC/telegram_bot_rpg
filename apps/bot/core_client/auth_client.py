@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from apps.common.database.repositories import UsersRepoORM
 from apps.common.schemas_dto import UserUpsertDTO
-from apps.common.services.core_service.redis_key import RedisKeys
+from apps.common.services.redis.redis_key import RedisKeys
 
 if TYPE_CHECKING:
     from apps.game_core.core_container import CoreContainer

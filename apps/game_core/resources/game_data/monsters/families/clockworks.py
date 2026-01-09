@@ -47,7 +47,7 @@ CLOCKWORKS_FAMILY: MonsterFamily = {
             "cost": 20,
             "min_tier": 3,
             "max_tier": 6,
-            "narrative_hint": "A simple bipedal automaton with tools for hands. Not designed for combat.",
+            "narrative_hint": "A simple bipedal automaton with tools for hands. Not designed for combats.",
             "extra_tags": ["worker", "weak"],
             "base_stats": {
                 "strength": 15,
@@ -270,7 +270,7 @@ CLOCKWORKS_FAMILY: MonsterFamily = {
             "cost": 600,
             "min_tier": 7,
             "max_tier": 7,
-            "narrative_hint": "The ultimate combat automaton, equipped with an arsenal of deadly weapons.",
+            "narrative_hint": "The ultimate combats automaton, equipped with an arsenal of deadly weapons.",
             "extra_tags": ["war_machine", "heavy_armor"],
             "base_stats": {
                 "strength": 80,

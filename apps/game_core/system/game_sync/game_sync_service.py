@@ -4,7 +4,7 @@ from typing import Any
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.services.core_service.manager.account_manager import AccountManager
+from apps.common.services.redis.manager.account_manager import AccountManager
 from apps.game_core.modules.status.regen_service import RegenService
 from apps.game_core.modules.status.stats_aggregation_service import StatsAggregationService
 

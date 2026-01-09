@@ -3,7 +3,7 @@
 
 Определяет структуры данных для создания "оболочки" персонажа,
 обновления данных после онбординга, чтения полной информации о персонаже,
-а также для обновления и чтения его характеристик.
+а также для обновления и чтения его атрибутов (ранее stats).
 """
 
 from datetime import datetime
@@ -57,9 +57,9 @@ class CharacterReadDTO(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class CharacterStatsUpdateDTO(BaseModel):
+class CharacterAttributesUpdateDTO(BaseModel):
     """
-    DTO для обновления характеристик персонажа.
+    DTO для обновления атрибутов персонажа (ранее Stats).
     Используется для изменения базовых характеристик.
     """
 
@@ -74,14 +74,19 @@ class CharacterStatsUpdateDTO(BaseModel):
     luck: int  # Удача: влияет на шанс крита, шанс найти лут, успех крафта.
 
 
-class CharacterStatsReadDTO(CharacterStatsUpdateDTO):
+class CharacterAttributesReadDTO(CharacterAttributesUpdateDTO):
     """
-    DTO для чтения характеристик персонажа из базы данных.
-    Включает поля из `CharacterStatsUpdateDTO` и временные метки.
+    DTO для чтения атрибутов персонажа из базы данных.
+    Включает поля из `CharacterAttributesUpdateDTO` и временные метки.
     """
 
-    created_at: datetime | None = None  # Дата и время создания записи характеристик.
-    updated_at: datetime | None = None  # Дата и время последнего обновления записи характеристик.
+    created_at: datetime | None = None  # Дата и время создания записи атрибутов.
+    updated_at: datetime | None = None  # Дата и время последнего обновления записи атрибутов.
     character_id: int = 0  # Added default value for dummy creation
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# Aliases for backward compatibility during refactoring (Optional, but safer)
+CharacterStatsUpdateDTO = CharacterAttributesUpdateDTO
+CharacterStatsReadDTO = CharacterAttributesReadDTO

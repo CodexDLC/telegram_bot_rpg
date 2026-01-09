@@ -9,7 +9,7 @@ class GameState(StrEnum):
 
     EXPLORATION = "exploration"  # Основной режим: навигация, хабы, мир
     INVENTORY = "inventory"  # Меню инвентаря
-    COMBAT = "combat"  # Активный бой
+    COMBAT = "combats"  # Активный бой
     SCENARIO = "scenario"  # Режим диалога/квеста
     STATUS = "status"  # Меню персонажа
     ONBOARDING = "onboarding"  # Создание персонажа / Туториал
@@ -27,7 +27,7 @@ class CoreDomain(StrEnum):
     # --- Игровые домены (совпадают с GameState) ---
     EXPLORATION = "exploration"
     INVENTORY = "inventory"
-    COMBAT = "combat"  # Обычно это CombatTurnOrchestrator
+    COMBAT = "combats"  # Обычно это CombatTurnOrchestrator
     SCENARIO = "scenario"
     ONBOARDING = "onboarding"
     LOBBY = "lobby"
