@@ -63,6 +63,7 @@ class RedisService:
         Устанавливает значение JSON по указанному пути.
         """
         try:
+            # type: ignore - redis-py stubs issue with async json
             result = await self.redis_client.json().set(key, path, obj, nx=nx, xx=xx)
             log.debug(f"RedisJSON | action=set status=success key='{key}' path='{path}'")
             return bool(result)
@@ -75,6 +76,7 @@ class RedisService:
         Получает значение JSON по указанному пути.
         """
         try:
+            # type: ignore - redis-py stubs issue with async json
             result = await self.redis_client.json().get(key, path)
             log.debug(f"RedisJSON | action=get status=found key='{key}' path='{path}'")
             return result
@@ -87,6 +89,7 @@ class RedisService:
         Добавляет элементы в массив JSON.
         """
         try:
+            # type: ignore - redis-py stubs issue with async json
             count = await self.redis_client.json().arrappend(key, path, *args)
             log.debug(f"RedisJSON | action=arrappend status=success key='{key}' count={count}")
             return int(count) if count else 0

@@ -10,6 +10,7 @@ SOCIAL_SKILLS = [
         stat_weights={"charisma": 2, "men": 1, "wisdom": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Способность вести за собой людей и вдохновлять их.",
     ),
     SkillDTO(
         skill_key="organization",
@@ -20,6 +21,7 @@ SOCIAL_SKILLS = [
         stat_weights={"intelligence": 2, "charisma": 1, "wisdom": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Умение организовывать процессы и людей.",
     ),
     SkillDTO(
         skill_key="team_spirit",
@@ -30,6 +32,7 @@ SOCIAL_SKILLS = [
         stat_weights={"charisma": 2, "men": 1, "luck": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Способность работать в команде и поддерживать моральный дух.",
     ),
     SkillDTO(
         skill_key="egoism",
@@ -40,5 +43,6 @@ SOCIAL_SKILLS = [
         stat_weights={"men": 2, "luck": 2},  # Dual 2+2
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Сосредоточенность на собственных интересах.",
     ),
 ]

@@ -10,6 +10,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"perception": 2.0, "endurance": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Добыча полезных ископаемых.",
     ),
     SkillDTO(
         skill_key="herbalism",
@@ -19,6 +20,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"perception": 2.0, "endurance": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Сбор лекарственных растений.",
     ),
     SkillDTO(
         skill_key="skinning",
@@ -28,6 +30,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"perception": 2.0, "endurance": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Обработка шкур животных.",
     ),
     SkillDTO(
         skill_key="woodcutting",
@@ -37,6 +40,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"perception": 2.0, "endurance": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Заготовка древесины.",
     ),
     SkillDTO(
         skill_key="hunting",
@@ -46,6 +50,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"perception": 2.0, "endurance": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Охота на дичь.",
     ),
     SkillDTO(
         skill_key="archaeology",
@@ -55,6 +60,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"perception": 2.0, "endurance": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Изучение древностей.",
     ),
     SkillDTO(
         skill_key="gathering",
@@ -64,6 +70,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"perception": 2.0, "endurance": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Сбор различных ресурсов.",
     ),
     # --- CRAFTING ---
     SkillDTO(
@@ -74,6 +81,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"intelligence": 2.0, "agility": 1.0},
         rate_mod=1.5,
         wall_mod=1.0,
+        description="Приготовление зелий.",
     ),
     SkillDTO(
         skill_key="weapon_craft",
@@ -83,6 +91,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"intelligence": 2.0, "agility": 1.0},
         rate_mod=2.0,
         wall_mod=1.0,
+        description="Создание оружия.",
     ),
     SkillDTO(
         skill_key="armor_craft",
@@ -92,6 +101,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"intelligence": 2.0, "agility": 1.0},
         rate_mod=2.0,
         wall_mod=1.0,
+        description="Создание брони.",
     ),
     SkillDTO(
         skill_key="jewelry_craft",
@@ -101,6 +111,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"intelligence": 2.0, "agility": 1.0},
         rate_mod=2.0,
         wall_mod=1.0,
+        description="Создание украшений.",
     ),
     SkillDTO(
         skill_key="artifact_craft",
@@ -110,6 +121,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"intelligence": 2.0, "agility": 1.0},
         rate_mod=2.5,
         wall_mod=1.5,
+        description="Создание магических предметов.",
     ),
     # --- SCIENCE ---
     SkillDTO(
@@ -120,6 +132,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"intelligence": 2.0, "perception": 1.0},
         rate_mod=1.5,
         wall_mod=1.0,
+        description="Научные изыскания.",
     ),
     # --- SOCIAL ---
     SkillDTO(
@@ -130,6 +143,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"luck": 2.0, "charisma": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Финансовый учет.",
     ),
     SkillDTO(
         skill_key="brokerage",
@@ -139,6 +153,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"luck": 2.0, "charisma": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Торговое посредничество.",
     ),
     SkillDTO(
         skill_key="contracts",
@@ -148,6 +163,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"luck": 2.0, "charisma": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Работа с контрактами.",
     ),
     SkillDTO(
         skill_key="trade_relations",
@@ -157,6 +173,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"luck": 2.0, "charisma": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Развитие торговых связей.",
     ),
     SkillDTO(
         skill_key="leadership",
@@ -166,6 +183,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"charisma": 2.0, "luck": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Управление группой.",
     ),
     SkillDTO(
         skill_key="organization",
@@ -175,6 +193,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"luck": 2.0, "charisma": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Организационные навыки.",
     ),
     SkillDTO(
         skill_key="team_spirit",
@@ -184,6 +203,7 @@ NON_COMBAT_SKILLS = [
         stat_weights={"charisma": 2.0, "luck": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Поддержание духа команды.",
     ),
     SkillDTO(
         skill_key="egoism",
@@ -193,5 +213,6 @@ NON_COMBAT_SKILLS = [
         stat_weights={"luck": 2.0, "charisma": 1.0},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Личная выгода.",
     ),
 ]

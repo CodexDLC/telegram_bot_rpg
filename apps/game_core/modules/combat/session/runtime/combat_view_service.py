@@ -38,7 +38,7 @@ class CombatViewService:
         target_info: ActorFullInfo | None = None
 
         # Глобальный статус
-        if context.meta.active == 0 or context.meta.teams.get("winner"):
+        if context.meta.active == 0 or context.meta.winner:
             status = "finished"
         elif me.state.is_dead:
             # Если мертв - статус active (зритель), но цели нет
@@ -93,7 +93,7 @@ class CombatViewService:
             target=target_info,
             allies=allies,
             enemies=enemies,
-            winner_team=context.meta.teams.get("winner"),
+            winner_team=context.meta.winner,
             logs=[],  # Логи грузятся отдельно
         )
 

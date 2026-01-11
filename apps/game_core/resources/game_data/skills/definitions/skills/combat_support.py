@@ -10,6 +10,7 @@ COMBAT_SUPPORT_SKILLS = [
         stat_weights={"agility": 2, "perception": 1, "strength": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Умение отражать удары противника оружием.",
     ),
     SkillDTO(
         skill_key="skill_anatomy",
@@ -20,6 +21,7 @@ COMBAT_SUPPORT_SKILLS = [
         stat_weights={"intelligence": 2, "perception": 2},  # Dual 2+2
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Знание анатомии для нанесения более эффективных ударов и лечения.",
     ),
     SkillDTO(
         skill_key="skill_tactics",
@@ -41,5 +43,6 @@ COMBAT_SUPPORT_SKILLS = [
         stat_weights={"memory": 2, "intelligence": 1, "agility": 1},  # Wis -> Memory
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Оказание первой помощи в полевых условиях.",
     ),
 ]

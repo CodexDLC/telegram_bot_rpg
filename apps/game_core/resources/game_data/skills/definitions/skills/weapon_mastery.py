@@ -10,6 +10,7 @@ WEAPON_MASTERY_SKILLS = [
         stat_weights={"strength": 2, "agility": 1, "endurance": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Мастерство владения мечами, увеличивает урон и точность при использовании мечей.",
     ),
     SkillDTO(
         skill_key="skill_fencing",
@@ -20,6 +21,7 @@ WEAPON_MASTERY_SKILLS = [
         stat_weights={"agility": 2, "perception": 1, "strength": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Искусство фехтования, повышает точность и шанс критического удара колющим оружием.",
     ),
     SkillDTO(
         skill_key="skill_polearms",
@@ -30,6 +32,7 @@ WEAPON_MASTERY_SKILLS = [
         stat_weights={"strength": 2, "agility": 1, "perception": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Владение древковым оружием, позволяет держать врагов на дистанции.",
     ),
     SkillDTO(
         skill_key="skill_macing",
@@ -40,6 +43,7 @@ WEAPON_MASTERY_SKILLS = [
         stat_weights={"strength": 2, "endurance": 1, "men": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Использование дробящего оружия, эффективно против бронированных целей.",
     ),
     SkillDTO(
         skill_key="skill_archery",
@@ -50,6 +54,7 @@ WEAPON_MASTERY_SKILLS = [
         stat_weights={"agility": 2, "perception": 1, "strength": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Мастерство стрельбы из лука, позволяет поражать цели на расстоянии.",
     ),
     SkillDTO(
         skill_key="skill_unarmed",
@@ -60,5 +65,6 @@ WEAPON_MASTERY_SKILLS = [
         stat_weights={"agility": 2, "strength": 1, "endurance": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Бой без оружия, использует тело как оружие.",
     ),
 ]

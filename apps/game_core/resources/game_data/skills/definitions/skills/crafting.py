@@ -10,6 +10,7 @@ CRAFTING_SKILLS = [
         stat_weights={"intelligence": 2, "wisdom": 1, "luck": 1},
         rate_mod=1.5,
         wall_mod=1.0,
+        description="Создание зелий, эликсиров и трансмутация веществ.",
     ),
     SkillDTO(
         skill_key="weapon_craft",
@@ -20,6 +21,7 @@ CRAFTING_SKILLS = [
         stat_weights={"strength": 2, "agility": 1, "perception": 1},
         rate_mod=2.0,
         wall_mod=1.0,
+        description="Изготовление и ремонт оружия.",
     ),
     SkillDTO(
         skill_key="armor_craft",
@@ -30,6 +32,7 @@ CRAFTING_SKILLS = [
         stat_weights={"strength": 2, "endurance": 2},  # Dual 2+2
         rate_mod=2.0,
         wall_mod=1.0,
+        description="Изготовление и ремонт доспехов.",
     ),
     SkillDTO(
         skill_key="jewelry_craft",
@@ -40,6 +43,7 @@ CRAFTING_SKILLS = [
         stat_weights={"agility": 2, "perception": 1, "luck": 1},
         rate_mod=2.0,
         wall_mod=1.0,
+        description="Создание ювелирных украшений и огранка камней.",
     ),
     SkillDTO(
         skill_key="artifact_craft",
@@ -50,5 +54,6 @@ CRAFTING_SKILLS = [
         stat_weights={"men": 2, "intelligence": 1, "wisdom": 1},
         rate_mod=2.5,
         wall_mod=1.5,
+        description="Создание магических артефактов и предметов силы.",
     ),
 ]

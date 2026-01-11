@@ -10,6 +10,7 @@ GATHERING_SKILLS = [
         stat_weights={"strength": 2, "endurance": 2},  # Dual 2+2
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Добыча руды и драгоценных камней.",
     ),
     SkillDTO(
         skill_key="herbalism",
@@ -20,6 +21,7 @@ GATHERING_SKILLS = [
         stat_weights={"perception": 2, "wisdom": 1, "intelligence": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Сбор трав, грибов и других растений.",
     ),
     SkillDTO(
         skill_key="skinning",
@@ -30,6 +32,7 @@ GATHERING_SKILLS = [
         stat_weights={"agility": 2, "perception": 1, "endurance": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Снятие шкур с убитых животных.",
     ),
     SkillDTO(
         skill_key="woodcutting",
@@ -40,6 +43,7 @@ GATHERING_SKILLS = [
         stat_weights={"strength": 2, "endurance": 2},  # Dual 2+2
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Рубка деревьев и заготовка древесины.",
     ),
     SkillDTO(
         skill_key="hunting",
@@ -50,6 +54,7 @@ GATHERING_SKILLS = [
         stat_weights={"perception": 2, "agility": 1, "endurance": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Выслеживание и добыча диких животных.",
     ),
     SkillDTO(
         skill_key="archaeology",
@@ -60,6 +65,7 @@ GATHERING_SKILLS = [
         stat_weights={"perception": 2, "wisdom": 1, "intelligence": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Поиск и изучение древних артефактов.",
     ),
     SkillDTO(
         skill_key="gathering",
@@ -70,5 +76,6 @@ GATHERING_SKILLS = [
         stat_weights={"perception": 2, "endurance": 2},  # Dual 2+2
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Общий навык сбора ресурсов.",
     ),
 ]
