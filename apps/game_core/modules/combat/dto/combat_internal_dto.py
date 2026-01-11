@@ -13,7 +13,6 @@ from apps.common.schemas_dto.combat_source_dto import CombatMoveDTO
 # Импортируем кирпичики из Common
 from apps.common.schemas_dto.modifier_dto import (
     CombatSkillsDTO,
-    CritStatsDTO,
     DefensiveStatsDTO,
     ElementalStatsDTO,
     EnvironmentalStatsDTO,
@@ -126,7 +125,6 @@ class ActorStats(
     OffHandStatsDTO,
     PhysicalStatsDTO,
     MagicalStatsDTO,
-    CritStatsDTO,
     DefensiveStatsDTO,
     MitigationStatsDTO,
     ElementalStatsDTO,
@@ -215,6 +213,7 @@ class BattleMeta(BaseModel):
     step_counter: int
     active_actors_count: int
     teams: dict[str, list[int]]
+    winner: str | None = None  # Имя победившей команды (blue/red)
     actors_info: dict[str, str] = Field(default_factory=dict)  # {id: type}
     dead_actors: list[int] = Field(default_factory=list)  # Список мертвых
     last_activity_at: int = 0  # Timestamp последней активности

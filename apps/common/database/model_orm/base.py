@@ -1,9 +1,26 @@
 from datetime import datetime
 
-from sqlalchemy import func
-from sqlalchemy.orm import Mapped, declarative_base, mapped_column
+from sqlalchemy import MetaData, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-Base = declarative_base()
+# Соглашение об именовании индексов (важно для Alembic)
+# ix = index, uq = unique, ck = check, fk = foreign key, pk = primary key
+convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+
+class Base(DeclarativeBase):
+    """
+    Главный класс, от которого наследуются все таблицы.
+    Включает автоматическое именование констрейнтов.
+    """
+
+    metadata = MetaData(naming_convention=convention)
 
 
 class TimestampMixin:
@@ -13,8 +30,6 @@ class TimestampMixin:
 
     Эти поля автоматически управляются базой данных на уровне сервера (в UTC).
     """
-
-    __abstract__ = True
 
     created_at: Mapped[datetime] = mapped_column(
         server_default=func.now(),

@@ -83,13 +83,35 @@
 * **DB:** SQLite (dev) -> PostgreSQL (prod). SQLAlchemy Async.
 * **Redis:** Используется для кэширования, FSM, очередей боя (RBC).
 * **Architecture:** Clean Architecture (Core -> Modules -> Services -> Handlers).
-* **Mechanics:**
-    *   9 Base Stats.
-    *   Skill-based progression (нет уровней персонажа, есть уровни скиллов).
-    *   Active Abilities (в бою используются Abilities, а не Skills напрямую).
-    *   Items: Pure Instance (все статы в JSON `item_data`).
-*   **Combat (RBC):** Reactive Burst Combat. Redis-based.
-    *   `v:raw` (Source of Truth), `v:cache` (Calculated).
-    *   Actors are stored in separate HASH keys (`combat:rbc:{sid}:actor:{id}`).
+
+### ⚙️ Mechanics
+*   **Attributes (9 Base Stats):**
+    *   **Body:** Strength, Agility, Endurance.
+    *   **Core:** Intellect, Memory, Mental.
+    *   **Sensor:** Perception, Projection, Prediction.
+*   **Skills (Use-Based):**
+    *   Нет уровней персонажа, только уровни скиллов.
+    *   Прокачка через использование (Variant B, Ultima Online style).
+    *   Скилл — это модификатор формул (стабилизация урона, снятие штрафов), а не активная кнопка.
+*   **Abilities:**
+    *   Активные способности в бою или пассивные, включающиеся от событий.
+*   **Items:**
+    *   Global System: Refactoring.
+    *   Combat Context: Pure Instance approach.
+
+### 🥊 Combat (RBC - Reactive Burst Combat)
+*   **Concept:** "Бойцовский клуб" (Combats) style. Очередь ходов + Персональный таймер на ответ.
+*   **Modes:** 1x1, GvG, FFA.
+*   **Redis Structure:**
+    *   `v:raw` (Attribute Storage): Хранит каждый атрибут/модификатор как структуру `{base, source, temp}`.
+        *   `base`: Float (Базовое значение).
+        *   `source`: Dict (Исходные данные предмета/актора, immutable).
+        *   `temp`: Dict (Временные эффекты и модификаторы).
+    *   `v:cache` (Calculated): Итоговые рассчитанные значения (Flat) для быстрого доступа.
+    *   Actors: `combat:rbc:{sid}:actor:{id}`.
+*   **Persistence:**
+    *   Данные не пишутся в БД в реальном времени.
+    *   После боя копия данных из `v:raw` сохраняется в отдельный ключ.
+    *   Фоновый Worker анализирует этот ключ и сохраняет результаты в PostgreSQL.
 
 **КОМАНДА АКТИВАЦИИ:** Если понял инструкцию, ответь: "Режим установлен. Готов к работе."

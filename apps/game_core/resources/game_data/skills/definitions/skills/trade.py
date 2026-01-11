@@ -10,6 +10,7 @@ TRADE_SKILLS = [
         stat_weights={"intelligence": 2, "luck": 2},  # Dual 2+2
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Ведение учета и управление финансами.",
     ),
     SkillDTO(
         skill_key="brokerage",
@@ -20,6 +21,7 @@ TRADE_SKILLS = [
         stat_weights={"charisma": 2, "luck": 1, "intelligence": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Умение договариваться и находить выгодные сделки.",
     ),
     SkillDTO(
         skill_key="contracts",
@@ -30,6 +32,7 @@ TRADE_SKILLS = [
         stat_weights={"intelligence": 2, "charisma": 1, "luck": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Составление и заключение юридически грамотных договоров.",
     ),
     SkillDTO(
         skill_key="trade_relations",
@@ -40,5 +43,6 @@ TRADE_SKILLS = [
         stat_weights={"charisma": 2, "luck": 2},  # Dual 2+2
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Установление и поддержание торговых отношений.",
     ),
 ]

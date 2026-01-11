@@ -10,6 +10,7 @@ TACTICAL_SKILLS = [
         stat_weights={"agility": 2, "perception": 1, "strength": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Стиль боя с использованием одноручного оружия.",
     ),
     SkillDTO(
         skill_key="skill_two_handed",
@@ -20,6 +21,7 @@ TACTICAL_SKILLS = [
         stat_weights={"strength": 2, "endurance": 1, "agility": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Стиль боя с использованием двуручного оружия.",
     ),
     SkillDTO(
         skill_key="skill_shield_mastery",
@@ -30,6 +32,7 @@ TACTICAL_SKILLS = [
         stat_weights={"strength": 2, "endurance": 1, "agility": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Мастерство использования щита для защиты и атаки.",
     ),
     SkillDTO(
         skill_key="skill_dual_wield",
@@ -40,5 +43,6 @@ TACTICAL_SKILLS = [
         stat_weights={"agility": 2, "perception": 1, "strength": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Стиль боя с оружием в каждой руке.",
     ),
 ]

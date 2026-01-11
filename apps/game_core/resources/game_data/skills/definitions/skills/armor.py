@@ -10,6 +10,7 @@ ARMOR_SKILLS = [
         stat_weights={"agility": 2, "endurance": 1, "perception": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Ношение легкой брони, не сковывающей движения.",
     ),
     SkillDTO(
         skill_key="skill_medium_armor",
@@ -20,6 +21,7 @@ ARMOR_SKILLS = [
         stat_weights={"endurance": 2, "strength": 1, "agility": 1},
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Ношение средней брони, баланс между защитой и подвижностью.",
     ),
     SkillDTO(
         skill_key="skill_heavy_armor",
@@ -30,5 +32,6 @@ ARMOR_SKILLS = [
         stat_weights={"strength": 2, "endurance": 2},  # Dual 2+2
         rate_mod=1.0,
         wall_mod=1.0,
+        description="Ношение тяжелой брони, обеспечивающей максимальную защиту.",
     ),
 ]

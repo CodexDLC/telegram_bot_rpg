@@ -238,7 +238,8 @@ class CombatResolver:
             CombatResolver._resolve_triggers(ctx, res, "ON_CRIT")
             return
 
-        if ctx.flags.restriction.cannot_crit or def_stats.immune_to_crit:
+        # Убрана проверка def_stats.immune_to_crit, так как поля нет в DTO
+        if ctx.flags.restriction.cannot_crit:
             CombatResolver._resolve_triggers(ctx, res, "ON_CRIT_FAIL")
             return
 
@@ -380,7 +381,9 @@ class CombatResolver:
 
                 resist_pct = getattr(def_stats, f"{elem}_resistance", 0.0)
                 pen_pct = 0.0
-                if atk_stats.magic:
+
+                # Убрана проверка if atk_stats.magic: - всегда применяем маг. пробивание для стихий
+                if atk_stats.magical_penetration > 0:
                     pen_pct = atk_stats.magical_penetration
 
                 mitigation_pct = max(0.0, resist_pct - pen_pct)
@@ -426,14 +429,17 @@ class CombatResolver:
     @staticmethod
     def _resolve_triggers(ctx: PipelineContextDTO, res: InteractionResultDTO, step_key: str):
         rules_book = TRIGGER_RULES.get(step_key)
-        if not rules_book:
+        if not rules_book or not isinstance(rules_book, dict):
             return
 
         for trigger_name, rule_data in rules_book.items():
             if not getattr(ctx.triggers, trigger_name, False):
                 continue
 
-            chance = rule_data.get("chance", 0.0)
+            # Безопасное получение шанса для mypy
+            raw_chance = rule_data.get("chance", 0.0)
+            chance = float(raw_chance) if isinstance(raw_chance, (int, float)) else 0.0
+
             if not MathCore.check_chance(chance):
                 continue
 
