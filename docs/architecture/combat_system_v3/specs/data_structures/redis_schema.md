@@ -1,150 +1,126 @@
-# Combat Data Structure (RBC v3.0)
+# 🧠 Redis Data Schema (RBC v3.1)
 
-⬅️ [Назад](../README.md) | 🏠 [Документация](../../../../README.md)
+⬅️ [Назад](../README.md) | 🏠 [Документация](../../../../../README.md)
 
-**Storage:** Redis (Cluster/Standalone)
-**Key Prefix:** `combat:rbc:{session_id}`
+**Status:** Final
+**Prefix:** `combat:rbc:{sid}:`
+
+Эта схема описывает структуру хранения данных боевой сессии в Redis.
+Используется RedisJSON для сложных структур и Hash для простых счетчиков.
 
 ---
 
-## 1. Global Session Data
+## 1. Session Metadata
+**Key:** `combat:rbc:{sid}:meta`
+**Type:** `Hash`
 
-### 1.1. META (RedisHash)
-**Key:** `...:meta`
-**TTL:** 24h (History)
+Глобальные счетчики и состояние сессии.
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `active` | int (0/1) | Флаг активности боя. |
-| `step_counter` | int | Глобальный счетчик обработанных действий (для синхронизации логов). |
-| `start_time` | int | Timestamp начала боя. |
-| `last_activity_at` | int | Timestamp последней активности (для Chaos Protocol / Garbage Collector). |
-| `teams` | json | Структура команд: `{"red": [101, 102], "blue": [201]}`. |
-| `actors_info` | json | Типы участников: `{"101": "player", "201": "ai"}`. |
-| `dead_actors` | json | Список мертвых: `[201]`. (Кэш для быстрого резолвинга целей). |
-| `alive_counts` | json | Счетчики живых по командам: `{"red": 2, "blue": 1}`. |
-| `battle_type` | str | "pvp", "pve", "raid". |
-| `location_id` | str | ID локации (для визуализации). |
-
-### 1.2. TARGETS (RedisJSON)
-**Key:** `...:targets`
-**Structure:** Graph (Adjacency List)
-Очереди целей для каждого участника.
-
-```json
-{
-  "101": [201, 202],  // Игрок 101 хочет бить 201, потом 202
-  "201": [101]        // Бот 201 хочет бить 101
-}
-```
-
-### 1.3. QUEUE (RedisList)
-**Key:** `...:q:actions`
-**Content:** Serialized `CombatActionDTO`.
-Системная очередь задач для Исполнителя.
-
-### 1.4. LOG (RedisList)
-**Key:** `...:log`
-**Content:** JSON Log Entries.
-История боя для клиента.
-
-### 1.5. BUSY (RedisString / JSON)
-**Key:** `...:sys:busy`
-**Content:** "pending" | "worker_uuid"
-Fencing Token для синхронизации воркеров.
+| `active` | `int` (0/1) | Флаг активности боя. |
+| `step_counter` | `int` | Глобальный счетчик обработанных действий (для логов). |
+| `active_actors_count` | `int` | Количество живых участников. |
+| `teams` | `json` | Список команд: `{"blue": [101, 102], "red": [201]}`. |
+| `winner` | `str` | Имя победившей команды (после завершения). |
+| `actors_info` | `json` | Маппинг ID -> Type: `{"101": "player"}`. |
+| `dead_actors` | `json` | Список ID мертвых: `[201]`. |
+| `last_activity_at` | `int` | Timestamp последнего действия (для GC). |
+| `battle_type` | `str` | Тип боя (PvE, PvP). |
+| `location_id` | `str` | ID локации. |
 
 ---
 
-## 2. Actor Data (Namespace)
+## 2. Actor Data (The Big JSON)
+**Key:** `combat:rbc:{sid}:actor:{id}`
+**Type:** `JSON` (RedisJSON)
 
-**Key Prefix:** `...:actor:{char_id}`
-
-### 2.1. STATE (RedisHash) - Hot Data
-Изменяемые параметры, требующие атомарных инкрементов (HINCRBY).
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `hp` | int | Текущее здоровье. |
-| `max_hp` | int | Максимальное здоровье (Snapshot). |
-| `en` | int | Энергия. |
-| `max_en` | int | Макс. энергия. |
-| `tactics` | int | Очки тактики. |
-| `afk_level` | int | Уровень AFK (0-3). |
-| `is_dead` | int (0/1) | Флаг смерти. |
-| `tokens` | json | Боевые токены: `{"gift": 1, "parry": 1}`. |
-
-### 2.2. RAW (RedisJSON) - Cold Data
-Статичные (в рамках раунда) параметры. Математическая модель.
+Единый объект состояния персонажа. См. [Actor Model](./actor_model.md).
 
 ```json
 {
-  "attributes": {"str": 10, "agi": 5},
-  "modifiers": {"phys_dmg": 1.5},
-  "temp": {}, // Временные модификаторы (баффы на 1 ход)
-  "name": "Hero Name",
-  "is_player": true
-}
-```
-
-### 2.3. LOADOUT (RedisJSON) - Config
-Экипировка и доступные скиллы.
-
-```json
-{
-  "equipment_layout": {"main_hand": "sword"},
-  "known_abilities": ["strike", "fireball"]
-}
-```
-
-### 2.4. META (RedisJSON) - Static Info
-Имя, тип, аватар.
-
-```json
-{
-  "name": "Hero",
-  "type": "player",
-  "team": "red"
-}
-```
-
-### 2.5. ACTIVE ABILITIES (RedisJSON) - Dynamic Modifiers
-Список активных эффектов (баффы/дебаффы).
-
-```json
-[
-  {
-    "uid": "uuid",
-    "ability_id": "poison",
-    "source_id": 201,
-    "expire_at_exchange": 5,
-    "impact": {"hp": -10}
-  }
-]
-```
-
-### 2.6. DATA XP (RedisJSON) - Accumulator
-Накопленный опыт и статистика.
-
-```json
-{
-  "xp_gained": 100,
-  "damage_dealt": 500
+  "meta": { "id": 101, "hp": 100, "en": 50, "team": "blue", ... },
+  "raw": { "attributes": {...}, "modifiers": {...} },
+  "skills": { "skill_swords": 0.5 },
+  "loadout": { "layout": {...}, "belt": [...], "tags": [...] },
+  "active_abilities": [...],
+  "xp_buffer": {...},
+  "metrics": {...},
+  "explanation": {...}
 }
 ```
 
 ---
 
-## 3. Moves (Intents)
+## 3. Targeting Queues
+**Key:** `combat:rbc:{sid}:targets:{id}`
+**Type:** `List` (Redis List)
 
-**Key:** `...:moves:{char_id}` (RedisJSON)
-Буфер намерений игрока.
+Очередь доступных целей для персонажа `{id}`.
+Используется для **Exchange** стратегии.
+
+*   Содержит ID врагов (`[201, 202]`).
+*   `LPOP` забирает цель для атаки.
+*   Если очередь пуста, атаковать нельзя (нужно ждать или бить другого).
+
+---
+
+## 4. Moves Buffer (Intents)
+**Key:** `combat:rbc:{sid}:moves:{id}`
+**Type:** `JSON` (RedisJSON)
+
+Буфер заявленных действий (Intents) от игрока `{id}`.
+Заполняется `CombatTurnManager`. Читается и очищается `CombatCollector`.
+
+**Structure:** Dictionary grouped by strategy.
 
 ```json
 {
   "exchange": {
-    "uuid_1": { ...CombatMoveDTO... }
+    "a1b2c3d4": {
+      "move_id": "a1b2c3d4",
+      "char_id": 101,
+      "strategy": "exchange",
+      "payload": { "target_id": 201, "skill_id": "heavy_strike" }
+    }
   },
-  "item": {},
+  "item": {
+    "e5f6g7h8": {
+      "move_id": "e5f6g7h8",
+      "strategy": "item",
+      "payload": { "item_id": 55 }
+    }
+  },
   "instant": {}
 }
 ```
+
+---
+
+## 5. Event Log (History)
+**Key:** `combat:rbc:{sid}:log`
+**Type:** `List` (Redis List)
+
+Хронологический лог событий боя.
+Используется для отправки клиенту и аналитики.
+
+**Structure:** JSON strings (`CombatLogEntryDTO`).
+
+```json
+{
+  "text": "Hero hits Orc for 10 damage.",
+  "timestamp": 1715000005.0,
+  "tags": ["damage", "crit"]
+}
+```
+
+---
+
+## 6. ARQ Queues (Job System)
+**Key:** `arq:queue` (Global)
+
+Очереди задач для воркеров.
+
+*   `combat_collector_task`: Сборка мувов (Immediate & Timeout).
+*   `combat_action_task`: Выполнение действия (Pipeline).
+*   `combat_ai_task`: Ход бота.

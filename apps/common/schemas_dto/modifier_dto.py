@@ -246,7 +246,7 @@ class EnvironmentalStatsDTO(BaseModel):
 
 class CombatModifiersDTO(
     VitalsDTO,
-    CombatSkillsDTO,
+    # CombatSkillsDTO удален отсюда!
     MainHandStatsDTO,
     OffHandStatsDTO,
     PhysicalStatsDTO,
@@ -259,8 +259,8 @@ class CombatModifiersDTO(
     EnvironmentalStatsDTO,
 ):
     """
-    Боевые модификаторы + Боевые навыки.
-    Используются в CombatWorker.
+    Только боевые модификаторы (без скиллов).
+    Используются в ActorStats.mods.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -287,9 +287,10 @@ class NonCombatModifiersDTO(SecondarySkillsDTO):
     xp_multiplier: float = 1.0
 
 
-class FullModifiersDTO(CombatModifiersDTO, NonCombatModifiersDTO):
+class FullModifiersDTO(CombatModifiersDTO, CombatSkillsDTO, NonCombatModifiersDTO):
     """
-    Полный набор модификаторов.
+    Полный набор модификаторов (включая скиллы).
+    Используется для сохранения/загрузки.
     """
 
     pass

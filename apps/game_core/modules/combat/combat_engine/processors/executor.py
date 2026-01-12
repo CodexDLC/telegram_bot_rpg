@@ -2,9 +2,8 @@ import asyncio
 
 from loguru import logger as log
 
+from apps.game_core.modules.combat.combat_engine.logic.combat_pipeline import CombatPipeline
 from apps.game_core.modules.combat.dto.combat_internal_dto import BattleContext, CombatActionDTO
-
-# from apps.game_core.modules.combat.combat_engine.logic.combat_pipeline import CombatPipeline
 
 
 class CombatExecutor:
@@ -15,8 +14,7 @@ class CombatExecutor:
     """
 
     def __init__(self):
-        # self.pipeline = CombatPipeline()
-        pass
+        self.pipeline = CombatPipeline()
 
     async def process_batch(self, ctx: BattleContext, actions: list[CombatActionDTO]) -> list[str]:
         """
@@ -89,18 +87,22 @@ class CombatExecutor:
         # 3. Если сработало -> Добавить в tasks НЕСКОЛЬКО вызовов pipeline.
 
         # Task 1: Main Hand (Всегда)
-        # tasks.append(self.pipeline.calculate(source, target, payload, mods=mods_for_source, hand="main"))
+        # ВАЖНО: Pipeline пока синхронный, поэтому оборачиваем в to_thread или делаем async
+        # Пока вызываем синхронно, но сохраняем структуру tasks для будущего async
+
+        # tasks.append(self.pipeline.calculate(source, target, action.move, mods=mods_for_source))
+        self.pipeline.calculate(source, target, action.move)
 
         # Task 2: Off Hand (Optional)
         # if dual_wield_proc:
-        #     tasks.append(self.pipeline.calculate(source, target, payload, mods=mods_for_source, hand="off"))
+        #     tasks.append(self.pipeline.calculate(source, target, action.move, mods=mods_for_source, hand="off"))
 
         # --- PHASE 3: TASK GENERATION (B -> A) ---
         if action.partner_move:
             # Аналогичная логика для второго участника
             # Task 1: Main Hand
-            # tasks.append(self.pipeline.calculate(target, source, partner_payload, mods=mods_for_target, hand="main"))
-            pass
+            # tasks.append(self.pipeline.calculate(target, source, action.partner_move, mods=mods_for_target))
+            self.pipeline.calculate(target, source, action.partner_move)
         elif not action.is_forced:
             log.error("Executor | Exchange action without partner and not forced")
             return
@@ -125,8 +127,11 @@ class CombatExecutor:
         for tid in target_ids:
             target = ctx.get_actor(tid)
             if target:
-                # tasks.append(self.pipeline.calculate_interaction(source, target, action.move.payload, is_initiator=True))
-                pass
+                # tasks.append(self.pipeline.calculate(source, target, action.move))
+                self.pipeline.calculate(source, target, action.move)
+            elif action.move.strategy == "item" and action.move.payload.get("target_id") == "self":
+                # Self-cast (если target_id не резолвился в список int)
+                self.pipeline.calculate(source, source, action.move)
 
         if tasks:
             await asyncio.gather(*tasks)

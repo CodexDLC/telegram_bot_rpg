@@ -38,7 +38,6 @@ class CombatResolver:
             return result
 
         # 2. Crit / Trigger Roll (Сработал ли спец-эффект оружия?)
-        # Перенесено ДО уворота, чтобы крит мог влиять на уворот (Undodgeable)
         cls._step_crit_roll(attacker_stats, defender_stats, context, result)
 
         # 3. Evasion (Увернулся ли враг?)
@@ -50,7 +49,6 @@ class CombatResolver:
             return result
 
         # 5. Block (Заблокировал?)
-        # Блок теперь работает как полный эвейжен (0 урона)
         if cls._step_block_roll(attacker_stats, defender_stats, context, result):
             return result
 
@@ -104,9 +102,10 @@ class CombatResolver:
             CombatResolver._resolve_triggers(ctx, res, "ON_DODGE_FAIL")
             return False
 
-        base_evasion = def_stats.dodge_chance
-        evasion_cap = def_stats.dodge_cap
-        anti_evasion = def_stats.anti_dodge_chance
+        # Access via .mods
+        base_evasion = def_stats.mods.dodge_chance
+        evasion_cap = def_stats.mods.dodge_cap
+        anti_evasion = def_stats.mods.anti_dodge_chance
 
         final_chance = 0.0
         if ctx.flags.formula.evasion_halved:
@@ -154,8 +153,9 @@ class CombatResolver:
                 CombatResolver._check_counter_attack(def_stats, ctx, res)
             return True
 
-        parry_chance = def_stats.parry_chance
-        parry_cap = def_stats.parry_cap
+        # Access via .mods
+        parry_chance = def_stats.mods.parry_chance
+        parry_cap = def_stats.mods.parry_cap
 
         final_chance = 0.0
         if ctx.flags.formula.parry_halved:
@@ -186,9 +186,6 @@ class CombatResolver:
     def _step_block_roll(
         atk_stats: ActorStats, def_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO
     ) -> bool:
-        """
-        Возвращает True, если удар полностью заблокирован (0 урона).
-        """
         if not ctx.stages.check_block:
             return False
         if ctx.flags.restriction.ignore_block:
@@ -200,8 +197,9 @@ class CombatResolver:
             CombatResolver._resolve_triggers(ctx, res, "ON_BLOCK")
             return True
 
-        block_chance = def_stats.shield_block_chance
-        block_cap = def_stats.shield_block_cap
+        # Access via .mods
+        block_chance = def_stats.mods.shield_block_chance
+        block_cap = def_stats.mods.shield_block_cap
 
         final_chance = 0.0
         if ctx.flags.formula.block_halved:
@@ -216,9 +214,8 @@ class CombatResolver:
             res.is_blocked = True
             res.tokens_awarded_defender.append("BLOCK")
             CombatResolver._resolve_triggers(ctx, res, "ON_BLOCK")
-            return True  # Полный блок
+            return True
 
-        # Частичное поглощение/отражение (если блок не прошел)
         if ctx.flags.mastery.shield_reflect and MathCore.check_chance(0.25):
             ctx.flags.state.partial_absorb_reflect = True
 
@@ -234,16 +231,13 @@ class CombatResolver:
 
         if ctx.flags.force.crit:
             res.is_crit = True
-            # Множитель крита теперь считается в calculate_damage
             CombatResolver._resolve_triggers(ctx, res, "ON_CRIT")
             return
 
-        # Убрана проверка def_stats.immune_to_crit, так как поля нет в DTO
         if ctx.flags.restriction.cannot_crit:
             CombatResolver._resolve_triggers(ctx, res, "ON_CRIT_FAIL")
             return
 
-        # Выбираем шанс крита
         is_magic = False
         elements = ["fire", "water", "air", "earth", "light", "darkness", "arcane", "nature"]
         for elem in elements:
@@ -252,17 +246,14 @@ class CombatResolver:
                 break
 
         if is_magic:
-            my_crit_chance = atk_stats.magical_crit_chance
+            my_crit_chance = atk_stats.mods.magical_crit_chance
         else:
             my_crit_chance = CombatResolver._get_offensive_val(atk_stats, ctx, "crit_chance")
 
-        # Получаем значение навыка оружия (если есть)
         skill_multiplier = 1.0
         if ctx.flags.meta.weapon_class:
             skill_key = f"skill_{ctx.flags.meta.weapon_class}"
             skill_val = getattr(atk_stats.skills, skill_key, 0.0)
-            # Пример формулы: +1% шанса за каждое очко навыка (x2 на 100)
-            # TODO: Вынести коэффициент в конфиг
             skill_multiplier = 1.0 + (skill_val / 100.0)
 
         final_chance = my_crit_chance * skill_multiplier
@@ -271,27 +262,20 @@ class CombatResolver:
 
         if final_chance > 0 and MathCore.check_chance(final_chance):
             res.is_crit = True
-            # Множитель крита теперь считается в calculate_damage
             CombatResolver._resolve_triggers(ctx, res, "ON_CRIT")
         else:
             CombatResolver._resolve_triggers(ctx, res, "ON_CRIT_FAIL")
 
     @staticmethod
     def _calculate_crit_multiplier(ctx: PipelineContextDTO) -> float:
-        """
-        Определяет множитель урона при крите.
-        """
-        # 1. Магия всегда x3.0
         elements = ["fire", "water", "air", "earth", "light", "darkness", "arcane", "nature"]
         is_magic = any(getattr(ctx.flags.damage, elem, False) for elem in elements)
         if is_magic:
             return 3.0
 
-        # 2. Физика: Если активен буст (от оружия/абилки) -> берем значение из модов
         if ctx.flags.formula.crit_damage_boost:
             return ctx.mods.weapon_effect_value
 
-        # 3. По умолчанию крит не увеличивает урон (только триггеры)
         return 1.0
 
     @staticmethod
@@ -301,7 +285,6 @@ class CombatResolver:
         if not ctx.stages.calculate_damage:
             return 0.0
 
-        # 1. ОПРЕДЕЛЕНИЕ БАЗОВОГО УРОНА
         if ctx.override_damage:
             min_d, max_d = ctx.override_damage
         else:
@@ -309,7 +292,7 @@ class CombatResolver:
             spread = CombatResolver._get_offensive_val(atk_stats, ctx, "damage_spread")
 
             if ctx.flags.damage.physical:
-                base += atk_stats.physical_damage_bonus
+                base += atk_stats.mods.physical_damage_bonus
 
             min_d = base * (1.0 - spread)
             max_d = base * (1.0 + spread)
@@ -317,41 +300,29 @@ class CombatResolver:
         raw_damage = MathCore.random_range(min_d, max_d)
         total_damage = 0.0
 
-        # Определяем множитель крита один раз
         crit_multiplier = 1.0
         if res.is_crit:
             crit_multiplier = CombatResolver._calculate_crit_multiplier(ctx)
-            res.crit_mult = crit_multiplier  # Сохраняем для логов
-
-        # 2. РАСЧЕТ ПО ТИПАМ
+            res.crit_mult = crit_multiplier
 
         # --- PHYSICAL ---
         if ctx.flags.damage.physical:
             phys_dmg = raw_damage
 
             if res.is_crit:
-                # Применяем множитель крита
                 phys_dmg *= crit_multiplier
-
-                # Снижение урона от крита тяжелой броней
                 heavy_skill = def_stats.skills.skill_heavy_armor
                 if heavy_skill > 0:
-                    # Снижаем эффективность множителя (если он > 1.0)
-                    # Логика: если множитель 2.0, то бонус = 1.0. Мы режем бонус.
                     bonus_part = crit_multiplier - 1.0
                     if bonus_part > 0:
-                        # Оставим простую логику снижения всего крит урона
-                        phys_dmg *= 1.0 - (heavy_skill * 0.2)  # Пример: -20% крит урона на мастере
+                        phys_dmg *= 1.0 - (heavy_skill * 0.2)
 
-            phys_res_pct = def_stats.physical_resistance
+            phys_res_pct = def_stats.mods.physical_resistance
             phys_pen_pct = CombatResolver._get_offensive_val(atk_stats, ctx, "penetration")
             mitigation_pct = max(0.0, phys_res_pct - phys_pen_pct)
             phys_dmg *= 1.0 - mitigation_pct
 
-            armor_flat = def_stats.damage_reduction_flat
-
-            # PIERCE CHECK удален (теперь это часть механики крита/триггеров)
-
+            armor_flat = def_stats.mods.damage_reduction_flat
             phys_dmg = max(0.0, phys_dmg - armor_flat)
 
             if res.is_crit:
@@ -365,8 +336,7 @@ class CombatResolver:
         if ctx.flags.damage.pure:
             pure_dmg = raw_damage
             if res.is_crit:
-                pure_dmg *= 1.5  # Pure damage crit is fixed? Или тоже через helper?
-                # Пусть пока будет 1.5, так как чистый урон редкий
+                pure_dmg *= 1.5
             total_damage += pure_dmg
 
         # --- ELEMENTAL ---
@@ -376,15 +346,13 @@ class CombatResolver:
                 elem_dmg = raw_damage
 
                 if res.is_crit:
-                    # Для магии хелпер вернет 3.0
                     elem_dmg *= crit_multiplier
 
-                resist_pct = getattr(def_stats, f"{elem}_resistance", 0.0)
+                resist_pct = getattr(def_stats.mods, f"{elem}_resistance", 0.0)
                 pen_pct = 0.0
 
-                # Убрана проверка if atk_stats.magic: - всегда применяем маг. пробивание для стихий
-                if atk_stats.magical_penetration > 0:
-                    pen_pct = atk_stats.magical_penetration
+                if atk_stats.mods.magical_penetration > 0:
+                    pen_pct = atk_stats.mods.magical_penetration
 
                 mitigation_pct = max(0.0, resist_pct - pen_pct)
                 elem_dmg *= 1.0 - mitigation_pct
@@ -410,8 +378,8 @@ class CombatResolver:
         if not ctx.can_counter:
             return
 
-        base_chance = def_stats.counter_attack_chance
-        cap = def_stats.counter_attack_cap
+        base_chance = def_stats.mods.counter_attack_chance
+        cap = def_stats.mods.counter_attack_cap
         counter_chance = min(base_chance, cap)
 
         if res.is_dodged and ctx.flags.mastery.light_armor and MathCore.check_chance(0.50):
@@ -436,7 +404,6 @@ class CombatResolver:
             if not getattr(ctx.triggers, trigger_name, False):
                 continue
 
-            # Безопасное получение шанса для mypy
             raw_chance = rule_data.get("chance", 0.0)
             chance = float(raw_chance) if isinstance(raw_chance, (int, float)) else 0.0
 
@@ -453,7 +420,6 @@ class CombatResolver:
     def _get_offensive_val(stats: ActorStats, ctx: PipelineContextDTO, stat_name: str) -> float:
         """
         Достает значение стата из нужной руки (с префиксом).
-        stat_name: "damage_base", "accuracy", "crit_chance" (без префикса).
         """
         current_source = ctx.flags.meta.source_type
 
@@ -468,5 +434,6 @@ class CombatResolver:
         if not prefix and current_source == "magic":
             full_stat_name = f"magical_{stat_name}"
 
-        val = getattr(stats, full_stat_name, 0.0)
+        # Access via .mods
+        val = getattr(stats.mods, full_stat_name, 0.0)
         return val

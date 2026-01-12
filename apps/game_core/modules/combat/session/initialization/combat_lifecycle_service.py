@@ -187,8 +187,7 @@ class CombatLifecycleService:
                 # 2. :raw (JSON) - Math Model
                 # Берем math_model как есть (attributes, modifiers)
                 raw_data = math_model.copy()
-                raw_data["temp"] = {}  # Добавляем слот для баффов
-                raw_data["name"] = new_name  # Добавляем имя для UI
+                # Убрали мусор: temp и name
 
                 # 3. :loadout (JSON) - Config
                 # Берем loadout как есть (belt, skills, layout, tags)
