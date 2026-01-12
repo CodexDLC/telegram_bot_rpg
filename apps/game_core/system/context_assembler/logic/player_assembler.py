@@ -167,8 +167,19 @@ class PlayerAssembler(BaseAssembler):
                     # core_wallet пока не реализован в репо
                 )
 
-                # Сериализация (exclude_none=True убирает core_* поля)
-                context_data = context_schema.model_dump(by_alias=True, exclude_none=True)
+                # Сериализация (exclude убирает core_* поля)
+                context_data = context_schema.model_dump(
+                    by_alias=True,
+                    exclude={
+                        "core_attributes",
+                        "core_inventory",
+                        "core_skills",
+                        "core_vitals",
+                        "core_meta",
+                        "core_symbiote",
+                        "core_wallet",
+                    },
+                )
 
                 redis_key = f"temp:setup:{uuid.uuid4()}"
                 success_map[char_id] = redis_key
@@ -178,18 +189,48 @@ class PlayerAssembler(BaseAssembler):
                 log.error(f"PlayerAssembler | transform failed for {char_id}: {e}")
                 error_list.append(char_id)
 
-        # 3. Массовое сохранение
+        # 3. Массовое сохранение с детальной обработкой ошибок
         if contexts_to_save:
             try:
-                await self.context_manager.save_context_batch(contexts_to_save)
+                # Используем pipeline БЕЗ transaction для performance
+                async with self.context_manager.redis.pipeline(transaction=False) as pipe:
+                    # Словарь для маппинга индексов результатов к char_id
+                    index_to_char = {}
+                    idx = 0
+
+                    for char_id, (redis_key, context_data) in contexts_to_save.items():
+                        pipe.json().set(redis_key, "$", context_data)
+                        pipe.expire(redis_key, 3600)
+                        index_to_char[idx] = char_id
+                        idx += 2  # каждая операция генерирует 2 команды
+
+                    # Выполняем pipeline с raise_on_error=False для обработки частичных сбоев
+                    results = await pipe.execute(raise_on_error=False)
+
+                    # Проверяем результаты каждой пары операций (set + expire)
+                    for i, char_id in index_to_char.items():
+                        set_result = results[i]  # json().set
+                        expire_result = results[i + 1]  # expire
+
+                        # Если хотя бы одна операция неудачна, считаем char_id ошибочным
+                        if isinstance(set_result, Exception) or isinstance(expire_result, Exception):
+                            log.error(
+                                f"PlayerAssembler | save failed for {char_id}. "
+                                f"Set: {set_result}, Expire: {expire_result}"
+                            )
+                            error_list.append(char_id)
+                            # Убираем из success_map, если был добавлен ранее
+                            success_map.pop(char_id, None)
+                        # Если обе операции успешны, char_id уже в success_map
+
             except (RedisError, OSError) as e:
-                log.error(f"PlayerAssembler | save_context_batch failed: {e}")
-                # If saving fails, we should probably consider all these as errors
+                # Катастрофический сбой (например, Redis недоступен)
+                log.critical(f"PlayerAssembler | Redis catastrophic failure: {e}")
+                # В этом случае помечаем все как ошибки
                 for char_id in contexts_to_save:
-                    if char_id in success_map:
-                        del success_map[char_id]
                     if char_id not in error_list:
                         error_list.append(char_id)
+                    success_map.pop(char_id, None)
 
         log.info(f"PlayerAssembler | batch processed. success={len(success_map)}, errors={len(error_list)}")
         return success_map, error_list

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.common.database.repositories import get_leaderboard_repo
 from apps.common.services.redis.manager.account_manager import AccountManager
 from apps.game_core.modules.status.stats_aggregation_service import StatsAggregationService
-from apps.game_core.resources.game_data.balance.gs_weights import GS_DIVISORS
+from apps.game_core.resources.balance import GS_DIVISORS
 
 
 class MatchmakingService:

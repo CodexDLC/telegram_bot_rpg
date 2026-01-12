@@ -16,8 +16,8 @@ from apps.common.database.model_orm.base import Base  # noqa: E402
 from apps.common.database.model_orm.world import WorldRegion, WorldZone  # noqa: E402
 from apps.common.database.repositories.ORM.world_repo import WorldRepoORM  # noqa: E402
 from apps.common.database.session import async_engine, async_session_factory  # noqa: E402
-from apps.game_core.resources.game_data.graf_data_world.start_vilage import STATIC_LOCATIONS  # noqa: E402
-from apps.game_core.resources.game_data.graf_data_world.world_config import (  # noqa: E402
+from apps.game_core.resources.graf_data_world.start_vilage import STATIC_LOCATIONS  # noqa: E402
+from apps.game_core.resources.graf_data_world.world_config import (  # noqa: E402
     BIOME_DEFINITIONS,
     HUB_CENTER,
     REGION_ROWS,

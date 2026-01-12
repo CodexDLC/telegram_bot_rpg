@@ -122,6 +122,9 @@ class WeaponData(ItemCoreData):
     parry_chance: float = 0.0
     evasion_penalty: float = 0.0
 
+    # Триггеры (ссылки на TriggerRegistry)
+    triggers: list[str] = Field(default_factory=list)
+
     # Классификация
     grip: str = "1h"  # "1h", "2h"
     subtype: str  # "sword", "axe"
@@ -139,6 +142,9 @@ class ArmorData(ItemCoreData):
     evasion_penalty: float = 0.0  # Штраф к шансу уворота
     dodge_cap_mod: float = 0.0  # Модификатор капа уворота (например, -0.25)
 
+    # Триггеры (ссылки на TriggerRegistry)
+    triggers: list[str] = Field(default_factory=list)
+
     # Классификация
     subtype: str  # "heavy", "light", "shield"
     related_skill: str | None = None  # "skill_heavy_armor"
@@ -147,6 +153,9 @@ class ArmorData(ItemCoreData):
 
 
 class AccessoryData(ItemCoreData):
+    # Триггеры (ссылки на TriggerRegistry)
+    triggers: list[str] = Field(default_factory=list)
+
     valid_slots: list[str]
 
 

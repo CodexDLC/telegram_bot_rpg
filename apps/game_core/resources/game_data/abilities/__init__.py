@@ -1,14 +1,29 @@
-# app/resources/game_data/abilities/__init__.py
-from apps.game_core.resources.game_data.ability_data_struct import AbilityData
+from apps.game_core.resources.game_data.abilities.schemas import AbilityDTO
 
-# Импортируем словари из соседних модулей
-from .fire import FIRE_ABILITIES
-from .monster_skills import MONSTER_ABILITIES
-from .physical import PHYSICAL_ABILITIES
-from .poison import POISON_ABILITIES
+# ==========================================
+# ГЛОБАЛЬНЫЕ РЕЕСТРЫ (In-Memory DB)
+# ==========================================
 
-# Объединяем их в единую библиотеку
-ABILITY_LIBRARY: dict[str, AbilityData] = PHYSICAL_ABILITIES | FIRE_ABILITIES | POISON_ABILITIES | MONSTER_ABILITIES
+ABILITY_REGISTRY: dict[str, AbilityDTO] = {}
 
-# Проверка на уникальность ключей (опционально, для отладки при старте)
-# Если ключи совпадут, правый словарь перезапишет левый.
+
+def _initialize_library() -> None:
+    # TODO: Load definitions here
+    pass
+
+
+# ==========================================
+# PUBLIC API
+# ==========================================
+
+
+def get_ability_config(ability_id: str) -> AbilityDTO | None:
+    return ABILITY_REGISTRY.get(ability_id)
+
+
+def get_all_abilities() -> list[AbilityDTO]:
+    return list(ABILITY_REGISTRY.values())
+
+
+# Auto-init
+_initialize_library()

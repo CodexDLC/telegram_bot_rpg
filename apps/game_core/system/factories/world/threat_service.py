@@ -1,7 +1,7 @@
 from operator import itemgetter
 from typing import TypedDict
 
-from apps.game_core.resources.game_data.graf_data_world.world_config import (
+from apps.game_core.resources.graf_data_world.world_config import (
     ANCHORS,
     HUB_CENTER,
     HYBRID_TAGS,

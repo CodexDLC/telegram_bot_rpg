@@ -7,9 +7,10 @@ from apps.common.services.redis.manager.combat_manager import CombatManager
 # DTOs
 from apps.game_core.modules.combat.dto.combat_internal_dto import (
     ActiveAbilityDTO,
+    ActorLoadoutDTO,
+    ActorMetaDTO,
     ActorRawDTO,
     ActorSnapshot,
-    ActorState,
     BattleContext,
     BattleMeta,
     CombatActionDTO,
@@ -167,8 +168,21 @@ class CombatDataService:
         for cid, actor in ctx.actors.items():
             actor_updates = {}
 
-            # State (Always)
-            actor_updates["state"] = actor.state.model_dump()
+            # State (Always) - сохраняем только state поля из meta
+            # Важно: ActorMetaDTO содержит и meta и state.
+            # В Redis мы пишем в разные ключи, но здесь у нас единый объект.
+            # CombatManager ожидает "state" как словарь с hp, en и т.д.
+
+            state_dict = {
+                "hp": actor.meta.hp,
+                "max_hp": actor.meta.max_hp,
+                "en": actor.meta.en,
+                "max_en": actor.meta.max_en,
+                "tactics": actor.meta.tactics,
+                "is_dead": int(actor.meta.is_dead),
+                "tokens": actor.meta.tokens,
+            }
+            actor_updates["state"] = state_dict
 
             # Active Abilities (Always rewrite list)
             actor_updates["abilities"] = [a.model_dump() for a in actor.active_abilities]
@@ -208,7 +222,16 @@ class CombatDataService:
         )
 
     def _build_snapshot(self, cid, team, r_state, r_raw, r_loadout, r_meta, r_active, r_xp) -> ActorSnapshot:
-        state = ActorState(
+        meta_dict = r_meta or {}
+
+        meta = ActorMetaDTO(
+            id=cid,
+            name=meta_dict.get("name", "Unknown"),
+            type=meta_dict.get("type", "unknown"),
+            team=team,
+            template_id=meta_dict.get("template_id"),
+            is_ai=meta_dict.get("is_ai", False),
+            # State fields
             hp=int(r_state.get(b"hp", 0)),
             max_hp=int(r_state.get(b"max_hp", 0)),
             en=int(r_state.get(b"en", 0)),
@@ -220,23 +243,24 @@ class CombatDataService:
 
         raw_dict = r_raw or {}
         loadout_dict = r_loadout or {}
-        meta_dict = r_meta or {}
 
         merged_raw = {
             "attributes": raw_dict.get("attributes", {}),
             "modifiers": raw_dict.get("modifiers", {}),
-            "temp": raw_dict.get("temp", {}),
-            "known_abilities": loadout_dict.get("known_abilities", []),
-            "equipment_layout": loadout_dict.get("equipment_layout", {}),
-            "name": meta_dict.get("name", "Unknown"),
-            "is_player": meta_dict.get("type") == "player",
+            # "temp": raw_dict.get("temp", {}), # ActorRawDTO не имеет поля temp в определении выше, проверим
         }
 
+        loadout = ActorLoadoutDTO(
+            layout=loadout_dict.get("equipment_layout", {}),
+            belt=loadout_dict.get("belt", []),
+            known_abilities=loadout_dict.get("known_abilities", []),
+            tags=loadout_dict.get("tags", []),
+        )
+
         return ActorSnapshot(
-            char_id=cid,
-            team=team,
-            state=state,
+            meta=meta,
             raw=ActorRawDTO(**merged_raw),
+            loadout=loadout,
             active_abilities=[ActiveAbilityDTO(**a) for a in (r_active or [])],
             xp_buffer=r_xp or {},
         )

@@ -2,17 +2,17 @@ from collections import defaultdict
 
 from loguru import logger as log
 
-from apps.game_core.resources.game_data.skills.definitions.skills.armor import ARMOR_SKILLS
-from apps.game_core.resources.game_data.skills.definitions.skills.combat_support import COMBAT_SUPPORT_SKILLS
-from apps.game_core.resources.game_data.skills.definitions.skills.crafting import CRAFTING_SKILLS
-from apps.game_core.resources.game_data.skills.definitions.skills.gathering import GATHERING_SKILLS
-from apps.game_core.resources.game_data.skills.definitions.skills.social import SOCIAL_SKILLS
-from apps.game_core.resources.game_data.skills.definitions.skills.survival import SURVIVAL_SKILLS
-from apps.game_core.resources.game_data.skills.definitions.skills.tactical import TACTICAL_SKILLS
-from apps.game_core.resources.game_data.skills.definitions.skills.trade import TRADE_SKILLS
+from apps.game_core.resources.game_data.skills.definitions.armor import ARMOR_SKILLS
+from apps.game_core.resources.game_data.skills.definitions.combat_support import COMBAT_SUPPORT_SKILLS
+from apps.game_core.resources.game_data.skills.definitions.crafting import CRAFTING_SKILLS
+from apps.game_core.resources.game_data.skills.definitions.gathering import GATHERING_SKILLS
+from apps.game_core.resources.game_data.skills.definitions.social import SOCIAL_SKILLS
+from apps.game_core.resources.game_data.skills.definitions.survival import SURVIVAL_SKILLS
+from apps.game_core.resources.game_data.skills.definitions.tactical import TACTICAL_SKILLS
+from apps.game_core.resources.game_data.skills.definitions.trade import TRADE_SKILLS
 
 # Импорт определений
-from apps.game_core.resources.game_data.skills.definitions.skills.weapon_mastery import WEAPON_MASTERY_SKILLS
+from apps.game_core.resources.game_data.skills.definitions.weapon_mastery import WEAPON_MASTERY_SKILLS
 from apps.game_core.resources.game_data.skills.schemas import SkillCategory, SkillDTO, SkillGroup
 
 # ==========================================

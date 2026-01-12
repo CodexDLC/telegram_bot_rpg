@@ -4,7 +4,7 @@ from typing import Any
 from loguru import logger as log
 
 from apps.common.services.redis.manager.combat_manager import CombatManager
-from apps.game_core.modules.combat.dto.combat_internal_dto import ActorRawDTO, ActorState
+from apps.game_core.modules.combat.dto.combat_internal_dto import ActorMetaDTO, ActorRawDTO
 
 
 class ChaosService:
@@ -69,17 +69,29 @@ class ChaosService:
             "luck": 1000,
         }
 
-        # State DTO
-        state = ActorState(
-            hp=100000, max_hp=100000, en=1000, max_en=1000, tactics=100, afk_level=0, is_dead=False, tokens={}
+        # State DTO (используем ActorMetaDTO вместо ActorState)
+        state = ActorMetaDTO(
+            id=self.CLEANER_ID,
+            name=self.CLEANER_NAME,
+            type="ai",
+            team=self.CLEANER_TEAM,
+            hp=100000,
+            max_hp=100000,
+            en=1000,
+            max_en=1000,
+            tactics=100,
+            afk_level=0,
+            is_dead=False,
+            tokens={},
         )
 
         # Raw DTO
         raw = ActorRawDTO(
-            name=self.CLEANER_NAME, attributes=stats, modifiers={}, known_abilities=[], equipment_layout={}
+            attributes=stats,
+            modifiers={},
         )
 
-        # Meta (dict)
+        # Meta (dict) - дублируем для совместимости, если нужно, или используем state
         meta_dict = {"name": self.CLEANER_NAME, "type": "ai"}
 
         # Loadout (dict)
