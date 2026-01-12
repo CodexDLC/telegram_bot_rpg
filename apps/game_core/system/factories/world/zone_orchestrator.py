@@ -6,7 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.database.db_contract.i_world_repo import IWorldRepo
-from apps.game_core.resources.game_data.graf_data_world.world_config import (
+from apps.game_core.resources.graf_data_world.world_config import (
     ANCHORS,
     HUB_CENTER,
     REGION_ROWS,

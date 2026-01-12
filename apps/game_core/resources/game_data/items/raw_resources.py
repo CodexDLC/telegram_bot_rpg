@@ -7,7 +7,9 @@
 Подробные данные находятся внутри соответствующих модулей в папке `raw_resource/`.
 """
 
-from typing import Any, TypedDict, cast
+from typing import Any, cast
+
+from apps.game_core.resources.game_data.items.schemas import ResourceDTO
 
 from .raw_resource.bark import BARK_DB
 from .raw_resource.common_supplies import COMMON_SUPPLIES_DB
@@ -20,25 +22,17 @@ from .raw_resource.ores import ORES_DB
 from .raw_resource.stone import STONE_DB
 from .raw_resource.woods import WOODS_DB
 
-
-class ResourceData(TypedDict):
-    id: str
-    name_ru: str
-    base_price: int
-    narrative_description: str
-
-
 # Сборка единой базы данных из модулей
 # Используем оператор | (Python 3.9+) для объединения словарей
-RAW_RESOURCES_DB: dict[str, dict[Any, ResourceData]] = (
-    cast(dict[str, dict[Any, ResourceData]], CURRENCY_DB)
-    | cast(dict[str, dict[Any, ResourceData]], ORES_DB)
-    | cast(dict[str, dict[Any, ResourceData]], HIDES_DB)
-    | cast(dict[str, dict[Any, ResourceData]], WOODS_DB)
-    | cast(dict[str, dict[Any, ResourceData]], FIBERS_DB)
-    | cast(dict[str, dict[Any, ResourceData]], ESSENCES_DB)
-    | cast(dict[str, dict[Any, ResourceData]], STONE_DB)
-    | cast(dict[str, dict[Any, ResourceData]], BARK_DB)
-    | cast(dict[str, dict[Any, ResourceData]], FLOWERS_DB)
-    | cast(dict[str, dict[Any, ResourceData]], COMMON_SUPPLIES_DB)
+RAW_RESOURCES_DB: dict[str, dict[Any, ResourceDTO]] = (
+    cast(dict[str, dict[Any, ResourceDTO]], CURRENCY_DB)
+    | cast(dict[str, dict[Any, ResourceDTO]], ORES_DB)
+    | cast(dict[str, dict[Any, ResourceDTO]], HIDES_DB)
+    | cast(dict[str, dict[Any, ResourceDTO]], WOODS_DB)
+    | cast(dict[str, dict[Any, ResourceDTO]], FIBERS_DB)
+    | cast(dict[str, dict[Any, ResourceDTO]], ESSENCES_DB)
+    | cast(dict[str, dict[Any, ResourceDTO]], STONE_DB)
+    | cast(dict[str, dict[Any, ResourceDTO]], BARK_DB)
+    | cast(dict[str, dict[Any, ResourceDTO]], FLOWERS_DB)
+    | cast(dict[str, dict[Any, ResourceDTO]], COMMON_SUPPLIES_DB)
 )

@@ -3,6 +3,7 @@ import uuid
 from typing import Any
 
 from loguru import logger as log
+from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.database.repositories.ORM.monster_repository import MonsterRepository
@@ -68,7 +69,15 @@ class MonsterAssembler(BaseAssembler):
                     },
                 )
 
-                context_data = context_schema.model_dump(by_alias=True)
+                context_data = context_schema.model_dump(
+                    by_alias=True,
+                    exclude={
+                        "core_stats",
+                        "core_loadout",
+                        "core_skills",
+                        "core_meta",
+                    },
+                )
 
                 redis_key = f"temp:setup:{uuid.uuid4()}"
                 success_map[m_id] = redis_key
@@ -77,9 +86,47 @@ class MonsterAssembler(BaseAssembler):
                 log.error(f"MonsterAssembler | transform failed for {m_id}: {e}")
                 error_list.append(m_id)
 
-        # Cast contexts_to_save to match ContextRedisManager signature if needed,
-        # but ContextRedisManager usually accepts dict[int|str, ...]
-        await self.context_manager.save_context_batch(contexts_to_save)  # type: ignore
+        # 3. Массовое сохранение с детальной обработкой ошибок
+        if contexts_to_save:
+            try:
+                # Используем pipeline БЕЗ transaction для performance
+                async with self.context_manager.redis.pipeline(transaction=False) as pipe:
+                    # Словарь для маппинга индексов результатов к m_id
+                    index_to_monster = {}
+                    idx = 0
+
+                    for m_id, (redis_key, context_data) in contexts_to_save.items():
+                        pipe.json().set(redis_key, "$", context_data)
+                        pipe.expire(redis_key, 3600)
+                        index_to_monster[idx] = m_id
+                        idx += 2  # каждая операция генерирует 2 команды
+
+                    # Выполняем pipeline с raise_on_error=False для обработки частичных сбоев
+                    results = await pipe.execute(raise_on_error=False)
+
+                    # Проверяем результаты каждой пары операций (set + expire)
+                    for i, m_id in index_to_monster.items():
+                        set_result = results[i]  # json().set
+                        expire_result = results[i + 1]  # expire
+
+                        # Если хотя бы одна операция неудачна, считаем m_id ошибочным
+                        if isinstance(set_result, Exception) or isinstance(expire_result, Exception):
+                            log.error(
+                                f"MonsterAssembler | save failed for {m_id}. Set: {set_result}, Expire: {expire_result}"
+                            )
+                            error_list.append(m_id)
+                            # Убираем из success_map, если был добавлен ранее
+                            success_map.pop(m_id, None)
+                        # Если обе операции успешны, m_id уже в success_map
+
+            except (RedisError, OSError) as e:
+                # Катастрофический сбой (например, Redis недоступен)
+                log.critical(f"MonsterAssembler | Redis catastrophic failure: {e}")
+                # В этом случае помечаем все как ошибки
+                for m_id in contexts_to_save:
+                    if m_id not in error_list:
+                        error_list.append(m_id)
+                    success_map.pop(m_id, None)
 
         log.info(f"MonsterAssembler | batch processed. success={len(success_map)}, errors={len(error_list)}")
         return success_map, error_list

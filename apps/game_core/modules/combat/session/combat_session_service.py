@@ -8,9 +8,10 @@ from apps.common.services.redis.manager.combat_manager import CombatManager
 from apps.common.services.redis.redis_fields import AccountFields as Af
 from apps.game_core.modules.combat.dto.combat_internal_dto import (
     ActiveAbilityDTO,
+    ActorLoadoutDTO,
+    ActorMetaDTO,
     ActorRawDTO,
     ActorSnapshot,
-    ActorState,
     BattleContext,
     BattleMeta,
 )
@@ -159,8 +160,18 @@ class CombatSessionService:
     def _build_light_snapshot(self, cid, team, r_state, r_meta, r_loadout, r_active) -> ActorSnapshot:
         """Собирает облегченный снапшот (без полной математики)."""
 
-        # State
-        state = ActorState(
+        # Meta + State (Merged)
+        # В Redis state и meta могут быть разделены, но мы объединяем их в ActorMetaDTO
+        meta_dict = r_meta or {}
+
+        meta = ActorMetaDTO(
+            id=cid,
+            name=meta_dict.get("name", "Unknown"),
+            type=meta_dict.get("type", "unknown"),
+            team=team,
+            template_id=meta_dict.get("template_id"),
+            is_ai=meta_dict.get("is_ai", False),
+            # State fields
             hp=int(r_state.get(b"hp", 0)),
             max_hp=int(r_state.get(b"max_hp", 100)),
             en=int(r_state.get(b"en", 0)),
@@ -171,23 +182,25 @@ class CombatSessionService:
         )
 
         # Raw (Fake/Partial)
-        # Нам нужно только имя и лейаут для ViewService
-        meta_dict = r_meta or {}
         loadout_dict = r_loadout or {}
 
         raw_dto = ActorRawDTO(
-            name=meta_dict.get("name", "Unknown"),
-            equipment_layout=loadout_dict.get("equipment_layout", {}),
             attributes={},  # Не нужно для UI
             modifiers={},  # Не нужно для UI
+        )
+
+        # Loadout
+        loadout_dto = ActorLoadoutDTO(
+            layout=loadout_dict.get("equipment_layout", {}),
             known_abilities=loadout_dict.get("known_abilities", []),
+            belt=[],
+            tags=[],
         )
 
         return ActorSnapshot(
-            char_id=cid,
-            team=team,
-            state=state,
+            meta=meta,
             raw=raw_dto,
+            loadout=loadout_dto,
             active_abilities=[ActiveAbilityDTO(**a) for a in (r_active or [])],
             xp_buffer={},  # Не нужно
         )

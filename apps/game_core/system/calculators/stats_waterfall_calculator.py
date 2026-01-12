@@ -3,7 +3,7 @@ from typing import Any
 from loguru import logger
 from simpleeval import simple_eval
 
-from apps.game_core.resources.game_data.stats_formulas import MODIFIER_RULES
+from apps.game_core.system.calculators.data.stats_formulas import MODIFIER_RULES
 
 
 class StatsWaterfallCalculator:
