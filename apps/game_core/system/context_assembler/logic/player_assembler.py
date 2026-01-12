@@ -4,6 +4,9 @@ import uuid
 from typing import Any, cast
 
 from loguru import logger as log
+from pydantic import ValidationError
+from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.database.model_orm.symbiote import CharacterSymbiote
@@ -19,7 +22,11 @@ from apps.common.schemas_dto.skill import SkillProgressDTO
 from apps.common.services.redis.manager.account_manager import AccountManager
 from apps.common.services.redis.manager.context_manager import ContextRedisManager
 from apps.game_core.system.context_assembler.logic.base_assembler import BaseAssembler
-from apps.game_core.system.context_assembler.schemas.temp_context import TempContextSchema
+from apps.game_core.system.context_assembler.logic.query_plan import get_query_plan
+from apps.game_core.system.context_assembler.schemas.base import BaseTempContext
+from apps.game_core.system.context_assembler.schemas.combat import CombatTempContext
+from apps.game_core.system.context_assembler.schemas.inventory import InventoryTempContext
+from apps.game_core.system.context_assembler.schemas.status import StatusTempContext
 
 
 class PlayerAssembler(BaseAssembler):
@@ -33,7 +40,7 @@ class PlayerAssembler(BaseAssembler):
         self.account_manager = account_manager
         self.context_manager = context_manager
         self.char_repo = get_character_repo(session)
-        self.attributes_repo = get_character_attributes_repo(session)  # Renamed from stats_repo
+        self.attributes_repo = get_character_attributes_repo(session)
         self.inv_repo = get_inventory_repo(session)
         self.skill_repo = get_skill_progress_repo(session)
         self.symbiote_repo = get_symbiote_repo(session)
@@ -42,110 +49,156 @@ class PlayerAssembler(BaseAssembler):
         """
         Реализация пакетной обработки игроков.
         """
-        log.debug(f"PlayerAssembler | processing batch count={len(ids)}")
+        log.debug(f"PlayerAssembler | processing batch count={len(ids)} scope={scope}")
 
         if not ids:
             return {}, []
 
-        # Ensure ids are ints
         int_ids = [int(i) for i in ids]
+        query_plan = get_query_plan(scope)
 
-        # 1. Пакетный сбор данных (3 запроса к БД)
+        # 1. Пакетный сбор данных (Conditional Loading)
+        tasks = []
+        task_mapping = []
+
+        # Всегда грузим базовую инфу о персонаже (для meta)
+        tasks.append(self.char_repo.get_characters_batch(int_ids))
+        task_mapping.append("char")
+
+        if "attributes" in query_plan:
+            tasks.append(self.attributes_repo.get_attributes_batch(int_ids))
+            task_mapping.append("attributes")
+
+        if "inventory" in query_plan:
+            # Всегда грузим весь инвентарь (equipped + inventory)
+            # Фильтрация (только equipped для боя) происходит внутри DTO
+            t1 = self.inv_repo.get_items_by_location_batch(int_ids, "equipped")
+            t2 = self.inv_repo.get_items_by_location_batch(int_ids, "inventory")
+            tasks.append(asyncio.gather(t1, t2))
+            task_mapping.append("inventory_complex")
+
+        if "skills" in query_plan:
+            tasks.append(self.skill_repo.get_all_skills_progress_batch(int_ids))
+            task_mapping.append("skills")
+
+        if "vitals" in query_plan:
+            tasks.append(self.account_manager.get_accounts_json_batch(int_ids, "vitals"))
+            task_mapping.append("vitals")
+
+        if "symbiote" in query_plan:
+            tasks.append(self.symbiote_repo.get_symbiotes_batch(int_ids))
+            task_mapping.append("symbiote")
+
+        # Ждем всех
         try:
-            # Запускаем запросы параллельно
-            char_task = self.char_repo.get_characters_batch(int_ids)
-            attributes_task = self.attributes_repo.get_attributes_batch(int_ids)  # Renamed from stats_task
-            skills_task = self.skill_repo.get_all_skills_progress_batch(int_ids)
-            equip_task = self.inv_repo.get_items_by_location_batch(int_ids, "equipped")
-            inv_task = self.inv_repo.get_items_by_location_batch(int_ids, "inventory")
-            symbiote_task = self.symbiote_repo.get_symbiotes_batch(int_ids)
-
-            # Vitals из Redis (Batch Fetching через Pipeline)
-            vitals_future = asyncio.create_task(self.account_manager.get_accounts_json_batch(int_ids, "vitals"))
-
-            # Ждем всех
-            fetched_data = await asyncio.gather(
-                char_task, attributes_task, skills_task, equip_task, inv_task, symbiote_task, vitals_future
-            )
-
-            # Распаковываем результаты с явным приведением типов
-            chars_list = cast(list[CharacterReadDTO], fetched_data[0])
-            attributes_list = cast(list[CharacterAttributesReadDTO], fetched_data[1])  # Renamed from stats_list
-            skills_map = cast(dict[int, list[SkillProgressDTO]], fetched_data[2])
-            equipped_map = cast(dict[int, list[Any]], fetched_data[3])
-            inventory_map = cast(dict[int, list[Any]], fetched_data[4])
-            symbiotes_list = cast(list[CharacterSymbiote], fetched_data[5])
-            vitals_list = cast(list[dict | None], fetched_data[6])
-
-        except Exception as e:  # noqa: BLE001
+            results = await asyncio.gather(*tasks)
+        except (SQLAlchemyError, RedisError, OSError) as e:
             log.exception(f"PlayerAssembler | DB fetch failed for batch. Error: {e}")
             return {}, int_ids
 
-        # Преобразуем список атрибутов в словарь для удобства
-        chars_map = {char.character_id: char for char in chars_list}
-        attributes_map = {attr.character_id: attr for attr in attributes_list}  # Renamed from stats_map
-        symbiotes_map = {s.character_id: s for s in symbiotes_list}
-        # vitals_list уже соответствует порядку ids, так как get_accounts_json_batch это гарантирует
-        vitals_map = {char_id: vitals for char_id, vitals in zip(int_ids, vitals_list, strict=False)}
+        # Распаковка результатов
+        raw_data: dict[str, Any] = {}
+        for key, result in zip(task_mapping, results, strict=False):
+            if key == "inventory_complex":
+                # result is tuple(equipped_dict, inventory_dict)
+                equipped, inventory = result
+                combined = {}
+                for cid in int_ids:
+                    combined[cid] = equipped.get(cid, []) + inventory.get(cid, [])
+                raw_data["inventory"] = combined
+            else:
+                raw_data[key] = result
+
+        # Преобразование в словари по ID
+        chars_map = {char.character_id: char for char in cast(list[CharacterReadDTO], raw_data.get("char", []))}
+        attributes_map = {
+            attr.character_id: attr for attr in cast(list[CharacterAttributesReadDTO], raw_data.get("attributes", []))
+        }
+        skills_map = cast(dict[int, list[SkillProgressDTO]], raw_data.get("skills", {}))
+        inventory_map = cast(dict[int, list[Any]], raw_data.get("inventory", {}))
+        symbiotes_map = {s.character_id: s for s in cast(list[CharacterSymbiote], raw_data.get("symbiote", []))}
+
+        # Vitals приходят списком в порядке ID
+        vitals_list = cast(list[dict | None], raw_data.get("vitals", []))
+        vitals_map = {}
+        if "vitals" in query_plan:
+            vitals_map = {char_id: vitals for char_id, vitals in zip(int_ids, vitals_list, strict=False)}
 
         # 2. Трансформация и подготовка к сохранению
         success_map = {}
         error_list = []
         contexts_to_save = {}
 
+        # Выбор класса DTO
+        dto_class = self._select_dto_class(scope)
+
         for char_id in int_ids:
-            if char_id not in attributes_map:
+            if char_id not in chars_map:
                 error_list.append(char_id)
                 continue
 
-            char_info = chars_map.get(char_id)
-            attributes = attributes_map.get(char_id)  # Renamed from stats
-            skills = skills_map.get(char_id, [])
-            equipped = equipped_map.get(char_id, [])
-            inventory = inventory_map.get(char_id, [])
-            vitals = vitals_map.get(char_id)
-            symbiote = symbiotes_map.get(char_id)
-
             try:
-                # attributes гарантированно CharacterAttributesReadDTO, так как мы проверили наличие в map
-                if attributes and char_info:
-                    # Маппинг симбиота (ORM -> dict)
-                    symbiote_data = None
-                    if symbiote:
-                        # Ручной маппинг, так как ORM не имеет model_dump
-                        symbiote_data = {
-                            "symbiote_name": symbiote.symbiote_name,
-                            "gift_id": symbiote.gift_id,
-                            "gift_rank": symbiote.gift_rank,
-                            "gift_xp": symbiote.gift_xp,
-                            "elements_resonance": symbiote.elements_resonance,
-                        }
+                # Сборка данных для конкретного персонажа
+                char_info = chars_map.get(char_id)
+                attributes = attributes_map.get(char_id)
+                skills = skills_map.get(char_id)
+                inventory = inventory_map.get(char_id)
+                vitals = vitals_map.get(char_id)
+                symbiote = symbiotes_map.get(char_id)
 
-                    # Используем TempContextSchema для сборки
-                    context_schema = TempContextSchema(
-                        core_stats=attributes,  # Renamed field in TempContextSchema (need to update schema too)
-                        core_inventory=equipped + inventory,  # Объединяем для полноты
-                        core_skills=skills,
-                        core_vitals=vitals if vitals else {},
-                        core_meta=char_info,
-                        core_symbiote=symbiote_data,
-                    )
+                symbiote_data = None
+                if symbiote:
+                    symbiote_data = {
+                        "symbiote_name": symbiote.symbiote_name,
+                        "gift_id": symbiote.gift_id,
+                        "gift_rank": symbiote.gift_rank,
+                        "gift_xp": symbiote.gift_xp,
+                        "elements_resonance": symbiote.elements_resonance,
+                    }
 
-                    # Получаем готовый JSON для Redis
-                    context_data = context_schema.model_dump(by_alias=True)
+                # Создание контекста
+                context_schema = dto_class(
+                    core_meta=char_info,
+                    core_attributes=attributes,
+                    core_inventory=inventory,
+                    core_skills=skills,
+                    core_vitals=vitals,
+                    core_symbiote=symbiote_data,
+                    # core_wallet пока не реализован в репо
+                )
 
-                    redis_key = f"temp:setup:{uuid.uuid4()}"
-                    success_map[char_id] = redis_key
-                    contexts_to_save[char_id] = (redis_key, context_data)
-                else:
-                    log.warning(f"PlayerAssembler | missing core data for {char_id}")
-                    error_list.append(char_id)
-            except Exception as e:  # noqa: BLE001
+                # Сериализация (exclude_none=True убирает core_* поля)
+                context_data = context_schema.model_dump(by_alias=True, exclude_none=True)
+
+                redis_key = f"temp:setup:{uuid.uuid4()}"
+                success_map[char_id] = redis_key
+                contexts_to_save[char_id] = (redis_key, context_data)
+
+            except (ValidationError, ValueError, TypeError) as e:
                 log.error(f"PlayerAssembler | transform failed for {char_id}: {e}")
                 error_list.append(char_id)
 
-        # 3. Массовое сохранение через ContextRedisManager
-        await self.context_manager.save_context_batch(contexts_to_save)  # type: ignore
+        # 3. Массовое сохранение
+        if contexts_to_save:
+            try:
+                await self.context_manager.save_context_batch(contexts_to_save)
+            except (RedisError, OSError) as e:
+                log.error(f"PlayerAssembler | save_context_batch failed: {e}")
+                # If saving fails, we should probably consider all these as errors
+                for char_id in contexts_to_save:
+                    if char_id in success_map:
+                        del success_map[char_id]
+                    if char_id not in error_list:
+                        error_list.append(char_id)
 
         log.info(f"PlayerAssembler | batch processed. success={len(success_map)}, errors={len(error_list)}")
         return success_map, error_list
+
+    def _select_dto_class(self, scope: str) -> type[BaseTempContext]:
+        if scope == "combats":
+            return CombatTempContext
+        if scope == "status":
+            return StatusTempContext
+        if scope == "inventory":
+            return InventoryTempContext
+        return BaseTempContext

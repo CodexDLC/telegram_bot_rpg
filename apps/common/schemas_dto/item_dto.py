@@ -74,7 +74,7 @@ class ItemComponents(BaseModel):
 
     base_id: str
     material_id: str
-    essence_id: list[str] | None = None  # Теперь это список ID бандлов
+    essence_id: list[str] | None = None
 
 
 class ItemDurability(BaseModel):
@@ -100,20 +100,49 @@ class ItemCoreData(BaseModel):
     components: ItemComponents | None = None
     durability: ItemDurability | None = None
     narrative_tags: list[str] = Field(default_factory=list)
+
+    # Встроенные бонусы (Implicit) - свойства материала/базы
+    implicit_bonuses: ItemBonuses = Field(default_factory=dict)
+
+    # Явные бонусы (Explicit) - заточка, суффиксы
     bonuses: ItemBonuses = Field(default_factory=dict)
 
 
-# --- СПЕЦИФИЧНЫЕ ДАННЫЕ ---
+# --- СПЕЦИФИЧНЫЕ ДАННЫЕ (RBC v3) ---
 
 
 class WeaponData(ItemCoreData):
-    damage_min: int
-    damage_max: int
+    # Математика
+    power: float  # Base Damage
+    spread: float = 0.1  # Variance (0.1 = 10%)
+    accuracy: float = 0.0  # Base Accuracy (может быть отрицательным)
+
+    # Механика
+    crit_chance: float = 0.0
+    parry_chance: float = 0.0
+    evasion_penalty: float = 0.0
+
+    # Классификация
+    grip: str = "1h"  # "1h", "2h"
+    subtype: str  # "sword", "axe"
+    related_skill: str | None = None  # "skill_swords"
+
     valid_slots: list[str]
 
 
 class ArmorData(ItemCoreData):
-    protection: int
+    # Математика
+    power: float  # Protection (Flat)
+
+    # Механика
+    block_chance: float = 0.0  # Только для щитов
+    evasion_penalty: float = 0.0  # Штраф к шансу уворота
+    dodge_cap_mod: float = 0.0  # Модификатор капа уворота (например, -0.25)
+
+    # Классификация
+    subtype: str  # "heavy", "light", "shield"
+    related_skill: str | None = None  # "skill_heavy_armor"
+
     valid_slots: list[str]
 
 
@@ -145,8 +174,8 @@ class BaseInventoryItemDTO(BaseModel):
     subtype: str
     rarity: ItemRarity
     quantity: int = 1
-    equipped_slot: str | None = None  # Changed from EquippedSlot to str to allow flexibility
-    quick_slot_position: str | None = None  # Changed from QuickSlot to str
+    equipped_slot: str | None = None
+    quick_slot_position: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

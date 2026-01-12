@@ -129,7 +129,7 @@ class AccountManager:
             if res:
                 try:
                     parsed_results.append(json.loads(res))
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, TypeError):
                     log.error(f"AccountManager | batch_decode_fail field={field}")
                     parsed_results.append(None)
             else:

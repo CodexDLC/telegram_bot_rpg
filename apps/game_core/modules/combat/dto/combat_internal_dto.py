@@ -12,18 +12,8 @@ from apps.common.schemas_dto.combat_source_dto import CombatMoveDTO
 
 # Импортируем кирпичики из Common
 from apps.common.schemas_dto.modifier_dto import (
+    CombatModifiersDTO,
     CombatSkillsDTO,
-    DefensiveStatsDTO,
-    ElementalStatsDTO,
-    EnvironmentalStatsDTO,
-    MagicalStatsDTO,
-    MainHandStatsDTO,
-    MitigationStatsDTO,
-    OffHandStatsDTO,
-    PhysicalStatsDTO,
-    SpecialStatsDTO,
-    StatusStatsDTO,
-    VitalsDTO,
 )
 
 # ==============================================================================
@@ -67,42 +57,51 @@ class MechanicsFlagsDTO(BaseModel):
 # ==============================================================================
 
 
-class ActorState(BaseModel):
+class ActorMetaDTO(BaseModel):
     """
-    Изменяемые параметры из Redis Hash `:state`.
-    Hot Data.
+    Мета-данные и Состояние (State).
+    Соответствует ключу `meta` в Redis JSON.
     """
 
+    # Identity
+    id: str | int
+    name: str
+    type: str  # "player", "monster"
+    team: str
+    template_id: str | None = None
+    is_ai: bool = False
+
+    # State (Hot Data)
     hp: int = 0
     max_hp: int = 0
     en: int = 0
     max_en: int = 0
-    initiative: int = 0
-    energy: int = 0
     tactics: int = 0
-    afk_level: int = 0
     is_dead: bool = False
-    exchange_count: int = 0
-    tokens: dict[str, int] = Field(default_factory=dict)  # {"gift": 1, "parry": 1}
+    afk_level: int = 0
+    tokens: dict[str, int] = Field(default_factory=dict)
 
 
 class ActorRawDTO(BaseModel):
     """
-    Строгая типизация для `:raw` данных.
-    Cold Data.
+    Математическая модель (Cold Data).
+    Соответствует ключу `raw` в Redis JSON.
     """
 
-    name: str = "Unknown"
-    stats: dict[str, Any] = Field(default_factory=dict)  # TODO: Use ActorStats
     attributes: dict[str, Any] = Field(default_factory=dict)
     modifiers: dict[str, Any] = Field(default_factory=dict)
 
-    # Whitelist доступных абилок
-    known_abilities: list[str] = Field(default_factory=list)
 
-    # Маппинг экипировки для XP сервиса
-    # {"main_hand": "light_weapons", "head_armor": "heavy_armor"}
-    equipment_layout: dict[str, str] = Field(default_factory=dict)
+class ActorLoadoutDTO(BaseModel):
+    """
+    Экипировка и доступные действия.
+    Соответствует ключу `loadout` в Redis JSON.
+    """
+
+    layout: dict[str, str] = Field(default_factory=dict)  # {slot: skill_key}
+    belt: list[dict[str, Any]] = Field(default_factory=list)
+    known_abilities: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
 
 
 class ActiveAbilityDTO(BaseModel):
@@ -119,91 +118,93 @@ class ActiveAbilityDTO(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
-class ActorStats(
-    VitalsDTO,
-    MainHandStatsDTO,
-    OffHandStatsDTO,
-    PhysicalStatsDTO,
-    MagicalStatsDTO,
-    DefensiveStatsDTO,
-    MitigationStatsDTO,
-    ElementalStatsDTO,
-    SpecialStatsDTO,
-    EnvironmentalStatsDTO,
-):
+class ActorStats(BaseModel):
     """
     Готовые статы для математики (In-Memory Calculated).
-    Гибридная структура:
-    - Основные боевые статы: Плоские (наследуются).
-    - Скиллы и Статусы: Вложенные (для удобства передачи в подсистемы).
+    Композиция: Модификаторы (результат калькулятора) + Скиллы (из базы).
     """
 
     calculated_at: float = 0.0
 
-    # Вложенные блоки
+    # 1. Результат WaterfallCalculator (Чистые цифры, включая StatusStats)
+    mods: CombatModifiersDTO = Field(default_factory=CombatModifiersDTO)
+
+    # 2. Скиллы (из Redis/Snapshot)
     skills: CombatSkillsDTO = Field(default_factory=CombatSkillsDTO)
-    status: StatusStatsDTO = Field(default_factory=StatusStatsDTO)
 
     @classmethod
     def from_flat_dict(cls, flat_data: dict[str, Any]) -> "ActorStats":
         """
-        Фабрика для создания ActorStats из плоского словаря (результат WaterfallCalculator).
-        Автоматически распределяет поля по вложенным DTO.
+        Фабрика для создания ActorStats из плоского словаря.
+        Распределяет данные по mods и skills.
         """
-        # 1. Выкусываем данные для вложенных DTO
+        mods_data = {}
         skills_data = {}
-        status_data = {}
-        main_data = flat_data.copy()  # Копия, чтобы не портить исходник (хотя можно и портить)
 
-        # Список полей для Skills и Status (можно оптимизировать через model_fields)
+        # Получаем списки полей для каждого DTO
+        mods_fields = CombatModifiersDTO.model_fields.keys()
         skills_fields = CombatSkillsDTO.model_fields.keys()
-        status_fields = StatusStatsDTO.model_fields.keys()
 
-        for key in list(main_data.keys()):
+        for key, value in flat_data.items():
             if key in skills_fields:
-                skills_data[key] = main_data.pop(key)
-            elif key in status_fields:
-                status_data[key] = main_data.pop(key)
+                skills_data[key] = value
+            elif key in mods_fields:
+                mods_data[key] = value
+            # Остальное игнорируем или логируем
 
-        # 2. Создаем вложенные объекты
-        skills_obj = CombatSkillsDTO(**skills_data)
-        status_obj = StatusStatsDTO(**status_data)
-
-        # 3. Создаем основной объект (Pydantic сам возьмет нужные поля из main_data)
-        # Важно: main_data теперь не содержит skills/status полей, чтобы не было конфликтов,
-        # хотя Pydantic extra='ignore' (по умолчанию) или 'forbid' (в CombatModifiersDTO)
-        # В CombatModifiersDTO стоит 'forbid', но ActorStats наследует кирпичики, у которых default config.
-        # Лучше передать явно.
-
-        return cls(**main_data, skills=skills_obj, status=status_obj)
+        return cls(
+            mods=CombatModifiersDTO(**mods_data),
+            skills=CombatSkillsDTO(**skills_data),
+        )
 
 
 class ActorSnapshot(BaseModel):
     """
     Агрегатор данных актера в памяти.
-    The Root Object.
+    Точная копия структуры Redis JSON.
     """
 
-    char_id: int
-    team: str
+    # 1. Meta & State
+    meta: ActorMetaDTO
 
-    state: ActorState
+    # 2. Math Model Source
+    raw: ActorRawDTO
 
-    # Calculated (In-Memory only)
-    # Может быть None, если еще не посчитан в этом цикле
+    # 3. Skills Source
+    skills: dict[str, float] = Field(default_factory=dict)
+
+    # 4. Loadout & Config
+    loadout: ActorLoadoutDTO = Field(default_factory=ActorLoadoutDTO)
+
+    # 5. Dynamic
+    active_abilities: list[ActiveAbilityDTO] = Field(default_factory=list)
+    xp_buffer: dict[str, int] = Field(default_factory=dict)
+
+    # 6. Analytics & Debug
+    metrics: dict[str, float] = Field(default_factory=dict)  # {damage_dealt: 500}
+    explanation: dict[str, str] = Field(default_factory=dict)  # {strength: "10+5"}
+
+    # --- Calculated (In-Memory only) ---
     stats: ActorStats | None = None
-
-    # Optimization: Dirty Flags
-    # Список полей, которые изменились в :raw и требуют пересчета
     dirty_stats: set[str] = Field(default_factory=set)
 
-    active_abilities: list[ActiveAbilityDTO] = Field(default_factory=list)
-    raw: ActorRawDTO  # Typed Source
-    xp_buffer: dict[str, int] = Field(default_factory=dict)  # Accumulator
+    # --- Helpers ---
+    @property
+    def char_id(self) -> int:
+        return int(self.meta.id)
+
+    @property
+    def team(self) -> str:
+        return self.meta.team
 
     @property
     def is_alive(self) -> bool:
-        return not self.state.is_dead and self.state.hp > 0
+        return not self.meta.is_dead and self.meta.hp > 0
+
+    # Alias для совместимости (если нужно)
+    @property
+    def state(self) -> ActorMetaDTO:
+        return self.meta
 
 
 class BattleMeta(BaseModel):
@@ -213,10 +214,10 @@ class BattleMeta(BaseModel):
     step_counter: int
     active_actors_count: int
     teams: dict[str, list[int]]
-    winner: str | None = None  # Имя победившей команды (blue/red)
-    actors_info: dict[str, str] = Field(default_factory=dict)  # {id: type}
-    dead_actors: list[int] = Field(default_factory=list)  # Список мертвых
-    last_activity_at: int = 0  # Timestamp последней активности
+    winner: str | None = None
+    actors_info: dict[str, str] = Field(default_factory=dict)
+    dead_actors: list[int] = Field(default_factory=list)
+    last_activity_at: int = 0
     battle_type: str
     location_id: str
 
@@ -230,13 +231,8 @@ class BattleContext(BaseModel):
     meta: BattleMeta
     actors: dict[int, ActorSnapshot]
 
-    # Moves Cache (Загруженные JSON-документы мувов для резолвинга Pointers)
     moves_cache: dict[int, dict[str, Any]] = Field(default_factory=dict)
-
-    # Targets Cache (Очереди целей)
     targets: dict[int, list[int]] = Field(default_factory=dict)
-
-    # Output Buffers
     pending_logs: list[dict] = Field(default_factory=list)
 
     def get_actor(self, char_id: int) -> ActorSnapshot | None:
@@ -246,4 +242,4 @@ class BattleContext(BaseModel):
         me = self.get_actor(char_id)
         if not me:
             return []
-        return [a for a in self.actors.values() if a.team != me.team and a.is_alive]
+        return [a for a in self.actors.values() if a.team != me.meta.team and a.is_alive]

@@ -1,9 +1,11 @@
-# Combat DTO Specification (RBC v3.0)
+# 📦 Data Transfer Objects (DTOs)
 
-⬅️ [Назад](../README.md) | 🏠 [Документация](../../../../README.md)
+⬅️ [Назад](../README.md) | 🏠 [Документация](../../../../../README.md)
+
+**Status:** Final
+**Implementation:** `apps/common/schemas_dto/modifier_dto.py`, `apps/game_core/modules/combat/dto/combat_internal_dto.py`
 
 Этот документ является **Единым Источником Истины** для всех Python-классов (DTO), используемых в боевой системе.
-Файл реализации: `apps/common/schemas_dto/combat_source_dto.py`.
 
 ---
 
@@ -84,7 +86,7 @@ class CollectorSignalDTO(BaseModel):
 ```python
 class SessionDataDTO(BaseModel):
     meta: Dict[str, Any]
-    actors: Dict[str, Dict[str, Any]] # {char_id: {state, raw, ...}}
+    actors: Dict[str, Dict[str, Any]] # {char_id: {meta, raw, skills, loadout...}}
     targets: Dict[int, List[int]]
 ```
 
@@ -123,69 +125,48 @@ class AiTurnRequestDTO(BaseModel):
 
 ## 4. Runtime Context DTOs (Worker Memory)
 
-### ActorState (Hot Data)
-Изменяемые параметры из Redis Hash `:state`.
-```python
-class ActorState(BaseModel):
-    hp: int
-    max_hp: int
-    en: int
-    max_en: int
-    tactics: int
-    afk_level: int
-    is_dead: bool
-    exchange_count: int
-    tokens: Dict[str, int]  # {"gift": 1, "parry": 1}
-```
+### 4.1. ActorSnapshot (The Root)
+Зеркальное отражение структуры данных в Redis JSON.
+Используется для хранения состояния актера в памяти воркера.
 
-### ActorRawDTO (Cold Data)
-Строгая типизация для `:raw` данных.
-```python
-class ActorRawDTO(BaseModel):
-    attributes: Dict[str, Any]
-    modifiers: Dict[str, Any]
-    
-    # Whitelist доступных абилок
-    known_abilities: List[str]
-    
-    # Маппинг экипировки для XP сервиса
-    # {"main_hand": "light_weapons", "head_armor": "heavy_armor"}
-    equipment_layout: Dict[str, str]
-```
-
-### ActiveAbilityDTO (Dynamic Modifiers)
-Активные эффекты из Redis JSON `:active_abilities`.
-```python
-class ActiveAbilityDTO(BaseModel):
-    uid: str
-    ability_id: str
-    source_id: int
-    expire_at_exchange: int  # Таймер жизни (в разменах)
-    impact: Dict[str, int]   # {"hp": -10}
-    payload: Dict[str, Any]
-```
-
-### ActorSnapshot (The Root)
-Агрегатор данных актера в памяти.
 ```python
 class ActorSnapshot(BaseModel):
-    char_id: int
-    team: str
+    meta: ActorMetaDTO       # ID, Team, HP, En
+    raw: ActorRawDTO         # Attributes, Modifiers (Source)
+    skills: dict[str, float] # Skill Levels (Source)
+    loadout: ActorLoadoutDTO # Equipment, Belt, Tags
+    active_abilities: list   # Dynamic Effects
+    xp_buffer: dict          # XP Accumulator
+    metrics: dict            # Analytics Counters
+    explanation: dict        # Debug Formulas
     
-    state: ActorState
-    
-    # Calculated (In-Memory only)
-    # Может быть None, если еще не посчитан в этом цикле
-    stats: Optional[ActorStats] = None 
-    
-    # Optimization: Dirty Flags
-    # Список полей, которые изменились в :raw и требуют пересчета
-    dirty_stats: Set[str] = Field(default_factory=set)
-    
-    active_abilities: List[ActiveAbilityDTO]
-    raw: ActorRawDTO        # Typed Source
-    xp_buffer: Dict[str, int] # Accumulator
+    # Calculated (In-Memory Cache)
+    stats: ActorStats | None
+    dirty_stats: set[str]
 ```
+
+### 4.2. ActorStats (Calculated)
+Результат вычислений (`StatsEngine`). Используется в `CombatResolver`.
+**Не сохраняется в Redis.**
+
+```python
+class ActorStats(BaseModel):
+    mods: CombatModifiersDTO  # Результат калькулятора (включая StatusStats)
+    skills: CombatSkillsDTO   # Копия из Snapshot
+```
+
+### 4.3. ActorMetaDTO
+Мета-данные и состояние (Hot Data).
+*   `id`, `name`, `team`.
+*   `hp`, `max_hp`, `en`, `max_en`.
+*   `is_dead`, `tokens`.
+
+### 4.4. ActorLoadoutDTO
+Экипировка и конфигурация.
+*   `layout`: `{ "main_hand": "skill_swords" }`.
+*   `belt`: Список предметов.
+*   `known_abilities`: Список ID абилок.
+*   `tags`: `["player", "undead"]`.
 
 ---
 
@@ -206,11 +187,23 @@ class InteractionResultDTO(BaseModel):
     is_miss: bool
     is_counter: bool
     
-    tokens_atk: Dict[str, int]
-    tokens_def: Dict[str, int]
+    tokens_awarded_attacker: List[str]
+    tokens_awarded_defender: List[str]
     
     logs: List[str]
 ```
+
+---
+
+## 6. Common DTOs (Shared)
+
+### CombatModifiersDTO
+Содержит **только** числовые модификаторы (без скиллов).
+Используется в `ActorStats.mods`.
+
+### CombatSkillsDTO
+Содержит уровни боевых навыков.
+Используется в `ActorStats.skills`.
 
 ---
 
