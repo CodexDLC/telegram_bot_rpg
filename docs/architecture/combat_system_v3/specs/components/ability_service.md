@@ -29,6 +29,78 @@
 4.  **Установка Флагов:** Может включить/выключить флаги в `ctx.flags` (например, `force.crit = True`).
 5.  **Регистрация Триггеров:** Записывает в `ctx.triggers` инструкции для Post-Calc (например, `{"on_hit": "apply_bleed"}`).
 
+### A.2. Trigger Activation (Композиция эффектов)
+
+Ability Service отвечает за активацию триггеров из скиллов и финтов.
+
+**Логика:**
+1. Читает `skill.triggers` или `feint.triggers` (список имён)
+2. Для каждого имени выставляет флаг `ctx.triggers.<name> = True`
+3. Resolver проверит эти флаги на соответствующих событиях
+
+**Пример:**
+```python
+# Pre-Calc
+def pre_process(self, ctx: PipelineContextDTO, move: CombatMoveDTO):
+    skill_id = move.payload.get("skill_id")
+    if skill_id:
+        skill_config = ABILITIES[skill_id]
+        # Активируем ВСЕ триггеры из скилла
+        for trigger_name in skill_config.get("triggers", []):
+            setattr(ctx.triggers, trigger_name, True)
+```
+
+**Trigger Chains (Цепочки):**
+
+Абилка может активировать НЕСКОЛЬКО триггеров одновременно:
+```python
+{
+    "skill_id": "devastating_strike",
+    "name": "Разящий удар",
+    "cost": 5,
+    "triggers": [
+        "trigger_force_crit",    # Гарантированный крит
+        "trigger_armor_break",   # Снятие брони (при крите)
+        "trigger_stun"           # Оглушение (при крите)
+    ]
+}
+```
+
+**Обработка:**
+1. Ability Service ставит все 3 флага
+2. `trigger_force_crit` срабатывает сразу → `ctx.flags.force.crit = True`
+3. Resolver видит крит → вызывает `_resolve_triggers("ON_CRIT")`
+4. `trigger_armor_break` и `trigger_stun` проверяются и применяются
+
+### A.3. RAW Mutations (Изменение характеристик)
+
+Ability Service может изменять характеристики ПЕРЕД расчётом урона.
+
+**Примеры:**
+
+**Обнуление урона (Shield Bash):**
+```python
+if skill_id == "shield_bash":
+    ctx.override_damage = (0, 0)  # min = 0, max = 0
+    ctx.triggers.trigger_stun = True
+```
+
+**Усиление урона (Power Strike):**
+```python
+if skill_id == "power_strike":
+    actor.raw.modifiers["main_hand_damage_base"]["temp"] = {
+        "ability": "*1.5"
+    }
+    actor.dirty_stats.add("main_hand_damage_base")
+```
+
+**Установка фиксированного значения:**
+```python
+actor.raw.modifiers["dodge_chance"]["temp"] = {
+    "root_effect": "=0"  # Обездвиживание, уворот невозможен
+}
+```
+
 ### B. Post-Calculation (Реакция)
 Вызывается после получения результата от `CombatResolver`.
 

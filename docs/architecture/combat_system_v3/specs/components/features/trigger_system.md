@@ -10,6 +10,72 @@
 *   **Ability Service** интерпретирует "сложные" триггеры (эффекты, статусы) и модифицирует флаги.
 *   **Combat Calculator** исполняет математику на основе финальных флагов.
 
+## 1.5. Philosophy: Universal Trigger Mechanism
+
+### Ключевая идея
+Триггеры — это **УНИВЕРСАЛЬНАЯ** система для всех источников эффектов:
+- Оружие (weapon triggers)
+- Финты (feint triggers)
+- Скиллы (ability triggers)
+- Стойки (stance triggers)
+
+**Все используют ОДНУ библиотеку** `TRIGGER_RULES` и **ОДНУ логику** обработки в `CombatResolver._resolve_triggers()`.
+
+### Разница только в источнике активации
+
+| Источник | Где активируется | Когда проверяется |
+|----------|------------------|-------------------|
+| **Weapon** | `ContextBuilder` (из `weapon.triggers`) | `ON_CRIT` / `ON_HIT` |
+| **Ability** | `AbilityService.pre_process()` (из `skill.triggers`) | Любое событие |
+| **Feint** | `AbilityService.pre_process()` (из `feint.triggers`) | Любое событие |
+
+### Data Flow
+```mermaid
+graph TD
+    TR[TRIGGER_RULES Library] -->|Definitions| CB
+    TR -->|Definitions| AS
+
+    subgraph Sources
+        W[Weapon.triggers]
+        S[Skill.triggers]
+        F[Feint.triggers]
+    end
+
+    W --> CB[Context Builder]
+    S --> AS[Ability Service]
+    F --> AS
+
+    CB -->|ctx.triggers.*| CR[Combat Resolver]
+    AS -->|ctx.triggers.*| CR
+
+    CR -->|Logic Execution| RES[Result]
+```
+
+### Пример: Одинаковая обработка
+
+**Меч (weapon):**
+```python
+BaseItemDTO(
+    id="longsword",
+    triggers=["trigger_bleed"]  # Активируется Context Builder
+)
+```
+
+**Финт (ability):**
+```python
+{
+    "feint_id": "bleeding_strike",
+    "triggers": ["trigger_bleed"]  # Активируется Ability Service
+}
+```
+
+**Резолвер:**
+```python
+# Оба триггера обрабатываются ОДИНАКОВО
+if ctx.triggers.trigger_bleed:
+    res.ability_flags.apply_bleed = True
+```
+
 ---
 
 ## 2. Типы Флагов (Flag Taxonomy)

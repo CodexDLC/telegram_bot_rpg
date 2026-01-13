@@ -1,27 +1,16 @@
 from apps.game_core.modules.combat.combat_engine.logic.math_core import MathCore
-from apps.game_core.modules.combat.dto.combat_internal_dto import ActorStats
-from apps.game_core.modules.combat.dto.combat_pipeline_dto import InteractionResultDTO, PipelineContextDTO
-
-# ==============================================================================
-# 2. LOGIC
-# ==============================================================================
-
-TRIGGER_RULES = {
-    "ON_HIT": {"trigger_combo": {"chance": 0.25, "mutations": {"check_evasion": False, "check_crit": True}}},
-    "ON_DODGE": {"trigger_counter_dodge": {"chance": 0.5, "mutations": {"enable_counter": True}}},
-    "ON_DODGE_FAIL": {},
-    "ON_PARRY": {},
-    "ON_PARRY_FAIL": {},
-    "ON_BLOCK": {},
-    "ON_BLOCK_FAIL": {},
-    "ON_CRIT": {},
-    "ON_CRIT_FAIL": {},
-}
+from apps.game_core.modules.combat.dto.combat_actor_dto import ActorStats
+from apps.game_core.modules.combat.dto.combat_pipeline_dto import (
+    InteractionResultDTO,
+    PipelineContextDTO,
+)
+from apps.game_core.resources.game_data.triggers import TRIGGER_RULES
 
 
 class CombatResolver:
     """
     Stateless Math Engine.
+    Отвечает за расчет одного взаимодействия (Attacker -> Defender).
     """
 
     @classmethod
@@ -396,25 +385,58 @@ class CombatResolver:
 
     @staticmethod
     def _resolve_triggers(ctx: PipelineContextDTO, res: InteractionResultDTO, step_key: str):
+        """
+        Обрабатывает триггеры, используя глобальную библиотеку правил.
+        """
         rules_book = TRIGGER_RULES.get(step_key)
         if not rules_book or not isinstance(rules_book, dict):
             return
 
         for trigger_name, rule_data in rules_book.items():
+            # 1. Проверяем, активирован ли триггер в контексте
             if not getattr(ctx.triggers, trigger_name, False):
                 continue
 
+            # 2. Проверяем шанс срабатывания
             raw_chance = rule_data.get("chance", 0.0)
             chance = float(raw_chance) if isinstance(raw_chance, (int, float)) else 0.0
 
             if not MathCore.check_chance(chance):
                 continue
 
+            # 3. Применяем мутации
             for key, value in rule_data.get("mutations", {}).items():
+                # A) Флаги пайплайна (stages, flags)
                 if hasattr(ctx.stages, key):
                     setattr(ctx.stages, key, value)
                 elif hasattr(ctx.flags, key):
-                    setattr(ctx.flags, key, value)
+                    # Пытаемся найти флаг рекурсивно или плоско
+                    # Для простоты пока плоско, но можно расширить
+                    if hasattr(ctx.flags, key):
+                        setattr(ctx.flags, key, value)
+                    # Если это вложенный флаг (например, formula.crit_damage_boost)
+                    # то в mutations ключи должны быть плоскими, если мы не напишем парсер.
+                    # В текущей реализации TriggerDTO mutations - это плоский dict.
+                    # Поэтому проверим вложенные объекты вручную:
+                    elif hasattr(ctx.flags.formula, key):
+                        setattr(ctx.flags.formula, key, value)
+                    elif hasattr(ctx.flags.force, key):
+                        setattr(ctx.flags.force, key, value)
+                    elif hasattr(ctx.flags.restriction, key):
+                        setattr(ctx.flags.restriction, key, value)
+                    elif hasattr(ctx.mods, key):
+                        setattr(ctx.mods, key, value)
+
+                # B) Инструкции для AbilityService (AbilityFlagsDTO)
+                elif hasattr(res.ability_flags, key):
+                    setattr(res.ability_flags, key, value)
+                    # Если есть pending_effect_data в мутациях
+                    if key == "pending_effect_data" and isinstance(value, dict):
+                        res.ability_flags.pending_effect_data.update(value)
+
+                # C) Pending Effect Data (Special Case)
+                elif key == "pending_effect_data" and isinstance(value, dict):
+                    res.ability_flags.pending_effect_data.update(value)
 
     @staticmethod
     def _get_offensive_val(stats: ActorStats, ctx: PipelineContextDTO, stat_name: str) -> float:
@@ -428,6 +450,8 @@ class CombatResolver:
             prefix = "off_hand_"
         elif current_source == "main_hand":
             prefix = "main_hand_"
+        elif current_source == "item":
+            prefix = "item_"
 
         full_stat_name = f"{prefix}{stat_name}"
 

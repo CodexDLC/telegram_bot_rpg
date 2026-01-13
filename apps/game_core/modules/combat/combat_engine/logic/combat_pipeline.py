@@ -1,13 +1,13 @@
 from typing import Any
 
-from apps.game_core.modules.combat.services.ability_service import AbilityService
-from apps.game_core.modules.combat.services.mechanics_service import MechanicsService
-
-from apps.common.schemas_dto.combat_source_dto import CombatMoveDTO
+from apps.game_core.modules.combat.combat_engine.logic.ability_service import AbilityService
 from apps.game_core.modules.combat.combat_engine.logic.combat_resolver import CombatResolver
 from apps.game_core.modules.combat.combat_engine.logic.context_builder import ContextBuilder
+from apps.game_core.modules.combat.combat_engine.logic.mechanics_service import (
+    MechanicsService,
+)
 from apps.game_core.modules.combat.combat_engine.logic.stats_engine import StatsEngine
-from apps.game_core.modules.combat.dto.combat_internal_dto import ActorSnapshot, InteractionResultDTO
+from apps.game_core.modules.combat.dto import ActorSnapshot, CombatMoveDTO, InteractionResultDTO
 
 
 class CombatPipeline:
@@ -36,7 +36,12 @@ class CombatPipeline:
 
         # 1. Pre-Calculation (Ability Service)
         if ctx.phases.run_pre_calc:
-            self.ability_service.pre_process(ctx, move)
+            # Передаем source, так как AbilityService теперь требует actor для списания ресурсов
+            self.ability_service.pre_process(ctx, move, source)
+
+        # Если пре-кальк прервал пайплайн (например, не хватило маны)
+        if not ctx.phases.run_calculator:
+            return InteractionResultDTO()  # Пустой результат или с ошибкой
 
         # 1.5. Stats Calculation (Stats Engine)
         # Актуализируем статы (если были изменения в pre-calc)
@@ -46,9 +51,10 @@ class CombatPipeline:
 
         # 1.6. Liveness Check
         if not source.is_alive:
-            return InteractionResultDTO(logs=["Attacker is dead"])
+            # TODO: Вернуть результат с флагом ошибки
+            return InteractionResultDTO()
         if target and not target.is_alive:
-            return InteractionResultDTO(logs=["Target is dead"])
+            return InteractionResultDTO()
 
         # 2. Calculator (Resolver)
         result = InteractionResultDTO()
@@ -57,9 +63,9 @@ class CombatPipeline:
 
         # 3. Post-Calculation (Ability Service)
         if ctx.phases.run_post_calc:
-            self.ability_service.post_process(ctx, result)
+            self.ability_service.post_process(ctx, result, source, target, move)
 
         # 4. Mechanics (Apply Results)
-        self.mechanics_service.apply_interaction_result(ctx, result)
+        self.mechanics_service.apply_interaction_result(ctx, result, source, target)
 
         return result

@@ -45,12 +45,12 @@ apps/game_core/modules/
 Создание предметов через `ItemAssembler`, генерация лута, интеграция с боевой системой.
 
 **Документы:**
-1. [Обзор системы предметов](./items/README.md)
+1. [Обзор системы предметов (Game Design)](../../rpg_system/items/README.md)
 2. [DTO справочник](./items/item_dto_reference.md)
 3. [Конвейер создания предметов](./items/item_creation_pipeline.md)
 4. [Миграция на DTO](./items/migration_to_dto.md)
 5. [Интеграция с боем](./items/combat_integration.md)
-6. [Система триггеров](./items/weapon_triggers/README.md)
+6. [Система триггеров (Game Design)](../../rpg_system/items/weapon_triggers.md)
 
 ### Inventory Module
 
@@ -58,7 +58,7 @@ apps/game_core/modules/
 
 **Документы:**
 1. [Обзор модуля инвентаря](./inventory/README.md)
-2. [Архитектура](./inventory/architecture.md)
+2. [Архитектура](./inventory/inventory_architecture.md)
 3. [Управление сессиями](./inventory/session_management.md)
 4. [Gateway API](./inventory/gateway.md)
 5. [Форматирование данных](./inventory/formatting_and_ui.md)
@@ -197,10 +197,10 @@ InventoryFormatter → UI данные
 
 ## 📚 Связанная документация
 
-- **Боевая система:** `/docs/architecture/combat_system_v3/`
-- **ContextAssembler:** `/docs/architecture/game_core_services/context_assembler_v2/`
-- **CoreRouter:** `/docs/architecture/game_core_services/core_router/`
-- **Redis Sessions:** `/docs/architecture/redis_sessions/`
+- **Боевая система:** `../../combat_system_v3/README.md`
+- **ContextAssembler:** `../../game_core_services/context_assembler_v2/README.md`
+- **CoreRouter:** `../../game_core_services/core_router/README.md`
+- **Redis Sessions:** `../../redis_sessions/README.md`
 
 ---
 

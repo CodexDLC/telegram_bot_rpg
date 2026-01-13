@@ -4,9 +4,9 @@
 Внутренние DTO перенесены в apps/game_core/modules/combat/dto/combat_internal_dto.py
 """
 
-from typing import Any, NamedTuple, TypedDict
+from typing import TypedDict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 # ==============================================================================
 # 1. 📦 PAYLOADS (TypedDicts for Polymorphism)
@@ -40,56 +40,7 @@ class ExchangePayload(TypedDict):
 
 
 # ==============================================================================
-# 2. 📡 ROUTER & SIGNALS (Ingress)
-# ==============================================================================
-
-
-class CombatMoveDTO(BaseModel):
-    """
-    "Пуля" (Intent) - заявка на ход от игрока.
-    Хранится в RedisJSON (`moves:{char_id}`).
-    """
-
-    move_id: str  # Unique Short ID
-    char_id: int  # Кто ходит
-
-    # Зона хранения и Логика обработки
-    strategy: str  # "item" | "instant" | "exchange"
-
-    created_at: float  # Timestamp
-
-    # Полиморфный контейнер данных
-    payload: dict[str, Any]  # ItemPayload | InstantPayload | ExchangePayload
-
-    # Результат резолвинга целей (заполняется Колектором)
-    targets: list[int] | None = None
-
-
-class CollectorSignalDTO(BaseModel):
-    """
-    Сигнал для триггера Колектора.
-    Отправляется Роутером в очередь `arq:combat_collector`.
-    """
-
-    session_id: str
-    char_id: int
-    signal_type: str  # "check_immediate" | "check_timeout"
-    move_id: str | None = None
-
-
-class CombatActionResultDTO(BaseModel):
-    """
-    Результат принятия действия (для API).
-    """
-
-    success: bool
-    move_id: str | None = None
-    message: str | None = None
-    error: str | None = None
-
-
-# ==============================================================================
-# 3. 🖥️ UI / DASHBOARD (Client View)
+# 2. 🖥️ UI / DASHBOARD (Client View)
 # ==============================================================================
 
 
@@ -161,31 +112,3 @@ class CombatLogDTO(BaseModel):
     logs: list[CombatLogEntryDTO]
     total: int
     page: int
-
-
-# ==============================================================================
-# 4. 🏁 INITIALIZATION (Setup)
-# ==============================================================================
-
-
-class CombatTeamDTO(BaseModel):
-    """Описание команды для создания боя."""
-
-    players: list[int] = Field(default_factory=list)
-    pets: list[int] = Field(default_factory=list)
-    monsters: list[str] = Field(default_factory=list)
-
-
-class CombatInitContextDTO(BaseModel):
-    """Контекст инициализации (передается в CombatInitService)."""
-
-    mode: str = "standard"
-    teams: list[CombatTeamDTO]
-
-
-class SessionDataDTO(NamedTuple):
-    """DTO for transferring assembled data to the persistence method."""
-
-    meta: dict[str, Any]
-    actors: dict[str, dict[str, Any]]  # final_id -> {key: value} (HASH/JSON fields)
-    targets: dict[str, list[str]]  # final_id -> [enemy_id, ...]

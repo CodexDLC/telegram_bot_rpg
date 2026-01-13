@@ -2,10 +2,10 @@ from typing import Any
 
 from loguru import logger as log
 
-from apps.common.schemas_dto.combat_source_dto import CombatMoveDTO
 from apps.game_core.modules.combat.combat_engine.logic.math_core import MathCore
-from apps.game_core.modules.combat.dto.combat_internal_dto import ActorSnapshot
-from apps.game_core.modules.combat.dto.combat_pipeline_dto import (
+from apps.game_core.modules.combat.dto import (
+    ActorSnapshot,
+    CombatMoveDTO,
     PipelineContextDTO,
     PipelineFlagsDTO,
     PipelineModsDTO,
@@ -37,15 +37,7 @@ class ContextBuilder:
         mods_b: dict[str, Any] = {}
 
         # 1. Interference Check (Stun/Sleep)
-        # Проверяем source
-        if ContextBuilder._check_control_effects(source):
-            mods_a["disable_attack"] = True
-            log.info(f"ContextBuilder | Actor {source.char_id} is controlled (stun/sleep)")
-
-        # Проверяем target (если он тоже атакует в ответ)
-        if move_b and ContextBuilder._check_control_effects(target):
-            mods_b["disable_attack"] = True
-            log.info(f"ContextBuilder | Actor {target.char_id} is controlled (stun/sleep)")
+        # Убрано: проверка контроля перенесена в AbilityService.pre_process
 
         # 2. Dual Wield Check (Только если атака не отключена)
         if not mods_a.get("disable_attack") and ContextBuilder._check_dual_wield(source):
@@ -59,28 +51,14 @@ class ContextBuilder:
         return mods_a, mods_b
 
     @staticmethod
-    def _check_control_effects(actor: ActorSnapshot) -> bool:
-        """Проверяет наличие эффектов контроля."""
-        for ability in actor.active_abilities:
-            # TODO: Проверять теги эффекта (is_stun, is_sleep)
-            # Пока заглушка: смотрим payload
-            if ability.payload.get("is_stun") or ability.payload.get("is_sleep"):
-                return True
-        return False
-
-    @staticmethod
     def _check_dual_wield(actor: ActorSnapshot) -> bool:
         """Проверяет возможность и шанс удара второй рукой."""
-        # 1. Проверяем наличие оружия в off_hand
         off_hand_skill = actor.loadout.layout.get("off_hand")
         if not off_hand_skill or "shield" in off_hand_skill:
             return False
 
-        # 2. Проверяем шанс (Skill Dual Wield)
-        # Шанс = 25% (база) + бонусы?
-        # Берем уровень скилла из snapshot.skills (если есть)
         skill_val = actor.skills.get("skill_dual_wield", 0.0)
-        chance = 0.25 + (skill_val * 0.01)  # Пример формулы
+        chance = 0.25 + (skill_val * 0.01)
 
         return MathCore.check_chance(chance)
 
@@ -93,11 +71,10 @@ class ContextBuilder:
     ) -> PipelineContextDTO:
         """
         Сборка контекста.
+        НЕ сохраняет actor/target в DTO, только настраивает флаги.
         """
-        # 1. Базовая инициализация
+        # 1. Базовая инициализация (Чистый DTO)
         ctx = PipelineContextDTO(
-            actor=actor,
-            target=target,
             phases=PipelinePhasesDTO(),
             flags=PipelineFlagsDTO(),
             mods=PipelineModsDTO(),
@@ -109,44 +86,72 @@ class ContextBuilder:
         if external_mods:
             ContextBuilder._apply_external_mods(ctx, external_mods)
 
-        # 3. Анализ Интента (Move Analysis)
-        ContextBuilder._analyze_intent(ctx, move, external_mods)
+        # 3. Анализ Интента (Move Analysis) - Атакующий
+        ContextBuilder._analyze_intent(ctx, actor, move, external_mods)
+
+        # 4. Анализ Защиты (Defense Analysis) - Защитник
+        if target:
+            ContextBuilder._analyze_defense(ctx, target)
 
         return ctx
 
     @staticmethod
     def _apply_external_mods(ctx: PipelineContextDTO, mods: dict[str, Any]) -> None:
         """
-        Применяет модификаторы от InterferenceService (прерывание, оглушение).
+        Применяет модификаторы от InterferenceService.
         """
         if mods.get("disable_attack"):
             ctx.phases.run_calculator = False
-            # Но оставляем run_post_calc, чтобы снять дебаффы или триггернуть "Fail"
 
     @staticmethod
-    def _analyze_intent(ctx: PipelineContextDTO, move: CombatMoveDTO, external_mods: dict[str, Any] | None) -> None:
+    def _analyze_intent(
+        ctx: PipelineContextDTO, actor: ActorSnapshot, move: CombatMoveDTO, external_mods: dict[str, Any] | None
+    ) -> None:
         """
-        Настраивает флаги на основе типа атаки (Skill, Item, Basic).
+        Настраивает мета-флаги Атаки (Source Type, Weapon Class).
         """
-        payload = move.payload
+        strategy = move.strategy
 
-        # Определяем тип источника (main_hand, off_hand, magic)
-        # По умолчанию - main_hand, если не переопределено в external_mods
+        # 1. MAGIC / SKILL
+        if strategy == "instant":
+            ctx.flags.meta.source_type = "magic"
+            return
+
+        # 2. ITEM
+        if strategy == "item":
+            ctx.flags.meta.source_type = "item"
+            return
+
+        # 3. EXCHANGE (Melee/Ranged Attack)
+        # Определяем Source Type (main_hand / off_hand)
         source_type = "main_hand"
         if external_mods and "source_type" in external_mods:
             source_type = external_mods["source_type"]
 
         ctx.flags.meta.source_type = source_type
 
-        # Если это скилл - смотрим его свойства (пока заглушка)
-        skill_id = payload.get("skill_id")
-        if skill_id:
-            # TODO: Load skill config and set flags
-            # if skill.is_magic: ctx.flags.damage.fire = True
-            pass
+        # Определяем Weapon Class (для скиллов и триггеров)
+        if source_type in ["main_hand", "off_hand"]:
+            weapon_skill_key = actor.loadout.layout.get(source_type)
+            # Пример: "skill_swords" -> "swords"
+            if weapon_skill_key and weapon_skill_key.startswith("skill_"):
+                ctx.flags.meta.weapon_class = weapon_skill_key.replace("skill_", "")
 
-        # Если это предмет
-        item_id = payload.get("item_id")
-        if item_id:
-            # TODO: Load item config
-            pass
+    @staticmethod
+    def _analyze_defense(ctx: PipelineContextDTO, target: ActorSnapshot) -> None:
+        """
+        Настраивает флаги Защиты (Armor Type, Shield).
+        """
+        layout = target.loadout.layout
+
+        # 1. Armor Type (Body)
+        body_skill = layout.get("body")
+        if body_skill == "skill_light_armor":
+            ctx.flags.mastery.light_armor = True
+        elif body_skill == "skill_medium_armor":
+            ctx.flags.mastery.medium_armor = True
+
+        # 2. Shield (Off-hand)
+        off_hand_skill = layout.get("off_hand")
+        if off_hand_skill == "skill_shield":
+            ctx.flags.mastery.shield_reflect = True

@@ -1,48 +1,57 @@
-from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class AbilityType(str, Enum):
-    INSTANT = "instant"
-    REACTION = "reaction"
-    PASSIVE = "passive"
+class AbilityCostDTO(BaseModel):
+    """
+    Стоимость абилки (Gift).
+    """
+
+    energy: int = 0  # Энергия (мана)
+    gift: int = 0  # Токен Дара
+    hp: int = 0  # Здоровье (кровавая магия)
 
 
-class AbilitySource(str, Enum):
-    GIFT = "gift"
-    COMBAT = "combat"
+class AbilityConfigDTO(BaseModel):
+    """
+    Конфигурация абилки (Gift Ability).
+    Источник: Дар (магия, особые способности).
+    """
 
-
-class AbilityTarget(str, Enum):
-    SELF = "self"
-    SINGLE_ENEMY = "single_enemy"
-    ALL_ENEMIES = "all_enemies"
-    SINGLE_ALLY = "single_ally"
-    ALL_ALLIES = "all_allies"
-
-
-class EffectConfig(BaseModel):
-    trigger: str
-    action: str
-    params: dict[str, Any]
-
-
-class AbilityDTO(BaseModel):
     ability_id: str
-    name_en: str
     name_ru: str
+    description_ru: str
 
-    type: AbilityType
-    source: AbilitySource
-    target: AbilityTarget
+    # === COST ===
+    cost: AbilityCostDTO = Field(default_factory=AbilityCostDTO)
 
-    cost_energy: int = 0
-    cost_hp: int = 0
-    cost_tokens: dict[str, int] = Field(default_factory=dict)
+    # === TARGETING ===
+    # Тип действия (instant, reaction, passive)
+    type: str = "instant"
+    # Цель (self, single_enemy, all_enemies, multi_enemy)
+    target: str = "single_enemy"
+    # Количество целей (если target="multi_enemy" или для ограничения all_enemies)
+    target_count: int = 1
 
-    flags: dict[str, Any] = Field(default_factory=dict)
-    effects: list[EffectConfig] = Field(default_factory=list)
+    # === INSTRUCTIONS (Для AbilityService) ===
 
-    description: str
+    # Прямое изменение статов (RAW)
+    # Пример: {"magical_damage_bonus": "*2.0"}
+    raw_mutations: dict[str, str] | None = None
+
+    # Изменение флагов пайплайна
+    # Пример: {"damage.fire": True}
+    pipeline_mutations: dict[str, Any] | None = None
+
+    # Активация триггеров (ссылки на TRIGGER_RULES)
+    triggers: list[str] | None = None
+
+    # Условные триггеры
+    conditional_triggers: dict[str, list[str]] | None = None
+
+    # Полная замена урона
+    override_damage: tuple[float, float] | None = None
+
+    # Эффекты, накладываемые ПОСЛЕ расчета (Post-Calc)
+    post_calc_effects: list[dict[str, Any]] | None = None
