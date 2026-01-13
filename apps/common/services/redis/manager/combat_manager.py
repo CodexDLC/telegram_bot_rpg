@@ -25,7 +25,7 @@ class CombatManager:
         """Загрузка HASH :meta"""
         return await self.redis.get_all_hash(Rk.get_rbc_meta_key(session_id))
 
-    async def pop_player_target(self, session_id: str, char_id: int) -> int | None:
+    async def pop_player_target(self, session_id: str, char_id: int | str) -> int | None:
         """
         [ATOMIC] Извлекает (Pop) первую цель из персонального пула :targets.
         """
@@ -36,7 +36,7 @@ class CombatManager:
         )
         return int(res[0]) if res and res[0] else None
 
-    async def peek_player_target(self, session_id: str, char_id: int) -> int | None:
+    async def peek_player_target(self, session_id: str, char_id: int | str) -> int | None:
         """
         Возвращает первую цель из очереди, НЕ удаляя ее (PEEK).
         Используется для ViewService.
@@ -65,32 +65,12 @@ class CombatManager:
             pipe.expire(targets_key, ttl)
 
             # 3. Actors (Namespace)
-            for aid, keys in data.actors.items():
+            for aid, actor_data in data.actors.items():
                 base_key = Rk.get_rbc_actor_key(session_id, str(aid))
 
-                # :state (Hash)
-                pipe.hset(f"{base_key}:state", mapping=keys["state"])
-                pipe.expire(f"{base_key}:state", ttl)
-
-                # :raw (JSON)
-                pipe.json().set(f"{base_key}:raw", "$", keys["raw"])  # type: ignore
-                pipe.expire(f"{base_key}:raw", ttl)
-
-                # :loadout (JSON)
-                pipe.json().set(f"{base_key}:loadout", "$", keys["loadout"])  # type: ignore
-                pipe.expire(f"{base_key}:loadout", ttl)
-
-                # :meta (JSON)
-                pipe.json().set(f"{base_key}:meta", "$", keys["meta"])  # type: ignore
-                pipe.expire(f"{base_key}:meta", ttl)
-
-                # :active_abilities (JSON)
-                pipe.json().set(f"{base_key}:active_abilities", "$", keys["active_abilities"])  # type: ignore
-                pipe.expire(f"{base_key}:active_abilities", ttl)
-
-                # :data_xp (JSON)
-                pipe.json().set(f"{base_key}:data_xp", "$", keys["data_xp"])  # type: ignore
-                pipe.expire(f"{base_key}:data_xp", ttl)
+                # Unified JSON Key
+                pipe.json().set(base_key, "$", actor_data)  # type: ignore
+                pipe.expire(base_key, ttl)
 
                 # :moves (JSON) - Init with empty dicts
                 moves_key = Rk.get_combat_moves_key(session_id, str(aid))
@@ -101,25 +81,18 @@ class CombatManager:
         await self.redis.execute_pipeline(_fill_pipe)
 
     async def universal_hot_join(
-        self, session_id: str, char_id: int, team_name: str, actor_data: dict, is_ai: bool = True
+        self, session_id: str, char_id: int | str, team_name: str, actor_data: dict, is_ai: bool = True
     ) -> None:
         """
         [UNIVERSAL HOT-JOIN] Атомарно внедряет любого актера (игрока, бота, хаос) в текущую сессию.
-        1. Создает инфраструктуру ключей актера.
-        2. Обновляет Meta (teams, actors_info).
-        3. Обновляет Targets (взаимная видимость врагов).
         """
 
         # 1. Создаем инфраструктуру (Pipeline)
         def _fill_pipe(pipe: Pipeline) -> None:
             base = Rk.get_rbc_actor_key(session_id, str(char_id))
 
-            pipe.hset(f"{base}:state", mapping=actor_data["state"])
-            pipe.json().set(f"{base}:raw", "$", actor_data["raw"])  # type: ignore
-            pipe.json().set(f"{base}:loadout", "$", actor_data["loadout"])  # type: ignore
-            pipe.json().set(f"{base}:meta", "$", actor_data["meta"])  # type: ignore
-            pipe.json().set(f"{base}:active_abilities", "$", [])  # type: ignore
-            pipe.json().set(f"{base}:data_xp", "$", {})  # type: ignore
+            # Unified JSON Key
+            pipe.json().set(base, "$", actor_data)  # type: ignore
 
             moves_key = Rk.get_combat_moves_key(session_id, str(char_id))
             pipe.json().set(moves_key, "$", {"exchange": {}, "item": {}, "instant": {}})  # type: ignore
@@ -151,7 +124,7 @@ class CombatManager:
             if tostring(id) == char_id then exists = true break end
         end
         if not exists then
-            table.insert(teams[team_name], tonumber(char_id))
+            table.insert(teams[team_name], tonumber(char_id) or char_id)
             redis.call("HSET", meta_key, "teams", cjson.encode(teams))
         end
         
@@ -167,8 +140,6 @@ class CombatManager:
         
         for actor_id, target_list in pairs(all_targets) do
             -- Определяем команду этого актера (нужно найти его в teams)
-            -- Это дорого (O(N*M)), но для Hot Join допустимо.
-            -- Или мы можем считать, что если он не в нашей команде - он враг.
             
             local is_enemy = true
             -- Проверяем, есть ли он в нашей команде
@@ -188,11 +159,11 @@ class CombatManager:
                     if tostring(tid) == char_id then already_target = true break end
                 end
                 if not already_target then
-                    table.insert(target_list, tonumber(char_id))
+                    table.insert(target_list, tonumber(char_id) or char_id)
                 end
                 
                 -- Он добавляется к нам в список целей
-                table.insert(new_actor_targets, tonumber(actor_id))
+                table.insert(new_actor_targets, tonumber(actor_id) or actor_id)
             end
         end
         
@@ -220,60 +191,76 @@ class CombatManager:
     # 2. ДАННЫЕ АКТОРА (BATCH LOADING)
     # ==========================================================================
 
-    async def load_full_context_data(self, session_id: str, char_ids: list[int]) -> dict[str, Any]:
+    async def load_full_context_data(self, session_id: str, char_ids: list[int | str]) -> dict[str, Any]:
         """
         Загружает данные всех участников сессии.
         Возвращает структурированный словарь: {char_id: {state, raw, loadout, ...}}
         """
         raw_results = await self.load_actors_data_batch(session_id, char_ids)
 
-        step = 7
+        step = 2  # Actor JSON + Moves JSON
         structured_data = {}
         for i, cid in enumerate(char_ids):
             idx = i * step
 
-            res_state = raw_results[idx]
-            res_raw = raw_results[idx + 1]
-            res_loadout = raw_results[idx + 2]
-            res_meta = raw_results[idx + 3]
-            res_active = raw_results[idx + 4]
-            res_xp = raw_results[idx + 5]
-            res_move = raw_results[idx + 6]
+            # Convert cid to string for consistency as dict key
+            cid_str = str(cid)
 
-            structured_data[cid] = {
-                "state": res_state,
-                "raw": res_raw if res_raw else {},
-                "loadout": res_loadout if res_loadout else {},
-                "meta": res_meta if res_meta else {},
-                "abilities": res_active if res_active else [],
-                "xp": res_xp if res_xp else {},
-                "move": res_move if res_move else {},  # Теперь это словарь списков {exchange: [], ...}
+            actor_data = raw_results[idx]
+            moves_data = raw_results[idx + 1]
+
+            if not actor_data:
+                # Fallback if actor not found
+                structured_data[cid_str] = {
+                    "state": {},
+                    "raw": {},
+                    "loadout": {},
+                    "meta": {},
+                    "abilities": [],
+                    "xp": {},
+                    "move": {},
+                }
+                continue
+
+            # Extract fields from unified JSON
+            # Note: state is now inside meta
+            meta = actor_data.get("meta", {})
+            state = {
+                "hp": meta.get("hp", 0),
+                "max_hp": meta.get("max_hp", 0),
+                "en": meta.get("en", 0),
+                "max_en": meta.get("max_en", 0),
+                "tactics": meta.get("tactics", 0),
+                "afk_level": meta.get("afk_level", 0),
+                "is_dead": meta.get("is_dead", False),
+                "tokens": meta.get("tokens", {}),
+            }
+
+            structured_data[cid_str] = {
+                "state": state,
+                "raw": actor_data.get("raw", {}),
+                "loadout": actor_data.get("loadout", {}),
+                "meta": meta,
+                "abilities": actor_data.get("active_abilities", []),
+                "xp": actor_data.get("xp_buffer", {}),
+                "skills": actor_data.get("skills", {}),
+                "move": moves_data if moves_data else {},
             }
 
         structured_data["global_queue"] = raw_results[-1]
         return structured_data
 
-    async def load_actors_data_batch(self, session_id: str, char_ids: list[int]) -> list[Any]:
+    async def load_actors_data_batch(self, session_id: str, char_ids: list[int | str]) -> list[Any]:
         """
-        Пакетная загрузка всех данных актеров (7 ключей на каждого).
+        Пакетная загрузка всех данных актеров (2 ключа на каждого).
         """
 
         def _load_batch(pipe: Pipeline) -> None:
             for cid in char_ids:
                 base_key = Rk.get_rbc_actor_key(session_id, str(cid))
-                # 0. State
-                pipe.hgetall(f"{base_key}:state")
-                # 1. Raw
-                pipe.json().get(f"{base_key}:raw")  # type: ignore
-                # 2. Loadout
-                pipe.json().get(f"{base_key}:loadout")  # type: ignore
-                # 3. Meta
-                pipe.json().get(f"{base_key}:meta")  # type: ignore
-                # 4. Active Abilities
-                pipe.json().get(f"{base_key}:active_abilities")  # type: ignore
-                # 5. XP Buffer
-                pipe.json().get(f"{base_key}:data_xp")  # type: ignore
-                # 6. Moves (Intents)
+                # 1. Unified Actor JSON
+                pipe.json().get(base_key)  # type: ignore
+                # 2. Moves (Intents)
                 pipe.json().get(Rk.get_combat_moves_key(session_id, str(cid)))  # type: ignore
 
             pipe.lrange(Rk.get_rbc_queue_key(session_id), 0, -1)
@@ -281,8 +268,8 @@ class CombatManager:
         return await self.redis.execute_pipeline(_load_batch)
 
     async def load_snapshot_data_batch(
-        self, session_id: str, char_ids: list[int]
-    ) -> tuple[dict[int, list[int]], list[Any]]:
+        self, session_id: str, char_ids: list[int | str]
+    ) -> tuple[dict[str, list[int]], list[Any]]:
         """
         Легкая загрузка для UI (Targets + Actors Data).
         Возвращает (targets_map, actors_data_list).
@@ -295,10 +282,8 @@ class CombatManager:
             # 2. Actors
             for cid in char_ids:
                 base_key = Rk.get_rbc_actor_key(session_id, str(cid))
-                pipe.hgetall(f"{base_key}:state")
-                pipe.json().get(f"{base_key}:meta")  # type: ignore
-                pipe.json().get(f"{base_key}:loadout")  # type: ignore
-                pipe.json().get(f"{base_key}:active_abilities")  # type: ignore
+                # Load specific fields to reduce bandwidth
+                pipe.json().get(base_key, "$.meta", "$.loadout", "$.active_abilities")  # type: ignore
                 pipe.json().get(Rk.get_combat_moves_key(session_id, str(cid)))  # type: ignore
 
         results = await self.redis.execute_pipeline(_load)
@@ -307,16 +292,37 @@ class CombatManager:
         targets_map = {}
         if targets_raw:
             for k, v in targets_raw.items():
-                if k.isdigit():
-                    targets_map[int(k)] = v
+                # Keys in JSON are always strings
+                targets_map[str(k)] = v
 
-        return targets_map, results[1:]
+        # Process actor results
+        # Results structure: [targets, actor1_data, actor1_moves, actor2_data, actor2_moves, ...]
+        actors_data_list = []
+        raw_actor_results = results[1:]
+
+        for i in range(0, len(raw_actor_results), 2):
+            actor_partial = raw_actor_results[i]  # Dict with keys from JSONPath
+            moves = raw_actor_results[i + 1]
+
+            if actor_partial:
+                # RedisJSON returns dict like { "$.meta": [...], "$.loadout": [...] }
+                # We need to flatten it
+                meta = actor_partial.get("$.meta", [{}])[0]
+                loadout = actor_partial.get("$.loadout", [{}])[0]
+                active = actor_partial.get("$.active_abilities", [[]])[0]
+
+                # Reconstruct partial object for UI
+                actors_data_list.append({"meta": meta, "loadout": loadout, "active_abilities": active, "moves": moves})
+            else:
+                actors_data_list.append(None)
+
+        return targets_map, actors_data_list
 
     # ==========================================================================
     # 3. НАМЕРЕНИЯ (MOVES - MULTI-TARGETING)
     # ==========================================================================
 
-    async def append_move(self, session_id: str, char_id: int, strategy: str, move_dto: dict) -> None:
+    async def append_move(self, session_id: str, char_id: int | str, strategy: str, move_dto: dict) -> None:
         """
         [SPAMMING] Добавляет намерение в СЛОВАРЬ соответствующей стратегии.
         strategy: 'exchange', 'item', 'instant'
@@ -335,7 +341,7 @@ class CombatManager:
         # Обновляем TTL ключа (продлеваем жизнь всем намерениям)
         await self.redis.expire(key, 300)
 
-    async def append_moves_batch(self, session_id: str, char_id: int, moves_dtos: list[Any]) -> None:
+    async def append_moves_batch(self, session_id: str, char_id: int | str, moves_dtos: list[Any]) -> None:
         """
         [BATCH] Добавляет несколько намерений (без удаления целей).
         Используется для Instant/Item мувов AI.
@@ -351,14 +357,10 @@ class CombatManager:
         await self.redis.execute_pipeline(_save_batch)
 
     async def register_exchange_move_atomic(
-        self, session_id: str, char_id: int, target_id: int, move_dto: dict
+        self, session_id: str, char_id: int | str, target_id: int | str, move_dto: dict
     ) -> bool:
         """
         [ATOMIC] Регистрирует ход типа 'exchange'.
-        1. Проверяет наличие target_id в списке целей игрока.
-        2. Если есть - удаляет его из списка.
-        3. Добавляет move_dto в moves:exchange (как ключ словаря).
-        Возвращает True, если успешно.
         """
         targets_key = Rk.get_rbc_targets_key(session_id)
         moves_key = Rk.get_combat_moves_key(session_id, str(char_id))
@@ -372,7 +374,10 @@ class CombatManager:
         local targets = redis.call('JSON.GET', KEYS[1], '$.' .. ARGV[1])
         if not targets then return 0 end
         
-        local idx_res = redis.call('JSON.ARRINDEX', KEYS[1], '$.' .. ARGV[1], tonumber(ARGV[2]))
+        -- ARGV[2] (target_id) can be string or int. JSON.ARRINDEX handles types strictly.
+        -- We try both number and string if needed, but usually we pass string here.
+        
+        local idx_res = redis.call('JSON.ARRINDEX', KEYS[1], '$.' .. ARGV[1], tonumber(ARGV[2]) or ARGV[2])
         
         if not idx_res or idx_res[1] == -1 then
             return 0
@@ -400,16 +405,11 @@ class CombatManager:
         )
         return bool(res)
 
-    async def register_moves_batch_atomic(self, session_id: str, char_id: int, moves_data: list[dict[str, Any]]) -> int:
+    async def register_moves_batch_atomic(
+        self, session_id: str, char_id: int | str, moves_data: list[dict[str, Any]]
+    ) -> int:
         """
         [ATOMIC BATCH] Регистрирует несколько ходов для AI.
-        Для каждого хода:
-        1. Находит цель в targets.
-        2. Удаляет её (POP).
-        3. Записывает мув.
-
-        moves_data: List of { "move_json": str, "target_id": int, "strategy": str, "move_id": str }
-        Возвращает количество успешно зарегистрированных ходов.
         """
         if not moves_data:
             return 0
@@ -429,8 +429,8 @@ class CombatManager:
             local strategy = move_item.strategy
             local move_id = move_item.move_id
             
-            -- 1. Ищем цель
-            local idx_res = redis.call('JSON.ARRINDEX', KEYS[1], '$.' .. char_id, target_id)
+            -- 1. Ищем цель (try number then string)
+            local idx_res = redis.call('JSON.ARRINDEX', KEYS[1], '$.' .. char_id, tonumber(target_id) or target_id)
             
             if idx_res and idx_res[1] ~= -1 then
                 local real_idx = idx_res[1]
@@ -456,12 +456,12 @@ class CombatManager:
         )
         return int(res) if res else 0
 
-    async def check_move_exists(self, session_id: str, char_id: int) -> bool:
+    async def check_move_exists(self, session_id: str, char_id: int | str) -> bool:
         """Проверяет наличие ключа с намерениями."""
         key = Rk.get_combat_moves_key(session_id, str(char_id))
         return await self.redis.key_exists(key)
 
-    async def get_moves_batch(self, session_id: str, char_ids: list[int]) -> dict[int, Any]:
+    async def get_moves_batch(self, session_id: str, char_ids: list[int | str]) -> dict[str, Any]:
         """Загружает только moves для списка игроков."""
 
         def _load(pipe):
@@ -469,7 +469,7 @@ class CombatManager:
                 pipe.json().get(Rk.get_combat_moves_key(session_id, str(cid)))
 
         results = await self.redis.execute_pipeline(_load)
-        return {cid: res for cid, res in zip(char_ids, results, strict=False) if res}
+        return {str(cid): res for cid, res in zip(char_ids, results, strict=False) if res}
 
     async def push_actions_batch(self, session_id: str, actions_json: list[str]) -> None:
         """Запись резолвленных задач в системную очередь q:actions."""
@@ -487,9 +487,6 @@ class CombatManager:
     ) -> None:
         """
         [ATOMIC] Переносит резолвленные намерения (Intents) в очередь действий (Actions).
-
-        actions_json: Список JSON-строк (CombatActionDTO) для добавления в очередь.
-        deletes: Список словарей { "char_id": int, "strategy": str, "move_id": str } для удаления.
         """
         if not actions_json and not deletes:
             return
@@ -518,16 +515,8 @@ class CombatManager:
     async def check_and_lock_busy_for_collector(self, session_id: str) -> bool:
         """
         Проверяет, свободна ли сессия. Если свободна — резервирует её для воркера.
-        Используется чтобы не плодить одинаковые задачи в ARQ.
-
-        Возвращает True, если удалось поставить метку "pending" (значит, можно ставить задачу).
-        Возвращает False, если занято (другой воркер или уже в очереди).
         """
         key = f"combat:rbc:{session_id}:sys:busy"
-
-        # Пытаемся поставить временную метку "pending" (в ожидании воркера)
-        # Если ключ уже есть (стоит метка другого воркера или pending) - вернет False
-        # TTL 30 сек - защита от зависания в очереди
         return await self.redis.redis_client.set(key, "pending", nx=True, ex=30)  # type: ignore
 
     async def acquire_worker_lock(self, session_id: str, worker_id: str) -> bool:
@@ -581,17 +570,22 @@ class CombatManager:
             for cid, data in updates.items():
                 base = f"{Rk.get_rbc_actor_key(session_id, str(cid))}"
 
+                # Unified Update via JSON.SET
+                # We update specific paths to avoid overwriting the whole object
+
                 if "state" in data:
-                    pipe.hset(f"{base}:state", mapping=data["state"])
+                    # State is now inside meta
+                    for k, v in data["state"].items():
+                        pipe.json().set(base, f"$.meta.{k}", v)
 
                 if "abilities" in data:
-                    pipe.json().set(f"{base}:active_abilities", "$", data["abilities"])  # type: ignore
+                    pipe.json().set(base, "$.active_abilities", data["abilities"])  # type: ignore
 
                 if "xp" in data:
-                    pipe.json().set(f"{base}:data_xp", "$", data["xp"])  # type: ignore
+                    pipe.json().set(base, "$.xp_buffer", data["xp"])  # type: ignore
 
                 if "raw_temp" in data:
-                    pipe.json().set(f"{base}:raw", ".temp", data["raw_temp"])  # type: ignore
+                    pipe.json().set(base, "$.raw.temp", data["raw_temp"])  # type: ignore
 
             if logs:
                 pipe.rpush(Rk.get_combat_log_key(session_id), *logs)
@@ -605,16 +599,33 @@ class CombatManager:
     # 6. ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
     # ==========================================================================
 
-    async def get_actor_state(self, session_id: str, char_id: int) -> dict[str, str] | None:
-        key = f"{Rk.get_rbc_actor_key(session_id, str(char_id))}:state"
-        return await self.redis.get_all_hash(key)
+    async def get_actor_state(self, session_id: str, char_id: int | str) -> dict[str, Any] | None:
+        """
+        Возвращает state (из meta)
+        """
+        key = Rk.get_rbc_actor_key(session_id, str(char_id))
+        # Fetch only meta part
+        meta = await self.redis.json_get(key, "$.meta")
+        if meta and isinstance(meta, list) and meta[0]:
+            # Extract state-like fields from meta
+            m = meta[0]
+            return {
+                "hp": m.get("hp"),
+                "max_hp": m.get("max_hp"),
+                "en": m.get("en"),
+                "max_en": m.get("max_en"),
+                "tactics": m.get("tactics"),
+                "is_dead": m.get("is_dead"),
+                "tokens": m.get("tokens"),
+            }
+        return None
 
-    async def get_actor_raw(self, session_id: str, char_id: int) -> dict[str, Any] | None:
-        key = f"{Rk.get_rbc_actor_key(session_id, str(char_id))}:raw"
-        data = await self.redis.json_get(key)
+    async def get_actor_raw(self, session_id: str, char_id: int | str) -> dict[str, Any] | None:
+        key = Rk.get_rbc_actor_key(session_id, str(char_id))
+        data = await self.redis.json_get(key, "$.raw")
         if isinstance(data, list) and data:
             return data[0]
-        return data if isinstance(data, dict) else {}
+        return None
 
     async def get_combat_log_list(self, session_id: str) -> list[str]:
         key = Rk.get_combat_log_key(session_id)

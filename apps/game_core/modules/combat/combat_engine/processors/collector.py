@@ -1,12 +1,12 @@
 from typing import Any
 
+from apps.game_core.modules.combat.dto.combat_internal_dto import BattleMeta, CombatActionDTO
 from loguru import logger as log
 
 from apps.common.schemas_dto.combat_source_dto import CombatMoveDTO
 from apps.game_core.modules.combat.combat_engine.combat_data_service import CombatDataService
 from apps.game_core.modules.combat.combat_engine.logic.target_resolver import TargetResolver
 from apps.game_core.modules.combat.dto.combat_arq_dto import AiTurnRequestDTO, CollectorSignalDTO
-from apps.game_core.modules.combat.dto.combat_internal_dto import BattleMeta, CombatActionDTO
 
 
 class CombatCollector:

@@ -156,6 +156,7 @@ class CombatLifecycleService:
 
                 # Extract parts from Template (TempContextSchema)
                 math_model = source_json.get("math_model", {})
+                skills_data = source_json.get("skills", {})
                 loadout = source_json.get("loadout", {})
                 vitals = source_json.get("vitals", {})
                 meta_info = source_json.get("meta", {})
@@ -172,44 +173,43 @@ class CombatLifecycleService:
 
                 # --- Build Actor Keys (RBC v3.0) ---
 
-                # 1. :state (Hash) - Hot Data
-                state_data = {
-                    "hp": vitals.get("hp_current", 100),
-                    "max_hp": vitals.get("hp_current", 100),  # Temporary, will be recalculated
-                    "en": vitals.get("energy_current", 100),
-                    "max_en": vitals.get("energy_current", 100),  # Temporary
-                    "tactics": 0,
-                    "afk_level": 0,
-                    "is_dead": 0,
-                    "tokens": "{}",
-                }
-
-                # 2. :raw (JSON) - Math Model
-                # Берем math_model как есть (attributes, modifiers)
-                raw_data = math_model.copy()
-                # Убрали мусор: temp и name
-
-                # 3. :loadout (JSON) - Config
-                # Берем loadout как есть (belt, skills, layout, tags)
-                loadout_data = loadout.copy()
-
-                # 4. :meta (JSON) - Static Info
+                # 1. :meta (JSON) - Static Info + State (Hot Data)
                 actor_meta_data = {
+                    "id": final_id,
                     "name": new_name,
                     "type": meta_info.get("type", "unknown"),
                     "template_id": tpl_id,
                     "is_ai": is_ai,
                     "team": color,
+                    # State fields merged into meta
+                    "hp": vitals.get("hp_current", 100),
+                    "max_hp": vitals.get("hp_current", 100),
+                    "en": vitals.get("energy_current", 100),
+                    "max_en": vitals.get("energy_current", 100),
+                    "tactics": 0,
+                    "afk_level": 0,
+                    "is_dead": False,
+                    "tokens": {},
                 }
 
-                # Store all keys for this actor
+                # 2. :raw (JSON) - Math Model
+                # Берем math_model как есть (attributes, modifiers)
+                raw_data = math_model.copy()
+
+                # 3. :loadout (JSON) - Config
+                # Берем loadout как есть (belt, skills, layout, tags)
+                loadout_data = loadout.copy()
+
+                # Store all keys for this actor (Unified Structure)
                 actors_data[final_id] = {
-                    "state": state_data,
-                    "raw": raw_data,
-                    "loadout": loadout_data,
                     "meta": actor_meta_data,
+                    "raw": raw_data,
+                    "skills": skills_data,
+                    "loadout": loadout_data,
                     "active_abilities": [],
-                    "data_xp": {},
+                    "xp_buffer": {},
+                    "metrics": {},
+                    "explanation": {},
                 }
 
                 team_ids.append(final_id)

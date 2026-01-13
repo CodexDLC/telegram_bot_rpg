@@ -1,12 +1,12 @@
 import contextlib
 import time
 
+from apps.game_core.modules.combat.dto.combat_internal_dto import CombatActionDTO
 from loguru import logger as log
 
 from apps.game_core.modules.combat.combat_engine.combat_data_service import CombatDataService
 from apps.game_core.modules.combat.combat_engine.processors.executor import CombatExecutor
 from apps.game_core.modules.combat.dto.combat_arq_dto import CollectorSignalDTO, WorkerBatchJobDTO
-from apps.game_core.modules.combat.dto.combat_internal_dto import CombatActionDTO
 
 
 async def execute_batch_task(ctx: dict, job_data: dict) -> None:

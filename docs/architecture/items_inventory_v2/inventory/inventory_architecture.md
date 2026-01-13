@@ -20,31 +20,7 @@
 - Делегирование бизнес-логики в `InventoryService`
 - Обработка исключений
 
-**Пример:**
-```python
-class InventoryGateway:
-    def __init__(self, service: InventoryService):
-        self.service = service
-    
-    async def get_entry_point(self, action: str, context: dict[str, Any]) -> Any:
-        """Вход для CoreRouter"""
-        char_id = context.get("char_id")
-        if not char_id:
-            raise ValueError("char_id required")
-            
-        if action == "view":
-            return await self.view_inventory(char_id)
-        elif action == "equip":
-            return await self.equip_item(char_id, context["item_id"], context.get("slot"))
-        # ...
-        
-    async def view_inventory(self, char_id: int) -> dict:
-        """Прямой вызов"""
-        return await self.service.get_inventory_view(char_id)
-        
-    async def equip_item(self, char_id: int, item_id: int, slot: str | None = None) -> dict:
-        return await self.service.equip_item(char_id, item_id, slot)
-```
+**Детальное описание API см. в:** [Gateway API](./gateway.md)
 
 ---
 
@@ -112,6 +88,8 @@ class InventoryService:
 - Dirty Flags
 - Синхронизация с БД (через Repository)
 
+**Детальное описание см. в:** [Session Management](./session_management.md)
+
 ---
 
 ### 4. InventoryFormatter
@@ -121,8 +99,10 @@ class InventoryService:
 **Расположение:** `apps/game_core/modules/inventory/inventory/logic/inventory_formatter.py`
 
 **Ответственность:**
-- Группировка, сортировка, фильтрация.
-- Генерация tooltip'ов.
+- Группировка, сортировка, фильтрация
+- Генерация tooltip'ов
+
+**Детальное описание см. в:** [Formatting and UI](./formatting_and_ui.md)
 
 ---
 
@@ -137,7 +117,21 @@ class InventoryService:
 
 ## 🎯 Ключевые принципы
 
-- **Gateway as Orchestrator:** Гейтвей сам является точкой входа для роутера.
-- **Thin Gateway:** Гейтвей не содержит логики, только делегирует.
-- **Rich Service:** Сервис управляет процессом.
-- **Redis-First:** Все состояние в Redis.
+- **Gateway as Unified Entry Point:** Gateway — единственная точка входа для всех запросов (CoreRouter для межмодульных вызовов + FastAPI для HTTP endpoints).
+- **Thin Gateway:** Gateway не содержит бизнес-логики, только маршрутизацию и валидацию входных данных.
+- **Rich Service:** Service управляет бизнес-процессами и координирует работу SessionManager/Formatter.
+- **Redis-First:** Все операции с инвентарём выполняются в Redis, БД используется только для персистентности.
+
+---
+
+## 📚 Связанная документация
+
+- **Gateway API:** [./gateway.md](./gateway.md)
+- **Session Management:** [./session_management.md](./session_management.md)
+- **Formatting and UI:** [./formatting_and_ui.md](./formatting_and_ui.md)
+- **Main README:** [./README.md](./README.md)
+
+---
+
+**Последнее обновление:** Январь 2026
+**Статус:** Архитектурная фаза

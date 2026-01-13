@@ -1,10 +1,10 @@
 import json
 from typing import Any
 
+from apps.game_core.modules.combat.dto.combat_internal_dto import ActorMetaDTO, ActorRawDTO
 from loguru import logger as log
 
 from apps.common.services.redis.manager.combat_manager import CombatManager
-from apps.game_core.modules.combat.dto.combat_internal_dto import ActorMetaDTO, ActorRawDTO
 
 
 class ChaosService:

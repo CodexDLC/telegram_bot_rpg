@@ -44,19 +44,19 @@ MODIFIER_DTOS: list[type[BaseModel]] = [
 class CombatTempContext(BaseTempContext):
     """
     Контекст для боевой системы (RBC v3).
-    Генерирует math_model (raw), loadout, vitals.
+    Генерирует math_model (raw), skills, loadout, vitals.
     """
 
     @computed_field(alias="math_model")
     def combat_view(self) -> dict[str, Any]:
         """
-        Проекция для COMBAT SERVICE.
-        Структура 'raw' для Redis.
+        Проекция для COMBAT SERVICE (Raw Data).
+        Содержит только attributes и modifiers.
+        Skills вынесены в отдельное поле.
         """
         model: dict[str, Any] = {
             "attributes": {},
             "modifiers": {},
-            "skills": {},
         }
 
         # 1. Attributes Base
@@ -81,13 +81,7 @@ class CombatTempContext(BaseTempContext):
                         "temp": {},
                     }
 
-        # 3. Skills
-        if self.core_skills:
-            for skill in self.core_skills:
-                if skill.total_xp > 0 or skill.is_unlocked:
-                    model["skills"][skill.skill_key] = float(skill.total_xp)
-
-        # 4. Equipment Bonuses
+        # 3. Equipment Bonuses
         if self.core_inventory:
             for item in self.core_inventory:
                 item_data = item.model_dump() if hasattr(item, "model_dump") else item
@@ -160,6 +154,18 @@ class CombatTempContext(BaseTempContext):
                     self._add_modifier(model, final_stat, src_key, val)
 
         return model
+
+    @computed_field(alias="skills")
+    def skills_view(self) -> dict[str, float]:
+        """
+        Отдельное поле для скиллов.
+        """
+        skills: dict[str, float] = {}
+        if self.core_skills:
+            for skill in self.core_skills:
+                if skill.total_xp > 0 or skill.is_unlocked:
+                    skills[skill.skill_key] = float(skill.total_xp)
+        return skills
 
     def _add_modifier(self, model: dict, stat_key: str, source_key: str, value: Any):
         """Helper для добавления модификатора."""
