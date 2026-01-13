@@ -574,9 +574,8 @@ class CombatManager:
                 # We update specific paths to avoid overwriting the whole object
 
                 if "state" in data:
-                    # State is now inside meta
-                    for k, v in data["state"].items():
-                        pipe.json().set(base, f"$.meta.{k}", v)
+                    # State is now inside meta. Using JSON.MERGE to update multiple fields in one command.
+                    pipe.json().merge(base, "$.meta", data["state"])  # type: ignore
 
                 if "abilities" in data:
                     pipe.json().set(base, "$.active_abilities", data["abilities"])  # type: ignore
