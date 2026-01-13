@@ -3,17 +3,21 @@ from typing import Any
 
 # Инфраструктура
 from apps.common.services.redis.manager.combat_manager import CombatManager
+from apps.game_core.modules.combat.dto.combat_action_dto import (
+    CombatActionDTO,
+)
 
 # DTOs
-from apps.game_core.modules.combat.dto.combat_internal_dto import (
+from apps.game_core.modules.combat.dto.combat_actor_dto import (
     ActiveAbilityDTO,
     ActorLoadoutDTO,
     ActorMetaDTO,
     ActorRawDTO,
     ActorSnapshot,
+)
+from apps.game_core.modules.combat.dto.combat_session_dto import (
     BattleContext,
     BattleMeta,
-    CombatActionDTO,
 )
 
 
@@ -38,14 +42,14 @@ class CombatDataService:
             return None
         return self._parse_meta(meta_raw)
 
-    async def get_intent_moves(self, session_id: str, char_ids: list[int]) -> dict[int, Any]:
+    async def get_intent_moves(self, session_id: str, char_ids: list[int | str]) -> dict[str, Any]:
         """
         Пакетная загрузка намерений (пуль) игроков.
         Возвращает словарь {char_id: moves_dict}.
         """
         return await self.combat_manager.get_moves_batch(session_id, char_ids)
 
-    async def get_targets(self, session_id: str) -> dict[int, list[int]]:
+    async def get_targets(self, session_id: str) -> dict[str, list[int]]:
         """
         Загружает очереди целей всех участников.
         Возвращает {char_id: [target_id, ...]}.
@@ -53,7 +57,7 @@ class CombatDataService:
         targets_map, _ = await self.combat_manager.load_snapshot_data_batch(session_id, [])
         return targets_map
 
-    async def check_intent_exists(self, session_id: str, char_id: int) -> bool:
+    async def check_intent_exists(self, session_id: str, char_id: int | str) -> bool:
         """Быстрая проверка наличия хода."""
         return await self.combat_manager.check_move_exists(session_id, char_id)
 
@@ -126,7 +130,8 @@ class CombatDataService:
             if cid == "global_queue":
                 continue
 
-            if not data["state"]:
+            # data["state"] is now a dict extracted from meta JSON, so it exists if actor exists
+            if not data.get("meta"):
                 continue
 
             # Build Snapshot
@@ -139,10 +144,11 @@ class CombatDataService:
                 data["meta"],
                 data["abilities"],
                 data["xp"],
+                data.get("skills", {}),  # Pass skills
             )
 
             # Cache Move
-            if data["move"]:
+            if data.get("move"):
                 moves_cache[cid] = data["move"]
 
         return BattleContext(
@@ -179,7 +185,7 @@ class CombatDataService:
                 "en": actor.meta.en,
                 "max_en": actor.meta.max_en,
                 "tactics": actor.meta.tactics,
-                "is_dead": int(actor.meta.is_dead),
+                "is_dead": actor.meta.is_dead,  # bool, JSON handles it
                 "tokens": actor.meta.tokens,
             }
             actor_updates["state"] = state_dict
@@ -206,8 +212,12 @@ class CombatDataService:
     # ==========================================================================
 
     def _parse_meta(self, raw: dict) -> BattleMeta:
+        """
+        Парсит мета-данные из Redis Hash (dict[str, str]).
+        """
+
         def d(k):
-            return raw.get(k.encode()) if isinstance(k, str) else raw.get(k)
+            return raw.get(k)
 
         return BattleMeta(
             active=int(d("active") or 1),
@@ -217,13 +227,14 @@ class CombatDataService:
             actors_info=json.loads(d("actors_info") or "{}"),
             dead_actors=json.loads(d("dead_actors") or "[]"),
             last_activity_at=int(d("last_activity_at") or 0),
-            battle_type=(d("battle_type") or b"standard").decode(),
-            location_id=(d("location_id") or b"unknown").decode(),
+            battle_type=d("battle_type") or "standard",
+            location_id=d("location_id") or "unknown",
         )
 
-    def _build_snapshot(self, cid, team, r_state, r_raw, r_loadout, r_meta, r_active, r_xp) -> ActorSnapshot:
+    def _build_snapshot(self, cid, team, r_state, r_raw, r_loadout, r_meta, r_active, r_xp, r_skills) -> ActorSnapshot:
         meta_dict = r_meta or {}
 
+        # r_state is now a dict from JSON, so keys are strings
         meta = ActorMetaDTO(
             id=cid,
             name=meta_dict.get("name", "Unknown"),
@@ -231,14 +242,14 @@ class CombatDataService:
             team=team,
             template_id=meta_dict.get("template_id"),
             is_ai=meta_dict.get("is_ai", False),
-            # State fields
-            hp=int(r_state.get(b"hp", 0)),
-            max_hp=int(r_state.get(b"max_hp", 0)),
-            en=int(r_state.get(b"en", 0)),
-            max_en=int(r_state.get(b"max_en", 0)),
-            tactics=int(r_state.get(b"tactics", 0)),
-            is_dead=bool(int(r_state.get(b"is_dead", 0))),
-            tokens=json.loads(r_state.get(b"tokens") or "{}"),
+            # State fields (from r_state dict)
+            hp=int(r_state.get("hp", 0)),
+            max_hp=int(r_state.get("max_hp", 0)),
+            en=int(r_state.get("en", 0)),
+            max_en=int(r_state.get("max_en", 0)),
+            tactics=int(r_state.get("tactics", 0)),
+            is_dead=bool(r_state.get("is_dead", False)),
+            tokens=r_state.get("tokens") or {},
         )
 
         raw_dict = r_raw or {}
@@ -247,7 +258,6 @@ class CombatDataService:
         merged_raw = {
             "attributes": raw_dict.get("attributes", {}),
             "modifiers": raw_dict.get("modifiers", {}),
-            # "temp": raw_dict.get("temp", {}), # ActorRawDTO не имеет поля temp в определении выше, проверим
         }
 
         loadout = ActorLoadoutDTO(
@@ -263,10 +273,18 @@ class CombatDataService:
             loadout=loadout,
             active_abilities=[ActiveAbilityDTO(**a) for a in (r_active or [])],
             xp_buffer=r_xp or {},
+            skills=r_skills or {},
         )
 
-    def _find_team(self, cid: int, teams: dict) -> str:
+    def _find_team(self, cid: int | str, teams: dict) -> str:
+        """
+        Находит команду по ID актора.
+        Безопасно сравнивает int и str.
+        """
+        cid_str = str(cid)
         for t_name, members in teams.items():
-            if cid in members:
-                return t_name
+            # members is list[int] or list[str]
+            for m in members:
+                if str(m) == cid_str:
+                    return t_name
         return "neutral"

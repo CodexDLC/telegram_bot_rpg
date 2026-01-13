@@ -1,9 +1,9 @@
 import asyncio
 
+from apps.game_core.modules.combat.dto.combat_internal_dto import BattleContext, CombatActionDTO
 from loguru import logger as log
 
 from apps.game_core.modules.combat.combat_engine.logic.combat_pipeline import CombatPipeline
-from apps.game_core.modules.combat.dto.combat_internal_dto import BattleContext, CombatActionDTO
 
 
 class CombatExecutor:

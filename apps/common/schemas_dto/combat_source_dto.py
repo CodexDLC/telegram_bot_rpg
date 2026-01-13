@@ -4,7 +4,7 @@
 Внутренние DTO перенесены в apps/game_core/modules/combat/dto/combat_internal_dto.py
 """
 
-from typing import TypedDict
+from typing import Any, NamedTuple, TypedDict
 
 from pydantic import BaseModel
 
@@ -112,3 +112,16 @@ class CombatLogDTO(BaseModel):
     logs: list[CombatLogEntryDTO]
     total: int
     page: int
+
+
+# ==============================================================================
+# 3. 🔄 DATA TRANSFER (Persistence)
+# ==============================================================================
+
+
+class SessionDataDTO(NamedTuple):
+    """DTO for transferring assembled data to the persistence method."""
+
+    meta: dict[str, Any]
+    actors: dict[str, dict[str, Any]]  # final_id -> {key: value} (HASH/JSON fields)
+    targets: dict[str, list[str]]  # final_id -> [enemy_id, ...]

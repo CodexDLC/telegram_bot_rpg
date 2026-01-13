@@ -34,12 +34,11 @@
 
 ```
 apps/game_core/modules/inventory/
-├── inventory_core_orchestrator.py    # Entry point для API
-├── inventory_gateway.py              # Публичный интерфейс
+├── inventory_gateway.py              # Единая точка входа (для CoreRouter + FastAPI)
 └── inventory/
     └── logic/
         ├── inventory_session_manager.py   # Работа с Redis Session
-        ├── inventory_logic.py             # Бизнес-логика
+        ├── inventory_service.py           # Бизнес-логика
         └── inventory_formatter.py         # UI форматирование
 ```
 
@@ -47,10 +46,9 @@ apps/game_core/modules/inventory/
 
 | Компонент                  | Ответственность                           |
 |----------------------------|-------------------------------------------|
-| InventoryCoreOrchestrator  | Точка входа (get_entry_point)            |
-| InventoryGateway           | Публичные методы для router               |
+| InventoryGateway           | Единая точка входа (CoreRouter + FastAPI)|
+| InventoryService           | Бизнес-логика (equip, use, stack)        |
 | InventorySessionManager    | Управление Redis Session                  |
-| InventoryLogic             | Бизнес-логика (equip, use, stack)        |
 | InventoryFormatter         | Подготовка данных для клиента            |
 
 ---
@@ -85,55 +83,10 @@ apps/game_core/modules/inventory/
 
 ## 🔄 Типичные флоу
 
-### 1. Просмотр инвентаря
-
-```
-User → API → InventoryCoreOrchestrator
-  ↓
-InventoryGateway.view_inventory(char_id)
-  ↓
-InventoryLogic запрашивает snapshot через router
-  ↓
-ContextAssembler готовит temp:inventory:{uuid}
-  ↓
-SessionManager копирует в session:inventory:{char_id}
-  ↓
-Formatter подготавливает UI данные
-  ↓
-Возврат клиенту
-```
-
-### 2. Экипировка предмета
-
-```
-User → API → InventoryCoreOrchestrator
-  ↓
-InventoryGateway.equip_item(char_id, item_id)
-  ↓
-SessionManager.get_session_data()
-  ↓
-InventoryLogic.equip_item_logic()
-  ↓
-Изменения в Redis Session
-  ↓
-SessionManager.mark_dirty()
-  ↓
-Возврат подтверждения
-```
-
-### 3. Выход из инвентаря
-
-```
-User закрывает инвентарь
-  ↓
-SessionManager.sync_to_db(char_id)
-  ↓
-Проверка dirty flag
-  ↓
-Если dirty=True → сохранение в БД
-  ↓
-Очистка Redis Session
-```
+**Детальные схемы работы см. в:**
+- [Session Management](./session_management.md) — жизненный цикл сессий
+- [Gateway API](./gateway.md) — примеры вызовов API
+- [Architecture](./inventory_architecture.md) — взаимодействие компонентов
 
 ---
 
@@ -174,41 +127,9 @@ Inventory работает с DTO предметов, не зная как он�
 
 ## 📊 Структура данных
 
-### Redis Session
-```python
-session:inventory:{char_id} = {
-    "metadata": {
-        "char_id": 1,
-        "loaded_at": 1704067200,
-        "dirty": False
-    },
-    "equipped": {
-        "main_hand": {...},
-        "off_hand": {...},
-        "armor": {...}
-    },
-    "backpack": [
-        {...},  # InventoryItemDTO
-        {...}
-    ],
-    "quick_slots": [
-        {...},  # Consumable
-        {...}
-    ]
-}
-```
-
-### Temp Snapshot
-```python
-temp:inventory:{uuid} = {
-    "items": [
-        # Список всех предметов из БД
-    ],
-    "display_data": {
-        # Накопленные данные для UI
-    }
-}
-```
+**Подробное описание структур Redis и форматов данных см. в:**
+- [Session Management](./session_management.md#структура-сессии)
+- [Formatting and UI](./formatting_and_ui.md#ui-layout-examples)
 
 ---
 
