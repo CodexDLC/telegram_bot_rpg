@@ -7,31 +7,103 @@
 ## SpecialStatsDTO
 
 ### Counter-Attack
-*   **`counter_attack_chance`**: Шанс контратаки.
-    *   **Источник (Base):** `Memory` (~0.25%/pt) + `Prediction` (~0.15%/pt).
-    *   **Множитель:** Навык `Tactics` (до x5).
-*   **`counter_attack_cap`**: Кап контратаки (Hard Cap).
+
+#### counter_attack_chance
+**Шанс контратаки (%).**
+- **Источник (Base):** `Memory` (~0.25%/pt) + `Prediction` (~0.15%/pt).
+- **Множитель:** Навык `Tactics` (до x5).
+- **Источник:** —
+
+#### counter_attack_cap
+**Кап контратаки (Hard Cap, %).**
+- **Источник (Base):** Системный параметр.
+- **Множитель:** —
+- **Источник:** —
+
+---
 
 ### Vampiric
-*   **`vampiric_power`**: Сила вампиризма (% от урона в HP).
-    *   **Источник:** Gift (Дар) или Item Affix.
-*   **`vampiric_trigger_chance`**: Шанс срабатывания вампиризма.
-*   **`vampiric_trigger_cap`**: Кап шанса.
+
+#### vampiric_power
+**Сила вампиризма (% от урона в HP).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Gift (Дар), Item Affix.
+
+#### vampiric_trigger_chance
+**Шанс срабатывания вампиризма (%).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Gift (Дар), Item Affix.
+
+#### vampiric_trigger_cap
+**Кап шанса (Hard Cap, %).**
+- **Источник (Base):** Системный параметр.
+- **Множитель:** —
+- **Источник:** —
+
+---
 
 ### Healing & Pets
-*   **`healing_power`**: Сила исходящего исцеления.
-    *   **Источник:** Навык `First Aid`.
-*   **`received_healing_bonus`**: Бонус к входящему исцелению.
-    *   **Множитель:** Навык `Anatomy`.
-*   **`pet_efficiency_mult`**: Множитель эффективности питомца (HP, DMG, etc).
-    *   **Источник:** Навык `Taming`.
+
+#### healing_power
+**Сила исходящего исцеления (множитель).**
+- **Источник (Base):** —
+- **Множитель:** Навык `First Aid`.
+- **Источник:** —
+
+#### received_healing_bonus
+**Бонус к входящему исцелению (множитель).**
+- **Источник (Base):** —
+- **Множитель:** Навык `Anatomy`.
+- **Источник:** —
+
+#### pet_efficiency_mult
+**Множитель эффективности питомца (HP, DMG, etc).**
+- **Источник (Base):** —
+- **Множитель:** Навык `Taming`.
+- **Источник:** —
+
+---
 
 ### Misc
-*   **`damage_mult`**: Глобальный множитель исходящего урона.
-*   **`thorns_damage_flat`**: Урон шипами (возврат урона).
+
+#### damage_mult
+**Глобальный множитель исходящего урона.**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Buff, Gift.
+
+#### thorns_damage_flat
+**Урон шипами (возврат урона, flat).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item Affix, Buff.
+
+---
 
 ## EnvironmentalStatsDTO
-*   **`environment_cold_resistance`**: Защита от холода (среда).
-*   **`environment_heat_resistance`**: Защита от жары.
-*   **`environment_gravity_resistance`**: Защита от гравитации.
-*   **`environment_bio_resistance`**: Защита от био-угроз.
+
+### environment_cold_resistance
+**Защита от холода (среда, %).**
+- **Источник (Base):** `Endurance` (2%/pt) — Bio-Resistance.
+- **Множитель:** —
+- **Источник:** Item (Armor).
+
+### environment_heat_resistance
+**Защита от жары (%).**
+- **Источник (Base):** `Endurance` (2%/pt) — Bio-Resistance.
+- **Множитель:** —
+- **Источник:** Item (Armor).
+
+### environment_gravity_resistance
+**Защита от гравитации (%).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item (Special Gear).
+
+### environment_bio_resistance
+**Защита от био-угроз (%).**
+- **Источник (Base):** `Endurance` (2%/pt) — Bio-Resistance.
+- **Множитель:** —
+- **Источник:** Item (Hazmat Suit).

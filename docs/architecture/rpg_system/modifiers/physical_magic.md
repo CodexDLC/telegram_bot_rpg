@@ -5,21 +5,71 @@
 Глобальные модификаторы атаки.
 
 ## PhysicalStatsDTO
-*   **`physical_damage_bonus`**: Глобальный бонус к физ. урону (обе руки).
-    *   **Источник:** Item Affix (не Strength).
-*   **`physical_accuracy_bonus`**: Глобальный бонус к точности.
+
+### physical_damage_bonus
+**Глобальный бонус к физ. урону (обе руки).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item Affix (не Strength, т.к. Strength дает локальный бонус к руке).
+
+### physical_accuracy_bonus
+**Глобальный бонус к точности.**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item Affix, Buffs.
 
 ## MagicalStatsDTO
-*   **`magical_damage_base`**: Базовый маг. урон.
-    *   **Источник:** Intellect (1-2/pt).
-*   **`magical_damage_spread`**: Разброс маг. урона.
-*   **`magical_damage_bonus`**: Бонус к маг. урону.
-*   **`magical_penetration`**: Магическое пробивание (Resist Pen).
-    *   **Источник:** Intellect (2%/pt).
-*   **`magical_accuracy`**: Магическая точность.
-*   **`magical_damage_power`**: Сила заклинаний.
-*   **`spell_land_chance`**: Шанс прохождения заклинания (Точность Дебаффов).
-    *   **Источник:** Projection (Debuff Efficiency).
-*   **`magical_crit_chance`**: Шанс маг. крита.
-    *   **Источник:** Item (Wand/Spell) + Prediction?
-*   **`magical_crit_cap`**: Кап маг. крита.
+
+### magical_damage_base
+**Базовый маг. урон.**
+- **Источник (Base):** `Intellect` (1-2 DMG/pt).
+- **Множитель:** —
+- **Источник:** —
+
+### magical_damage_spread
+**Разброс маг. урона.**
+- **Источник (Base):** —
+- **Множитель:** Навык (возможно Spell Mastery).
+- **Источник:** Item (Wand/Staff).
+
+### magical_damage_bonus
+**Бонус к маг. урону.**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item Affix, Buffs.
+
+### magical_penetration
+**Магическое пробивание (Resist Pen, %).**
+- **Источник (Base):** `Intellect` (2%/pt).
+- **Множитель:** —
+- **Источник:** Item Affix.
+
+### magical_accuracy
+**Магическая точность (%).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item (Wand/Spell).
+
+### magical_damage_power
+**Сила заклинаний (множитель).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item Affix, Buffs.
+
+### spell_land_chance
+**Шанс прохождения заклинания (Debuff Accuracy, %).**
+- **Источник (Base):** `Projection` (Debuff Efficiency).
+- **Множитель:** —
+- **Источник:** —
+
+### magical_crit_chance
+**Шанс маг. крита (%).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item (Wand/Spell), `Prediction` (возможно).
+
+### magical_crit_cap
+**Кап маг. крита (Hard Cap, %).**
+- **Источник (Base):** Системный параметр.
+- **Множитель:** —
+- **Источник:** —

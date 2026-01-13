@@ -5,33 +5,87 @@
 Модификаторы стихий и статусных эффектов.
 
 ## ElementalStatsDTO (Energy-Resistances)
-*   **Источник (Base):** `Mental` (2%/pt).
-*   **Множитель:** Навык `Adaptation` (до x3).
 
-Для каждой стихии (Fire, Water, Air, Earth, Light, Dark, Arcane, Nature):
-*   **`{element}_damage_bonus`**: Бонус к урону стихией.
-*   **`{element}_resistance`**: Сопротивление стихии.
+**Общая логика для всех стихий (Fire, Water, Air, Earth, Light, Dark, Arcane, Nature):**
+
+### {element}_damage_bonus
+**Бонус к урону стихией (%).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item Affix, Ability.
+
+### {element}_resistance
+**Сопротивление стихии (%).**
+- **Источник (Base):** `Mental` (2%/pt) — Energy-Resistance.
+- **Множитель:** Навык `Adaptation` (до x3).
+- **Источник:** Item Affix.
+
+---
 
 ## StatusStatsDTO (Bio & Control)
 
 ### Control (Mental Base)
-*   **Источник (Base):** `Mental` (2%/pt).
-*   **Множитель:** Навык `Adaptation` (до x3).
-*   **`control_chance_bonus`**: Шанс наложить контроль (Stun, Root).
-*   **`control_resistance`**: Сопротивление контролю.
-*   **`mental_resistance`**: Сопротивление ментальным атакам (Fear, Sleep).
-*   **`debuff_avoidance`**: Шанс избежать наложения дебаффа.
-*   **`shock_resistance`**: Сопротивление шоку.
+
+#### control_chance_bonus
+**Шанс наложить контроль (Stun, Root, %).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item Affix, Ability.
+
+#### control_resistance
+**Сопротивление контролю (%).**
+- **Источник (Base):** `Mental` (2%/pt) — Control-Resistance.
+- **Множитель:** Навык `Adaptation` (до x3).
+- **Источник:** Item Affix.
+
+#### mental_resistance
+**Сопротивление ментальным атакам (Fear, Sleep, %).**
+- **Источник (Base):** `Mental` (2%/pt) — Control-Resistance.
+- **Множитель:** Навык `Adaptation` (до x3).
+- **Источник:** —
+
+#### debuff_avoidance
+**Шанс избежать наложения дебаффа (%).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item Affix, Buffs.
+
+#### shock_resistance
+**Сопротивление шоку (%).**
+- **Источник (Base):** `Mental` (2%/pt) — Energy-Resistance.
+- **Множитель:** —
+- **Источник:** —
+
+---
 
 ### Bio (Endurance Base)
-*   **Источник (Base):** `Endurance` (2%/pt).
-*   **Множитель:** Навык `Adaptation` (до x3).
-*   **`poison_damage_bonus`**: Урон ядом.
-*   **`poison_resistance`**: Сопротивление яду.
-*   **`poison_efficiency`**: Эффективность ядов.
-    *   **Источник (Base):** `Projection` (Debuff Efficiency).
-    *   **Множитель:** Навык `Alchemy`.
-*   **`bleed_damage_bonus`**: Урон кровотечением.
-    *   **Источник (Base):** `Strength` (Physical Penetration).
-    *   **Множитель:** Навык `Weapon Mastery`.
-*   **`bleed_resistance`**: Сопротивление кровотечению.
+
+#### poison_damage_bonus
+**Урон ядом (flat/%).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item Affix, Ability.
+
+#### poison_resistance
+**Сопротивление яду (%).**
+- **Источник (Base):** `Endurance` (2%/pt) — Bio-Resistance.
+- **Множитель:** Навык `Adaptation` (до x3).
+- **Источник:** Item Affix.
+
+#### poison_efficiency
+**Эффективность ядов (Land Chance, %).**
+- **Источник (Base):** `Projection` (Debuff Efficiency).
+- **Множитель:** Навык `Alchemy`.
+- **Источник:** —
+
+#### bleed_damage_bonus
+**Урон кровотечением (flat).**
+- **Источник (Base):** `Strength` (Physical Penetration — глубина раны).
+- **Множитель:** Навык `Weapon Mastery`.
+- **Источник:** —
+
+#### bleed_resistance
+**Сопротивление кровотечению (%).**
+- **Источник (Base):** `Endurance` (2%/pt) — Bio-Resistance.
+- **Множитель:** Навык `Adaptation` (до x3).
+- **Источник:** —

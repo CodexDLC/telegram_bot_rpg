@@ -5,17 +5,84 @@
 Небоевые модификаторы, влияющие на экономику и исследование мира.
 
 ## NonCombatModifiersDTO
-*   **`trade_discount`**: Скидка у торговцев (%).
-*   **`find_loot_chance`**: Шанс найти лучший лут.
-*   **`crafting_success_chance`**: Шанс успеха крафта.
-*   **`crafting_critical_chance`**: Шанс крит. успеха крафта.
-*   **`crafting_speed`**: Скорость крафта.
-*   **`skill_gain_bonus`**: Скорость прокачки навыков.
-*   **`inventory_slots_bonus`**: Доп. слоты инвентаря.
-*   **`weight_limit_bonus`**: Доп. переносимый вес.
-*   **`xp_multiplier`**: Множитель опыта.
+
+### trade_discount
+**Скидка у торговцев (%).**
+- **Источник (Base):** `Projection` (Social Influence).
+- **Множитель:** —
+- **Источник:** Item Affix, Buffs.
+
+### find_loot_chance
+**Шанс найти лучший лут (%).**
+- **Источник (Base):** `Prediction` (Loot Luck) + `Perception` (Detection).
+- **Множитель:** —
+- **Источник:** Item Affix.
+
+### crafting_success_chance
+**Шанс успеха крафта (%).**
+- **Источник (Base):** —
+- **Множитель:** Навык `Crafting`.
+- **Источник:** —
+
+### crafting_critical_chance
+**Шанс крит. успеха крафта (%).**
+- **Источник (Base):** `Prediction` (Crafting Quality).
+- **Множитель:** Навык `Crafting`.
+- **Источник:** —
+
+### crafting_speed
+**Скорость крафта (множитель).**
+- **Источник (Base):** —
+- **Множитель:** Навык `Crafting`.
+- **Источник:** —
+
+### skill_gain_bonus
+**Скорость прокачки навыков (%).**
+- **Источник (Base):** `Memory` (XP Gain — глобальный множитель опыта).
+- **Множитель:** —
+- **Источник:** Item Affix, Buffs.
+
+### inventory_slots_bonus
+**Доп. слоты инвентаря (int).**
+- **Источник (Base):** —
+- **Множитель:** —
+- **Источник:** Item (Backpack), Buff.
+
+### weight_limit_bonus
+**Доп. переносимый вес (int).**
+- **Источник (Base):** `Strength` (Carry Weight).
+- **Множитель:** —
+- **Источник:** Item (Backpack).
+
+### xp_multiplier
+**Множитель опыта (float).**
+- **Источник (Base):** `Memory` (XP Gain).
+- **Множитель:** —
+- **Источник:** Item Affix, Buffs.
+
+---
 
 ## SecondarySkillsDTO (Skills)
-*   **`skill_crafting`**
-*   **`skill_trading`**
-*   **`skill_gathering`**
+
+### skill_crafting
+**Навык крафта (float, 0.0-1.0).**
+- **Источник (Base):** —
+- **Множитель:** Практика крафта (XP Factor).
+- **Источник:** —
+
+### skill_trading
+**Навык торговли (float, 0.0-1.0).**
+- **Источник (Base):** —
+- **Множитель:** Практика торговли (XP Factor).
+- **Источник:** —
+
+### skill_gathering
+**Навык сбора ресурсов (float, 0.0-1.0).**
+- **Источник (Base):** Зависит от типа сбора:
+    - **Mining / Woodcutting:** `Strength` + `Endurance`.
+    - **Skinning:** `Agility` + `Perception`.
+    - **Herbalism:** `Perception` + `Memory`.
+    - **Hunting:** `Perception` + `Agility`.
+    - **Archaeology:** `Perception` + `Intellect`.
+- **Множитель:** Практика сбора (XP Factor).
+- **Источник:** —
