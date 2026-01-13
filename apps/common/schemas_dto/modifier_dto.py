@@ -98,6 +98,20 @@ class OffHandStatsDTO(BaseModel):
     off_hand_crit_chance: float = 0.0
 
 
+class ItemStatsDTO(BaseModel):
+    """
+    Статы БОЕВЫХ ПРЕДМЕТОВ (Гранаты, Свитки, Метательное).
+    Используются, когда source_type="item".
+    """
+
+    item_damage_base: float = 0.0
+    item_damage_spread: float = 0.1
+    item_damage_bonus: float = 0.0
+    item_penetration: float = 0.0
+    item_accuracy: float = 0.0
+    item_crit_chance: float = 0.0
+
+
 class PhysicalStatsDTO(BaseModel):
     """
     Глобальные физические бонусы (работают на обе руки).
@@ -249,6 +263,7 @@ class CombatModifiersDTO(
     # CombatSkillsDTO удален отсюда!
     MainHandStatsDTO,
     OffHandStatsDTO,
+    ItemStatsDTO,  # <--- NEW
     PhysicalStatsDTO,
     MagicalStatsDTO,
     DefensiveStatsDTO,

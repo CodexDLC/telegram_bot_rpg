@@ -1,60 +1,15 @@
 """
-Внутренние DTO боевого модуля (Domain Layer).
-Используются только внутри воркеров, менеджеров и сервисов.
-Не должны импортироваться в Common или Client слоях.
+DTO, описывающие состояние Актора (Участника боя).
 """
 
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from apps.common.schemas_dto.combat_source_dto import CombatMoveDTO
-
-# Импортируем кирпичики из Common
 from apps.common.schemas_dto.modifier_dto import (
     CombatModifiersDTO,
     CombatSkillsDTO,
 )
-
-# ==============================================================================
-# 1. ORCHESTRATION (Manager -> Worker)
-# ==============================================================================
-
-
-class CombatActionDTO(BaseModel):
-    """
-    Задача для Воркера в очереди `q:actions`.
-    Содержит полные данные мува (Cut & Paste).
-    """
-
-    action_type: str  # "item", "instant", "exchange", "forced"
-
-    # Основной мув (Инициатор)
-    move: CombatMoveDTO
-
-    # Ответный мув (для exchange)
-    partner_move: CombatMoveDTO | None = None
-
-    is_forced: bool = False
-
-
-class MechanicsFlagsDTO(BaseModel):
-    """
-    Мутация стейта.
-    Этот блок управляет тем, как MechanicsService будет записывать результат в Redis.
-    """
-
-    pay_cost: bool = True  # Списывать ли энергию/хп за действие
-    grant_xp: bool = True  # Начислять ли опыт в буфер
-    check_death: bool = True  # Проверять ли смерть после удара
-    apply_damage: bool = True  # Наносить ли урон в HP/Shield
-    apply_sustain: bool = True  # Считать ли вампиризм/реген
-    apply_periodic: bool = False  # Флаг для тиков DoT/HoT
-
-
-# ==============================================================================
-# 3. WORKER RUNTIME (Context)
-# ==============================================================================
 
 
 class ActorMetaDTO(BaseModel):
@@ -136,12 +91,10 @@ class ActorStats(BaseModel):
     def from_flat_dict(cls, flat_data: dict[str, Any]) -> "ActorStats":
         """
         Фабрика для создания ActorStats из плоского словаря.
-        Распределяет данные по mods и skills.
         """
         mods_data = {}
         skills_data = {}
 
-        # Получаем списки полей для каждого DTO
         mods_fields = CombatModifiersDTO.model_fields.keys()
         skills_fields = CombatSkillsDTO.model_fields.keys()
 
@@ -150,7 +103,6 @@ class ActorStats(BaseModel):
                 skills_data[key] = value
             elif key in mods_fields:
                 mods_data[key] = value
-            # Остальное игнорируем или логируем
 
         return cls(
             mods=CombatModifiersDTO(**mods_data),
@@ -181,8 +133,8 @@ class ActorSnapshot(BaseModel):
     xp_buffer: dict[str, int] = Field(default_factory=dict)
 
     # 6. Analytics & Debug
-    metrics: dict[str, float] = Field(default_factory=dict)  # {damage_dealt: 500}
-    explanation: dict[str, str] = Field(default_factory=dict)  # {strength: "10+5"}
+    metrics: dict[str, float] = Field(default_factory=dict)
+    explanation: dict[str, str] = Field(default_factory=dict)
 
     # --- Calculated (In-Memory only) ---
     stats: ActorStats | None = None
@@ -201,45 +153,6 @@ class ActorSnapshot(BaseModel):
     def is_alive(self) -> bool:
         return not self.meta.is_dead and self.meta.hp > 0
 
-    # Alias для совместимости (если нужно)
     @property
     def state(self) -> ActorMetaDTO:
         return self.meta
-
-
-class BattleMeta(BaseModel):
-    """Глобальные счетчики (из Redis :meta)"""
-
-    active: int
-    step_counter: int
-    active_actors_count: int
-    teams: dict[str, list[int]]
-    winner: str | None = None
-    actors_info: dict[str, str] = Field(default_factory=dict)
-    dead_actors: list[int] = Field(default_factory=list)
-    last_activity_at: int = 0
-    battle_type: str
-    location_id: str
-
-
-class BattleContext(BaseModel):
-    """
-    Глобальный контекст сессии в памяти Воркера.
-    """
-
-    session_id: str
-    meta: BattleMeta
-    actors: dict[int, ActorSnapshot]
-
-    moves_cache: dict[int, dict[str, Any]] = Field(default_factory=dict)
-    targets: dict[int, list[int]] = Field(default_factory=dict)
-    pending_logs: list[dict] = Field(default_factory=list)
-
-    def get_actor(self, char_id: int) -> ActorSnapshot | None:
-        return self.actors.get(char_id)
-
-    def get_enemies(self, char_id: int) -> list[ActorSnapshot]:
-        me = self.get_actor(char_id)
-        if not me:
-            return []
-        return [a for a in self.actors.values() if a.team != me.meta.team and a.is_alive]

@@ -1,10 +1,10 @@
-from apps.game_core.resources.game_data.feints.schemas import FeintDTO
+from apps.game_core.resources.game_data.feints.schemas import FeintConfigDTO
 
 # ==========================================
 # ГЛОБАЛЬНЫЕ РЕЕСТРЫ (In-Memory DB)
 # ==========================================
 
-FEINT_REGISTRY: dict[str, FeintDTO] = {}
+FEINT_REGISTRY: dict[str, FeintConfigDTO] = {}
 
 
 def _initialize_library() -> None:
@@ -17,11 +17,11 @@ def _initialize_library() -> None:
 # ==========================================
 
 
-def get_feint_config(feint_id: str) -> FeintDTO | None:
+def get_feint_config(feint_id: str) -> FeintConfigDTO | None:
     return FEINT_REGISTRY.get(feint_id)
 
 
-def get_all_feints() -> list[FeintDTO]:
+def get_all_feints() -> list[FeintConfigDTO]:
     return list(FEINT_REGISTRY.values())
 
 

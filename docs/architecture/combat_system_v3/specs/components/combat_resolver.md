@@ -67,5 +67,94 @@
     *   **Pure:** Игнорирует резисты.
 
 ## 4. Триггеры (Triggers)
-Резолвер обрабатывает систему триггеров (`ON_HIT`, `ON_DODGE`, `ON_CRIT`).
-Если срабатывает триггер (например, "Контратака при увороте"), он может изменить флаги контекста прямо посреди расчета.
+
+### 4.1. Концепция
+
+Резолвер обрабатывает триггеры, которые были **активированы** до начала расчёта:
+- Context Builder активирует триггеры оружия
+- Ability Service активирует триггеры скиллов/финтов
+
+Resolver **НЕ ЗНАЕТ** источник триггера. Он просто проверяет флаги `ctx.triggers.*` и применяет правила из `TRIGGER_RULES`.
+
+### 4.2. Обработка
+
+На каждом событии (`ON_HIT`, `ON_CRIT`, `ON_DODGE`, ...) вызывается:
+```python
+_resolve_triggers(ctx, result, step_key="ON_CRIT")
+```
+
+**Алгоритм:**
+1. Получить правила для события: `rules = TRIGGER_RULES[step_key]`
+2. Для каждого триггера в правилах:
+   - Проверить активен ли: `ctx.triggers.<name> == True`
+   - Проверить шанс: `MathCore.check_chance(rule["chance"])`
+   - Применить мутации: `setattr(ctx.stages, key, value)`
+
+### 4.3. Мутации
+
+Триггеры могут менять:
+
+**A) Флаги пайплайна:**
+```python
+"mutations": {
+    "check_evasion": False,  # ctx.stages.check_evasion
+    "crit_damage_boost": True  # ctx.flags.formula.crit_damage_boost
+}
+```
+
+**B) Модификаторы:**
+```python
+"mutations": {
+    "weapon_effect_value": 3.0  # ctx.mods.weapon_effect_value
+}
+```
+
+**C) Инструкции для Ability Service:**
+```python
+# В _step_calculate_damage()
+if ctx.triggers.trigger_bleed and res.is_crit:
+    result.ability_flags.apply_bleed = True
+    result.ability_flags.pending_effect_data = {
+        "bleed_strength": 0.3,
+        "duration": 3
+    }
+```
+
+### 4.4. Пример: Меч с кровотечением
+
+**1. Context Builder:**
+```python
+weapon.triggers = ["trigger_bleed"]
+ctx.triggers.trigger_bleed = True  # Активация
+```
+
+**2. Resolver (Crit Roll):**
+```python
+if MathCore.check_chance(crit_chance):
+    res.is_crit = True
+    _resolve_triggers(ctx, res, "ON_CRIT")
+```
+
+**3. Resolver (_resolve_triggers):**
+```python
+rules = TRIGGER_RULES["ON_CRIT"]["trigger_bleed"]
+if ctx.triggers.trigger_bleed:
+    # Применяем мутации
+    ctx.flags.formula.crit_damage_boost = rules["mutations"]["crit_damage_boost"]
+```
+
+**4. Resolver (_calculate_damage):**
+```python
+if res.is_crit and ctx.triggers.trigger_bleed:
+    result.ability_flags.apply_bleed = True
+    result.ability_flags.pending_effect_data = {
+        "bleed_damage": result.damage_final * 0.3,
+        "duration": 3
+    }
+```
+
+**5. Ability Service (Post-Calc):**
+```python
+if result.ability_flags.apply_bleed:
+    apply_bleed_effect(target, result.ability_flags.pending_effect_data)
+```

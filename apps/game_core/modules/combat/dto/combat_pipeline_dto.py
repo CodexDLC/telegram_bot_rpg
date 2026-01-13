@@ -3,7 +3,7 @@ DTO для управления Пайплайном Боя (Combat Pipeline).
 Содержит флаги, контексты и результаты расчетов.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -175,9 +175,51 @@ class PipelineContextDTO(BaseModel):
     can_counter: bool = True
 
 
+class AbilityFlagsDTO(BaseModel):
+    """
+    Флаги для Ability Service.
+    Определяют, какие эффекты применить ПОСЛЕ калькуляции урона.
+    """
+
+    # DoT Effects (Damage over Time)
+    apply_bleed: bool = False  # Кровотечение
+    apply_poison: bool = False  # Яд
+    apply_burn: bool = False  # Горение
+    apply_frostbite: bool = False  # Обморожение
+
+    # Control Effects (CC)
+    apply_stun: bool = False  # Оглушение (пропуск хода)
+    apply_knockdown: bool = False  # Сбивание с ног
+    apply_root: bool = False  # Обездвиживание
+    apply_silence: bool = False  # Немота (блок скиллов)
+    apply_disarm: bool = False  # Обезоруживание
+
+    # Debuffs (Stat Reduction)
+    apply_armor_break: bool = False  # Снижение брони
+    apply_slow: bool = False  # Замедление (инициатива)
+    apply_weakness: bool = False  # Слабость (урон)
+    apply_blind: bool = False  # Ослепление (точность)
+
+    # Buffs (Positive Effects)
+    apply_haste: bool = False  # Ускорение
+    apply_fortify: bool = False  # Укрепление (броня)
+    apply_regeneration: bool = False  # Регенерация HP
+    apply_shield: bool = False  # Магический щит
+
+    # Special Mechanics (Markers)
+    grant_counter_marker: bool = False  # Маркер контратаки
+    grant_evasion_marker: bool = False  # Маркер гарантированного уворота
+    grant_parry_marker: bool = False  # Маркер парирования
+
+    # Meta
+    pending_effect_data: dict[str, Any] = Field(default_factory=dict)
+    # ↑ Дополнительные параметры (сила эффекта, длительность)
+
+
 class InteractionResultDTO(BaseModel):
     """Итоговый отчет."""
 
+    # === Что случилось (Факты) ===
     is_hit: bool = False
     is_crit: bool = False
     is_blocked: bool = False
@@ -195,3 +237,6 @@ class InteractionResultDTO(BaseModel):
 
     tokens_awarded_attacker: list[str] = Field(default_factory=list)
     tokens_awarded_defender: list[str] = Field(default_factory=list)
+
+    # === Что надо сделать (Команды) ===
+    ability_flags: AbilityFlagsDTO = Field(default_factory=AbilityFlagsDTO)
