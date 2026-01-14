@@ -15,7 +15,7 @@ from apps.game_core.modules.onboarding.onboarding_service import OnboardingServi
 from apps.game_core.modules.onboarding.onboarding_session_manager import OnboardingSessionManager
 
 if TYPE_CHECKING:
-    from apps.game_core.system.core_router import CoreRouter
+    from apps.game_core.system.dispatcher.system_dispatcher import CoreRouter
 
 
 class OnboardingCoreOrchestrator:

@@ -9,7 +9,7 @@ from apps.common.services.redis.manager.account_manager import AccountManager
 
 if TYPE_CHECKING:
     from apps.game_core.modules.scenario_orchestrator.logic.scenario_manager import ScenarioManager
-    from apps.game_core.system.core_router import CoreRouter
+    from apps.game_core.system.dispatcher.system_dispatcher import CoreRouter
 
 
 class BaseScenarioHandler(ABC):

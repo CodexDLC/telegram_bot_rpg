@@ -1,0 +1,11 @@
+# 📂 Core Layer (Shared Engines)
+
+[⬅️ Назад: Architecture Root](../README.md)
+
+## 🎯 Описание
+Общие механизмы, используемые разными доменами.
+
+## 🗺️ Структура
+* [**System_Dispatcher/**](./System_Dispatcher/README.md) — Внутренняя шина сообщений (CoreRouter).
+* [**RPG_Rules/**](./RPG_Rules/README.md) — "Физика мира" (Атрибуты, Формулы).
+* [**Context_System/**](./Context_System/README.md) — Сборщик данных (Aggregators).

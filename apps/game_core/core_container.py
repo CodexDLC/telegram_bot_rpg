@@ -30,7 +30,7 @@ from apps.game_core.modules.scenario_orchestrator.logic.scenario_formatter impor
 from apps.game_core.modules.scenario_orchestrator.logic.scenario_manager import ScenarioManager
 from apps.game_core.modules.scenario_orchestrator.scenario_core_orchestrator import ScenarioCoreOrchestrator
 from apps.game_core.system.context_assembler.service import ContextAssemblerOrchestrator
-from apps.game_core.system.core_router import CoreRouter
+from apps.game_core.system.dispatcher.system_dispatcher import CoreRouter
 from apps.game_core.system.factories.world.world_loader_service import WorldLoaderService
 
 if TYPE_CHECKING:

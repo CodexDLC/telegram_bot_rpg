@@ -13,7 +13,7 @@ from apps.bot.resources.keyboards.status_callback import StatusNavCallback
 
 router = Router(name="character_status_menu")
 
-# TODO: Refactor StatusMenu to use BotContainer and new architecture
+# TODO: Refactor StatusMenu to use BotContainer and new architecture_1
 
 
 async def show_status_tab_logic(

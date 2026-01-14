@@ -51,7 +51,7 @@ async def main() -> None:
         async with core_container.db_session_factory() as session:  # noqa: F841
             # entry_orchestrator = core_container.get_combat_entry_orchestrator(session)
             # await entry_orchestrator.restore_active_battles()
-            log.warning("Restoration of active battles is not yet implemented in the new architecture.")
+            log.warning("Restoration of active battles is not yet implemented in the new architecture_1.")
 
     except Exception as e:  # noqa: BLE001
         log.error(f"Ошибка при восстановлении боев: {e}")
