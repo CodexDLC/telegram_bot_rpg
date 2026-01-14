@@ -6,7 +6,7 @@ from loguru import logger as log
 # DTOs
 from apps.common.schemas_dto.combat_source_dto import CombatDashboardDTO, CombatLogDTO
 from apps.common.schemas_dto.core_response_dto import CoreResponseDTO, GameStateHeader
-from apps.common.schemas_dto.game_state_enum import GameState
+from apps.common.schemas_dto.game_state_enum import CoreDomain
 
 # Services
 from apps.game_core.modules.combat.session.combat_session_service import CombatSessionService
@@ -52,17 +52,17 @@ class CombatGateway:
         """Метод для внешних API (возвращает обертку CoreResponseDTO)."""
         try:
             result = await self._router_handle_action(char_id, action_type, payload)
-            return CoreResponseDTO(header=GameStateHeader(current_state=GameState.COMBAT), payload=result)
+            return CoreResponseDTO(header=GameStateHeader(current_state=CoreDomain.COMBAT), payload=result)
         except Exception as e:  # noqa: BLE001
-            return CoreResponseDTO(header=GameStateHeader(current_state=GameState.COMBAT, error=str(e)), payload=None)
+            return CoreResponseDTO(header=GameStateHeader(current_state=CoreDomain.COMBAT, error=str(e)), payload=None)
 
     async def get_view(self, char_id: int, view_type: str, params: dict[str, Any]) -> CoreResponseDTO:
         """Метод для внешних GET-запросов."""
         try:
             result = await self._router_get_view(char_id, view_type, params)
-            return CoreResponseDTO(header=GameStateHeader(current_state=GameState.COMBAT), payload=result)
+            return CoreResponseDTO(header=GameStateHeader(current_state=CoreDomain.COMBAT), payload=result)
         except Exception as e:  # noqa: BLE001
-            return CoreResponseDTO(header=GameStateHeader(current_state=GameState.COMBAT, error=str(e)), payload=None)
+            return CoreResponseDTO(header=GameStateHeader(current_state=CoreDomain.COMBAT, error=str(e)), payload=None)
 
     # ==========================================================================
     # 3. INTERNAL LOGIC (The "Clean" Implementation)

@@ -21,7 +21,7 @@ from apps.game_core.system.factories.monster.encounter_pool_service import Encou
 from .base_handler import BaseScenarioHandler
 
 if TYPE_CHECKING:
-    from apps.game_core.system.core_router import CoreRouter
+    from apps.game_core.system.dispatcher.system_dispatcher import CoreRouter
 
 # Список точек выхода из туториала (окрестности Хаба 52_52, радиус ~6 клеток)
 TUTORIAL_EXIT_LOCATIONS = [

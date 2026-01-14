@@ -126,6 +126,11 @@ class CombatDataService:
         actors_map = {}
         moves_cache = {}
 
+        # Pre-calculate team mapping for O(1) lookup
+        id_to_team_map = {
+            str(actor_id): team_name for team_name, actor_ids in meta.teams.items() for actor_id in actor_ids
+        }
+
         for cid, data in structured_data.items():
             if cid == "global_queue":
                 continue
@@ -137,7 +142,7 @@ class CombatDataService:
             # Build Snapshot
             actors_map[cid] = self._build_snapshot(
                 cid,
-                self._find_team(cid, meta.teams),
+                id_to_team_map.get(str(cid), "neutral"),
                 data["state"],
                 data["raw"],
                 data["loadout"],
@@ -275,16 +280,3 @@ class CombatDataService:
             xp_buffer=r_xp or {},
             skills=r_skills or {},
         )
-
-    def _find_team(self, cid: int | str, teams: dict) -> str:
-        """
-        Находит команду по ID актора.
-        Безопасно сравнивает int и str.
-        """
-        cid_str = str(cid)
-        for t_name, members in teams.items():
-            # members is list[int] or list[str]
-            for m in members:
-                if str(m) == cid_str:
-                    return t_name
-        return "neutral"

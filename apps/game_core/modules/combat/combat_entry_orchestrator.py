@@ -7,7 +7,7 @@ from loguru import logger as log
 from apps.common.schemas_dto.game_state_enum import CoreDomain
 from apps.game_core.modules.combat.session.initialization import CombatLifecycleService
 from apps.game_core.system.context_assembler.dtos import ContextRequestDTO, ContextResponseDTO
-from apps.game_core.system.core_router import CoreRouter
+from apps.game_core.system.dispatcher.system_dispatcher import CoreRouter
 
 if TYPE_CHECKING:
     from apps.game_core.modules.combat.session.combat_session_service import CombatSessionService
