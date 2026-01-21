@@ -6,6 +6,7 @@ from .combat_action_dto import (
 )
 from .combat_actor_dto import (
     ActiveAbilityDTO,
+    ActiveEffectDTO,
     ActorLoadoutDTO,
     ActorMetaDTO,
     ActorRawDTO,
@@ -14,7 +15,7 @@ from .combat_actor_dto import (
 )
 from .combat_arq_dto import AiTurnRequestDTO, WorkerBatchJobDTO
 from .combat_pipeline_dto import (
-    AbilityFlagsDTO,
+    CombatEventDTO,
     DamageTypeFlagsDTO,
     ForceFlagsDTO,
     FormulaFlagsDTO,
@@ -26,7 +27,6 @@ from .combat_pipeline_dto import (
     PipelineModsDTO,
     PipelinePhasesDTO,
     PipelineStagesDTO,
-    PipelineTriggersDTO,
     RestrictionFlagsDTO,
     StateFlagsDTO,
 )
@@ -36,8 +36,8 @@ from .combat_session_dto import (
     CombatInitContextDTO,
     CombatTeamDTO,
     MechanicsFlagsDTO,
-    SessionDataDTO,
 )
+from .trigger_rules_flags_dto import TriggerRulesFlagsDTO
 
 __all__ = [
     # Actor
@@ -46,6 +46,7 @@ __all__ = [
     "ActorRawDTO",
     "ActorLoadoutDTO",
     "ActiveAbilityDTO",
+    "ActiveEffectDTO",
     "ActorStats",
     # Action
     "CombatMoveDTO",
@@ -57,16 +58,15 @@ __all__ = [
     "BattleMeta",
     "CombatInitContextDTO",
     "CombatTeamDTO",
-    "SessionDataDTO",
     "MechanicsFlagsDTO",
     # Pipeline
     "PipelineContextDTO",
     "InteractionResultDTO",
-    "AbilityFlagsDTO",
+    "CombatEventDTO",
     "PipelinePhasesDTO",
     "PipelineFlagsDTO",
     "PipelineModsDTO",
-    "PipelineTriggersDTO",
+    "TriggerRulesFlagsDTO",
     "PipelineStagesDTO",
     "ForceFlagsDTO",
     "RestrictionFlagsDTO",

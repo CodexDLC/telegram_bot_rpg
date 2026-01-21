@@ -10,10 +10,12 @@ from apps.game_core.modules.combat.dto.combat_action_dto import (
 # DTOs
 from apps.game_core.modules.combat.dto.combat_actor_dto import (
     ActiveAbilityDTO,
+    ActiveEffectDTO,
     ActorLoadoutDTO,
     ActorMetaDTO,
     ActorRawDTO,
     ActorSnapshot,
+    ActorStatusesDTO,
 )
 from apps.game_core.modules.combat.dto.combat_session_dto import (
     BattleContext,
@@ -147,7 +149,7 @@ class CombatDataService:
                 data["raw"],
                 data["loadout"],
                 data["meta"],
-                data["abilities"],
+                data["statuses"],  # NEW: statuses
                 data["xp"],
                 data.get("skills", {}),  # Pass skills
             )
@@ -195,8 +197,8 @@ class CombatDataService:
             }
             actor_updates["state"] = state_dict
 
-            # Active Abilities (Always rewrite list)
-            actor_updates["abilities"] = [a.model_dump() for a in actor.active_abilities]
+            # Statuses (Always rewrite container)
+            actor_updates["statuses"] = actor.statuses.model_dump()  # NEW: statuses
 
             # XP Buffer (Always rewrite)
             actor_updates["xp"] = actor.xp_buffer
@@ -236,7 +238,9 @@ class CombatDataService:
             location_id=d("location_id") or "unknown",
         )
 
-    def _build_snapshot(self, cid, team, r_state, r_raw, r_loadout, r_meta, r_active, r_xp, r_skills) -> ActorSnapshot:
+    def _build_snapshot(
+        self, cid, team, r_state, r_raw, r_loadout, r_meta, r_statuses, r_xp, r_skills
+    ) -> ActorSnapshot:
         meta_dict = r_meta or {}
 
         # r_state is now a dict from JSON, so keys are strings
@@ -272,11 +276,18 @@ class CombatDataService:
             tags=loadout_dict.get("tags", []),
         )
 
+        # NEW: Parse statuses
+        statuses_dict = r_statuses or {"abilities": [], "effects": []}
+        statuses = ActorStatusesDTO(
+            abilities=[ActiveAbilityDTO(**a) for a in statuses_dict.get("abilities", [])],
+            effects=[ActiveEffectDTO(**e) for e in statuses_dict.get("effects", [])],
+        )
+
         return ActorSnapshot(
             meta=meta,
             raw=ActorRawDTO(**merged_raw),
             loadout=loadout,
-            active_abilities=[ActiveAbilityDTO(**a) for a in (r_active or [])],
+            statuses=statuses,  # NEW: statuses
             xp_buffer=r_xp or {},
             skills=r_skills or {},
         )

@@ -1,9 +1,10 @@
 import asyncio
 
-from apps.game_core.modules.combat.dto.combat_internal_dto import BattleContext, CombatActionDTO
 from loguru import logger as log
 
 from apps.game_core.modules.combat.combat_engine.logic.combat_pipeline import CombatPipeline
+from apps.game_core.modules.combat.dto.combat_action_dto import CombatActionDTO
+from apps.game_core.modules.combat.dto.combat_session_dto import BattleContext
 
 
 class CombatExecutor:
@@ -29,7 +30,6 @@ class CombatExecutor:
                 processed_ids.append(action.move.move_id)
             except Exception as e:  # noqa: BLE001
                 log.error(f"Executor | Action {action.move.move_id} failed: {e}")
-                # Считаем обработанным (чтобы удалить из очереди), но с ошибкой
                 processed_ids.append(action.move.move_id)
 
         return processed_ids
@@ -44,12 +44,10 @@ class CombatExecutor:
             return
 
         # Routing Logic
-        # Exchange (Дуэль) или Forced Attack (Односторонний удар по манекену)
-        # Forced Attack обрабатывается в ветке Exchange, так как это физическое взаимодействие
         if action.action_type == "exchange" or (action.is_forced and action.move.payload.get("target_id")):
             await self._handle_exchange(ctx, action)
         else:
-            # Instant / Item (Одностороннее воздействие на N целей)
+            # Instant / Item (Одностороннее воздействие)
             await self._handle_unidirectional(ctx, action)
 
     # ==========================================================================
@@ -59,7 +57,8 @@ class CombatExecutor:
     async def _handle_exchange(self, ctx: BattleContext, action: CombatActionDTO) -> None:
         """
         Ветка: Обмен ударами (Exchange).
-        Может быть 2 задачи (A->B, B->A) или 1 задача (A->B, если Forced).
+        Обрабатывает цепочку атак (Waves) внутри одного контекста.
+        Использует Chain Reactions из DTO результата.
         """
         source = ctx.get_actor(action.move.char_id)
         target_id = action.move.payload.get("target_id")
@@ -69,69 +68,115 @@ class CombatExecutor:
             log.warning(f"Executor | Exchange participants not found: {action.move.char_id} -> {target_id}")
             return
 
-        tasks = []
+        # Очередь задач (Waves)
+        pending_tasks = []
 
-        # --- PHASE 1: INTERFERENCE CHECK (Предварительная проверка) ---
-        # TODO: Вызвать InterferenceService.resolve(action.move, action.partner_move)
-        # 1. Проверить наличие флагов контроля (Stun, Knockdown) в интентах.
-        # 2. Если есть конфликт -> Сравнить инициативу.
-        # 3. Сгенерировать external_mods (дебаффы) для проигравшего.
+        # 1. Main Attack (A -> B)
+        pending_tasks.append(self._create_task(source, target, action.move, mods={"action_mode": "exchange"}))
 
-        # mods_for_source = {} # Заглушка (удалено, так как не используется)
-        # mods_for_target = {} # Заглушка (удалено, так как не используется)
-
-        # --- PHASE 2: TASK GENERATION (A -> B) ---
-        # TODO: Multi-Hit Logic
-        # 1. Проверить триггер "Dual Wield" (шанс удара второй рукой).
-        # 2. Проверить триггер "Double Strike" (абилка).
-        # 3. Если сработало -> Добавить в tasks НЕСКОЛЬКО вызовов pipeline.
-
-        # Task 1: Main Hand (Всегда)
-        # ВАЖНО: Pipeline пока синхронный, поэтому оборачиваем в to_thread или делаем async
-        # Пока вызываем синхронно, но сохраняем структуру tasks для будущего async
-
-        # tasks.append(self.pipeline.calculate(source, target, action.move, mods=mods_for_source))
-        self.pipeline.calculate(source, target, action.move)
-
-        # Task 2: Off Hand (Optional)
-        # if dual_wield_proc:
-        #     tasks.append(self.pipeline.calculate(source, target, action.move, mods=mods_for_source, hand="off"))
-
-        # --- PHASE 3: TASK GENERATION (B -> A) ---
+        # 2. Partner Attack (B -> A)
         if action.partner_move:
-            # Аналогичная логика для второго участника
-            # Task 1: Main Hand
-            # tasks.append(self.pipeline.calculate(target, source, action.partner_move, mods=mods_for_target))
-            self.pipeline.calculate(target, source, action.partner_move)
+            pending_tasks.append(
+                self._create_task(target, source, action.partner_move, mods={"action_mode": "exchange"})
+            )
         elif not action.is_forced:
-            log.error("Executor | Exchange action without partner and not forced")
+            log.error("Executor | Exchange without partner_move and not forced")
             return
 
-        # --- PHASE 4: EXECUTION ---
-        if tasks:
-            await asyncio.gather(*tasks)
+        # --- EXECUTION LOOP (Waves) ---
+        max_waves = 3
+        wave = 0
+
+        while pending_tasks and wave < max_waves:
+            wave += 1
+
+            # Запускаем текущую волну
+            results = await asyncio.gather(*pending_tasks)
+            pending_tasks = []
+
+            for result in results:
+                s_id = result.source_id
+                t_id = result.target_id
+
+                log.debug(
+                    f"Executor | Result [{s_id}->{t_id}] ({result.hand}): "
+                    f"hit={result.is_hit}, dmg={result.damage_final}"
+                )
+
+                # --- CHAIN REACTIONS ---
+
+                # 1. Counter-Attack
+                if result.chain_events.trigger_counter_attack:
+                    defender = ctx.get_actor(t_id)
+                    attacker = ctx.get_actor(s_id)
+
+                    if defender and attacker:
+                        log.info(f"Executor | Chain: Counter-Attack {t_id} -> {s_id}")
+                        counter_move = action.partner_move if action.partner_move else action.move
+                        pending_tasks.append(
+                            self._create_task(
+                                defender,
+                                attacker,
+                                counter_move,
+                                mods={"is_counter_attack": True, "action_mode": "exchange"},
+                            )
+                        )
+
+                # 2. Off-Hand Attack
+                if result.chain_events.trigger_offhand_attack:
+                    attacker = ctx.get_actor(s_id)
+                    defender = ctx.get_actor(t_id)
+
+                    if attacker and defender:
+                        log.info(f"Executor | Chain: Off-Hand Attack {s_id} -> {t_id}")
+                        pending_tasks.append(
+                            self._create_task(
+                                attacker, defender, action.move, mods={"hand": "off", "action_mode": "exchange"}
+                            )
+                        )
+
+        # --- FINALIZE ---
+        source.meta.exchange_counter += 1
+        target.meta.exchange_counter += 1
+        ctx.meta.step_counter += 1
+
+        log.info(f"Executor | Exchange complete. Waves={wave}. Global step={ctx.meta.step_counter}")
 
     async def _handle_unidirectional(self, ctx: BattleContext, action: CombatActionDTO) -> None:
         """
-        Ветка: Одностороннее действие (Instant / Item).
-        Инициатор воздействует на список целей.
+        Ветка: Одностороннее действие.
         """
         source = ctx.get_actor(action.move.char_id)
         if not source:
             return
 
-        # Цели уже резолвлены Коллектором и лежат в action.move.targets
         target_ids = action.move.targets or []
+        if action.move.strategy == "item" and action.move.payload.get("target_id") == "self":
+            target_ids = [source.char_id]
 
         tasks = []
         for tid in target_ids:
             target = ctx.get_actor(tid)
             if target:
-                # tasks.append(self.pipeline.calculate(source, target, action.move))
-                self.pipeline.calculate(source, target, action.move)
-            elif action.move.strategy == "item" and action.move.payload.get("target_id") == "self":
-                # Self-cast (если target_id не резолвился в список int)
-                self.pipeline.calculate(source, source, action.move)
+                tasks.append(self._create_task(source, target, action.move, mods={"action_mode": "unidirectional"}))
 
         if tasks:
             await asyncio.gather(*tasks)
+            log.info(f"Executor | Unidirectional complete. Targets={len(tasks)}")
+
+    # ==========================================================================
+    # 🛠️ HELPERS
+    # ==========================================================================
+
+    def _create_task(self, source, target, move, mods=None):
+        """
+        Создает задачу для Pipeline.
+        Инкапсулирует передачу exchange_count и других параметров.
+        """
+        return self.pipeline.calculate(
+            source=source,
+            target=target,
+            move=move,
+            external_mods=mods,
+            exchange_count=source.meta.exchange_counter,
+        )

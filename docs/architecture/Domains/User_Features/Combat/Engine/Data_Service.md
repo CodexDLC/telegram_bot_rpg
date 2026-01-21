@@ -34,7 +34,7 @@
 *   **`load_battle_context(session_id)`**
     *   Загружает **ВСЕ** данные сессии (Meta, Actors, Moves).
     *   Использует `CombatManager.load_full_context_data` (Batch Load).
-    *   Собирает объекты `ActorSnapshot` (парсит JSON, объединяет Raw и State).
+    *   Собирает объекты `ActorSnapshot` (парсит JSON, объединяет Raw, State и Statuses).
     *   Возвращает `BattleContext`.
 *   **`commit_session(ctx)`**
     *   Сохраняет изменения обратно в Redis.
@@ -47,17 +47,18 @@
 ## 🔄 Data Mapping (Преобразование)
 
 ### Чтение (Redis -> Domain)
-1.  **Raw Data:** Получает словарь `{state: {...}, raw: {...}, meta: {...}}` из Redis.
+1.  **Raw Data:** Получает словарь `{state: {...}, raw: {...}, meta: {...}, statuses: {...}}` из Redis.
 2.  **Assembly:**
     *   Создает `ActorMetaDTO` (объединяя статические данные из `meta` и динамические из `state`).
     *   Создает `ActorRawDTO` (Attributes, Modifiers).
     *   Создает `ActorLoadoutDTO`.
+    *   Создает `ActorStatusesDTO` (Abilities + Effects).
 3.  **Result:** Возвращает `ActorSnapshot`.
 
 ### Запись (Domain -> Redis)
 1.  **Extraction:** Извлекает из `ActorSnapshot` только измененные данные.
     *   `state` (HP, En, Tokens).
-    *   `active_abilities` (список эффектов).
+    *   `statuses` (контейнер с abilities и effects).
     *   `xp_buffer` (накопленный опыт).
 2.  **Commit:** Отправляет обновления в `CombatManager` для записи через `JSON.MERGE` или `JSON.SET`.
 

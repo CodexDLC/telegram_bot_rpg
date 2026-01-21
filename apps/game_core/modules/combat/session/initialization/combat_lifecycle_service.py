@@ -206,7 +206,7 @@ class CombatLifecycleService:
                     "raw": raw_data,
                     "skills": skills_data,
                     "loadout": loadout_data,
-                    "active_abilities": [],
+                    "statuses": {"abilities": [], "effects": []},  # NEW: Statuses container
                     "xp_buffer": {},
                     "metrics": {},
                     "explanation": {},

@@ -22,47 +22,6 @@ class ContextBuilder:
     """
 
     @staticmethod
-    def analyze_exchange(
-        source: ActorSnapshot,
-        target: ActorSnapshot,
-        move_a: CombatMoveDTO,
-        move_b: CombatMoveDTO | None,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """
-        Анализирует намерения участников ДО создания задач.
-        Проверяет Interference (стан) и Dual Wield.
-        Возвращает (mods_a, mods_b).
-        """
-        mods_a: dict[str, Any] = {}
-        mods_b: dict[str, Any] = {}
-
-        # 1. Interference Check (Stun/Sleep)
-        # Убрано: проверка контроля перенесена в AbilityService.pre_process
-
-        # 2. Dual Wield Check (Только если атака не отключена)
-        if not mods_a.get("disable_attack") and ContextBuilder._check_dual_wield(source):
-            mods_a["trigger_dual_wield"] = True
-            log.info(f"ContextBuilder | Actor {source.char_id} triggered Dual Wield")
-
-        if move_b and not mods_b.get("disable_attack") and ContextBuilder._check_dual_wield(target):
-            mods_b["trigger_dual_wield"] = True
-            log.info(f"ContextBuilder | Actor {target.char_id} triggered Dual Wield")
-
-        return mods_a, mods_b
-
-    @staticmethod
-    def _check_dual_wield(actor: ActorSnapshot) -> bool:
-        """Проверяет возможность и шанс удара второй рукой."""
-        off_hand_skill = actor.loadout.layout.get("off_hand")
-        if not off_hand_skill or "shield" in off_hand_skill:
-            return False
-
-        skill_val = actor.skills.get("skill_dual_wield", 0.0)
-        chance = 0.25 + (skill_val * 0.01)
-
-        return MathCore.check_chance(chance)
-
-    @staticmethod
     def build_context(
         actor: ActorSnapshot,
         target: ActorSnapshot | None,
@@ -74,6 +33,7 @@ class ContextBuilder:
         НЕ сохраняет actor/target в DTO, только настраивает флаги.
         """
         # 1. Базовая инициализация (Чистый DTO)
+        # result создается автоматически через default_factory
         ctx = PipelineContextDTO(
             phases=PipelinePhasesDTO(),
             flags=PipelineFlagsDTO(),
@@ -93,7 +53,31 @@ class ContextBuilder:
         if target:
             ContextBuilder._analyze_defense(ctx, target)
 
+        # 5. Инициализация Результата (Context Info)
+        if ctx.result:
+            ctx.result.source_id = int(actor.char_id)
+            ctx.result.target_id = int(target.char_id) if target else None
+            ctx.result.hand = ctx.flags.meta.source_type
+
+            # 6. Проверка Dual Wield (Chain Reaction)
+            # Если это Main Hand атака и у нас есть второе оружие -> ставим триггер
+            if ctx.flags.meta.source_type == "main_hand" and ContextBuilder._check_dual_wield(actor):
+                ctx.result.chain_events.trigger_offhand_attack = True
+                log.info(f"ContextBuilder | Chain Event: Dual Wield triggered for {actor.char_id}")
+
         return ctx
+
+    @staticmethod
+    def _check_dual_wield(actor: ActorSnapshot) -> bool:
+        """Проверяет возможность и шанс удара второй рукой."""
+        off_hand_skill = actor.loadout.layout.get("off_hand")
+        if not off_hand_skill or "shield" in off_hand_skill:
+            return False
+
+        skill_val = actor.skills.get("skill_dual_wield", 0.0)
+        chance = 0.25 + (skill_val * 0.01)
+
+        return MathCore.check_chance(chance)
 
     @staticmethod
     def _apply_external_mods(ctx: PipelineContextDTO, mods: dict[str, Any]) -> None:
@@ -102,6 +86,12 @@ class ContextBuilder:
         """
         if mods.get("disable_attack"):
             ctx.phases.run_calculator = False
+
+        # Парсинг action_mode
+        if "action_mode" in mods:
+            mode = mods["action_mode"]
+            if mode in ["exchange", "unidirectional"]:
+                ctx.flags.meta.action_mode = mode
 
     @staticmethod
     def _analyze_intent(
@@ -125,8 +115,16 @@ class ContextBuilder:
         # 3. EXCHANGE (Melee/Ranged Attack)
         # Определяем Source Type (main_hand / off_hand)
         source_type = "main_hand"
-        if external_mods and "source_type" in external_mods:
-            source_type = external_mods["source_type"]
+        if external_mods:
+            # Поддержка обоих ключей для совместимости
+            if "hand" in external_mods:
+                hand_val = external_mods["hand"]
+                if hand_val == "off":
+                    source_type = "off_hand"
+                elif hand_val == "main":
+                    source_type = "main_hand"
+            elif "source_type" in external_mods:
+                source_type = external_mods["source_type"]
 
         ctx.flags.meta.source_type = source_type
 

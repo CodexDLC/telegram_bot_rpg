@@ -2,25 +2,22 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from apps.game_core.resources.game_data.common.targeting import TargetType
+
 
 class FeintCostDTO(BaseModel):
     """
     Стоимость финта (Tactical).
     """
 
-    # Стоимость в тактических токенах.
-    # Примеры:
-    # {"crit": 1, "hit": 2} -> Требует 1 токен крита и 2 токена хита.
-    # {"any": 5} -> Требует 5 любых токенов (списание по дефолтному приоритету).
-    tactics: dict[str, int] = Field(default_factory=dict)
-
-    stamina: int = 0  # Выносливость (для instant финтов, будущее)
+    # Стоимость в тактических токенах (строки для калькулятора).
+    # Примеры: {"crit": "-1", "hit": "-2"}
+    tactics: dict[str, str] = Field(default_factory=dict)
 
 
 class FeintConfigDTO(BaseModel):
     """
     Конфигурация финта (Tactical Move).
-    Источник: Владение оружием, стойка, опыт.
     """
 
     feint_id: str
@@ -31,22 +28,29 @@ class FeintConfigDTO(BaseModel):
     cost: FeintCostDTO = Field(default_factory=FeintCostDTO)
 
     # === TARGETING ===
-    # Финты обычно бьют по 1 цели (модификатор атаки), но могут быть исключения (instant)
+    target: TargetType = TargetType.SINGLE_ENEMY
     target_count: int = 1
 
-    # === INSTRUCTIONS (Для AbilityService) ===
+    # === PRE-CALC (Настройка удара) ===
 
-    # Прямое изменение статов (RAW)
+    # 1. Прямое изменение статов (RAW) - Строки для WaterfallCalculator
+    # Пример: {"physical_damage_bonus": "+10", "accuracy_mult": "-0.2"}
     raw_mutations: dict[str, str] | None = None
 
-    # Изменение флагов пайплайна
+    # 2. Гарантированные флаги (Pipeline)
+    # Пример: {"restriction.ignore_block": True}
     pipeline_mutations: dict[str, Any] | None = None
 
-    # Активация триггеров (ссылки на TRIGGER_RULES)
+    # 3. Вероятностные и Реактивные правила (Triggers)
+    # Список путей к флагам в TriggerRulesFlagsDTO
+    # Пример: ["accuracy.true_strike", "dodge.counter_on_dodge"]
     triggers: list[str] | None = None
 
-    # Условные триггеры
-    conditional_triggers: dict[str, list[str]] | None = None
-
-    # Полная замена урона
+    # Полная замена урона (редко, но бывает)
     override_damage: tuple[float, float] | None = None
+
+    # === POST-CALC (Последствия) ===
+
+    # Наложение эффектов (обычно при попадании)
+    # Пример: [{"id": "bleed", "params": {"power": 10}}]
+    effects: list[dict[str, Any]] | None = None
