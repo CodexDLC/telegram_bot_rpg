@@ -45,6 +45,7 @@ WEAPONS_DB = {
                 "physical_pierce_chance": 0.15,
                 "physical_accuracy": 0.10,
             },
+            triggers=["crit.bleed_on_crit"],  # NEW ID
         ),
         "knife": BaseItemDTO(
             id="knife",
@@ -61,6 +62,7 @@ WEAPONS_DB = {
             implicit_bonuses={
                 "physical_crit_chance": 0.05,
             },
+            triggers=["crit.bleed_on_crit"],  # NEW ID
         ),
         "tanto": BaseItemDTO(
             id="tanto",
@@ -78,6 +80,7 @@ WEAPONS_DB = {
                 "physical_crit_chance": 0.10,
                 "physical_pierce_chance": 0.10,
             },
+            triggers=["crit.bleed_on_crit"],  # NEW ID
         ),
         "hatchet": BaseItemDTO(
             id="hatchet",
@@ -95,6 +98,7 @@ WEAPONS_DB = {
                 "physical_crit_power_float": 0.50,
                 "bleed_damage_bonus": 0.15,
             },
+            triggers=["crit.heavy_strike_on_crit"],  # NEW ID
         ),
         "wakizashi": BaseItemDTO(
             id="wakizashi",
@@ -113,6 +117,7 @@ WEAPONS_DB = {
                 "parry_chance": 0.10,
                 "counter_attack_chance": 0.05,
             },
+            triggers=["crit.bleed_on_crit"],  # NEW ID
         ),
     },
     # ==========================================
@@ -135,7 +140,7 @@ WEAPONS_DB = {
                 "physical_accuracy": 0.10,
                 "parry_chance": 0.10,
             },
-            triggers=["sword_crit_bleed"],  # Added trigger
+            triggers=["crit.bleed_on_crit"],  # NEW ID
         ),
         "shortsword": BaseItemDTO(
             id="shortsword",
@@ -152,7 +157,7 @@ WEAPONS_DB = {
                 "physical_accuracy": 0.10,
                 "attack_speed": 0.05,
             },
-            triggers=["sword_crit_bleed"],  # Added trigger
+            triggers=["crit.bleed_on_crit"],  # NEW ID
         ),
         "scimitar": BaseItemDTO(
             id="scimitar",
@@ -169,7 +174,7 @@ WEAPONS_DB = {
                 "bleed_chance": 0.10,
                 "parry_chance": 0.05,
             },
-            triggers=["sword_crit_bleed"],  # Added trigger
+            triggers=["crit.bleed_on_crit"],  # NEW ID
         ),
         "longsword": BaseItemDTO(
             id="longsword",
@@ -186,7 +191,7 @@ WEAPONS_DB = {
                 "parry_chance": 0.10,
                 "physical_damage_bonus": 0.05,
             },
-            triggers=["sword_crit_bleed"],  # Added trigger
+            triggers=["crit.bleed_on_crit"],  # NEW ID
         ),
         "battle_axe": BaseItemDTO(
             id="battle_axe",
@@ -203,6 +208,7 @@ WEAPONS_DB = {
                 "physical_crit_power_float": 0.60,
                 "physical_damage_bonus": 0.05,
             },
+            triggers=["crit.heavy_strike_on_crit"],  # NEW ID
         ),
         "mace": BaseItemDTO(
             id="mace",
@@ -219,7 +225,7 @@ WEAPONS_DB = {
                 "physical_penetration": 0.25,
                 "shock_resistance": 0.10,
             },
-            triggers=["macing_crit_stun"],  # Added trigger
+            triggers=["crit.stun_on_crit"],  # NEW ID
         ),
         "rapier": BaseItemDTO(
             id="rapier",
@@ -237,6 +243,7 @@ WEAPONS_DB = {
                 "physical_pierce_chance": 0.10,
                 "parry_chance": 0.05,
             },
+            triggers=["crit.piercing_crit"],  # NEW ID
         ),
     },
     # ==========================================
@@ -259,7 +266,7 @@ WEAPONS_DB = {
                 "parry_chance": 0.15,
                 "physical_damage_bonus": 0.15,
             },
-            triggers=["sword_crit_bleed"],  # Added trigger
+            triggers=["crit.bleed_on_crit"],  # NEW ID
         ),
         "warhammer": BaseItemDTO(
             id="warhammer",
@@ -276,7 +283,7 @@ WEAPONS_DB = {
                 "physical_penetration": 0.40,
                 "dodge_chance": -0.10,
             },
-            triggers=["macing_crit_stun"],  # Added trigger
+            triggers=["crit.stun_on_crit"],  # NEW ID
         ),
         "spear": BaseItemDTO(
             id="spear",
@@ -294,7 +301,7 @@ WEAPONS_DB = {
                 "physical_accuracy": 0.10,
                 "physical_pierce_chance": 0.05,
             },
-            triggers=["polearm_heavy_crit"],  # Added trigger
+            triggers=["crit.piercing_crit"],  # NEW ID
         ),
         "halberd": BaseItemDTO(
             id="halberd",
@@ -311,7 +318,7 @@ WEAPONS_DB = {
                 "physical_penetration": 0.20,
                 "counter_attack_chance": 0.15,
             },
-            triggers=["polearm_heavy_crit"],  # Added trigger
+            triggers=["crit.heavy_strike_on_crit"],  # NEW ID
         ),
         "katana": BaseItemDTO(
             id="katana",
@@ -329,7 +336,7 @@ WEAPONS_DB = {
                 "bleed_damage_bonus": 0.20,
                 "physical_accuracy": 0.10,
             },
-            triggers=["sword_crit_bleed"],  # Added trigger
+            triggers=["crit.bleed_on_crit"],  # NEW ID
         ),
         "quarterstaff": BaseItemDTO(
             id="quarterstaff",
@@ -348,6 +355,7 @@ WEAPONS_DB = {
                 "dodge_chance": 0.10,
                 "counter_attack_chance": 0.10,
             },
+            triggers=["crit.stun_on_crit"],  # NEW ID (Added for Staff)
         ),
     },
     # ==========================================
@@ -370,6 +378,7 @@ WEAPONS_DB = {
                 "physical_accuracy": -0.05,
                 "physical_crit_power_float": 0.20,
             },
+            triggers=["crit.stun_on_crit"],  # NEW ID
         ),
         "shortbow": BaseItemDTO(
             id="shortbow",
@@ -386,7 +395,7 @@ WEAPONS_DB = {
                 "physical_accuracy": 0.15,
                 "dodge_chance": 0.05,
             },
-            triggers=["shortbow_evasion"],  # Added trigger
+            triggers=["control.evasive_shot"],  # NEW ID
         ),
         "longbow": BaseItemDTO(
             id="longbow",
@@ -404,7 +413,7 @@ WEAPONS_DB = {
                 "physical_accuracy": 0.10,
                 "physical_pierce_chance": 0.05,
             },
-            triggers=["longbow_sniper_crit"],  # Added trigger
+            triggers=["crit.piercing_crit"],  # NEW ID
         ),
         "crossbow": BaseItemDTO(
             id="crossbow",
@@ -421,7 +430,7 @@ WEAPONS_DB = {
                 "physical_penetration": 0.40,
                 "physical_crit_power_float": 0.50,
             },
-            triggers=["heavy_crossbow_armor_breach"],  # Added trigger
+            triggers=["crit.unblockable_crit"],  # NEW ID
         ),
     },
     # ==========================================
@@ -444,6 +453,7 @@ WEAPONS_DB = {
                 "shield_block_chance": 0.20,
                 "shield_block_power": 0.30,
             },
+            triggers=["block.bash_on_block"],  # NEW ID (Added)
         ),
         "buckler": BaseItemDTO(
             id="buckler",
@@ -461,6 +471,7 @@ WEAPONS_DB = {
                 "counter_attack_chance": 0.10,
                 "shield_block_chance": 0.05,
             },
+            triggers=["parry.counter_on_parry"],  # NEW ID (Added)
         ),
     },
 }

@@ -10,6 +10,7 @@ from apps.common.schemas_dto.modifier_dto import (
     CombatModifiersDTO,
     CombatSkillsDTO,
 )
+from apps.game_core.resources.game_data.effects.schemas import ControlInstructionDTO
 
 
 class ActorMetaDTO(BaseModel):
@@ -34,6 +35,7 @@ class ActorMetaDTO(BaseModel):
     tactics: int = 0
     is_dead: bool = False
     afk_level: int = 0
+    exchange_counter: int = 0  # Счетчик участий в разменах (для кулдаунов и XP)
     tokens: dict[str, int] = Field(default_factory=dict)
 
 
@@ -61,16 +63,59 @@ class ActorLoadoutDTO(BaseModel):
 
 class ActiveAbilityDTO(BaseModel):
     """
-    Активные эффекты из Redis JSON `:active_abilities`.
-    Dynamic Modifiers.
+    Активные способности (Стойки, Чаннелинг).
+    Имеют логику (pipeline_mutations).
     """
 
     uid: str
     ability_id: str
     source_id: int
-    expire_at_exchange: int  # Таймер жизни (в разменах)
-    impact: dict[str, int] = Field(default_factory=dict)  # {"hp": -10}
+    expire_at_exchange: int
+    impact: dict[str, int] = Field(default_factory=dict)
+
+    # --- Memory (для отката) ---
+    # Список ключей в actor.raw.modifiers, которые эта абилка изменила.
+    modified_keys: list[str] = Field(default_factory=list)
+
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ActiveEffectDTO(BaseModel):
+    """
+    Активные эффекты (Баффы, Дебаффы, Контроль).
+    Влияют на статы и ресурсы.
+    """
+
+    uid: str
+    effect_id: str
+    source_id: int
+    expire_at_exchange: int
+
+    # --- State ---
+    # Копия resource_impact из конфига (с учетом power)
+    impact: dict[str, int] = Field(default_factory=dict)
+
+    # Копия control_logic из конфига (для быстрого доступа)
+    control: ControlInstructionDTO | None = None
+
+    # Исходный множитель силы (для наследования)
+    power: float = 1.0
+
+    # Исходные параметры создания (для наследования и логики)
+    params: dict[str, Any] = Field(default_factory=dict)
+
+    # --- Memory (для отката) ---
+    # Список ключей в actor.raw.modifiers, которые этот эффект изменил.
+    modified_keys: list[str] = Field(default_factory=list)
+
+
+class ActorStatusesDTO(BaseModel):
+    """
+    Контейнер для всех временных состояний.
+    """
+
+    abilities: list[ActiveAbilityDTO] = Field(default_factory=list)
+    effects: list[ActiveEffectDTO] = Field(default_factory=list)
 
 
 class ActorStats(BaseModel):
@@ -128,8 +173,9 @@ class ActorSnapshot(BaseModel):
     # 4. Loadout & Config
     loadout: ActorLoadoutDTO = Field(default_factory=ActorLoadoutDTO)
 
-    # 5. Dynamic
-    active_abilities: list[ActiveAbilityDTO] = Field(default_factory=list)
+    # 5. Dynamic Statuses
+    statuses: ActorStatusesDTO = Field(default_factory=ActorStatusesDTO)
+
     xp_buffer: dict[str, int] = Field(default_factory=dict)
 
     # 6. Analytics & Debug
@@ -156,3 +202,13 @@ class ActorSnapshot(BaseModel):
     @property
     def state(self) -> ActorMetaDTO:
         return self.meta
+
+    @property
+    def active_abilities(self) -> list[ActiveAbilityDTO]:
+        """Helper для обратной совместимости (только абилки)."""
+        return self.statuses.abilities
+
+    @property
+    def active_effects(self) -> list[ActiveEffectDTO]:
+        """Helper для доступа к эффектам."""
+        return self.statuses.effects

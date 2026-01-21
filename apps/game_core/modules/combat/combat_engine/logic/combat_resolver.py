@@ -1,10 +1,13 @@
+from typing import Any
+
 from apps.game_core.modules.combat.combat_engine.logic.math_core import MathCore
 from apps.game_core.modules.combat.dto.combat_actor_dto import ActorStats
 from apps.game_core.modules.combat.dto.combat_pipeline_dto import (
+    CombatEventDTO,
     InteractionResultDTO,
     PipelineContextDTO,
 )
-from apps.game_core.resources.game_data.triggers import TRIGGER_RULES
+from apps.game_core.resources.game_data.triggers.definitions.rules import TRIGGER_RULES_DICT
 
 
 class CombatResolver:
@@ -17,34 +20,93 @@ class CombatResolver:
     def resolve_exchange(
         cls, attacker_stats: ActorStats, defender_stats: ActorStats, context: PipelineContextDTO
     ) -> InteractionResultDTO:
-        result = InteractionResultDTO()
+        # Используем уже созданный результат из контекста
+        result = context.result
+        if result is None:
+            result = InteractionResultDTO()
 
         if not context.phases.run_calculator:
             return result
 
-        # 1. Accuracy (Попали ли вообще?)
+        # 1. Accuracy
         if not cls._step_accuracy_roll(attacker_stats, context, result):
             return result
 
-        # 2. Crit / Trigger Roll (Сработал ли спец-эффект оружия?)
+        # 2. Crit
         cls._step_crit_roll(attacker_stats, defender_stats, context, result)
 
-        # 3. Evasion (Увернулся ли враг?)
+        # 3. Evasion
         if cls._step_evasion_roll(attacker_stats, defender_stats, context, result):
+            cls._step_counter_check(defender_stats, context, result)
             return result
 
-        # 4. Parry (Спарировал?)
+        # 4. Parry
         if cls._step_parry_roll(attacker_stats, defender_stats, context, result):
+            cls._step_counter_check(defender_stats, context, result)
             return result
 
-        # 5. Block (Заблокировал?)
+        # 5. Block
         if cls._step_block_roll(attacker_stats, defender_stats, context, result):
+            cls._step_counter_check(defender_stats, context, result)
             return result
 
-        # 6. Damage Calculation
+        # 6. Damage
         cls._step_calculate_damage(attacker_stats, defender_stats, context, result)
 
+        # 7. Healing (NEW)
+        cls._step_calculate_healing(attacker_stats, context, result)
+
         return result
+
+    @staticmethod
+    def _get_offensive_val(stats: ActorStats, ctx: PipelineContextDTO, key: str) -> float:
+        """
+        Получает значение модификатора в зависимости от источника (main_hand, off_hand, magic).
+        """
+        source = ctx.flags.meta.source_type
+
+        # Маппинг ключей
+        prefix = "main_hand"  # Default is Main Hand (Physical)
+        if source == "off_hand":
+            prefix = "off_hand"
+        elif source == "magic":
+            prefix = "magical"
+
+        # Спец. кейсы (явный доступ к полям DTO)
+        if key == "damage_base":
+            if source == "off_hand":
+                return stats.mods.off_hand_damage_base
+            elif source == "magic":
+                return stats.mods.magical_damage_base
+            return stats.mods.main_hand_damage_base
+
+        if key == "crit_chance":
+            if source == "magic":
+                return stats.mods.magical_crit_chance
+            if source == "off_hand":
+                return stats.mods.off_hand_crit_chance
+            return stats.mods.main_hand_crit_chance
+
+        if key == "accuracy":
+            if source == "magic":
+                return stats.mods.magical_accuracy
+            if source == "off_hand":
+                return stats.mods.off_hand_accuracy
+            return stats.mods.main_hand_accuracy
+
+        if key == "penetration":
+            if source == "magic":
+                return stats.mods.magical_penetration
+            if source == "off_hand":
+                return stats.mods.off_hand_penetration
+            return stats.mods.main_hand_penetration
+
+        # Fallback (если ключ не специфичен, например damage_spread)
+        full_key = f"{prefix}_{key}"
+        if hasattr(stats.mods, full_key):
+            return getattr(stats.mods, full_key)
+
+        return 0.0
 
     @staticmethod
     def _step_accuracy_roll(atk_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO) -> bool:
@@ -54,13 +116,13 @@ class CombatResolver:
         if ctx.flags.force.miss:
             res.is_miss = True
             res.tokens_awarded_defender.append("TEMPO")
+            res.events.append(CombatEventDTO(type="MISS", source_id=res.source_id, target_id=res.target_id))
             return False
 
         if ctx.flags.force.hit:
-            CombatResolver._resolve_triggers(ctx, res, "ON_HIT")
+            CombatResolver._resolve_triggers(ctx, res, "ON_ACCURACY_CHECK")
             return True
 
-        # Используем "accuracy" -> превратится в "{hand}_accuracy"
         base_acc = CombatResolver._get_offensive_val(atk_stats, ctx, "accuracy")
         multiplier = ctx.mods.accuracy_mult
         final_acc = base_acc * multiplier
@@ -68,14 +130,16 @@ class CombatResolver:
         if not MathCore.check_chance(final_acc):
             res.is_miss = True
             res.tokens_awarded_defender.append("TEMPO")
+            res.events.append(CombatEventDTO(type="MISS", source_id=res.source_id, target_id=res.target_id))
+            CombatResolver._resolve_triggers(ctx, res, "ON_MISS")
             return False
 
-        CombatResolver._resolve_triggers(ctx, res, "ON_HIT")
+        CombatResolver._resolve_triggers(ctx, res, "ON_ACCURACY_CHECK")
         return True
 
     @staticmethod
     def _step_evasion_roll(
-        atk_stats: ActorStats, def_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO
+        _atk_stats: ActorStats, def_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO
     ) -> bool:
         if not ctx.stages.check_evasion:
             return False
@@ -83,20 +147,19 @@ class CombatResolver:
         if ctx.flags.force.dodge:
             res.is_dodged = True
             res.tokens_awarded_defender.append("DODGE")
+            res.events.append(CombatEventDTO(type="DODGE", source_id=res.source_id, target_id=res.target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_DODGE")
-            CombatResolver._check_counter_attack(def_stats, ctx, res)
+            ctx.flags.state.check_counter = True
             return True
 
         if ctx.flags.force.hit_evasion:
             CombatResolver._resolve_triggers(ctx, res, "ON_DODGE_FAIL")
             return False
 
-        # Access via .mods
         base_evasion = def_stats.mods.dodge_chance
         evasion_cap = def_stats.mods.dodge_cap
         anti_evasion = def_stats.mods.anti_dodge_chance
 
-        final_chance = 0.0
         if ctx.flags.formula.evasion_halved:
             final_chance = (base_evasion * 0.5) - anti_evasion
             final_chance = min(final_chance, evasion_cap)
@@ -116,8 +179,9 @@ class CombatResolver:
         if MathCore.check_chance(final_chance):
             res.is_dodged = True
             res.tokens_awarded_defender.append("DODGE")
+            res.events.append(CombatEventDTO(type="DODGE", source_id=res.source_id, target_id=res.target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_DODGE")
-            CombatResolver._check_counter_attack(def_stats, ctx, res)
+            ctx.flags.state.check_counter = True
             return True
         else:
             CombatResolver._resolve_triggers(ctx, res, "ON_DODGE_FAIL")
@@ -125,7 +189,7 @@ class CombatResolver:
 
     @staticmethod
     def _step_parry_roll(
-        atk_stats: ActorStats, def_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO
+        _atk_stats: ActorStats, def_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO
     ) -> bool:
         if not ctx.stages.check_parry:
             return False
@@ -137,16 +201,15 @@ class CombatResolver:
         if ctx.flags.force.parry:
             res.is_parried = True
             res.tokens_awarded_defender.append("PARRY")
+            res.events.append(CombatEventDTO(type="PARRY", source_id=res.source_id, target_id=res.target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_PARRY")
-            if ctx.flags.mastery.medium_armor or ctx.flags.can_counter_on_parry:
-                CombatResolver._check_counter_attack(def_stats, ctx, res)
+            if ctx.flags.mastery.medium_armor or ctx.flags.state.allow_counter_on_parry:
+                ctx.flags.state.check_counter = True
             return True
 
-        # Access via .mods
         parry_chance = def_stats.mods.parry_chance
         parry_cap = def_stats.mods.parry_cap
 
-        final_chance = 0.0
         if ctx.flags.formula.parry_halved:
             final_chance = parry_chance * 0.5
             final_chance = min(final_chance, parry_cap)
@@ -159,13 +222,15 @@ class CombatResolver:
         if final_chance > 0 and MathCore.check_chance(final_chance):
             res.is_parried = True
             res.tokens_awarded_defender.append("PARRY")
+            res.events.append(CombatEventDTO(type="PARRY", source_id=res.source_id, target_id=res.target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_PARRY")
+
             if ctx.flags.mastery.medium_armor:
                 mastery_chance = def_stats.skills.skill_medium_armor
                 if MathCore.check_chance(mastery_chance):
-                    CombatResolver._check_counter_attack(def_stats, ctx, res)
-            elif ctx.flags.can_counter_on_parry:
-                CombatResolver._check_counter_attack(def_stats, ctx, res)
+                    ctx.flags.state.check_counter = True
+            elif ctx.flags.state.allow_counter_on_parry:
+                ctx.flags.state.check_counter = True
             return True
         else:
             CombatResolver._resolve_triggers(ctx, res, "ON_PARRY_FAIL")
@@ -173,7 +238,7 @@ class CombatResolver:
 
     @staticmethod
     def _step_block_roll(
-        atk_stats: ActorStats, def_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO
+        _atk_stats: ActorStats, def_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO
     ) -> bool:
         if not ctx.stages.check_block:
             return False
@@ -183,14 +248,13 @@ class CombatResolver:
         if ctx.flags.force.block:
             res.is_blocked = True
             res.tokens_awarded_defender.append("BLOCK")
+            res.events.append(CombatEventDTO(type="BLOCK", source_id=res.source_id, target_id=res.target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_BLOCK")
             return True
 
-        # Access via .mods
         block_chance = def_stats.mods.shield_block_chance
         block_cap = def_stats.mods.shield_block_cap
 
-        final_chance = 0.0
         if ctx.flags.formula.block_halved:
             final_chance = block_chance * 0.5
             final_chance = min(final_chance, block_cap)
@@ -202,6 +266,7 @@ class CombatResolver:
         if final_chance > 0 and MathCore.check_chance(final_chance):
             res.is_blocked = True
             res.tokens_awarded_defender.append("BLOCK")
+            res.events.append(CombatEventDTO(type="BLOCK", source_id=res.source_id, target_id=res.target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_BLOCK")
             return True
 
@@ -212,8 +277,30 @@ class CombatResolver:
         return False
 
     @staticmethod
+    def _step_counter_check(def_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO):
+        if not ctx.stages.check_counter or not ctx.flags.state.check_counter:
+            return
+
+        base_chance = def_stats.mods.counter_attack_chance
+        cap = def_stats.mods.counter_attack_cap
+        counter_chance = min(base_chance, cap)
+
+        if res.is_dodged and ctx.flags.mastery.light_armor and MathCore.check_chance(0.50):
+            skill_lvl = def_stats.skills.skill_light_armor
+            mult = 1.0 + skill_lvl
+            counter_chance *= mult
+
+        if ctx.flags.formula.counter_chance_boost:
+            counter_chance += 0.20
+
+        if counter_chance > 0 and MathCore.check_chance(counter_chance):
+            res.is_counter = True
+            res.tokens_awarded_defender.append("COUNTER")
+            res.chain_events.trigger_counter_attack = True
+
+    @staticmethod
     def _step_crit_roll(
-        atk_stats: ActorStats, def_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO
+        atk_stats: ActorStats, _def_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO
     ):
         if not ctx.stages.check_crit:
             return
@@ -294,7 +381,6 @@ class CombatResolver:
             crit_multiplier = CombatResolver._calculate_crit_multiplier(ctx)
             res.crit_mult = crit_multiplier
 
-        # --- PHYSICAL ---
         if ctx.flags.damage.physical:
             phys_dmg = raw_damage
 
@@ -321,14 +407,12 @@ class CombatResolver:
 
             total_damage += phys_dmg
 
-        # --- PURE ---
         if ctx.flags.damage.pure:
             pure_dmg = raw_damage
             if res.is_crit:
                 pure_dmg *= 1.5
             total_damage += pure_dmg
 
-        # --- ELEMENTAL ---
         elements = ["fire", "water", "air", "earth", "light", "darkness", "arcane", "nature"]
         for elem in elements:
             if getattr(ctx.flags.damage, elem, False):
@@ -347,7 +431,6 @@ class CombatResolver:
                 elem_dmg *= 1.0 - mitigation_pct
                 total_damage += elem_dmg
 
-        # 3. ОБЩИЕ МОДИФИКАТОРЫ
         if ctx.flags.state.hit_index > 0:
             heavy_skill = def_stats.skills.skill_heavy_armor
             if heavy_skill > 0:
@@ -360,104 +443,171 @@ class CombatResolver:
 
         total_damage = max(0.0, total_damage)
         res.damage_final = int(total_damage)
+
+        # [EVENT] HIT
+        res.is_hit = True
+        tags = []
+        if res.is_crit:
+            tags.append("CRIT")
+
+        res.events.append(
+            CombatEventDTO(
+                type="HIT",
+                source_id=res.source_id,
+                target_id=res.target_id,
+                value=res.damage_final,
+                resource="hp",
+                tags=tags,
+            )
+        )
+
         return total_damage
 
     @staticmethod
-    def _check_counter_attack(def_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO):
-        if not ctx.can_counter:
-            return
+    def _step_calculate_healing(atk_stats: ActorStats, ctx: PipelineContextDTO, res: InteractionResultDTO) -> float:
+        """
+        Расчет лечения (Healing).
+        Использует магические статы или override_damage.
+        """
+        if not ctx.stages.calculate_healing:
+            return 0.0
 
-        base_chance = def_stats.mods.counter_attack_chance
-        cap = def_stats.mods.counter_attack_cap
-        counter_chance = min(base_chance, cap)
+        # 1. Базовое значение
+        if ctx.override_damage:
+            min_h, max_h = ctx.override_damage
+        else:
+            # Если нет override, берем магическую базу (или 0)
+            # TODO: Можно добавить healing_base в статы
+            base = atk_stats.mods.magical_damage_base
+            min_h = base * 0.9
+            max_h = base * 1.1
 
-        if res.is_dodged and ctx.flags.mastery.light_armor and MathCore.check_chance(0.50):
-            skill_lvl = def_stats.skills.skill_light_armor
-            mult = 1.0 + skill_lvl
-            counter_chance *= mult
+        raw_healing = MathCore.random_range(min_h, max_h)
 
-        if ctx.flags.enable_counter:
-            counter_chance += 0.20
+        # 2. Крит
+        if res.is_crit:
+            raw_healing *= 1.5  # Стандартный крит хила
+            res.crit_mult = 1.5
 
-        if counter_chance > 0 and MathCore.check_chance(counter_chance):
-            res.is_counter = True
-            res.tokens_awarded_defender.append("COUNTER")
+        # 3. Бонусы (Anatomy / Healing Power)
+        # Пока используем intelligence как бонус
+        # TODO: Добавить healing_power_mult в статы
+
+        final_healing = int(raw_healing)
+        res.healing_final = final_healing
+
+        # Записываем в resource_changes (чтобы MechanicsService применил)
+        if "hp" not in res.resource_changes:
+            res.resource_changes["hp"] = {}
+
+        # Используем ключ "heal" для WaterfallCalculator
+        res.resource_changes["hp"]["heal"] = f"+{final_healing}"
+
+        # [EVENT] HEAL
+        tags = []
+        if res.is_crit:
+            tags.append("CRIT")
+
+        res.events.append(
+            CombatEventDTO(
+                type="HEAL",
+                source_id=res.source_id,
+                target_id=res.target_id,
+                value=final_healing,
+                resource="hp",
+                tags=tags,
+            )
+        )
+
+        return float(final_healing)
 
     @staticmethod
     def _resolve_triggers(ctx: PipelineContextDTO, res: InteractionResultDTO, step_key: str):
         """
         Обрабатывает триггеры, используя глобальную библиотеку правил.
+        Использует вложенный поиск по TriggerRulesFlagsDTO.
         """
-        rules_book = TRIGGER_RULES.get(step_key)
-        if not rules_book or not isinstance(rules_book, dict):
+        # 1. Определяем секцию DTO
+        dto_section = None
+        if step_key == "ON_ACCURACY_CHECK" or step_key == "ON_MISS":
+            dto_section = ctx.triggers.accuracy
+        elif step_key == "ON_CRIT" or step_key == "ON_CRIT_FAIL":
+            dto_section = ctx.triggers.crit
+        elif step_key == "ON_DODGE" or step_key == "ON_DODGE_FAIL":
+            dto_section = ctx.triggers.dodge
+        elif step_key == "ON_PARRY" or step_key == "ON_PARRY_FAIL":
+            dto_section = ctx.triggers.parry
+        elif step_key == "ON_BLOCK" or step_key == "ON_BLOCK_FAIL":
+            dto_section = ctx.triggers.block
+        elif step_key == "ON_CHECK_CONTROL":
+            dto_section = ctx.triggers.control
+        elif step_key == "ON_DAMAGE":
+            dto_section = ctx.triggers.damage
+
+        if not dto_section:
             return
 
-        for trigger_name, rule_data in rules_book.items():
-            # 1. Проверяем, активирован ли триггер в контексте
-            if not getattr(ctx.triggers, trigger_name, False):
+        # 2. Находим активные флаги (True)
+        active_rule_ids = [k for k, v in dto_section.model_dump().items() if v is True]
+
+        if not active_rule_ids:
+            return
+
+        # 3. Ищем правила
+        for rule_id in active_rule_ids:
+            rule_data = TRIGGER_RULES_DICT.get(rule_id)
+            if not rule_data:
                 continue
 
-            # 2. Проверяем шанс срабатывания
+            if rule_data.get("event") != step_key:
+                continue
+
+            # 4. Шанс
             raw_chance = rule_data.get("chance", 0.0)
             chance = float(raw_chance) if isinstance(raw_chance, (int, float)) else 0.0
 
             if not MathCore.check_chance(chance):
                 continue
 
-            # 3. Применяем мутации
+            # 5. Мутации (с поддержкой точек и add_effect)
             for key, value in rule_data.get("mutations", {}).items():
-                # A) Флаги пайплайна (stages, flags)
-                if hasattr(ctx.stages, key):
-                    setattr(ctx.stages, key, value)
-                elif hasattr(ctx.flags, key):
-                    # Пытаемся найти флаг рекурсивно или плоско
-                    # Для простоты пока плоско, но можно расширить
-                    if hasattr(ctx.flags, key):
-                        setattr(ctx.flags, key, value)
-                    # Если это вложенный флаг (например, formula.crit_damage_boost)
-                    # то в mutations ключи должны быть плоскими, если мы не напишем парсер.
-                    # В текущей реализации TriggerDTO mutations - это плоский dict.
-                    # Поэтому проверим вложенные объекты вручную:
-                    elif hasattr(ctx.flags.formula, key):
-                        setattr(ctx.flags.formula, key, value)
-                    elif hasattr(ctx.flags.force, key):
-                        setattr(ctx.flags.force, key, value)
-                    elif hasattr(ctx.flags.restriction, key):
-                        setattr(ctx.flags.restriction, key, value)
-                    elif hasattr(ctx.mods, key):
-                        setattr(ctx.mods, key, value)
-
-                # B) Инструкции для AbilityService (AbilityFlagsDTO)
-                elif hasattr(res.ability_flags, key):
-                    setattr(res.ability_flags, key, value)
-                    # Если есть pending_effect_data в мутациях
-                    if key == "pending_effect_data" and isinstance(value, dict):
-                        res.ability_flags.pending_effect_data.update(value)
-
-                # C) Pending Effect Data (Special Case)
-                elif key == "pending_effect_data" and isinstance(value, dict):
-                    res.ability_flags.pending_effect_data.update(value)
+                CombatResolver._apply_mutation(ctx, res, key, value)
 
     @staticmethod
-    def _get_offensive_val(stats: ActorStats, ctx: PipelineContextDTO, stat_name: str) -> float:
+    def _apply_mutation(ctx: PipelineContextDTO, res: InteractionResultDTO, key: str, value: Any):
         """
-        Достает значение стата из нужной руки (с префиксом).
+        Применяет мутацию к контексту или результату.
+        Поддерживает вложенные ключи и спец. команду add_effect.
         """
-        current_source = ctx.flags.meta.source_type
+        # 0. Спец. команда: add_effect
+        if key == "add_effect" and isinstance(value, dict):
+            res.applied_effects.append(value)
+            return
 
-        prefix = ""
-        if current_source == "off_hand":
-            prefix = "off_hand_"
-        elif current_source == "main_hand":
-            prefix = "main_hand_"
-        elif current_source == "item":
-            prefix = "item_"
+        # 1. Разбор пути
+        if "." in key:
+            parts = key.split(".")
+            root_name = parts[0]
+            field_name = parts[1]
 
-        full_stat_name = f"{prefix}{stat_name}"
+            # A) Flags (ctx.flags.force, ctx.flags.formula...)
+            if hasattr(ctx.flags, root_name):
+                sub_obj = getattr(ctx.flags, root_name)
+                if hasattr(sub_obj, field_name):
+                    setattr(sub_obj, field_name, value)
+                    return
 
-        if not prefix and current_source == "magic":
-            full_stat_name = f"magical_{stat_name}"
+            # B) Chain Events (res.chain_events)
+            if root_name == "chain_events" and hasattr(res.chain_events, field_name):
+                setattr(res.chain_events, field_name, value)
+                return
 
-        # Access via .mods
-        val = getattr(stats.mods, full_stat_name, 0.0)
-        return val
+            return
+
+        # 2. Плоский поиск (Legacy / Shortcuts)
+        if hasattr(ctx.stages, key):
+            setattr(ctx.stages, key, value)
+        elif hasattr(ctx.flags, key):
+            setattr(ctx.flags, key, value)
+        elif hasattr(ctx.mods, key):
+            setattr(ctx.mods, key, value)

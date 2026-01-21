@@ -5,65 +5,70 @@ from loguru import logger as log
 from apps.game_core.modules.combat.combat_engine.combat_data_service import CombatDataService
 from apps.game_core.modules.combat.combat_engine.logic.chaos_service import ChaosService
 
+# Константа таймаута (10 минут)
+MAX_INACTIVITY_SEC = 600
+
 
 async def chaos_check_task(ctx: dict, session_id: str) -> None:
     """
-    Задача Хаоса (Garbage Collector / Event).
-    Работает по принципу эстафеты: проверяет активность и ставит себя же через 5 минут.
+    Задача Хаоса (Watchdog / Garbage Collector).
+
+    Работает как рекурсивный таймер ("Эстафета"):
+    1. Проверяет, жива ли сессия.
+    2. Если сессия неактивна > 10 минут, спавнит "Чистильщика" (Force End).
+    3. Перезапускает саму себя через 5 минут.
+
+    Args:
+        ctx: Контекст ARQ.
+        session_id: ID боевой сессии.
     """
     try:
-        # Инициализация сервисов (если их нет в ctx, создаем, но лучше брать из ctx)
-        # В combat_arq.py мы не положили ChaosService в ctx.
-        # Но у нас есть combat_manager.
+        # Service Resolution (Lazy Load Pattern)
+        # Пытаемся достать сервис, если он есть, иначе фоллбек
+        data_service: CombatDataService = ctx.get("combat_data_service")
 
-        # Получаем сервисы из контекста (или создаем на лету, если нет)
-        # В combat_arq.py мы создали data_service.
-        data_service: CombatDataService = ctx.get(
-            "combat_data_service"
-        )  # В combat_arq.py мы не положили его под этим ключом?
-        # В combat_arq.py: ctx['combat_collector'] = CombatCollector(data_service)
-        # Мы можем достать data_service из коллектора или создать новый.
-        # Лучше добавить data_service в ctx в combat_arq.py.
-
-        # Fallback:
         if not data_service:
-            # Пытаемся достать из коллектора
             if "combat_collector" in ctx:
                 data_service = ctx["combat_collector"].data_service
             else:
-                # Если совсем беда, выходим (или создаем, но нужен redis_service)
-                log.error("Chaos | DataService not found in context")
+                log.error("ChaosError | reason=service_not_found")
                 return
 
-        # ChaosService создаем на лету (он легкий)
+        # ChaosService легковесный, создаем on-demand
         chaos_service = ChaosService(data_service.combat_manager)
 
-        # 1. Загружаем мету
+        # 1. Check Session State
         meta = await data_service.get_battle_meta(session_id)
+
         if not meta or not meta.active:
-            # Сессия закрыта или не существует -> Эстафета прерывается
-            # log.debug(f"Chaos | Session {session_id} inactive, stopping relay")
+            log.info("ChaosStop | reason=session_inactive session_id={session_id}", session_id=session_id)
             return
 
-        # 2. Считаем простой: Delta = Now - LastActivity
+        # 2. Check Inactivity (Zombie Session Detection)
         now = int(time.time())
         delta = now - meta.last_activity_at
 
-        if delta > 600:  # 10 минут тишины
-            # Время вышло — Мусорщик приходит за ними
+        if delta > MAX_INACTIVITY_SEC:
+            # Trigger Cleanup Event
             spawned = await chaos_service.spawn_cleaner(session_id)
             if spawned:
-                log.info(f"Chaos | Cleaner spawned in {session_id} (delta={delta}s)")
+                log.warning(
+                    "ChaosCleanerSpawned | session_id={session_id} inactivity_sec={delta}",
+                    session_id=session_id,
+                    delta=delta,
+                )
             else:
-                # Уже заспавнен
-                pass
+                log.debug("ChaosCleanerSkip | reason=already_spawned session_id={session_id}", session_id=session_id)
 
-        # 3. ПЕРЕДАЕМ ЭСТАФЕТУ (Рекурсия через ARQ)
-        # Ставим следующую проверку через 5 минут (300 сек)
-        await ctx["redis"].enqueue_job("chaos_check_task", session_id, _defer_until=int(time.time() + 300))
+        # 3. Relay (Self-Requeue)
+        # Планируем следующий чек через 5 минут (300 сек)
+        next_check_delay = 300
+        await ctx["redis"].enqueue_job("chaos_check_task", session_id, _defer_until=int(time.time() + next_check_delay))
 
-    except Exception as e:
-        log.error(f"Chaos | Error: {e}")
-        # Если ошибка, эстафета может прерваться.
-        # Можно попробовать перезапустить, но лучше не спамить ошибками.
-        raise
+        log.debug(
+            "ChaosRelay | session_id={session_id} next_run_in={delay}s", session_id=session_id, delay=next_check_delay
+        )
+
+    except Exception:  # noqa: BLE001
+        log.exception("ChaosCriticalError | session_id={session_id}", session_id=session_id)
+        # Не делаем raise, чтобы не забить очередь ретраями упавшей "мусорной" задачи

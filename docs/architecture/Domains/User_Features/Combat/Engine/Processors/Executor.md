@@ -8,73 +8,104 @@
 **Location:** `apps/game_core/modules/combat/combat_engine/processors/executor.py`
 
 **Executor** — это "дирижер" боевого раунда. Он получает задачу на действие (`CombatAction`) и превращает её в серию вызовов Пайплайна.
-Именно здесь реализуется логика **Dual Wield** (два оружия), **Multi-Hit** (серии ударов) и **AOE**.
+Он реализует концепцию **"Всё в одной задаче"**: весь каскад ударов (атака, вторая рука, контратака) обрабатывается внутри одного вызова `process_batch`, обеспечивая атомарность размена.
+
+---
+
+## 🏗️ Class Structure (API)
+
+### Public Methods
+
+#### `process_batch(ctx: BattleContext, actions: list[CombatActionDTO]) -> list[str]`
+Главная точка входа. Обрабатывает пакет действий последовательно.
+*   **ctx:** Контекст боя (изменяется in-place).
+*   **actions:** Список действий для обработки.
+*   **Returns:** Список ID успешно обработанных действий (`move_id`).
+
+---
+
+### Private Methods (Internal Logic)
+
+#### `_process_single_action(ctx, action) -> None`
+Маршрутизатор. Определяет тип действия и вызывает соответствующий обработчик.
+*   Если `exchange` -> `_handle_exchange`.
+*   Если `instant/item` -> `_handle_unidirectional`.
+
+#### `_handle_exchange(ctx, action) -> None`
+**Core Logic.** Обрабатывает дуэль (размен ударами).
+*   Запускает цикл **Waves (Волн)**.
+*   Обрабатывает триггеры (Chain Reactions) из результатов Pipeline.
+*   Инкрементит глобальные счетчики (`step_counter`, `exchange_counter`).
+
+#### `_handle_unidirectional(ctx, action) -> None`
+Обрабатывает односторонние действия (хил, бафф, AOE).
+*   Поддерживает мульти-таргет (список `target_ids`).
+*   **Не** инкрементит счетчики боя.
+
+#### `_create_task(source, target, move, mods=None)`
+Хелпер для создания задачи Pipeline.
+*   Инкапсулирует вызов `pipeline.calculate`.
+*   Прокидывает `exchange_count` и внешние модификаторы (`mods`).
 
 ---
 
 ## 🔄 Executor Flow (Processing Loop)
-Цикл обработки батча действий.
 
 ```mermaid
 graph TD
-    Task(ExecutorTask) -->|Load Full Context| Redis[(Redis)]
-    Task -->|Try Acquire Lock| Lock{Lock Acquired?}
-    Lock -->|No| Stop[Stop: Busy]
-    Lock -->|Yes| Exec[CombatExecutor]
+    Start[Action] --> Type{Type?}
     
-    subgraph Loop [Action Processing Loop]
-        Exec -->|Next Action| Type{Type?}
-        Type -->|Exchange| GenEx[Generate Tasks]
-        Type -->|Instant| GenInst[Generate Tasks]
-        
-        subgraph Pipeline [Combat Pipeline]
-            CB[ContextBuilder] --> Pre[AbilityService: Pre-Calc]
-            Pre --> Stats[StatsEngine: Recalculate]
-            Stats --> Live{Liveness Check}
-            Live -->|Dead| Skip
-            Live -->|Alive| Res[CombatResolver]
-            Res --> Post[AbilityService: Post-Calc]
-            Post --> Mech[MechanicsService: Commit]
-        end
-        
-        GenEx --> Pipeline
-        GenInst --> Pipeline
-    end
-
-    Pipeline -->|Result| Logs[Aggregate Logs]
-    Logs -->|Loop End| Exec
-    Exec -->|All Done| Commit[Commit Session]
-    Commit -->|Save Batch| Redis
-    Redis -->|Signal| Heart[Heartbeat -> Collector]
+    Type -->|Unidirectional| Uni[Loop Targets]
+    Uni -->|Parallel| PipeUni[Pipeline Calc]
+    
+    Type -->|Exchange| Ex[Init Waves]
+    Ex --> Wave1[Wave 1: Main Attacks]
+    Wave1 -->|Parallel| PipeEx[Pipeline Calc]
+    PipeEx --> Result[Result Analysis]
+    
+    Result -->|Trigger: Offhand| Wave2[Add to Next Wave]
+    Result -->|Trigger: Counter| Wave2
+    
+    Wave2 -->|Loop| PipeEx
+    
+    PipeEx -->|No More Triggers| Final[Finalize]
+    Final -->|Increment Counters| Done
 ```
 
 ---
 
 ## ⚙️ Алгоритм Работы
 
-### 1. Analysis (Планирование)
-Перед запуском Executor анализирует экипировку и интент.
-*   **Dual Wield Check:** Если у игрока два оружия, Executor запланирует **два** прогона пайплайна (Main Hand + Off Hand).
-*   **AOE Check:** Если цель — "все враги", Executor создаст список пар (Source -> Enemy1, Source -> Enemy2...).
+### 1. Exchange Mode (Размен)
+Обработка дуэли между двумя участниками (A и B). Использует механизм **Waves (Волн)** для поддержки цепных реакций.
 
-### 2. Execution Loop (Цикл исполнения)
-Для каждой запланированной пары (Source -> Target):
+#### Wave 1: Initial Clash
+*   Создается задача **A -> B** (Main Hand).
+*   Если есть `partner_move`, создается задача **B -> A** (Main Hand).
+*   Задачи выполняются параллельно через `asyncio.gather`.
 
-1.  **Stats Update:** Актуализирует статы (`StatsEngine.ensure_stats`).
-2.  **Pipeline Call:** Вызывает `CombatPipeline.calculate()`.
-3.  **Result Handling:**
-    *   Получает `InteractionResult`.
-    *   Если была контратака (`is_counter`), добавляет новую задачу в очередь "мгновенных действий".
-4.  **Log Generation:** Формирует запись для лога боя.
+#### Wave 2+: Chain Reactions
+Executor анализирует результаты первой волны на наличие **Триггеров** (в `InteractionResultDTO.chain_events`):
+1.  **Off-Hand Attack:** Если Pipeline решил, что нужно ударить второй рукой -> добавляется задача `A -> B (Off Hand)`.
+2.  **Counter-Attack:** Если сработал триггер контратаки (например, после уклонения) -> добавляется задача `B -> A (Counter)`.
+3.  **Extra Strike:** Если сработал перк на двойной удар.
 
-### 3. Finalization
-*   Проверяет смерть участников.
-*   Сохраняет изменения в Redis (через `CombatDataService`).
-*   Отправляет события (Events) во внешние системы (если нужно).
+Цикл повторяется до тех пор, пока есть новые задачи (с лимитом `MAX_WAVES = 3` для защиты от зацикливания).
+
+#### Finalization
+*   Инкрементируются счетчики `exchange_counter` (для участников) и `step_counter` (глобальный).
+*   Логируется завершение размена.
+
+### 2. Unidirectional Mode (Одностороннее)
+Для действий типа `item`, `instant` или `cast`.
+*   Executor получает список целей (`target_ids`).
+*   Создает задачу для **каждой** цели (AOE).
+*   Выполняет их параллельно.
+*   **Важно:** В этом режиме счетчики (`exchange_counter`) **не** инкрементируются.
 
 ---
 
-## 🔄 Обработка Контратак
-Если Пайплайн вернул флаг `is_counter=True`:
-1.  Executor **не** запускает контратаку мгновенно внутри того же цикла (чтобы избежать рекурсии).
-2.  Вместо этого он создает новую задачу `CombatAction(type="forced", ...)` и кладет её в начало очереди обработки.
+## 📊 Data Flow
+1.  **Input:** `BattleContext` (Mutable) + `CombatActionDTO`.
+2.  **Process:** Мутация контекста внутри Pipeline (HP, Tokens).
+3.  **Output:** Список ID обработанных действий (`processed_ids`).

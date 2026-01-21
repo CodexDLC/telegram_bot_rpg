@@ -1,3 +1,5 @@
+from loguru import logger as log
+
 from apps.common.core.base_arq import ArqService, BaseArqSettings, base_shutdown, base_startup
 from apps.common.services.redis.manager.combat_manager import CombatManager
 from apps.game_core.modules.combat.combat_engine.combat_data_service import CombatDataService
@@ -6,18 +8,25 @@ from apps.game_core.modules.combat.combat_engine.processors.collector import Com
 from apps.game_core.modules.combat.combat_engine.processors.executor import CombatExecutor
 from apps.game_core.modules.combat.session.runtime.combat_turn_manager import CombatTurnManager
 
+# Импорты тасок
 from .tasks.ai_turn_task import ai_turn_task
 from .tasks.chaos_task import chaos_check_task
-
-# Импорты тасок
 from .tasks.collector_task import combat_collector_task
 from .tasks.executor_task import execute_batch_task
 
 
-async def combat_startup(ctx):
+async def combat_startup(ctx: dict) -> None:
     """
-    Инициализация боевого воркера.
+    Выполняет инициализацию контекста боевого воркера (ARQ).
+
+    Настраивает подключение к Redis, инициализирует сервисы данных,
+    процессоры (Executor, Collector, AI) и менеджер ходов.
+
+    Args:
+        ctx: Словарь контекста ARQ, передаваемый между задачами.
     """
+    log.info("WorkerInit | stage=start worker_type=combat")
+
     # 1. Базовая инициализация (Redis)
     await base_startup(ctx)
 
@@ -27,41 +36,57 @@ async def combat_startup(ctx):
     combat_manager = CombatManager(redis_service)
     data_service = CombatDataService(combat_manager)
 
-    # ArqService для TurnManager
+    # ArqService для TurnManager (внутренняя очередь)
     arq_service = ArqService()
 
     # 3. Инициализация менеджеров
     turn_manager = CombatTurnManager(combat_manager, arq_service)
 
-    # 4. Инициализация процессоров
-    ctx["combat_data_service"] = data_service  # Важно для Executor Task
+    # 4. Инициализация процессоров и внедрение в контекст
+    ctx["combat_data_service"] = data_service
     ctx["combat_collector"] = CombatCollector(data_service)
-    ctx["combat_executor"] = CombatExecutor()  # Чистый процессор
+    ctx["combat_executor"] = CombatExecutor()
     ctx["ai_processor"] = AiProcessor()
 
     ctx["turn_manager"] = turn_manager
     ctx["arq_service_internal"] = arq_service
 
+    log.info("WorkerInit | stage=complete services_loaded=true")
 
-async def combat_shutdown(ctx):
-    """Очистка ресурсов."""
+
+async def combat_shutdown(ctx: dict) -> None:
+    """
+    Выполняет корректное завершение работы воркера.
+
+    Закрывает соединения с Redis и внутренними пулами.
+    """
+    log.info("WorkerShutdown | stage=start")
+
     if "arq_service_internal" in ctx:
         await ctx["arq_service_internal"].close()
+
     await base_shutdown(ctx)
+
+    log.info("WorkerShutdown | stage=complete")
 
 
 class CombatArqSettings(BaseArqSettings):
     """
-    Настройки ARQ воркера для боевой системы.
+    Конфигурация воркера ARQ для боевой системы.
+
+    Attributes:
+        max_jobs (int): Лимит одновременных задач (высокий для concurrency).
+        job_timeout (int): Жесткий таймаут выполнения задачи.
     """
 
-    # Оптимизация под высокий темп
-    max_jobs = 50
-    job_timeout = 30
-    keep_result = 0
+    max_jobs: int = 50
+    job_timeout: int = 30
+    keep_result: int = 0  # Результаты не храним, экономим Redis
 
-    on_startup = combat_startup
-    on_shutdown = combat_shutdown
-
-    # Список задач (функций), которые выполняет этот воркер
-    functions = [combat_collector_task, execute_batch_task, ai_turn_task, chaos_check_task]
+    # Регистрация функций-задач
+    functions = [
+        combat_collector_task,
+        execute_batch_task,
+        ai_turn_task,
+        chaos_check_task,
+    ]

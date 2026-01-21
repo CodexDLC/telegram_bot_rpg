@@ -7,7 +7,7 @@ from apps.game_core.modules.combat.combat_engine.logic.mechanics_service import 
     MechanicsService,
 )
 from apps.game_core.modules.combat.combat_engine.logic.stats_engine import StatsEngine
-from apps.game_core.modules.combat.dto import ActorSnapshot, CombatMoveDTO, InteractionResultDTO
+from apps.game_core.modules.combat.dto import ActorSnapshot, CombatMoveDTO, InteractionResultDTO, PipelineContextDTO
 
 
 class CombatPipeline:
@@ -26,46 +26,57 @@ class CombatPipeline:
         source: ActorSnapshot,
         target: ActorSnapshot | None,
         move: CombatMoveDTO,
+        exchange_count: int = 0,
         external_mods: dict[str, Any] | None = None,
     ) -> InteractionResultDTO:
         """
         Запуск пайплайна (Async).
         """
         # 0. Context Build
+        # ContextBuilder создает ctx и инициализирует ctx.result (заполняет ID и hand)
         ctx = ContextBuilder.build_context(source, target, move, external_mods)
 
         # 1. Pre-Calculation (Ability Service)
         if ctx.phases.run_pre_calc:
-            # Передаем source, так как AbilityService теперь требует actor для списания ресурсов
-            self.ability_service.pre_process(ctx, move, source)
+            # AbilityService теперь берет result из ctx.result
+            self.ability_service.pre_process(ctx, move, source, target)
 
-        # Если пре-кальк прервал пайплайн (например, не хватило маны)
-        if not ctx.phases.run_calculator:
-            return InteractionResultDTO()  # Пустой результат или с ошибкой
+        # 1.5. Liveness Check (Управление флагами)
+        if ctx.phases.run_calculator:
+            self._check_liveness(ctx, source, target)
 
-        # 1.5. Stats Calculation (Stats Engine)
-        # Актуализируем статы (если были изменения в pre-calc)
-        StatsEngine.ensure_stats(source)
-        if target:
-            StatsEngine.ensure_stats(target)
+        # 2. Stats Calculation (Stats Engine)
+        if ctx.phases.run_calculator:
+            StatsEngine.ensure_stats(source)
+            if target:
+                StatsEngine.ensure_stats(target)
 
-        # 1.6. Liveness Check
-        if not source.is_alive:
-            # TODO: Вернуть результат с флагом ошибки
-            return InteractionResultDTO()
-        if target and not target.is_alive:
-            return InteractionResultDTO()
-
-        # 2. Calculator (Resolver)
-        result = InteractionResultDTO()
+        # 3. Calculator (Resolver)
         if ctx.phases.run_calculator and target and source.stats and target.stats:
-            result = CombatResolver.resolve_exchange(source.stats, target.stats, ctx)
+            # Resolver работает напрямую с ctx.result
+            CombatResolver.resolve_exchange(source.stats, target.stats, ctx)
 
-        # 3. Post-Calculation (Ability Service)
+        # 4. Post-Calculation (Ability Service)
         if ctx.phases.run_post_calc:
-            self.ability_service.post_process(ctx, result, source, target, move)
+            # AbilityService использует ctx.result
+            self.ability_service.post_process(ctx, source, target, move)
 
-        # 4. Mechanics (Apply Results)
-        self.mechanics_service.apply_interaction_result(ctx, result, source, target)
+        # 5. Mechanics (Apply Results & Logs)
+        # Исправлен порядок аргументов: ctx, source, target, result
+        self.mechanics_service.apply_interaction_result(ctx, source, target, ctx.result)
 
-        return result
+        return ctx.result
+
+    def _check_liveness(self, ctx: PipelineContextDTO, source: ActorSnapshot, target: ActorSnapshot | None) -> None:
+        """
+        Проверяет, живы ли участники.
+        Если нет - отключает фазу калькуляции и пост-процессинга.
+        """
+        if not source.is_alive:
+            ctx.phases.run_calculator = False
+            ctx.phases.run_post_calc = False
+            return
+
+        if target and not target.is_alive:
+            ctx.phases.run_calculator = False
+            ctx.phases.run_post_calc = False

@@ -2,56 +2,67 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from apps.game_core.resources.game_data.abilities.enums import AbilitySource, AbilityType
+from apps.game_core.resources.game_data.common.targeting import TargetType
+
 
 class AbilityCostDTO(BaseModel):
     """
-    Стоимость абилки (Gift).
+    Стоимость абилки.
     """
 
-    energy: int = 0  # Энергия (мана)
-    gift: int = 0  # Токен Дара
-    hp: int = 0  # Здоровье (кровавая магия)
+    energy: int = 0  # Мана / Энергия
+    hp: int = 0  # Здоровье (Кровавая магия)
+    gift_tokens: int = 0  # Спец. ресурс Дара
+
+
+class PipelineMutationsDTO(BaseModel):
+    """
+    Настройка Пайплайна для абилки.
+    """
+
+    preset: str | None = None  # Имя пресета (MAGIC_ATTACK, HEALING...)
+    flags: dict[str, Any] = Field(default_factory=dict)  # Индивидуальные флаги
 
 
 class AbilityConfigDTO(BaseModel):
     """
     Конфигурация абилки (Gift Ability).
-    Источник: Дар (магия, особые способности).
     """
 
     ability_id: str
     name_ru: str
     description_ru: str
 
+    source: AbilitySource = AbilitySource.GIFT
+    type: AbilityType = AbilityType.INSTANT
+
     # === COST ===
     cost: AbilityCostDTO = Field(default_factory=AbilityCostDTO)
 
     # === TARGETING ===
-    # Тип действия (instant, reaction, passive)
-    type: str = "instant"
-    # Цель (self, single_enemy, all_enemies, multi_enemy)
-    target: str = "single_enemy"
-    # Количество целей (если target="multi_enemy" или для ограничения all_enemies)
+    target: TargetType = TargetType.SINGLE_ENEMY
     target_count: int = 1
 
-    # === INSTRUCTIONS (Для AbilityService) ===
+    # === PIPELINE CONFIG ===
 
-    # Прямое изменение статов (RAW)
+    # 1. Прямое изменение статов (RAW) - Строки для калькулятора
     # Пример: {"magical_damage_bonus": "*2.0"}
     raw_mutations: dict[str, str] | None = None
 
-    # Изменение флагов пайплайна
-    # Пример: {"damage.fire": True}
-    pipeline_mutations: dict[str, Any] | None = None
+    # 2. Настройка Пайплайна (Пресеты + Флаги)
+    # Пример: {"preset": "MAGIC_ATTACK", "flags": {"damage.fire": True}}
+    pipeline_mutations: PipelineMutationsDTO | None = None
 
-    # Активация триггеров (ссылки на TRIGGER_RULES)
+    # 3. Активация Триггеров (ссылки на TRIGGER_RULES)
+    # Пример: ["crit.burn_on_crit"]
     triggers: list[str] | None = None
 
-    # Условные триггеры
-    conditional_triggers: dict[str, list[str]] | None = None
-
-    # Полная замена урона
+    # 4. Полная замена урона (или хила)
     override_damage: tuple[float, float] | None = None
 
-    # Эффекты, накладываемые ПОСЛЕ расчета (Post-Calc)
-    post_calc_effects: list[dict[str, Any]] | None = None
+    # === EFFECTS ===
+
+    # Наложение эффектов (Баффы, Дебаффы, Хил)
+    # Пример: [{"id": "burn", "params": {"duration": 3}}]
+    effects: list[dict[str, Any]] | None = None

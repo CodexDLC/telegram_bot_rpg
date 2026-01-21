@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from apps.game_core.modules.combat.dto.trigger_rules_flags_dto import TriggerRulesFlagsDTO
+
 # ==============================================================================
 # 1. FLAGS & SWITCHES (Управление логикой)
 # ==============================================================================
@@ -16,11 +18,11 @@ class PipelinePhasesDTO(BaseModel):
     """Управление глобальными фазами пайплайна."""
 
     run_pre_calc: bool = True
+    run_stats_engine: bool = True  # NEW: Отдельный флаг для статов
     run_calculator: bool = True
     run_post_calc: bool = True
 
     is_target_dead: bool = False
-    is_interrupted: bool = False
 
 
 class ForceFlagsDTO(BaseModel):
@@ -73,6 +75,9 @@ class FormulaFlagsDTO(BaseModel):
     # Damage
     can_pierce: bool = False  # Разрешить проверку на пронзание
 
+    # Counter Attack
+    counter_chance_boost: bool = False  # Был enable_counter (+20% chance)
+
 
 class DamageTypeFlagsDTO(BaseModel):
     """Типы урона."""
@@ -87,6 +92,7 @@ class DamageTypeFlagsDTO(BaseModel):
     darkness: bool = False
     arcane: bool = False
     nature: bool = False
+    healing: bool = False  # NEW: Тип урона "Лечение"
 
 
 class StateFlagsDTO(BaseModel):
@@ -97,6 +103,10 @@ class StateFlagsDTO(BaseModel):
     open_combo: bool = False
     hit_index: int = 0
 
+    # Counter Attack State
+    allow_counter_on_parry: bool = False  # Был can_counter_on_parry
+    check_counter: bool = False  # Сигнал для запуска этапа проверки контратаки
+
 
 class MetaFlagsDTO(BaseModel):
     """Строковые мета-данные и счетчики."""
@@ -106,6 +116,12 @@ class MetaFlagsDTO(BaseModel):
     crit_trigger_key: str | None = None  # stun, bleed...
     attack_index: int = 0
     combo_stage: int = 0
+
+    # Context Flags (для Executor)
+    has_offhand_weapon: bool = False
+
+    # Режим действия (Exchange / Unidirectional)
+    action_mode: Literal["exchange", "unidirectional"] = "exchange"
 
 
 class PipelineFlagsDTO(BaseModel):
@@ -118,9 +134,6 @@ class PipelineFlagsDTO(BaseModel):
     damage: DamageTypeFlagsDTO = Field(default_factory=DamageTypeFlagsDTO)
     state: StateFlagsDTO = Field(default_factory=StateFlagsDTO)
     meta: MetaFlagsDTO = Field(default_factory=MetaFlagsDTO)
-
-    enable_counter: bool = False
-    can_counter_on_parry: bool = False
 
 
 # ==============================================================================
@@ -135,14 +148,6 @@ class PipelineModsDTO(BaseModel):
     weapon_effect_value: float = 2.0  # Универсальный бонус оружия (Crit Mult / Pierce %)
 
 
-class PipelineTriggersDTO(BaseModel):
-    """Флаги активации триггеров."""
-
-    trigger_combo: bool = False
-    trigger_stun: bool = False
-    trigger_counter_dodge: bool = False
-
-
 class PipelineStagesDTO(BaseModel):
     """Управление этапами."""
 
@@ -152,10 +157,106 @@ class PipelineStagesDTO(BaseModel):
     check_block: bool = True
     check_crit: bool = True
     calculate_damage: bool = True
+    calculate_healing: bool = False  # NEW: Этап расчета хила
+
+    # Новый этап: Проверка контратаки
+    check_counter: bool = True
 
 
 # ==============================================================================
-# 3. CONTEXT & RESULT (Вход и Выход)
+# 3. RESULT & CHAIN (Выходные данные)
+# ==============================================================================
+
+
+class ChainTriggersDTO(BaseModel):
+    """
+    Триггеры цепных реакций (Chain Reactions).
+    Указывают Executor'у, что нужно создать дополнительные задачи.
+    """
+
+    trigger_offhand_attack: bool = False  # Атака второй рукой
+    trigger_counter_attack: bool = False  # Контратака
+    trigger_extra_strike: bool = False  # Дополнительный удар (перк)
+    trigger_cleave: list[int] = Field(default_factory=list)  # IDs целей для Cleave
+
+
+class CombatEventDTO(BaseModel):
+    """
+    Атомарное событие боя для лога.
+    """
+
+    type: Literal[
+        "CAST", "HIT", "MISS", "DODGE", "PARRY", "BLOCK", "CRIT", "TICK", "DEATH", "HEAL", "COST", "APPLY_EFFECT"
+    ]
+    source_id: int
+    target_id: int | None = None
+
+    # Контекст (чем вызвано)
+    action_id: str | None = None  # ID абилки/финта/эффекта
+
+    # Значение (если есть)
+    value: int | None = None
+    resource: str | None = None  # hp, en
+
+    # Теги (для доп. инфы)
+    tags: list[str] = Field(default_factory=list)
+
+
+class InteractionResultDTO(BaseModel):
+    """Итоговый отчет."""
+
+    # === Context (Кто и Кого) ===
+    source_id: int | None = None
+    target_id: int | None = None
+    hand: str = "main"  # main, off
+
+    # === Что случилось (Факты) ===
+    is_hit: bool = False
+    is_crit: bool = False
+    is_blocked: bool = False
+    is_parried: bool = False
+    is_dodged: bool = False
+    is_miss: bool = False
+    is_counter: bool = False  # Старый флаг (можно оставить для совместимости или убрать)
+
+    # === Причина пропуска ===
+    skip_reason: str | None = None  # STUNNED, NO_RESOURCE, DEAD, etc.
+
+    crit_mult: float = 1.0
+
+    damage_raw: int = 0
+    damage_mitigated: int = 0
+    damage_final: int = 0
+    healing_final: int = 0  # NEW: Итоговый хил
+    reflected_damage: int = 0
+    lifesteal_amount: int = 0  # NEW: Восстановленное HP от лайфстила
+
+    # Токены (изменил на dict[str, int])
+    tokens_awarded_attacker: dict[str, int] = Field(default_factory=dict)
+    tokens_awarded_defender: dict[str, int] = Field(default_factory=dict)
+
+    # === Events (Структурированный лог) ===
+    events: list[CombatEventDTO] = Field(default_factory=list)
+
+    # === Что надо сделать (Команды) ===
+    # Список эффектов для наложения: [{"id": "bleed", "params": {"power": 30}}]
+    applied_effects: list[dict[str, Any]] = Field(default_factory=list)
+
+    # === Chain Reactions (Новые задачи) ===
+    chain_events: ChainTriggersDTO = Field(default_factory=ChainTriggersDTO)
+
+    # === Resources (Изменения ресурсов) ===
+    # {"hp": {"cost": "-10", "regen": "+5"}, "en": {"cost": "-20"}}
+    # Используется WaterfallCalculator для расчета итога
+    resource_changes: dict[str, dict[str, str]] = Field(default_factory=dict)
+
+    # Флаги для AbilityService (чтобы знать, какие эффекты накладывать)
+    # Используется для передачи информации из Резолвера в Пост-Кальк
+    ability_flags: Any = None  # TODO: Типизировать как AbilityFlagsDTO, но тут циклический импорт
+
+
+# ==============================================================================
+# 4. CONTEXT (Вход и Выход)
 # ==============================================================================
 
 
@@ -165,7 +266,10 @@ class PipelineContextDTO(BaseModel):
     phases: PipelinePhasesDTO = Field(default_factory=PipelinePhasesDTO)
     flags: PipelineFlagsDTO = Field(default_factory=PipelineFlagsDTO)
     mods: PipelineModsDTO = Field(default_factory=PipelineModsDTO)
-    triggers: PipelineTriggersDTO = Field(default_factory=PipelineTriggersDTO)
+
+    # Заменили PipelineTriggersDTO на TriggerRulesFlagsDTO
+    triggers: TriggerRulesFlagsDTO = Field(default_factory=TriggerRulesFlagsDTO)
+
     stages: PipelineStagesDTO = Field(default_factory=PipelineStagesDTO)
 
     # Meta
@@ -174,69 +278,5 @@ class PipelineContextDTO(BaseModel):
     # Calc Flags
     can_counter: bool = True
 
-
-class AbilityFlagsDTO(BaseModel):
-    """
-    Флаги для Ability Service.
-    Определяют, какие эффекты применить ПОСЛЕ калькуляции урона.
-    """
-
-    # DoT Effects (Damage over Time)
-    apply_bleed: bool = False  # Кровотечение
-    apply_poison: bool = False  # Яд
-    apply_burn: bool = False  # Горение
-    apply_frostbite: bool = False  # Обморожение
-
-    # Control Effects (CC)
-    apply_stun: bool = False  # Оглушение (пропуск хода)
-    apply_knockdown: bool = False  # Сбивание с ног
-    apply_root: bool = False  # Обездвиживание
-    apply_silence: bool = False  # Немота (блок скиллов)
-    apply_disarm: bool = False  # Обезоруживание
-
-    # Debuffs (Stat Reduction)
-    apply_armor_break: bool = False  # Снижение брони
-    apply_slow: bool = False  # Замедление (инициатива)
-    apply_weakness: bool = False  # Слабость (урон)
-    apply_blind: bool = False  # Ослепление (точность)
-
-    # Buffs (Positive Effects)
-    apply_haste: bool = False  # Ускорение
-    apply_fortify: bool = False  # Укрепление (броня)
-    apply_regeneration: bool = False  # Регенерация HP
-    apply_shield: bool = False  # Магический щит
-
-    # Special Mechanics (Markers)
-    grant_counter_marker: bool = False  # Маркер контратаки
-    grant_evasion_marker: bool = False  # Маркер гарантированного уворота
-    grant_parry_marker: bool = False  # Маркер парирования
-
-    # Meta
-    pending_effect_data: dict[str, Any] = Field(default_factory=dict)
-    # ↑ Дополнительные параметры (сила эффекта, длительность)
-
-
-class InteractionResultDTO(BaseModel):
-    """Итоговый отчет."""
-
-    # === Что случилось (Факты) ===
-    is_hit: bool = False
-    is_crit: bool = False
-    is_blocked: bool = False
-    is_parried: bool = False
-    is_dodged: bool = False
-    is_miss: bool = False
-    is_counter: bool = False
-
-    crit_mult: float = 1.0
-
-    damage_raw: int = 0
-    damage_mitigated: int = 0
-    damage_final: int = 0
-    reflected_damage: int = 0
-
-    tokens_awarded_attacker: list[str] = Field(default_factory=list)
-    tokens_awarded_defender: list[str] = Field(default_factory=list)
-
-    # === Что надо сделать (Команды) ===
-    ability_flags: AbilityFlagsDTO = Field(default_factory=AbilityFlagsDTO)
+    # Result (Всегда инициализирован)
+    result: InteractionResultDTO = Field(default_factory=InteractionResultDTO)

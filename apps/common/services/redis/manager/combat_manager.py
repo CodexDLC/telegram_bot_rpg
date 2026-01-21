@@ -216,7 +216,7 @@ class CombatManager:
                     "raw": {},
                     "loadout": {},
                     "meta": {},
-                    "abilities": [],
+                    "statuses": {"abilities": [], "effects": []},  # NEW: Default statuses
                     "xp": {},
                     "move": {},
                 }
@@ -241,7 +241,7 @@ class CombatManager:
                 "raw": actor_data.get("raw", {}),
                 "loadout": actor_data.get("loadout", {}),
                 "meta": meta,
-                "abilities": actor_data.get("active_abilities", []),
+                "statuses": actor_data.get("statuses", {"abilities": [], "effects": []}),  # NEW: Read statuses
                 "xp": actor_data.get("xp_buffer", {}),
                 "skills": actor_data.get("skills", {}),
                 "move": moves_data if moves_data else {},
@@ -283,7 +283,7 @@ class CombatManager:
             for cid in char_ids:
                 base_key = Rk.get_rbc_actor_key(session_id, str(cid))
                 # Load specific fields to reduce bandwidth
-                pipe.json().get(base_key, "$.meta", "$.loadout", "$.active_abilities")  # type: ignore
+                pipe.json().get(base_key, "$.meta", "$.loadout", "$.statuses")  # type: ignore # NEW: $.statuses
                 pipe.json().get(Rk.get_combat_moves_key(session_id, str(cid)))  # type: ignore
 
         results = await self.redis.execute_pipeline(_load)
@@ -309,10 +309,10 @@ class CombatManager:
                 # We need to flatten it
                 meta = actor_partial.get("$.meta", [{}])[0]
                 loadout = actor_partial.get("$.loadout", [{}])[0]
-                active = actor_partial.get("$.active_abilities", [[]])[0]
+                statuses = actor_partial.get("$.statuses", [{"abilities": [], "effects": []}])[0]  # NEW: statuses
 
                 # Reconstruct partial object for UI
-                actors_data_list.append({"meta": meta, "loadout": loadout, "active_abilities": active, "moves": moves})
+                actors_data_list.append({"meta": meta, "loadout": loadout, "statuses": statuses, "moves": moves})
             else:
                 actors_data_list.append(None)
 
@@ -577,8 +577,8 @@ class CombatManager:
                     # State is now inside meta. Using JSON.MERGE to update multiple fields in one command.
                     pipe.json().merge(base, "$.meta", data["state"])  # type: ignore
 
-                if "abilities" in data:
-                    pipe.json().set(base, "$.active_abilities", data["abilities"])  # type: ignore
+                if "statuses" in data:  # NEW: statuses
+                    pipe.json().set(base, "$.statuses", data["statuses"])  # type: ignore
 
                 if "xp" in data:
                     pipe.json().set(base, "$.xp_buffer", data["xp"])  # type: ignore

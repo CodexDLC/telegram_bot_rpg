@@ -19,6 +19,7 @@
     *   Клонирует шаблоны для каждого участника.
     *   Генерирует уникальные ID для монстров (`mob_1`, `mob_2`).
     *   Формирует структуру `SessionDataDTO`.
+    *   Инициализирует контейнер статусов: `"statuses": {"abilities": [], "effects": []}`.
 3.  **Persist:** Сохраняет данные в Redis (`combat:rbc:{sid}:...`).
 4.  **Kickstart:** Запускает `Chaos Relay` (первый тик таймера).
 
@@ -35,3 +36,4 @@
 *   `:actor:{id}:meta` — HP, Energy, State.
 *   `:actor:{id}:raw` — Математическая модель (Attributes, Modifiers).
 *   `:actor:{id}:loadout` — Экипировка и скиллы.
+*   `:actor:{id}:statuses` — Активные способности и эффекты (JSON).
