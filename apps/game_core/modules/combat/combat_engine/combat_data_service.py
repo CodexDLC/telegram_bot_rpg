@@ -118,7 +118,7 @@ class CombatDataService:
         meta = self._parse_meta(meta_raw)
 
         # 2. Actors List
-        all_actor_ids = []
+        all_actor_ids: list[int | str] = []
         for team_ids in meta.teams.values():
             all_actor_ids.extend(team_ids)
 
@@ -137,7 +137,6 @@ class CombatDataService:
             if cid == "global_queue":
                 continue
 
-            # data["state"] is now a dict extracted from meta JSON, so it exists if actor exists
             if not data.get("meta"):
                 continue
 
@@ -149,9 +148,9 @@ class CombatDataService:
                 data["raw"],
                 data["loadout"],
                 data["meta"],
-                data["statuses"],  # NEW: statuses
+                data["statuses"],
                 data["xp"],
-                data.get("skills", {}),  # Pass skills
+                data.get("skills", {}),
             )
 
             # Cache Move
@@ -165,47 +164,32 @@ class CombatDataService:
     async def load_snapshot_context(self, session_id: str) -> BattleContext | None:
         """
         Легкая загрузка для UI (без XP и Queue).
-        Использует тот же механизм, что и load_battle_context, но фильтрует лишнее на уровне DTO.
-        (Для оптимизации можно сделать отдельный метод в Manager, но пока так).
         """
         return await self.load_battle_context(session_id)
 
     async def commit_session(self, ctx: BattleContext, processed_action_ids: list[str]) -> None:
         """
-        Атомарное сохранение изменений.
-        Использует CombatManager.commit_battle_results.
+        Атомарное сохранение изменений актёров и логов.
+        НЕ трогает очереди целей - это делает return_targets_to_queues.
         """
         updates = {}
 
-        # 1. Prepare Updates
+        # 1. Prepare Updates (Actors State)
         for cid, actor in ctx.actors.items():
-            actor_updates = {}
-
-            # State (Always) - сохраняем только state поля из meta
-            # Важно: ActorMetaDTO содержит и meta и state.
-            # В Redis мы пишем в разные ключи, но здесь у нас единый объект.
-            # CombatManager ожидает "state" как словарь с hp, en и т.д.
-
-            state_dict = {
-                "hp": actor.meta.hp,
-                "max_hp": actor.meta.max_hp,
-                "en": actor.meta.en,
-                "max_en": actor.meta.max_en,
-                "tactics": actor.meta.tactics,
-                "is_dead": actor.meta.is_dead,  # bool, JSON handles it
-                "tokens": actor.meta.tokens,
+            actor_updates = {
+                "state": {
+                    "hp": actor.meta.hp,
+                    "max_hp": actor.meta.max_hp,
+                    "en": actor.meta.en,
+                    "max_en": actor.meta.max_en,
+                    "tactics": actor.meta.tactics,
+                    "is_dead": actor.meta.is_dead,
+                    "tokens": actor.meta.tokens,
+                },
+                "statuses": actor.statuses.model_dump(),
+                "xp": actor.xp_buffer,
+                "raw": actor.raw.model_dump(),
             }
-            actor_updates["state"] = state_dict
-
-            # Statuses (Always rewrite container)
-            actor_updates["statuses"] = actor.statuses.model_dump()  # NEW: statuses
-
-            # XP Buffer (Always rewrite)
-            actor_updates["xp"] = actor.xp_buffer
-
-            # Raw Temp (Only if dirty - logic to be added, now always)
-            # actor_updates["raw_temp"] = actor.raw.temp
-
             updates[cid] = actor_updates
 
         # 2. Prepare Logs
@@ -213,6 +197,16 @@ class CombatDataService:
 
         # 3. Commit via Manager
         await self.combat_manager.commit_battle_results(ctx.session_id, updates, logs, len(processed_action_ids))
+
+    async def return_targets_to_queues(self, ctx: BattleContext) -> None:
+        """
+        Возвращает цели обратно в очереди участников после Exchange.
+        Вызывается отдельно после commit_session.
+        """
+        if not ctx.pending_target_returns:
+            return
+
+        await self.combat_manager.return_targets_batch(ctx.session_id, ctx.pending_target_returns)
 
     # ==========================================================================
     # 3. HELPERS
@@ -243,7 +237,6 @@ class CombatDataService:
     ) -> ActorSnapshot:
         meta_dict = r_meta or {}
 
-        # r_state is now a dict from JSON, so keys are strings
         meta = ActorMetaDTO(
             id=cid,
             name=meta_dict.get("name", "Unknown"),
@@ -276,7 +269,6 @@ class CombatDataService:
             tags=loadout_dict.get("tags", []),
         )
 
-        # NEW: Parse statuses
         statuses_dict = r_statuses or {"abilities": [], "effects": []}
         statuses = ActorStatusesDTO(
             abilities=[ActiveAbilityDTO(**a) for a in statuses_dict.get("abilities", [])],
@@ -287,7 +279,7 @@ class CombatDataService:
             meta=meta,
             raw=ActorRawDTO(**merged_raw),
             loadout=loadout,
-            statuses=statuses,  # NEW: statuses
+            statuses=statuses,
             xp_buffer=r_xp or {},
             skills=r_skills or {},
         )

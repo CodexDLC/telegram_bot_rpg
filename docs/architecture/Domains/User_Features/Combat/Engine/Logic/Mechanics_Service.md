@@ -62,11 +62,13 @@
 *   `kill`: Убийство противника.
 
 ### 5. Hand Management (Feint System)
-В конце обработки хода вызывает `FeintService` для обновления руки.
-*   **Method:** `update_hand_state(actor)`
+В конце обработки хода (если разрешено флагом `generate_feints`) вызывает `FeintService` для пополнения руки.
+
+*   **Method:** `FeintService.refill_hand(actor)`
 *   **Logic:**
-    1.  `FeintService.calculate_pool(actor)` (обновляет емкость).
-    2.  `FeintService.fill_hand(actor)` (добирает карты).
+    1.  Проверяет текущий размер руки.
+    2.  Если меньше MAX, выбирает доступные финты из арсенала (по стоимости).
+    3.  Добавляет финты в руку и временно списывает токены.
 
 ---
 

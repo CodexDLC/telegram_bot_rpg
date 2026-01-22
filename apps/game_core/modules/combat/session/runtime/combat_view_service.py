@@ -4,6 +4,7 @@
 """
 
 import contextlib
+from collections import defaultdict
 
 from apps.common.schemas_dto.combat_source_dto import (
     ActorFullInfo,
@@ -12,7 +13,9 @@ from apps.common.schemas_dto.combat_source_dto import (
     CombatLogDTO,
     CombatLogEntryDTO,
 )
-from apps.game_core.modules.combat.dto.combat_internal_dto import ActorSnapshot, BattleContext
+from apps.game_core.modules.combat.combat_engine.mechanics.feint_service import FeintService
+from apps.game_core.modules.combat.dto.combat_actor_dto import ActorSnapshot
+from apps.game_core.modules.combat.dto.combat_session_dto import BattleContext
 
 
 class CombatViewService:
@@ -27,7 +30,8 @@ class CombatViewService:
         Собирает CombatDashboardDTO из BattleContext.
         """
         # 1. Находим себя
-        me = context.actors.get(char_id)
+        # context.actors ключи - строки
+        me = context.actors.get(str(char_id))
         if not me:
             raise ValueError(f"Player {char_id} not found in context")
 
@@ -46,14 +50,14 @@ class CombatViewService:
         else:
             # Проверка: Есть ли цель в очереди?
             # targets: {char_id: [target_id, ...]}
-            my_targets = context.targets.get(char_id, [])
+            my_targets = context.targets.get(str(char_id), [])
 
             if not my_targets:
                 status = "waiting"
             else:
                 # Цель есть -> Active
                 target_id = my_targets[0]
-                target_actor = context.actors.get(target_id)
+                target_actor = context.actors.get(str(target_id))
 
                 if target_actor:
                     target_info = self._map_actor_full(target_actor)
@@ -70,10 +74,10 @@ class CombatViewService:
         current_target_id = target_info.char_id if target_info else None
 
         for aid, actor in context.actors.items():
-            if aid == char_id:
+            if str(aid) == str(char_id):
                 continue  # Себя в списки не добавляем
 
-            is_target = aid == current_target_id
+            is_target = int(aid) == current_target_id
             short_dto = self._map_actor_short(actor, is_target)
 
             if actor.team == my_team:
@@ -94,10 +98,10 @@ class CombatViewService:
             allies=allies,
             enemies=enemies,
             winner_team=context.meta.winner,
-            logs=[],  # Логи грузятся отдельно
         )
 
-    def build_logs_dto(self, raw_logs: list[str], page: int = 0) -> CombatLogDTO:
+    @staticmethod
+    def build_logs_dto(raw_logs: list[str], page: int = 0) -> CombatLogDTO:
         """
         Собирает CombatLogDTO из списка сырых логов.
         """
@@ -119,24 +123,45 @@ class CombatViewService:
 
     # --- MAPPERS ---
 
-    def _map_actor_full(self, actor: ActorSnapshot) -> ActorFullInfo:
+    @staticmethod
+    def _map_actor_full(actor: ActorSnapshot) -> ActorFullInfo:
         """Полная инфа (Hero / Target)."""
-        layout = actor.raw.equipment_layout.get("main_hand", "1h")
+        # Получаем тип оружия из layout (main_hand)
+        # layout теперь dict[str, str], где ключ - слот, значение - skill_key
+        layout_skill = actor.loadout.layout.get("main_hand", "unarmed")
+
+        # Получаем финты для UI
+        feints_hand = FeintService.get_hand_for_dashboard(actor.meta)
+
+        # Подсчет полных токенов (свободные + в руке)
+        total_tokens: dict[str, int] = defaultdict(int)
+
+        # 1. Свободные
+        for k, v in actor.state.tokens.items():
+            total_tokens[k] += v
+
+        # 2. В руке (замороженные)
+        # hand: {feint_id: {hit: 2, crit: 1}}
+        for cost in actor.meta.feints.hand.values():
+            for token_type, amount in cost.items():
+                total_tokens[token_type] += amount
 
         return ActorFullInfo(
             char_id=actor.char_id,
-            name=actor.raw.name,
+            name=actor.meta.name,  # Имя в meta
             team=actor.team,
             hp_current=actor.state.hp,
             hp_max=actor.state.max_hp,
             energy_current=actor.state.en,
             energy_max=actor.state.max_en,
-            weapon_type=layout,
-            tokens=actor.state.tokens,
-            effects=[a.ability_id for a in actor.active_abilities],
+            weapon_type=layout_skill,
+            tokens=dict(total_tokens),  # Отправляем сумму
+            effects=[e.effect_id for e in actor.active_effects],  # Используем active_effects
+            feints=feints_hand,  # NEW: Feints
         )
 
-    def _map_actor_short(self, actor: ActorSnapshot, is_target: bool) -> ActorShortInfo:
+    @staticmethod
+    def _map_actor_short(actor: ActorSnapshot, is_target: bool) -> ActorShortInfo:
         """Краткая инфа (Lists)."""
         hp_pct = 0
         if actor.state.max_hp > 0:
@@ -144,7 +169,7 @@ class CombatViewService:
 
         return ActorShortInfo(
             char_id=actor.char_id,
-            name=actor.raw.name,
+            name=actor.meta.name,  # Имя в meta
             hp_percent=hp_pct,
             is_dead=actor.state.is_dead,
             is_target=is_target,

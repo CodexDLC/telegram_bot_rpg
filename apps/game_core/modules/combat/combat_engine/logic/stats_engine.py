@@ -1,7 +1,7 @@
-from apps.game_core.modules.combat.dto.combat_internal_dto import ActorSnapshot, ActorStats
 from pydantic import ValidationError
 
 from apps.common.schemas_dto.modifier_dto import CombatModifiersDTO, CombatSkillsDTO
+from apps.game_core.modules.combat.dto.combat_actor_dto import ActorSnapshot, ActorStats
 from apps.game_core.system.calculators.stats_waterfall_calculator import StatsWaterfallCalculator
 
 

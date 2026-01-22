@@ -14,6 +14,8 @@ from apps.common.schemas_dto.modifier_dto import (
     PhysicalStatsDTO,
     SpecialStatsDTO,
 )
+from apps.game_core.resources.game_data.feints import get_all_feints
+from apps.game_core.resources.game_data.items import get_weapon_trigger
 from apps.game_core.system.context_assembler.schemas.base import BaseTempContext
 from apps.game_core.system.context_assembler.utils import format_value
 
@@ -189,7 +191,7 @@ class CombatTempContext(BaseTempContext):
         """
         belt = []
         equipment_layout = {}
-        abilities = []
+        abilities: list[str] = []
         tags = ["player"]  # Default tag
 
         if self.core_inventory:
@@ -202,17 +204,49 @@ class CombatTempContext(BaseTempContext):
                 if item_data.get("location") == "equipped":
                     slot = item_data.get("equipped_slot") or item_data.get("data", {}).get("slot") or "unknown"
                     skill_key = item_data.get("data", {}).get("related_skill")
+
+                    # Получаем триггер атаки
+                    trigger_id = None
+
+                    # 1. Пробуем взять из item_data (если уже есть)
+                    triggers = item_data.get("data", {}).get("triggers")
+                    if triggers and isinstance(triggers, list) and len(triggers) > 0:
+                        trigger_id = triggers[0]
+
+                    # 2. Если нет, пробуем найти по base_id
+                    if not trigger_id:
+                        # Ищем base_id в components или data
+                        base_id = item_data.get("components", {}).get("base_id") or item_data.get("data", {}).get(
+                            "base_id"
+                        )
+                        if base_id:
+                            trigger_id = get_weapon_trigger(base_id)
+
                     if skill_key:
                         equipment_layout[slot] = skill_key
                     else:
                         equipment_layout[slot] = "unknown"
 
+                    # Сохраняем триггер в layout с суффиксом
+                    if trigger_id:
+                        equipment_layout[f"{slot}_trigger"] = trigger_id
+
         # TODO: Collect abilities from Character/Skills/Items
         # abilities = ...
+
+        # --- FEINTS (Temporary: All Available) ---
+        # TODO: Сделать маппер скиллов по навыкам актера:
+        # 1. Словарь финтов по классам/типам оружия.
+        # 2. Проверка активного скилла оружия.
+        # 3. Учет хвата (2H, 1H+Shield, Dual Wield).
+        # 4. Грязные приемы (Dirty Tricks) привязать к тактическим скиллам.
+        all_feints = get_all_feints()
+        known_feints = [f.feint_id for f in all_feints]
 
         return {
             "belt": belt,
             "abilities": abilities,
+            "known_feints": known_feints,
             "equipment_layout": equipment_layout,
             "tags": tags,
         }

@@ -1,14 +1,15 @@
 # apps/game_core/modules/combats/session/runtime/combat_turn_manager.py
 import time
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from loguru import logger as log
 from pydantic import ValidationError
 
 from apps.common.core.base_arq import ArqService
-from apps.common.schemas_dto.combat_source_dto import CombatMoveDTO, ExchangePayload, InstantPayload, ItemPayload
+from apps.common.schemas_dto.combat_source_dto import ExchangePayload, InstantPayload
 from apps.common.services.redis.manager.combat_manager import CombatManager
+from apps.game_core.modules.combat.dto.combat_action_dto import CombatMoveDTO
 from apps.game_core.modules.combat.dto.combat_arq_dto import CollectorSignalDTO
 
 # Конфиг таймеров согласно документации
@@ -40,6 +41,7 @@ class CombatTurnManager:
         action_type = payload.get("action", "attack")
 
         # 2. Получаем данные персонажа (нужен afk_level для таймера)
+        # get_actor_state возвращает словарь из $.meta
         state_dict = await self.combat_manager.get_actor_state(session_id, char_id)
 
         if not state_dict:
@@ -55,9 +57,25 @@ class CombatTurnManager:
             log.error(f"TurnManager | Payload validation failed: {e}")
             raise ValueError("Invalid move payload structure") from e
 
+        # --- FEINT VALIDATION & CONSUMPTION (ATOMIC) ---
+        # Проверяем финт, если он есть в payload
+        feint_id = None
+        if isinstance(move_dto.payload, (ExchangePayload, InstantPayload)):
+            feint_id = move_dto.payload.feint_id
+
+        cost = None
+        if feint_id:
+            # Атомарно проверяем и удаляем финт из руки
+            # Возвращает стоимость (dict) если успех, или None если финта нет
+            cost = await self.combat_manager.consume_feint_atomic(session_id, char_id, feint_id)
+
+            if not cost:
+                raise ValueError(f"Feint {feint_id} is not in hand")
+
         # 4. Записываем в буфер (Multi-Targeting / Spamming)
         if move_dto.strategy == "exchange":
-            target_id = move_dto.payload.get("target_id")
+            # Для ExchangePayload target_id обязателен и int
+            target_id = getattr(move_dto.payload, "target_id", None)
             if not target_id:
                 raise ValueError("Target ID is required for exchange")
 
@@ -66,6 +84,9 @@ class CombatTurnManager:
             )
 
             if not success:
+                # Если не удалось зарегистрировать ход (цель недоступна), нужно вернуть финт!
+                if feint_id and cost:
+                    await self.combat_manager.return_feint_to_hand(session_id, char_id, feint_id, cost)
                 raise ValueError("Target is not available in your queue")
 
         else:
@@ -108,7 +129,7 @@ class CombatTurnManager:
                 move_dto = self._build_move_dto(char_id, action_type, payload)
 
                 if move_dto.strategy == "exchange":
-                    target_id = move_dto.payload.get("target_id")
+                    target_id = getattr(move_dto.payload, "target_id", None)
                     if target_id:
                         exchange_moves_data.append(
                             {
@@ -121,6 +142,17 @@ class CombatTurnManager:
                 else:
                     # Instant / Item
                     other_moves_dtos.append(move_dto)
+
+                # --- FEINT CONSUMPTION (AI) ---
+                feint_id = None
+                if isinstance(move_dto.payload, (ExchangePayload, InstantPayload)):
+                    feint_id = move_dto.payload.feint_id
+
+                if feint_id:
+                    cost = await self.combat_manager.consume_feint_atomic(session_id, char_id, feint_id)
+                    if not cost:
+                        log.warning(f"TurnManager | AI tried to use missing feint {feint_id}. Skipping move.")
+                        continue  # Пропускаем этот ход, так как финта нет
 
             except ValidationError:
                 continue
@@ -146,7 +178,6 @@ class CombatTurnManager:
             await self.arq.enqueue_job("combat_collector_task", signal_immediate.model_dump())
 
             # B. Timeout (Force Attack)
-            # Ставим один таймер на весь батч (60 сек)
             timeout = 60
             signal_timeout = CollectorSignalDTO(
                 session_id=session_id, char_id=char_id, signal_type="check_timeout", move_id="batch"
@@ -163,18 +194,21 @@ class CombatTurnManager:
         """
         Маппинг входящих данных в правильную стратегию и Payload.
         """
-        strategy = "exchange"
-        validated_payload = {}
+        strategy: Literal["exchange", "item", "instant", "system"] = "exchange"
+        validated_payload: ExchangePayload | InstantPayload | dict[str, Any] = {}
 
         if action == "use_item":
             strategy = "item"
-            validated_payload = ItemPayload(
+            # ItemPayload пока не обновляли, используем InstantPayload как заглушку или словарь
+            validated_payload = InstantPayload(
                 item_id=int(data.get("item_id", 0)), target_id=data.get("target_id", char_id)
             )
         elif action in ("use_skill", "cast", "instant"):
             strategy = "instant"
             validated_payload = InstantPayload(
-                skill_id=data.get("skill_id", ""), target_id=data.get("target_id", char_id)
+                ability_id=data.get("ability_id") or data.get("skill_id"),
+                target_id=data.get("target_id", char_id),
+                feint_id=data.get("feint_id"),
             )
         elif action in ("leave", "surrender", "flee"):
             strategy = "system"
@@ -182,18 +216,11 @@ class CombatTurnManager:
         else:
             # По умолчанию - боевой размен (attack, defend, etc.)
             strategy = "exchange"
-            validated_payload = ExchangePayload(
-                target_id=int(data.get("target_id", 0)),
-                attack_zones=data.get("attack_zones", []),
-                block_zones=data.get("block_zones", []),
-                skill_id=data.get("skill_id"),
-                item_id=data.get("item_id"),
-            )
+            validated_payload = ExchangePayload(target_id=int(data.get("target_id", 0)), feint_id=data.get("feint_id"))
 
         return CombatMoveDTO(
             move_id=str(uuid.uuid4())[:8],
             char_id=char_id,
             strategy=strategy,
-            payload=validated_payload,  # type: ignore
-            created_at=time.time(),
+            payload=validated_payload,
         )

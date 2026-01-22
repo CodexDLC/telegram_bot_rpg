@@ -63,8 +63,8 @@ class RedisService:
         Устанавливает значение JSON по указанному пути.
         """
         try:
-            # type: ignore - redis-py stubs issue with async json
-            result = await self.redis_client.json().set(key, path, obj, nx=nx, xx=xx)
+            # redis-py stubs issue with async json
+            result = await self.redis_client.json().set(key, path, obj, nx=nx, xx=xx)  # type: ignore
             log.debug(f"RedisJSON | action=set status=success key='{key}' path='{path}'")
             return bool(result)
         except RedisError:
@@ -76,8 +76,8 @@ class RedisService:
         Получает значение JSON по указанному пути.
         """
         try:
-            # type: ignore - redis-py stubs issue with async json
-            result = await self.redis_client.json().get(key, path)
+            # redis-py stubs issue with async json
+            result = await self.redis_client.json().get(key, path)  # type: ignore
             log.debug(f"RedisJSON | action=get status=found key='{key}' path='{path}'")
             return result
         except RedisError:
@@ -89,8 +89,8 @@ class RedisService:
         Добавляет элементы в массив JSON.
         """
         try:
-            # type: ignore - redis-py stubs issue with async json
-            count = await self.redis_client.json().arrappend(key, path, *args)
+            # redis-py stubs issue with async json
+            count = await self.redis_client.json().arrappend(key, path, *args)  # type: ignore
             log.debug(f"RedisJSON | action=arrappend status=success key='{key}' count={count}")
             return int(count) if count else 0
         except RedisError:

@@ -56,9 +56,9 @@ class FeintCostDTO(BaseModel):
     """
     Стоимость в тактических токенах.
     Ключи: "hit", "crit", "block", "parry", "dodge", "tempo".
-    Значения: Строки (сколько списать).
+    Значения: Целые числа (цена).
     """
-    tactics: dict[str, str] = {} # Пример: {"hit": "-2", "crit": "-1"}
+    tactics: dict[str, int] = {} # Пример: {"hit": 2, "crit": 1}
 ```
 
 ---
@@ -70,7 +70,7 @@ class FeintCostDTO(BaseModel):
 ```json
 {
   "feint_id": "true_strike",
-  "cost": {"tactics": {"hit": "-2"}},
+  "cost": {"tactics": {"hit": 2}},
   "target": "single_enemy",
   "triggers": ["accuracy.true_strike"],
   "raw_mutations": {
@@ -84,7 +84,7 @@ class FeintCostDTO(BaseModel):
 ```json
 {
   "feint_id": "sand_throw",
-  "cost": {"tactics": {"tempo": "-3"}},
+  "cost": {"tactics": {"tempo": 3}},
   "target": "single_enemy",
   "raw_mutations": {
     "physical_damage_mult": "-0.8"
@@ -103,7 +103,7 @@ class FeintCostDTO(BaseModel):
 ```json
 {
   "feint_id": "cleave",
-  "cost": {"tactics": {"hit": "-2", "crit": "-1"}},
+  "cost": {"tactics": {"hit": 2, "crit": 1}},
   "target": "all_enemies",
   "target_count": 3,
   "raw_mutations": {

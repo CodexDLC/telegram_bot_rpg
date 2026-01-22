@@ -1,17 +1,21 @@
 # apps/game_core/modules/combats/session/combat_session_service.py
-import itertools
 import json
 
 from apps.common.schemas_dto.combat_source_dto import CombatDashboardDTO, CombatLogDTO
 from apps.common.services.redis.manager.account_manager import AccountManager
 from apps.common.services.redis.manager.combat_manager import CombatManager
 from apps.common.services.redis.redis_fields import AccountFields as Af
-from apps.game_core.modules.combat.dto.combat_internal_dto import (
+from apps.game_core.modules.combat.dto.combat_actor_dto import (
     ActiveAbilityDTO,
+    ActiveEffectDTO,
     ActorLoadoutDTO,
     ActorMetaDTO,
     ActorRawDTO,
     ActorSnapshot,
+    ActorStatusesDTO,
+    FeintHandDTO,
+)
+from apps.game_core.modules.combat.dto.combat_session_dto import (
     BattleContext,
     BattleMeta,
 )
@@ -19,16 +23,6 @@ from apps.game_core.modules.combat.dto.combat_internal_dto import (
 # Менеджеры и сервисы
 from apps.game_core.modules.combat.session.runtime.combat_turn_manager import CombatTurnManager
 from apps.game_core.modules.combat.session.runtime.combat_view_service import CombatViewService
-
-
-def batched(iterable, n):
-    """
-    Batch data into tuples of length n. The last batch may be shorter.
-    Backport for Python < 3.12.
-    """
-    it = iter(iterable)
-    while batch := list(itertools.islice(it, n)):
-        yield batch
 
 
 class CombatSessionService:
@@ -111,26 +105,34 @@ class CombatSessionService:
 
         meta = self._parse_meta(meta_raw)
 
-        all_actor_ids = []
+        all_actor_ids: list[int | str] = []
         for team_ids in meta.teams.values():
             all_actor_ids.extend(team_ids)
 
         # 2. Batch Load via Manager
+        # Возвращает (targets_map, actors_data_list)
+        # actors_data_list = [{"meta": ..., "loadout": ..., "statuses": ..., "moves": ...}, ...]
         targets_map, actors_data_list = await self.combat_manager.load_snapshot_data_batch(session_id, all_actor_ids)
 
         actors_map = {}
         moves_cache = {}
 
-        # Используем batched для упрощения чтения
-        batches = batched(actors_data_list, 5)
-        for cid, (res_state, res_meta, res_loadout, res_active, res_moves) in zip(all_actor_ids, batches, strict=False):
-            if res_state:
-                actors_map[cid] = self._build_light_snapshot(
-                    cid, self._find_team(cid, meta.teams), res_state, res_meta, res_loadout, res_active
-                )
+        for cid, actor_data in zip(all_actor_ids, actors_data_list, strict=False):
+            if not actor_data:
+                continue
 
-            if res_moves:
-                moves_cache[cid] = res_moves
+            # Parse Snapshot
+            actors_map[str(cid)] = self._build_light_snapshot(
+                str(cid),
+                self._find_team(cid, meta.teams),
+                actor_data.get("meta", {}),
+                actor_data.get("loadout", {}),
+                actor_data.get("statuses", {}),
+            )
+
+            # Cache Moves
+            if actor_data.get("moves"):
+                moves_cache[str(cid)] = actor_data["moves"]
 
         return BattleContext(
             session_id=session_id,
@@ -153,62 +155,67 @@ class CombatSessionService:
             active_actors_count=0,  # Не важно для UI
             teams=json.loads(d("teams") or "{}"),
             actors_info=json.loads(d("actors_info") or "{}"),
-            battle_type=(d("battle_type") or b"standard").decode(),
-            location_id=(d("location_id") or b"unknown").decode(),
+            battle_type=(d("battle_type") or "standard"),
+            location_id=(d("location_id") or "unknown"),
         )
 
-    def _build_light_snapshot(self, cid, team, r_state, r_meta, r_loadout, r_active) -> ActorSnapshot:
+    def _build_light_snapshot(self, cid, team, r_meta, r_loadout, r_statuses) -> ActorSnapshot:
         """Собирает облегченный снапшот (без полной математики)."""
 
-        # Meta + State (Merged)
-        # В Redis state и meta могут быть разделены, но мы объединяем их в ActorMetaDTO
-        meta_dict = r_meta or {}
+        # 1. Meta (State + Feints)
+        # r_meta уже содержит hp, en, tokens, feints
+        feints_data = r_meta.get("feints") or {}
+        feints_dto = FeintHandDTO(**feints_data) if feints_data else FeintHandDTO()
 
         meta = ActorMetaDTO(
             id=cid,
-            name=meta_dict.get("name", "Unknown"),
-            type=meta_dict.get("type", "unknown"),
+            name=r_meta.get("name", "Unknown"),
+            type=r_meta.get("type", "unknown"),
             team=team,
-            template_id=meta_dict.get("template_id"),
-            is_ai=meta_dict.get("is_ai", False),
-            # State fields
-            hp=int(r_state.get(b"hp", 0)),
-            max_hp=int(r_state.get(b"max_hp", 100)),
-            en=int(r_state.get(b"en", 0)),
-            max_en=int(r_state.get(b"max_en", 100)),
-            tactics=int(r_state.get(b"tactics", 0)),
-            is_dead=bool(int(r_state.get(b"is_dead", 0))),
-            tokens=json.loads(r_state.get(b"tokens") or "{}"),
+            template_id=r_meta.get("template_id"),
+            is_ai=r_meta.get("is_ai", False),
+            hp=int(r_meta.get("hp", 0)),
+            max_hp=int(r_meta.get("max_hp", 100)),
+            en=int(r_meta.get("en", 0)),
+            max_en=int(r_meta.get("max_en", 100)),
+            tactics=int(r_meta.get("tactics", 0)),
+            is_dead=bool(r_meta.get("is_dead", False)),
+            tokens=r_meta.get("tokens") or {},
+            feints=feints_dto,  # NEW: Feints
         )
 
-        # Raw (Fake/Partial)
-        loadout_dict = r_loadout or {}
-
-        raw_dto = ActorRawDTO(
-            attributes={},  # Не нужно для UI
-            modifiers={},  # Не нужно для UI
+        # 2. Loadout
+        loadout = ActorLoadoutDTO(
+            layout=r_loadout.get("equipment_layout", {}),
+            known_abilities=r_loadout.get("known_abilities", []),
+            belt=r_loadout.get("belt", []),
+            tags=r_loadout.get("tags", []),
         )
 
-        # Loadout
-        loadout_dto = ActorLoadoutDTO(
-            layout=loadout_dict.get("equipment_layout", {}),
-            known_abilities=loadout_dict.get("known_abilities", []),
-            belt=[],
-            tags=[],
+        # 3. Statuses
+        statuses = ActorStatusesDTO(
+            abilities=[ActiveAbilityDTO(**a) for a in r_statuses.get("abilities", [])],
+            effects=[ActiveEffectDTO(**e) for e in r_statuses.get("effects", [])],
         )
+
+        # 4. Raw (Stub)
+        raw = ActorRawDTO(attributes={}, modifiers={})
 
         return ActorSnapshot(
             meta=meta,
-            raw=raw_dto,
-            loadout=loadout_dto,
-            active_abilities=[ActiveAbilityDTO(**a) for a in (r_active or [])],
-            xp_buffer={},  # Не нужно
+            raw=raw,
+            loadout=loadout,
+            statuses=statuses,
+            xp_buffer={},
         )
 
-    def _find_team(self, cid: int, teams: dict) -> str:
+    def _find_team(self, cid: int | str, teams: dict) -> str:
+        cid_str = str(cid)
         for t_name, members in teams.items():
-            if cid in members:
-                return t_name
+            # members list can contain ints or strs
+            for m in members:
+                if str(m) == cid_str:
+                    return t_name
         return "neutral"
 
     # --- LIFECYCLE ---

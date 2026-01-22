@@ -1,11 +1,11 @@
 import contextlib
 import time
 
-from apps.game_core.modules.combat.dto.combat_internal_dto import CombatActionDTO
 from loguru import logger as log
 
 from apps.game_core.modules.combat.combat_engine.combat_data_service import CombatDataService
 from apps.game_core.modules.combat.combat_engine.processors.executor import CombatExecutor
+from apps.game_core.modules.combat.dto.combat_action_dto import CombatActionDTO
 from apps.game_core.modules.combat.dto.combat_arq_dto import CollectorSignalDTO, WorkerBatchJobDTO
 
 
@@ -33,7 +33,7 @@ async def execute_batch_task(ctx: dict, job_data: dict) -> None:
 
         # 0. Извлечение сервисов
         executor: CombatExecutor = ctx["combat_executor"]
-        data_service: CombatDataService = ctx.get("combat_data_service")
+        data_service: CombatDataService | None = ctx.get("combat_data_service")
 
         if not data_service:
             # Fallback для надежности (если инициализация сбойнула)
@@ -63,7 +63,7 @@ async def execute_batch_task(ctx: dict, job_data: dict) -> None:
             # 3. Fetch Actions from Redis Queue
             queue_key = f"combat:rbc:{session_id}:q:actions"
             # Берем пачку действий
-            raw_actions = await data_service.combat_manager.redis.redis_client.lrange(queue_key, 0, job.batch_size - 1)
+            raw_actions = await data_service.combat_manager.redis.redis_client.lrange(queue_key, 0, job.batch_size - 1)  # type: ignore
 
             if not raw_actions:
                 log.info("ExecutorEmpty | session_id={session_id}")
@@ -87,7 +87,12 @@ async def execute_batch_task(ctx: dict, job_data: dict) -> None:
                 log.error("ExecutorZombie | error=lock_lost_during_calc", session_id=session_id)
                 return
 
+            # 5.1. Save Battle Context (Actors State)
             await data_service.commit_session(battle_ctx, processed_ids)
+
+            # 5.2. Return Targets to Queues (Separate Operation)
+            if battle_ctx.pending_target_returns:
+                await data_service.return_targets_to_queues(battle_ctx)
 
             log.info(
                 "ExecutorSuccess | session_id={session_id} processed={count}",

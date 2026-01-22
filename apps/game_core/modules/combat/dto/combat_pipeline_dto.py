@@ -124,6 +124,21 @@ class MetaFlagsDTO(BaseModel):
     action_mode: Literal["exchange", "unidirectional"] = "exchange"
 
 
+class MechanicsFlagsDTO(BaseModel):
+    """
+    Мутация стейта (Mechanics Service).
+    Управляет тем, какие изменения применяются к акторам.
+    """
+
+    pay_cost: bool = True  # Списывать ли энергию/хп за действие
+    grant_xp: bool = True  # Начислять ли опыт в буфер
+    check_death: bool = True  # Проверять ли смерть после удара
+    apply_damage: bool = True  # Наносить ли урон в HP/Shield
+    apply_sustain: bool = True  # Считать ли вампиризм/реген
+    apply_periodic: bool = False  # Флаг для тиков DoT/HoT
+    generate_feints: bool = True  # NEW: Генерировать ли финты (отключать для insta_skill)
+
+
 class PipelineFlagsDTO(BaseModel):
     """Группировка всех флагов."""
 
@@ -134,6 +149,7 @@ class PipelineFlagsDTO(BaseModel):
     damage: DamageTypeFlagsDTO = Field(default_factory=DamageTypeFlagsDTO)
     state: StateFlagsDTO = Field(default_factory=StateFlagsDTO)
     meta: MetaFlagsDTO = Field(default_factory=MetaFlagsDTO)
+    mechanics: MechanicsFlagsDTO = Field(default_factory=MechanicsFlagsDTO)  # NEW
 
 
 # ==============================================================================

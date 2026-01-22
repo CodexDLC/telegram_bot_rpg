@@ -44,7 +44,10 @@ class CombatExecutor:
             return
 
         # Routing Logic
-        if action.action_type == "exchange" or (action.is_forced and action.move.payload.get("target_id")):
+        # payload is object, use getattr
+        target_id = getattr(action.move.payload, "target_id", None)
+
+        if action.action_type == "exchange" or (action.is_forced and target_id):
             await self._handle_exchange(ctx, action)
         else:
             # Instant / Item (Одностороннее воздействие)
@@ -61,7 +64,7 @@ class CombatExecutor:
         Использует Chain Reactions из DTO результата.
         """
         source = ctx.get_actor(action.move.char_id)
-        target_id = action.move.payload.get("target_id")
+        target_id = getattr(action.move.payload, "target_id", None)
         target = ctx.get_actor(int(target_id)) if target_id else None
 
         if not source or not target:
@@ -140,6 +143,9 @@ class CombatExecutor:
         target.meta.exchange_counter += 1
         ctx.meta.step_counter += 1
 
+        # НОВОЕ: Собираем пары для возврата целей
+        self._collect_target_returns(ctx, action)
+
         log.info(f"Executor | Exchange complete. Waves={wave}. Global step={ctx.meta.step_counter}")
 
     async def _handle_unidirectional(self, ctx: BattleContext, action: CombatActionDTO) -> None:
@@ -151,8 +157,11 @@ class CombatExecutor:
             return
 
         target_ids = action.move.targets or []
-        if action.move.strategy == "item" and action.move.payload.get("target_id") == "self":
-            target_ids = [source.char_id]
+
+        # Check for self target in payload
+        payload_target = getattr(action.move.payload, "target_id", None)
+        if action.move.strategy == "item" and payload_target == "self":
+            target_ids = [int(source.char_id)]
 
         tasks = []
         for tid in target_ids:
@@ -180,3 +189,27 @@ class CombatExecutor:
             external_mods=mods,
             exchange_count=source.meta.exchange_counter,
         )
+
+    def _collect_target_returns(self, ctx: BattleContext, action: CombatActionDTO) -> None:
+        """
+        Собирает пары (source_id, target_id) для возврата в очереди после Exchange.
+
+        Логика:
+        - Source всегда возвращает target в свою очередь
+        - Target возвращает source в свою очередь (если был partner_move)
+        - Если не было partner_move (forced attack) - target не возвращает
+        """
+        source_id = str(action.move.char_id)
+        target_id_raw = getattr(action.move.payload, "target_id", None)
+
+        if not target_id_raw:
+            return
+
+        target_id = int(target_id_raw)
+
+        # Source -> Target (всегда)
+        ctx.pending_target_returns.append({"source_id": source_id, "target_id": target_id})
+
+        # Target -> Source (только если был ответ)
+        if action.partner_move:
+            ctx.pending_target_returns.append({"source_id": str(target_id), "target_id": int(source_id)})

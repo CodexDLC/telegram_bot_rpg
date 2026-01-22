@@ -1,68 +1,50 @@
 """
-DTO, описывающие Действия (Actions) и Сигналы.
+DTO для действий (Actions) и намерений (Intents).
 """
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from apps.common.schemas_dto.combat_source_dto import (
+    ExchangePayload,
+    InstantPayload,
+)
 
 
 class CombatMoveDTO(BaseModel):
     """
-    "Пуля" (Intent) - заявка на ход от игрока.
-    Хранится в RedisJSON (`moves:{char_id}`).
+    Единица намерения (Intent).
     """
 
-    move_id: str  # Unique Short ID
-    char_id: int  # Кто ходит
+    move_id: str
+    char_id: int | str
+    strategy: Literal["exchange", "item", "instant", "system"]
 
-    # Зона хранения и Логика обработки
-    strategy: str  # "item" | "instant" | "exchange"
+    # Полиморфный payload
+    payload: ExchangePayload | InstantPayload | dict[str, Any] = Field(default_factory=dict)
 
-    created_at: float  # Timestamp
-
-    # Полиморфный контейнер данных
-    payload: dict[str, Any]  # ItemPayload | InstantPayload | ExchangePayload
-
-    # Результат резолвинга целей (заполняется Колектором)
-    targets: list[int] | None = None
-
-
-class CollectorSignalDTO(BaseModel):
-    """
-    Сигнал для триггера Колектора.
-    Отправляется Роутером в очередь `arq:combat_collector`.
-    """
-
-    session_id: str
-    char_id: int
-    signal_type: str  # "check_immediate" | "check_timeout"
-    move_id: str | None = None
-
-
-class CombatActionResultDTO(BaseModel):
-    """
-    Результат принятия действия (для API).
-    """
-
-    success: bool
-    move_id: str | None = None
-    message: str | None = None
-    error: str | None = None
+    # Вспомогательные поля
+    targets: list[int] | None = None  # Резолвленные ID целей (заполняется сервером)
 
 
 class CombatActionDTO(BaseModel):
     """
-    Задача для Воркера в очереди `q:actions`.
-    Содержит полные данные мува (Cut & Paste).
+    Пара действий (Action Pair).
     """
 
-    action_type: str  # "item", "instant", "exchange", "forced"
-
-    # Основной мув (Инициатор)
+    action_type: Literal["exchange", "item", "instant", "system"]
     move: CombatMoveDTO
+    partner_move: CombatMoveDTO | None = None  # Ответный удар (только для exchange)
 
-    # Ответный мув (для exchange)
-    partner_move: CombatMoveDTO | None = None
+    is_forced: bool = False  # Если true, то partner_move не обязателен (безответный удар)
 
-    is_forced: bool = False
+
+class CombatActionResultDTO(BaseModel):
+    """
+    Результат выполнения действия (для API/Клиента).
+    """
+
+    success: bool = True
+    error: str | None = None
+    events: list[dict[str, Any]] = Field(default_factory=list)

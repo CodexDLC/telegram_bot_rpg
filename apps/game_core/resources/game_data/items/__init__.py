@@ -156,3 +156,26 @@ def get_bundle_by_id(bundle_id: str) -> Mapping[str, Any] | None:
 def get_bundle_by_ingredient(ingredient_id: str) -> Mapping[str, Any] | None:
     """Обратный поиск O(1) с использованием предварительно созданного индекса."""
     return _INGREDIENT_TO_BUNDLE_MAP.get(ingredient_id)
+
+
+# --- E. COMBAT HELPERS ---
+
+
+def get_weapon_trigger(base_id: str) -> str | None:
+    """
+    Возвращает ID триггера атаки для базового оружия.
+    Берет первый элемент из списка triggers.
+    """
+    item = ITEM_REGISTRY.get(base_id)
+    if not item:
+        return None
+
+    # Проверяем, что это оружие (опционально, но полезно)
+    # if item.get("type") != "weapon":
+    #     return None
+
+    triggers = item.get("triggers")
+    if triggers and isinstance(triggers, list) and len(triggers) > 0:
+        return triggers[0]
+
+    return None

@@ -193,7 +193,7 @@ class PlayerAssembler(BaseAssembler):
         if contexts_to_save:
             try:
                 # Используем pipeline БЕЗ transaction для performance
-                async with self.context_manager.redis.pipeline(transaction=False) as pipe:
+                async with self.context_manager.redis.redis_client.pipeline(transaction=False) as pipe:
                     # Словарь для маппинга индексов результатов к char_id
                     index_to_char = {}
                     idx = 0

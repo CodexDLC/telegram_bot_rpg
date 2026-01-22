@@ -1,3 +1,5 @@
+# === НОВЫЙ ИМПОРТ ===
+from apps.game_core.modules.combat.combat_engine.mechanics.feint_service import FeintService
 from apps.game_core.modules.combat.dto import ActorSnapshot, CombatEventDTO, InteractionResultDTO, PipelineContextDTO
 from apps.game_core.system.calculators.stats_waterfall_calculator import StatsWaterfallCalculator
 
@@ -17,31 +19,33 @@ class MechanicsService:
         """
         Обработка начала хода: Тики эффектов (DOT/HOT).
         """
-        # 1. Collect Ticks
-        hp_changes = []
-        en_changes = []
+        # Проверка флага: применять ли периодические эффекты
+        if ctx.flags.mechanics.apply_periodic:
+            # 1. Collect Ticks
+            hp_changes = []
+            en_changes = []
 
-        for effect in actor.statuses.effects:
-            if not effect.impact:
-                continue
+            for effect in actor.statuses.effects:
+                if not effect.impact:
+                    continue
 
-            # HP Impact
-            if "hp" in effect.impact:
-                val = effect.impact["hp"]
-                hp_changes.append(str(val))
-                self._log_effect_tick(ctx, actor, effect.effect_id, val, "hp")
+                # HP Impact
+                if "hp" in effect.impact:
+                    val = effect.impact["hp"]
+                    hp_changes.append(str(val))
+                    self._log_effect_tick(ctx, actor, effect.effect_id, val, "hp")
 
-            # EN Impact
-            if "en" in effect.impact:
-                val = effect.impact["en"]
-                en_changes.append(str(val))
-                self._log_effect_tick(ctx, actor, effect.effect_id, val, "en")
+                # EN Impact
+                if "en" in effect.impact:
+                    val = effect.impact["en"]
+                    en_changes.append(str(val))
+                    self._log_effect_tick(ctx, actor, effect.effect_id, val, "en")
 
-        # 2. Apply Changes
-        if hp_changes:
-            self._apply_resource_delta(actor, "hp", hp_changes)
-        if en_changes:
-            self._apply_resource_delta(actor, "en", en_changes)
+            # 2. Apply Changes
+            if hp_changes:
+                self._apply_resource_delta(actor, "hp", hp_changes)
+            if en_changes:
+                self._apply_resource_delta(actor, "en", en_changes)
 
     def apply_interaction_result(
         self, ctx: PipelineContextDTO, source: ActorSnapshot, target: ActorSnapshot | None, result: InteractionResultDTO
@@ -57,7 +61,14 @@ class MechanicsService:
             self._apply_target_changes(ctx, target, result)
 
         # 3. [XP] Register Events
-        self._register_xp_events(source, target, result)
+        self._register_xp_events(ctx, source, target, result)
+
+        # === НОВАЯ ИНТЕГРАЦИЯ: Пополнение руки финтов ===
+        # 4. [FEINTS] Refill Hand (только для exchange, не для insta_skill)
+        if ctx.flags.mechanics.generate_feints:
+            FeintService.refill_hand(source.meta)
+            if target:
+                FeintService.refill_hand(target.meta)
 
     # ==============================================================================
     # INTERNAL LOGIC
@@ -69,27 +80,27 @@ class MechanicsService:
         """
         Изменения для Атакующего: Косты, Токены.
         """
-        hp_sources = []
-        en_sources = []
-
         # A. Costs (из resource_changes)
-        # Пример: {"hp": {"cost": "-10"}, "en": {"cost": "-20"}}
-        if "hp" in result.resource_changes:
-            for _key, val in result.resource_changes["hp"].items():
-                hp_sources.append(val)
-                # Log Cost? Usually handled by AbilityService or LogBuilder implicitly.
+        if ctx.flags.mechanics.pay_cost:
+            hp_sources = []
+            en_sources = []
 
-        if "en" in result.resource_changes:
-            for _key, val in result.resource_changes["en"].items():
-                en_sources.append(val)
+            # Пример: {"hp": {"cost": "-10"}, "en": {"cost": "-20"}}
+            if "hp" in result.resource_changes:
+                for _key, val in result.resource_changes["hp"].items():
+                    hp_sources.append(val)
 
-        # B. Apply Costs
-        if hp_sources:
-            self._apply_resource_delta(source, "hp", hp_sources)
-        if en_sources:
-            self._apply_resource_delta(source, "en", en_sources)
+            if "en" in result.resource_changes:
+                for _key, val in result.resource_changes["en"].items():
+                    en_sources.append(val)
 
-        # C. Tokens Awarded
+            # Apply Costs
+            if hp_sources:
+                self._apply_resource_delta(source, "hp", hp_sources)
+            if en_sources:
+                self._apply_resource_delta(source, "en", en_sources)
+
+        # B. Tokens Awarded (Всегда начисляем, если не сказано иное? Пока оставим безусловно)
         if result.tokens_awarded_attacker:
             for token, amount in result.tokens_awarded_attacker.items():
                 source.meta.tokens[token] = source.meta.tokens.get(token, 0) + amount
@@ -100,25 +111,25 @@ class MechanicsService:
         """
         Изменения для Защитника: Урон.
         """
-        hp_sources = []
-
         # A. Damage Final
-        if result.damage_final > 0:
-            hp_sources.append(f"-{result.damage_final}")
+        if ctx.flags.mechanics.apply_damage:
+            hp_sources = []
+            if result.damage_final > 0:
+                hp_sources.append(f"-{result.damage_final}")
 
-        # B. Apply
-        if hp_sources:
-            self._apply_resource_delta(target, "hp", hp_sources)
+            # Apply
+            if hp_sources:
+                self._apply_resource_delta(target, "hp", hp_sources)
 
-        # C. Death Check
-        if target.meta.hp <= 0:
+        # B. Death Check
+        if ctx.flags.mechanics.check_death and target.meta.hp <= 0:
             target.meta.is_dead = True
 
             # Log Death Event
             ctx.result.events.append(
                 CombatEventDTO(
                     type="DEATH",
-                    source_id=target.char_id,  # Source of death is self? Or attacker? Usually target is the one dying.
+                    source_id=target.char_id,
                     target_id=target.char_id,
                     value=0,
                 )
@@ -144,11 +155,18 @@ class MechanicsService:
             actor.meta.en = max(0, min(new_val, actor.meta.max_en))
 
     def _register_xp_events(
-        self, source: ActorSnapshot, target: ActorSnapshot | None, result: InteractionResultDTO
+        self,
+        ctx: PipelineContextDTO,
+        source: ActorSnapshot,
+        target: ActorSnapshot | None,
+        result: InteractionResultDTO,
     ) -> None:
         """
         Регистрация событий для XP Buffer.
         """
+        if not ctx.flags.mechanics.grant_xp:
+            return
+
         # 1. Generic Actions
         if result.is_hit:
             self._inc_xp(source, "action_hit")

@@ -64,8 +64,9 @@ graph TD
 #### Step 2: Crit Check (Крит)
 Определение критического удара.
 *   **Event:** `ON_CRIT` / `ON_CRIT_FAIL`.
-*   **Formula:** `(Crit Chance * Skill Bonus) - Crit Anti-Chance`.
-*   **Outcome:** Если успех -> `is_crit=True`.
+*   **Formula:** `(Crit Chance * Skill Bonus), capped at Crit Cap`.
+*   **Outcome:** Если успех -> `is_crit=True`, активируются триггеры оружия.
+*   **Note:** Крит сам по себе не увеличивает урон - он запускает специальные эффекты через систему триггеров (например, кровотечение, оглушение, бонусный урон от оружия).
 
 #### Step 3: Evasion (Уклонение)
 Проверка защиты ловкостью.

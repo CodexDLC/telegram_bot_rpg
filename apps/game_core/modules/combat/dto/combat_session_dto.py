@@ -53,6 +53,9 @@ class BattleContext(BaseModel):
     targets: dict[str, list[int]] = Field(default_factory=dict)
     pending_logs: list[dict] = Field(default_factory=list)
 
+    # NEW: Очередь возврата целей (заполняется в Executor, обрабатывается в DataService)
+    pending_target_returns: list[dict[str, int]] = Field(default_factory=list)
+
     def get_actor(self, char_id: str | int) -> ActorSnapshot | None:
         return self.actors.get(str(char_id))
 
@@ -65,8 +68,8 @@ class BattleContext(BaseModel):
 
 class MechanicsFlagsDTO(BaseModel):
     """
-    Мутация стейта.
-    Этот блок управляет тем, как MechanicsService будет записывать результат в Redis.
+    Мутация стейта (Mechanics Service).
+    Управляет тем, какие изменения применяются к акторам.
     """
 
     pay_cost: bool = True  # Списывать ли энергию/хп за действие
@@ -75,3 +78,4 @@ class MechanicsFlagsDTO(BaseModel):
     apply_damage: bool = True  # Наносить ли урон в HP/Shield
     apply_sustain: bool = True  # Считать ли вампиризм/реген
     apply_periodic: bool = False  # Флаг для тиков DoT/HoT
+    generate_feints: bool = True  # NEW: Генерировать ли финты (отключать для insta_skill)

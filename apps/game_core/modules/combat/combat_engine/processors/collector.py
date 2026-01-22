@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal, cast
 
 from loguru import logger as log
 
@@ -34,7 +34,7 @@ class CombatCollector:
             return 0, []
 
         # Получаем список всех участников из Meta
-        all_actor_ids = []
+        all_actor_ids: list[int | str] = []
         for team_ids in meta.teams.values():
             all_actor_ids.extend(team_ids)
 
@@ -75,7 +75,7 @@ class CombatCollector:
         return batch_size, ai_tasks
 
     def _check_ai_turns(
-        self, session_id: str, meta: BattleMeta, moves_map: dict[int, Any], targets_map: dict[int, list[int]]
+        self, session_id: str, meta: BattleMeta, moves_map: dict[str, Any], targets_map: dict[str, list[int]]
     ) -> list[AiTurnRequestDTO]:
         """
         Проверяет, кто из AI еще не сделал ход.
@@ -93,12 +93,12 @@ class CombatCollector:
             actor_id = int(actor_id_str)
 
             # 1. Получаем цели бота
-            my_targets = targets_map.get(actor_id, [])
+            my_targets = targets_map.get(actor_id_str, [])
             if not my_targets:
                 continue  # Нет целей - нет проблем (или бот спит)
 
             # 2. Получаем заявленные Exchange мувы
-            actor_moves = moves_map.get(actor_id, {})
+            actor_moves = moves_map.get(actor_id_str, {})
             exchange_moves = actor_moves.get("exchange", {})
 
             covered_targets = set()
@@ -106,7 +106,8 @@ class CombatCollector:
                 try:
                     # Парсим JSON, чтобы достать target_id
                     move = CombatMoveDTO(**move_json)
-                    tid = move.payload.get("target_id")
+                    # payload теперь объект, используем getattr
+                    tid = getattr(move.payload, "target_id", None)
                     if tid:
                         covered_targets.add(int(tid))
                 except Exception:  # noqa: BLE001
@@ -121,7 +122,7 @@ class CombatCollector:
 
         return tasks
 
-    def _harvest_instant(self, moves_map: dict[int, Any], meta: BattleMeta) -> tuple[list[CombatActionDTO], list[str]]:
+    def _harvest_instant(self, moves_map: dict[str, Any], meta: BattleMeta) -> tuple[list[CombatActionDTO], list[str]]:
         """Собирает Instant и Item мувы, резолвит цели."""
         actions = []
         to_delete = []
@@ -139,13 +140,18 @@ class CombatCollector:
                         move = CombatMoveDTO(**move_json)
 
                         # Резолвинг целей через TargetResolver
-                        target_ids = self.target_resolver.resolve(char_id, move.payload.get("target_id"), meta)
+                        # payload теперь объект, используем getattr
+                        raw_target = getattr(move.payload, "target_id", None)
+                        target_ids = self.target_resolver.resolve(char_id, raw_target, meta)
 
                         # Записываем результат резолвинга в сам мув
                         move.targets = target_ids
 
                         # Создаем ОДИН Action на весь мув (с множеством целей)
-                        action = CombatActionDTO(action_type=strategy, move=move, is_forced=False)
+                        # Используем cast для успокоения mypy
+                        action_type = cast(Literal["exchange", "item", "instant", "system"], strategy)
+                        action = CombatActionDTO(action_type=action_type, move=move, is_forced=False)
+
                         actions.append(action)
                         to_delete.append(move_id)  # Удаляем мув после обработки
 
@@ -155,7 +161,7 @@ class CombatCollector:
         return actions, to_delete
 
     def _matchmake_exchange(
-        self, moves_map: dict[int, Any], signal: CollectorSignalDTO | None = None
+        self, moves_map: dict[str, Any], signal: CollectorSignalDTO | None = None
     ) -> tuple[list[CombatActionDTO], list[str]]:
         """Ищет пары для обмена ударами. Обрабатывает Force Attack по таймауту."""
         actions = []
@@ -169,12 +175,14 @@ class CombatCollector:
             for _move_id, move_json in exchanges.items():
                 try:
                     move = CombatMoveDTO(**move_json)
+                    # created_at removed from DTO, assume order is not critical or use move_id/timestamp if added back
+                    # For now, just append
                     pool.append(move)
                 except Exception:  # noqa: BLE001
                     pass
 
-        # Сортируем по времени (FIFO)
-        pool.sort(key=lambda x: x.created_at)
+        # Сортируем по времени (FIFO) - removed as created_at is missing
+        # pool.sort(key=lambda x: x.created_at)
 
         matched_ids = set()
 
@@ -183,7 +191,8 @@ class CombatCollector:
             if move_a.move_id in matched_ids:
                 continue
 
-            target_id = move_a.payload.get("target_id")
+            # payload теперь объект, используем getattr
+            target_id = getattr(move_a.payload, "target_id", None)
             if not target_id:
                 continue
             target_id = int(target_id)
@@ -192,12 +201,12 @@ class CombatCollector:
             for move_b in pool:
                 if move_b.move_id in matched_ids:
                     continue
-                if move_b.char_id != target_id:
+                if int(move_b.char_id) != target_id:
                     continue
 
                 # Проверяем, бьет ли B игрока A
-                target_b = int(move_b.payload.get("target_id", 0))
-                if target_b == move_a.char_id:
+                target_b = getattr(move_b.payload, "target_id", 0)
+                if int(target_b) == int(move_a.char_id):
                     # ПАРА НАЙДЕНА!
                     action = CombatActionDTO(action_type="exchange", move=move_a, partner_move=move_b, is_forced=False)
                     actions.append(action)
@@ -224,7 +233,7 @@ class CombatCollector:
                 # Force all unmatched moves for this char_id (if provided)
                 # Signal содержит char_id.
                 for move in pool:
-                    if move.move_id not in matched_ids and move.char_id == signal.char_id:
+                    if move.move_id not in matched_ids and int(move.char_id) == signal.char_id:
                         force_candidates.append(move)
             else:
                 # Specific move

@@ -11,8 +11,8 @@ from apps.game_core.modules.combat.dto import (
     PipelineModsDTO,
     PipelinePhasesDTO,
     PipelineStagesDTO,
-    PipelineTriggersDTO,
 )
+from apps.game_core.modules.combat.dto.trigger_rules_flags_dto import TriggerRulesFlagsDTO
 
 
 class ContextBuilder:
@@ -39,7 +39,7 @@ class ContextBuilder:
             flags=PipelineFlagsDTO(),
             mods=PipelineModsDTO(),
             stages=PipelineStagesDTO(),
-            triggers=PipelineTriggersDTO(),
+            triggers=TriggerRulesFlagsDTO(),
         )
 
         # 2. Применение внешних модификаторов (Interference)
@@ -126,6 +126,10 @@ class ContextBuilder:
             elif "source_type" in external_mods:
                 source_type = external_mods["source_type"]
 
+        # Ensure source_type is one of the allowed literals
+        if source_type not in ["main_hand", "off_hand", "magic", "item"]:
+            source_type = "main_hand"  # Fallback default
+
         ctx.flags.meta.source_type = source_type
 
         # Определяем Weapon Class (для скиллов и триггеров)
@@ -134,6 +138,39 @@ class ContextBuilder:
             # Пример: "skill_swords" -> "swords"
             if weapon_skill_key and weapon_skill_key.startswith("skill_"):
                 ctx.flags.meta.weapon_class = weapon_skill_key.replace("skill_", "")
+
+            # --- NEW: Weapon Trigger Activation ---
+            # Берем триггер из layout (ключ с суффиксом _trigger)
+            trigger_key = f"{source_type}_trigger"
+            trigger_id = actor.loadout.layout.get(trigger_key)
+
+            if trigger_id:
+                ContextBuilder._activate_trigger_flag(ctx, trigger_id)
+
+    @staticmethod
+    def _activate_trigger_flag(ctx: PipelineContextDTO, trigger_id: str) -> None:
+        """
+        Активирует флаг триггера по ID.
+        Поддерживает:
+        1. Путь через точку: "accuracy.true_strike"
+        2. Простое имя: "true_strike" (ищет во всех секциях)
+        """
+        # 1. Если это путь (section.field)
+        if "." in trigger_id:
+            parts = trigger_id.split(".")
+            if len(parts) == 2:
+                section_name, field_name = parts
+                if hasattr(ctx.triggers, section_name):
+                    section = getattr(ctx.triggers, section_name)
+                    if hasattr(section, field_name):
+                        setattr(section, field_name, True)
+                        return
+
+        # 2. Если это просто имя (ищем везде)
+        for _section_name, section_model in ctx.triggers:
+            if hasattr(section_model, trigger_id):
+                setattr(section_model, trigger_id, True)
+                return
 
     @staticmethod
     def _analyze_defense(ctx: PipelineContextDTO, target: ActorSnapshot) -> None:

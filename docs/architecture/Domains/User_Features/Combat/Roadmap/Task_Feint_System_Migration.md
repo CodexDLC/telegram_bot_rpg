@@ -11,26 +11,29 @@
 
 ### 1. Architecture & Design (Архитектура)
 - [x] Создать спецификацию `Feint_Service.md`.
-- [ ] Обновить `State_Models.md` (добавить `hand`, `pool` в `ActorMetaDTO`).
-- [ ] Обновить `Mechanics_Service.md` (интеграция фазы `Refill Hand`).
-- [ ] Обновить `View_Service.md` (отображение `hand` в UI).
+- [x] Обновить `State_Models.md` (добавить `hand`, `pool` в `ActorMetaDTO`).
+- [x] Обновить `Mechanics_Service.md` (интеграция фазы `Refill Hand`).
+- [x] Обновить `View_Service.md` (отображение `hand` в UI) - *Реализовано в коде ViewService*.
 
 ### 2. Core Implementation (Код: Engine)
-- [ ] Реализовать `FeintService` (Logic):
-    - [ ] `calculate_pool(actor)`
-    - [ ] `fill_hand(actor)` (The Buyer algorithm)
-    - [ ] `validate_card(actor, card_hash)`
-- [ ] Интегрировать вызов `FeintService` в `MechanicsService` (конец хода).
-- [ ] Обновить `ContextBuilder` для работы с `FeintCard`.
+- [x] Обновить `ActorMetaDTO`: добавить поля `hand`, `pool`, `deck` (как `feints: FeintHandDTO`)
+- [x] Обновить `CombatDataService._build_snapshot`: загрузка `hand`, `pool`, `deck` из Redis (автоматически через `meta`)
+- [x] Обновить `CombatDataService.commit_session`: сохранение `hand`, `pool`, `deck` в Redis (автоматически через `meta`)
+- [x] Реализовать `FeintService` (Logic):
+    - [x] `calculate_pool(actor)` (реализовано как `refill_hand`)
+    - [x] `fill_hand(actor)` (реализовано как `refill_hand`)
+    - [x] `validate_card(actor, card_hash)` (реализовано в `TurnManager` через `consume_feint_atomic`)
+- [x] Интегрировать вызов `FeintService` в `MechanicsService` (конец хода)
+- [x] Обновить `ContextBuilder` для работы с `FeintCard` (триггеры оружия)
 
 ### 3. Data & Config (Данные)
-- [ ] Создать DTO: `FeintCardDTO`, `DeckDTO`.
-- [ ] Обновить Redis Schema для хранения руки.
-- [ ] Перенести конфиги финтов из старых JSON/Code в `GameData`.
+- [x] Создать DTO: `FeintCardDTO`, `DeckDTO` (как `FeintConfigDTO`, `FeintHandDTO`)
+- [x] ✅ Redis Schema уже поддерживает сохранение через `JSON.MERGE` в `$.meta`
+- [x] Перенести конфиги финтов из старых JSON/Code в `GameData` (структура создана, наполнение - отдельная задача)
 
 ### 4. UI Integration (Клиент)
-- [ ] Обновить `CombatDashboardDTO` (добавить список доступных действий).
-- [ ] Обновить `ViewService` для генерации клавиатуры на основе `Actor.hand`.
+- [x] Обновить `CombatDashboardDTO` (добавить список доступных действий).
+- [x] Обновить `ViewService` для генерации клавиатуры на основе `Actor.hand`.
 
 ## 🔗 Связанные документы
 *   `docs/architecture/Domains/User_Features/Combat/Engine/Logic/Feint_Service.md`

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger as log
 
 from apps.common.schemas_dto.game_state_enum import CoreDomain
-from apps.game_core.modules.combat.session.initialization import CombatLifecycleService
+from apps.game_core.modules.combat.session.initialization.combat_lifecycle_service import CombatLifecycleService
 from apps.game_core.system.context_assembler.dtos import ContextRequestDTO, ContextResponseDTO
 from apps.game_core.system.dispatcher.system_dispatcher import CoreRouter
 

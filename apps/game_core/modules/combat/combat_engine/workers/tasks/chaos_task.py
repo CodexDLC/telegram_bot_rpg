@@ -25,7 +25,7 @@ async def chaos_check_task(ctx: dict, session_id: str) -> None:
     try:
         # Service Resolution (Lazy Load Pattern)
         # Пытаемся достать сервис, если он есть, иначе фоллбек
-        data_service: CombatDataService = ctx.get("combat_data_service")
+        data_service: CombatDataService | None = ctx.get("combat_data_service")
 
         if not data_service:
             if "combat_collector" in ctx:

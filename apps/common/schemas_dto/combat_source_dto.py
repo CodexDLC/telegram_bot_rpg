@@ -4,39 +4,46 @@
 Внутренние DTO перенесены в apps/game_core/modules/combat/dto/combat_internal_dto.py
 """
 
-from typing import Any, NamedTuple, TypedDict
+from enum import Enum
+from typing import Any, NamedTuple
 
 from pydantic import BaseModel
 
 # ==============================================================================
-# 1. 📦 PAYLOADS (TypedDicts for Polymorphism)
+# 1. 📦 PAYLOADS (Polymorphic Intents)
 # ==============================================================================
 
 
-class ItemPayload(TypedDict):
-    """Данные для стратегии 'item'."""
-
-    item_id: int
-    target_id: int | str  # ID цели или инструкция ("self", "all_enemies")
-
-
-class InstantPayload(TypedDict):
-    """Данные для стратегии 'instant' (Skills)."""
-
-    skill_id: str
-    target_id: int | str
+class TargetType(str, Enum):
+    SELF = "self"
+    SINGLE_ENEMY = "single_enemy"
+    ALL_ENEMIES = "all_enemies"
+    SINGLE_ALLY = "single_ally"
+    ALL_ALLIES = "all_allies"
+    RANDOM_ENEMY = "random_enemy"
+    LOWEST_HP_ALLY = "lowest_hp_ally"
+    LOWEST_HP_ENEMY = "lowest_hp_enemy"
+    CLEAVE = "cleave"  # Атака по 3 целям
 
 
-class ExchangePayload(TypedDict):
+class ExchangePayload(BaseModel):
     """Данные для стратегии 'exchange' (Combat)."""
 
-    target_id: int  # Конкретный ID оппонента
-    attack_zones: list[str]  # ["head"]
-    block_zones: list[str]  # ["body", "legs"]
+    target_id: int  # В обмене всегда одна конкретная цель (ID)
 
-    # Опционально (чем бьем)
-    skill_id: str | None
-    item_id: int | None  # Если это граната/метательное в бою
+    # Финт (опционально)
+    feint_id: str | None = None
+
+
+class InstantPayload(BaseModel):
+    """Данные для стратегии 'instant' (Abilities / Items)."""
+
+    # В инстанте может быть ID, список ID или инструкция (TargetType)
+    target_id: int | str | list[int] | None = None
+
+    ability_id: str | None = None  # ID способности
+    item_id: int | None = None  # ID предмета (если это расходник)
+    feint_id: str | None = None  # ID финта (если это мгновенный финт, например "песок в глаза")
 
 
 # ==============================================================================
@@ -79,10 +86,14 @@ class ActorFullInfo(BaseModel):
     weapon_type: str  # "sword", "bow", "staff" (из main_hand)
 
     # Строка 2 (Tokens)
+    # Суммарные токены (свободные + замороженные в руке)
     tokens: dict[str, int]  # {"tactics": 5, "gift": 1}
 
     # Строка 3 (Status)
     effects: list[str]  # ["burn", "stun"] (ID иконок)
+
+    # Строка 4 (Feints Hand)
+    feints: dict[str, str] = {}  # {"sand_throw": "Бросок песка"}
 
 
 class CombatDashboardDTO(BaseModel):
@@ -103,7 +114,7 @@ class CombatDashboardDTO(BaseModel):
 
     winner_team: str | None = None
 
-    logs: list[CombatLogEntryDTO] = []
+    # logs удалены, так как грузятся отдельно
 
 
 class CombatLogDTO(BaseModel):
