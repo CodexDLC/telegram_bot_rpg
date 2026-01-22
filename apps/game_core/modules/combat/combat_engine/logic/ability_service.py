@@ -14,7 +14,7 @@ from apps.game_core.modules.combat.dto import (
 from apps.game_core.resources.game_data import GameData
 from apps.game_core.resources.game_data.abilities.presets import PIPELINE_PRESETS
 from apps.game_core.resources.game_data.abilities.schemas import AbilityConfigDTO, AbilityCostDTO
-from apps.game_core.resources.game_data.feints.schemas import FeintConfigDTO, FeintCostDTO
+from apps.game_core.resources.game_data.feints.schemas import FeintConfigDTO
 
 
 class AbilityService:
@@ -51,9 +51,13 @@ class AbilityService:
 
         # 4. [ROUTING & LOGIC]
         if ctx.phases.run_calculator:
-            if move.payload.get("ability_id"):
+            # Используем getattr для безопасного доступа к полям payload (объект или dict)
+            ability_id = getattr(move.payload, "ability_id", None)
+            feint_id = getattr(move.payload, "feint_id", None)
+
+            if ability_id:
                 self._process_action_logic(ctx, move, source, target, mode="ability")
-            elif move.payload.get("feint_id"):
+            elif feint_id:
                 self._process_action_logic(ctx, move, source, target, mode="feint")
             else:
                 # Basic Attack (No CAST event needed? Or maybe "ATTACK"?)
@@ -134,7 +138,10 @@ class AbilityService:
         action_id = ""
 
         if mode == "ability":
-            action_id = move.payload["ability_id"]
+            action_id = getattr(move.payload, "ability_id", None)
+            if not action_id:
+                return
+
             config = GameData.get_ability(action_id)
             if config:
                 cost_ok = AbilityService._check_ability_cost(actor, config.cost)
@@ -146,16 +153,14 @@ class AbilityService:
                     log.info(f"AbilityService | Not enough resources for ability {config.ability_id}")
 
         elif mode == "feint":
-            action_id = move.payload["feint_id"]
+            action_id = getattr(move.payload, "feint_id", None)
+            if not action_id:
+                return
+
             config = GameData.get_feint(action_id)
             if config:
-                cost_ok = AbilityService._check_feint_cost(actor, config.cost)
-                if cost_ok:
-                    AbilityService._register_feint_cost(ctx, config.cost)
-                else:
-                    ctx.phases.run_calculator = False
-                    ctx.result.skip_reason = "NO_TACTICS"
-                    log.info(f"AbilityService | Not enough tactics for feint {config.feint_id}")
+                # Финты уже оплачены (при получении в руку) и списаны (в TurnManager)
+                cost_ok = True
 
         if not config or not cost_ok:
             return
@@ -178,9 +183,16 @@ class AbilityService:
         if config.effects:
             payload_effects["is_hit"] = config.effects
 
+        # Determine ID for ActiveAbilityDTO
+        active_id = (
+            config.ability_id
+            if mode == "ability" and hasattr(config, "ability_id")
+            else (config.feint_id if mode == "feint" and hasattr(config, "feint_id") else action_id)
+        )
+
         active_ability = ActiveAbilityDTO(
             uid=ability_uid,
-            ability_id=config.ability_id if mode == "ability" else config.feint_id,
+            ability_id=active_id,
             source_id=actor.char_id,
             expire_at_exchange=actor.meta.exchange_counter,
             modified_keys=modified_keys,
@@ -300,6 +312,9 @@ class AbilityService:
                 continue
 
             # 3. Create Active Effect (Factory)
+            if not isinstance(effect_id, str):
+                continue
+
             config = GameData.get_effect(effect_id)
             if not config:
                 continue
@@ -379,23 +394,6 @@ class AbilityService:
             if "gift" not in ctx.result.resource_changes:
                 ctx.result.resource_changes["gift"] = {}
             ctx.result.resource_changes["gift"]["cost"] = f"-{cost.gift_tokens}"
-
-    @staticmethod
-    def _check_feint_cost(actor: ActorSnapshot, cost: FeintCostDTO) -> bool:
-        if cost.tactics:
-            for token_type, amount in cost.tactics.items():
-                val = int(amount.replace("-", ""))
-                if actor.meta.tokens.get(token_type, 0) < val:
-                    return False
-        return True
-
-    @staticmethod
-    def _register_feint_cost(ctx: PipelineContextDTO, cost: FeintCostDTO) -> None:
-        if cost.tactics:
-            for token_type, amount in cost.tactics.items():
-                if token_type not in ctx.result.resource_changes:
-                    ctx.result.resource_changes[token_type] = {}
-                ctx.result.resource_changes[token_type]["cost"] = amount
 
     @staticmethod
     def _apply_raw_mutations(actor: ActorSnapshot, mutations: dict, source_key: str) -> None:

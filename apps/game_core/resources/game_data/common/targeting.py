@@ -10,3 +10,4 @@ class TargetType(str, Enum):
     RANDOM_ENEMY = "random_enemy"
     LOWEST_HP_ALLY = "lowest_hp_ally"
     LOWEST_HP_ENEMY = "lowest_hp_enemy"
+    CLEAVE = "cleave"  # Атака по 3 целям

@@ -121,7 +121,7 @@ class CombatLifecycleService:
         id_to_team = {}
 
         # Counters for Meta
-        alive_counts = defaultdict(int)
+        alive_counts: dict[str, int] = defaultdict(int)
         actors_info_map = {}
 
         # Global Name Counter (Unique across teams)
@@ -161,6 +161,9 @@ class CombatLifecycleService:
                 vitals = source_json.get("vitals", {})
                 meta_info = source_json.get("meta", {})
 
+                # Extract known_feints from loadout
+                known_feints = loadout.get("known_feints", [])
+
                 # Name Patching
                 original_name = meta_info.get("character", {}).get("name", "Unknown")
                 new_name = original_name
@@ -190,6 +193,8 @@ class CombatLifecycleService:
                     "afk_level": 0,
                     "is_dead": False,
                     "tokens": {},
+                    # Feint System
+                    "feints": {"arsenal": known_feints, "hand": {}},
                 }
 
                 # 2. :raw (JSON) - Math Model

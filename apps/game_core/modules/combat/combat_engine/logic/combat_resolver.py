@@ -28,6 +28,12 @@ class CombatResolver:
         if not context.phases.run_calculator:
             return result
 
+        # Ensure source_id and target_id are set in result from context if not already
+        if result.source_id is None and context.result.source_id is not None:
+            result.source_id = context.result.source_id
+        if result.target_id is None and context.result.target_id is not None:
+            result.target_id = context.result.target_id
+
         # 1. Accuracy
         if not cls._step_accuracy_roll(attacker_stats, context, result):
             return result
@@ -55,6 +61,10 @@ class CombatResolver:
 
         # 7. Healing (NEW)
         cls._step_calculate_healing(attacker_stats, context, result)
+
+        # 8. Control Check
+        if result.is_hit:
+            cls._resolve_triggers(context, result, "ON_CHECK_CONTROL")
 
         return result
 
@@ -113,10 +123,13 @@ class CombatResolver:
         if not ctx.stages.check_accuracy:
             return True
 
+        source_id = res.source_id if res.source_id is not None else 0
+        target_id = res.target_id if res.target_id is not None else 0
+
         if ctx.flags.force.miss:
             res.is_miss = True
-            res.tokens_awarded_defender.append("TEMPO")
-            res.events.append(CombatEventDTO(type="MISS", source_id=res.source_id, target_id=res.target_id))
+            res.tokens_awarded_defender["tempo"] = 1
+            res.events.append(CombatEventDTO(type="MISS", source_id=source_id, target_id=target_id))
             return False
 
         if ctx.flags.force.hit:
@@ -129,8 +142,8 @@ class CombatResolver:
 
         if not MathCore.check_chance(final_acc):
             res.is_miss = True
-            res.tokens_awarded_defender.append("TEMPO")
-            res.events.append(CombatEventDTO(type="MISS", source_id=res.source_id, target_id=res.target_id))
+            res.tokens_awarded_defender["tempo"] = 1
+            res.events.append(CombatEventDTO(type="MISS", source_id=source_id, target_id=target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_MISS")
             return False
 
@@ -144,10 +157,13 @@ class CombatResolver:
         if not ctx.stages.check_evasion:
             return False
 
+        source_id = res.source_id if res.source_id is not None else 0
+        target_id = res.target_id if res.target_id is not None else 0
+
         if ctx.flags.force.dodge:
             res.is_dodged = True
-            res.tokens_awarded_defender.append("DODGE")
-            res.events.append(CombatEventDTO(type="DODGE", source_id=res.source_id, target_id=res.target_id))
+            res.tokens_awarded_defender["dodge"] = 1
+            res.events.append(CombatEventDTO(type="DODGE", source_id=source_id, target_id=target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_DODGE")
             ctx.flags.state.check_counter = True
             return True
@@ -178,8 +194,8 @@ class CombatResolver:
 
         if MathCore.check_chance(final_chance):
             res.is_dodged = True
-            res.tokens_awarded_defender.append("DODGE")
-            res.events.append(CombatEventDTO(type="DODGE", source_id=res.source_id, target_id=res.target_id))
+            res.tokens_awarded_defender["dodge"] = 1
+            res.events.append(CombatEventDTO(type="DODGE", source_id=source_id, target_id=target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_DODGE")
             ctx.flags.state.check_counter = True
             return True
@@ -194,14 +210,17 @@ class CombatResolver:
         if not ctx.stages.check_parry:
             return False
 
+        source_id = res.source_id if res.source_id is not None else 0
+        target_id = res.target_id if res.target_id is not None else 0
+
         if ctx.flags.restriction.ignore_parry:
             CombatResolver._resolve_triggers(ctx, res, "ON_PARRY_FAIL")
             return False
 
         if ctx.flags.force.parry:
             res.is_parried = True
-            res.tokens_awarded_defender.append("PARRY")
-            res.events.append(CombatEventDTO(type="PARRY", source_id=res.source_id, target_id=res.target_id))
+            res.tokens_awarded_defender["parry"] = 1
+            res.events.append(CombatEventDTO(type="PARRY", source_id=source_id, target_id=target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_PARRY")
             if ctx.flags.mastery.medium_armor or ctx.flags.state.allow_counter_on_parry:
                 ctx.flags.state.check_counter = True
@@ -221,8 +240,8 @@ class CombatResolver:
 
         if final_chance > 0 and MathCore.check_chance(final_chance):
             res.is_parried = True
-            res.tokens_awarded_defender.append("PARRY")
-            res.events.append(CombatEventDTO(type="PARRY", source_id=res.source_id, target_id=res.target_id))
+            res.tokens_awarded_defender["parry"] = 1
+            res.events.append(CombatEventDTO(type="PARRY", source_id=source_id, target_id=target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_PARRY")
 
             if ctx.flags.mastery.medium_armor:
@@ -242,13 +261,17 @@ class CombatResolver:
     ) -> bool:
         if not ctx.stages.check_block:
             return False
+
+        source_id = res.source_id if res.source_id is not None else 0
+        target_id = res.target_id if res.target_id is not None else 0
+
         if ctx.flags.restriction.ignore_block:
             CombatResolver._resolve_triggers(ctx, res, "ON_BLOCK_FAIL")
             return False
         if ctx.flags.force.block:
             res.is_blocked = True
-            res.tokens_awarded_defender.append("BLOCK")
-            res.events.append(CombatEventDTO(type="BLOCK", source_id=res.source_id, target_id=res.target_id))
+            res.tokens_awarded_defender["block"] = 1
+            res.events.append(CombatEventDTO(type="BLOCK", source_id=source_id, target_id=target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_BLOCK")
             return True
 
@@ -265,8 +288,8 @@ class CombatResolver:
 
         if final_chance > 0 and MathCore.check_chance(final_chance):
             res.is_blocked = True
-            res.tokens_awarded_defender.append("BLOCK")
-            res.events.append(CombatEventDTO(type="BLOCK", source_id=res.source_id, target_id=res.target_id))
+            res.tokens_awarded_defender["block"] = 1
+            res.events.append(CombatEventDTO(type="BLOCK", source_id=source_id, target_id=target_id))
             CombatResolver._resolve_triggers(ctx, res, "ON_BLOCK")
             return True
 
@@ -295,7 +318,7 @@ class CombatResolver:
 
         if counter_chance > 0 and MathCore.check_chance(counter_chance):
             res.is_counter = True
-            res.tokens_awarded_defender.append("COUNTER")
+            res.tokens_awarded_defender["counter"] = 1
             res.chain_events.trigger_counter_attack = True
 
     @staticmethod
@@ -361,6 +384,9 @@ class CombatResolver:
         if not ctx.stages.calculate_damage:
             return 0.0
 
+        source_id = res.source_id if res.source_id is not None else 0
+        target_id = res.target_id if res.target_id is not None else 0
+
         if ctx.override_damage:
             min_d, max_d = ctx.override_damage
         else:
@@ -401,9 +427,9 @@ class CombatResolver:
             phys_dmg = max(0.0, phys_dmg - armor_flat)
 
             if res.is_crit:
-                res.tokens_awarded_attacker.append("CRIT_TOKEN")
+                res.tokens_awarded_attacker["crit"] = 1
             else:
-                res.tokens_awarded_attacker.append("HIT_TOKEN")
+                res.tokens_awarded_attacker["hit"] = 1
 
             total_damage += phys_dmg
 
@@ -453,8 +479,8 @@ class CombatResolver:
         res.events.append(
             CombatEventDTO(
                 type="HIT",
-                source_id=res.source_id,
-                target_id=res.target_id,
+                source_id=source_id,
+                target_id=target_id,
                 value=res.damage_final,
                 resource="hp",
                 tags=tags,
@@ -471,6 +497,9 @@ class CombatResolver:
         """
         if not ctx.stages.calculate_healing:
             return 0.0
+
+        source_id = res.source_id if res.source_id is not None else 0
+        target_id = res.target_id if res.target_id is not None else 0
 
         # 1. Базовое значение
         if ctx.override_damage:
@@ -511,8 +540,8 @@ class CombatResolver:
         res.events.append(
             CombatEventDTO(
                 type="HEAL",
-                source_id=res.source_id,
-                target_id=res.target_id,
+                source_id=source_id,
+                target_id=target_id,
                 value=final_healing,
                 resource="hp",
                 tags=tags,

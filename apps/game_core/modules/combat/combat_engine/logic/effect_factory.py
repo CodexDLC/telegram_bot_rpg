@@ -3,7 +3,6 @@ import uuid
 from typing import Any
 
 from apps.game_core.modules.combat.dto import ActiveEffectDTO
-from apps.game_core.resources.game_data.common.effect_params import EffectParams
 from apps.game_core.resources.game_data.effects.schemas import ControlInstructionDTO, EffectDTO
 
 
@@ -16,7 +15,7 @@ class EffectFactory:
     @staticmethod
     def create_effect(
         config: EffectDTO,
-        params: EffectParams,
+        params: dict[str, Any],
         source_id: int,
         current_exchange: int,
         damage_ref: int = 0,

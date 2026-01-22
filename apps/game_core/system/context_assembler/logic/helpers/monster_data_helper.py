@@ -8,7 +8,7 @@ from apps.game_core.resources.game_data.monsters.monster_equipment import MONSTE
 from apps.game_core.system.context_assembler.utils import format_value
 
 
-def get_equipment_modifiers(loadout: dict | Any) -> dict[str, dict[str, str]]:
+def get_equipment_modifiers(loadout: dict | Any) -> dict[str, dict[str, Any]]:
     """
     Собирает модификаторы от экипировки монстра.
     Ищет предметы в BASES_DB и MONSTER_EQUIPMENT_DB.
@@ -93,5 +93,4 @@ def get_equipment_modifiers(loadout: dict | Any) -> dict[str, dict[str, str]]:
                 "damage_reduction_flat", base_power, "external"
             )
 
-    # Cast to expected return type
-    return all_modifiers  # type: ignore
+    return all_modifiers

@@ -49,6 +49,29 @@ class CombatManager:
             return int(res[0])
         return None
 
+    async def return_targets_batch(self, session_id: str, returns: list[dict[str, int]]) -> None:
+        """
+        Батчевый возврат целей в очереди.
+
+        Args:
+            session_id: ID сессии боя.
+            returns: Список пар [{"source_id": 1, "target_id": 4}, ...]
+                     source_id - кому вернуть в очередь
+                     target_id - кого вернуть
+        """
+        if not returns:
+            return
+
+        def _push_targets(pipe: Pipeline) -> None:
+            targets_key = Rk.get_rbc_targets_key(session_id)
+            for pair in returns:
+                source_id = str(pair["source_id"])
+                target_id = pair["target_id"]
+                # RPUSH в конец очереди source_id
+                pipe.json().arrappend(targets_key, f"$.{source_id}", target_id)  # type: ignore
+
+        await self.redis.execute_pipeline(_push_targets)
+
     async def create_session_batch(self, session_id: str, data: SessionDataDTO, ttl: int) -> None:
         """
         Создает сессию в Redis (Meta, Targets, Actors).
@@ -74,7 +97,7 @@ class CombatManager:
 
                 # :moves (JSON) - Init with empty dicts
                 moves_key = Rk.get_combat_moves_key(session_id, str(aid))
-                empty_moves = {"exchange": {}, "item": {}, "instant": {}}
+                empty_moves: dict[str, dict[str, Any]] = {"exchange": {}, "item": {}, "instant": {}}
                 pipe.json().set(moves_key, "$", empty_moves)  # type: ignore
                 pipe.expire(moves_key, ttl)
 
@@ -199,7 +222,7 @@ class CombatManager:
         raw_results = await self.load_actors_data_batch(session_id, char_ids)
 
         step = 2  # Actor JSON + Moves JSON
-        structured_data = {}
+        structured_data: dict[str, Any] = {}
         for i, cid in enumerate(char_ids):
             idx = i * step
 
@@ -464,9 +487,9 @@ class CombatManager:
     async def get_moves_batch(self, session_id: str, char_ids: list[int | str]) -> dict[str, Any]:
         """Загружает только moves для списка игроков."""
 
-        def _load(pipe):
+        def _load(pipe: Pipeline) -> None:
             for cid in char_ids:
-                pipe.json().get(Rk.get_combat_moves_key(session_id, str(cid)))
+                pipe.json().get(Rk.get_combat_moves_key(session_id, str(cid)))  # type: ignore
 
         results = await self.redis.execute_pipeline(_load)
         return {str(cid): res for cid, res in zip(char_ids, results, strict=False) if res}
@@ -477,7 +500,7 @@ class CombatManager:
             return
         key = Rk.get_rbc_queue_key(session_id)
 
-        def _push(pipe):
+        def _push(pipe: Pipeline) -> None:
             pipe.rpush(key, *actions_json)
 
         await self.redis.execute_pipeline(_push)
@@ -561,12 +584,14 @@ class CombatManager:
     # 5. КОММИТ (BATCH SAVING)
     # ==========================================================================
 
-    async def commit_battle_results(self, session_id: str, updates: dict, logs: list[str], processed_count: int):
+    async def commit_battle_results(
+        self, session_id: str, updates: dict, logs: list[str], processed_count: int
+    ) -> None:
         """
         Массовое сохранение итогов раунда через Pipeline.
         """
 
-        def _commit(pipe: Pipeline):
+        def _commit(pipe: Pipeline) -> None:
             for cid, data in updates.items():
                 base = f"{Rk.get_rbc_actor_key(session_id, str(cid))}"
 
@@ -582,6 +607,9 @@ class CombatManager:
 
                 if "xp" in data:
                     pipe.json().set(base, "$.xp_buffer", data["xp"])  # type: ignore
+
+                if "raw" in data:
+                    pipe.json().set(base, "$.raw", data["raw"])  # type: ignore
 
                 if "raw_temp" in data:
                     pipe.json().set(base, "$.raw.temp", data["raw_temp"])  # type: ignore
@@ -616,6 +644,8 @@ class CombatManager:
                 "tactics": m.get("tactics"),
                 "is_dead": m.get("is_dead"),
                 "tokens": m.get("tokens"),
+                "afk_level": m.get("afk_level"),
+                "feints": m.get("feints"),  # NEW: Need feints for validation
             }
         return None
 
@@ -638,3 +668,54 @@ class CombatManager:
             pipe.expire(Rk.get_combat_log_key(session_id), history_ttl)
 
         await self.redis.execute_pipeline(_cleanup)
+
+    # ==========================================================================
+    # 7. FEINT SYSTEM (ATOMIC)
+    # ==========================================================================
+
+    async def consume_feint_atomic(self, session_id: str, char_id: int | str, feint_id: str) -> dict[str, int] | None:
+        """
+        [ATOMIC] Проверяет наличие финта в руке и удаляет его.
+        Возвращает стоимость финта (если он был), иначе None.
+        """
+        key = Rk.get_rbc_actor_key(session_id, str(char_id))
+
+        # Lua Script:
+        # 1. Check if feint exists in $.meta.feints.hand
+        # 2. If yes, get cost, delete feint, return cost
+        # 3. If no, return nil
+
+        script = """
+        local key = KEYS[1]
+        local feint_id = ARGV[1]
+        
+        -- Get hand
+        local hand_raw = redis.call("JSON.GET", key, "$.meta.feints.hand")
+        if not hand_raw then return nil end
+        
+        local hand = cjson.decode(hand_raw)[1]
+        if not hand or not hand[feint_id] then return nil end
+        
+        local cost = hand[feint_id]
+        
+        -- Delete feint
+        redis.call("JSON.DEL", key, "$.meta.feints.hand." .. feint_id)
+        
+        return cjson.encode(cost)
+        """
+
+        res = await self.redis.eval_script(script, keys=[key], args=[feint_id])
+
+        if res:
+            return json.loads(res)
+        return None
+
+    async def return_feint_to_hand(
+        self, session_id: str, char_id: int | str, feint_id: str, cost: dict[str, int]
+    ) -> None:
+        """
+        Возвращает финт в руку (если атака не прошла).
+        """
+        key = Rk.get_rbc_actor_key(session_id, str(char_id))
+        # JSON.SET $.meta.feints.hand.feint_id = cost
+        await self.redis.json_set(key, f"$.meta.feints.hand.{feint_id}", cost)

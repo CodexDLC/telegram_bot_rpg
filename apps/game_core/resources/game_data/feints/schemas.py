@@ -10,9 +10,9 @@ class FeintCostDTO(BaseModel):
     Стоимость финта (Tactical).
     """
 
-    # Стоимость в тактических токенах (строки для калькулятора).
-    # Примеры: {"crit": "-1", "hit": "-2"}
-    tactics: dict[str, str] = Field(default_factory=dict)
+    # Стоимость в тактических токенах (int, положительные числа).
+    # Примеры: {"crit": 1, "hit": 2}
+    tactics: dict[str, int] = Field(default_factory=dict)
 
 
 class FeintConfigDTO(BaseModel):

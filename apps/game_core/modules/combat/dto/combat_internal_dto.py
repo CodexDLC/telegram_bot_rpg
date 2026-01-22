@@ -1,5 +1,6 @@
 """
-DTO, описывающие состояние Актора (Участника боя).
+Внутренние DTO для боевой системы (RBC v3.0).
+Используются только внутри модуля combat.
 """
 
 from typing import Any
@@ -9,6 +10,11 @@ from pydantic import BaseModel, Field
 from apps.common.schemas_dto.modifier_dto import (
     CombatModifiersDTO,
     CombatSkillsDTO,
+)
+from apps.game_core.modules.combat.dto.combat_action_dto import (
+    CombatActionDTO,
+    CombatActionResultDTO,
+    CombatMoveDTO,
 )
 from apps.game_core.resources.game_data.effects.schemas import ControlInstructionDTO
 
@@ -263,3 +269,20 @@ class ActorSnapshot(BaseModel):
     def active_effects(self) -> list[ActiveEffectDTO]:
         """Helper для доступа к эффектам."""
         return self.statuses.effects
+
+
+__all__ = [
+    "FeintCostDTO",
+    "FeintHandDTO",
+    "ActorMetaDTO",
+    "ActorRawDTO",
+    "ActorLoadoutDTO",
+    "ActiveAbilityDTO",
+    "ActiveEffectDTO",
+    "ActorStatusesDTO",
+    "ActorStats",
+    "ActorSnapshot",
+    "CombatMoveDTO",
+    "CombatActionDTO",
+    "CombatActionResultDTO",
+]

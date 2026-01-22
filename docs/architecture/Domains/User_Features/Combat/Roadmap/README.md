@@ -4,8 +4,8 @@
 
 ## 📅 Текущий спринт
 - [x] **[Testing Strategy & Docs](./Task_Testing_Strategy.md)** (Разработка стратегии тестирования по эталону Context Assembler).
-- [ ] **[Finalize Basic Pipeline](./Task_Basic_Pipeline_Implementation.md)** (Устранение заглушек, реализация Mechanics/Ability Service).
-- [ ] **[Feint System Migration](./Task_Feint_System_Migration.md)** (Внедрение системы финтов и управления рукой).
+- [x] **[Finalize Basic Pipeline](./Task_Basic_Pipeline_Implementation.md)** (Устранение заглушек, реализация Mechanics/Ability Service).
+- [x] **[Feint System Migration](./Task_Feint_System_Migration.md)** (Внедрение системы финтов и управления рукой).
 - [ ] **[Audit & Compare Docs](./Task_Basic_Pipeline_Implementation.md)** (Сравнение документации и кода, аудит текущего состояния).
 
 ## 🔮 Backlog

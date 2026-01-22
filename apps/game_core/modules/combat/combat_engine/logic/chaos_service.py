@@ -1,10 +1,10 @@
 import json
 from typing import Any
 
-from apps.game_core.modules.combat.dto.combat_internal_dto import ActorMetaDTO, ActorRawDTO
 from loguru import logger as log
 
 from apps.common.services.redis.manager.combat_manager import CombatManager
+from apps.game_core.modules.combat.dto.combat_actor_dto import ActorMetaDTO, ActorRawDTO
 
 
 class ChaosService:
@@ -95,6 +95,6 @@ class ChaosService:
         meta_dict = {"name": self.CLEANER_NAME, "type": "ai"}
 
         # Loadout (dict)
-        loadout_dict = {"equipment_layout": {}, "known_abilities": []}
+        loadout_dict: dict[str, Any] = {"equipment_layout": {}, "known_abilities": []}
 
         return {"state": state.model_dump(), "raw": raw.model_dump(), "loadout": loadout_dict, "meta": meta_dict}
