@@ -1,0 +1,237 @@
+import json
+from typing import Any
+
+from loguru import logger as log
+from redis.asyncio.client import Pipeline
+
+from backend.database.redis.redis_key import RedisKeys as Rk
+from backend.database.redis.redis_service import RedisService
+
+
+class AccountManager:
+    """
+    Менеджер для управления данными аккаунтов в Redis (ac:{char_id}).
+    Использует RedisJSON для хранения структуры.
+    Предоставляет методы для работы с конкретными секциями (Bio, Stats, Sessions, etc).
+    Также управляет кэшем лобби (lobby:user:{id}).
+    """
+
+    def __init__(self, redis_service: RedisService):
+        self.redis_service = redis_service
+
+    # --- Core Methods (ac:{char_id}) ---
+
+    async def create_account(self, char_id: int, initial_data: dict[str, Any]) -> None:
+        """
+        Создает запись аккаунта (JSON).
+        """
+        key = Rk.get_account_key(char_id)
+        # Используем JSON.SET key $ data
+        await self.redis_service.json_set(key, "$", initial_data)
+        log.info(f"AccountManager | action=create status=success char_id={char_id}")
+
+    async def account_exists(self, char_id: int) -> bool:
+        """
+        Проверяет существование аккаунта.
+        """
+        key = Rk.get_account_key(char_id)
+        return await self.redis_service.key_exists(key)
+
+    async def get_full_account(self, char_id: int) -> dict[str, Any] | None:
+        """
+        Получает весь JSON аккаунта.
+        """
+        key = Rk.get_account_key(char_id)
+        return await self.redis_service.json_get(key, "$")
+
+    async def delete_account(self, char_id: int) -> None:
+        """
+        Удаляет аккаунт целиком.
+        """
+        key = Rk.get_account_key(char_id)
+        await self.redis_service.delete_key(key)
+
+    # --- Bio ---
+
+    async def get_bio(self, char_id: int) -> dict[str, Any] | None:
+        key = Rk.get_account_key(char_id)
+        # Возвращает список (так как JSONPath может вернуть несколько), берем первый
+        res = await self.redis_service.json_get(key, "$.bio")
+        return res[0] if res else None
+
+    async def update_bio(self, char_id: int, bio_data: dict[str, Any]) -> None:
+        """
+        Обновляет всю секцию bio.
+        """
+        key = Rk.get_account_key(char_id)
+        await self.redis_service.json_set(key, "$.bio", bio_data)
+
+    async def update_bio_field(self, char_id: int, field: str, value: Any) -> None:
+        """
+        Обновляет конкретное поле в bio (например, name).
+        """
+        key = Rk.get_account_key(char_id)
+        await self.redis_service.json_set(key, f"$.bio.{field}", value)
+
+    # --- Stats (Vitals) ---
+
+    async def get_stats(self, char_id: int) -> dict[str, Any] | None:
+        key = Rk.get_account_key(char_id)
+        res = await self.redis_service.json_get(key, "$.stats")
+        return res[0] if res else None
+
+    async def update_stat(self, char_id: int, stat_name: str, value: dict[str, int]) -> None:
+        """
+        Обновляет стат целиком (например, hp: {cur: 100, max: 100}).
+        """
+        key = Rk.get_account_key(char_id)
+        await self.redis_service.json_set(key, f"$.stats.{stat_name}", value)
+
+    async def update_stat_current(self, char_id: int, stat_name: str, value: int) -> None:
+        """
+        Обновляет только текущее значение стата (hp.cur).
+        """
+        key = Rk.get_account_key(char_id)
+        await self.redis_service.json_set(key, f"$.stats.{stat_name}.cur", value)
+
+    # --- Attributes ---
+
+    async def get_attributes(self, char_id: int) -> dict[str, int] | None:
+        key = Rk.get_account_key(char_id)
+        res = await self.redis_service.json_get(key, "$.attributes")
+        return res[0] if res else None
+
+    async def update_attributes(self, char_id: int, attributes: dict[str, int]) -> None:
+        key = Rk.get_account_key(char_id)
+        await self.redis_service.json_set(key, "$.attributes", attributes)
+
+    # --- Sessions ---
+
+    async def get_sessions(self, char_id: int) -> dict[str, Any] | None:
+        key = Rk.get_account_key(char_id)
+        res = await self.redis_service.json_get(key, "$.sessions")
+        return res[0] if res else None
+
+    async def set_combat_session(self, char_id: int, session_id: str | None) -> None:
+        key = Rk.get_account_key(char_id)
+        await self.redis_service.json_set(key, "$.sessions.combat_id", session_id)
+
+    async def set_inventory_session(self, char_id: int, session_id: str | None) -> None:
+        key = Rk.get_account_key(char_id)
+        await self.redis_service.json_set(key, "$.sessions.inventory_id", session_id)
+
+    # --- State & Location ---
+
+    async def get_state(self, char_id: int) -> str | None:
+        key = Rk.get_account_key(char_id)
+        res = await self.redis_service.json_get(key, "$.state")
+        return res[0] if res else None
+
+    async def set_state(self, char_id: int, state: str) -> None:
+        key = Rk.get_account_key(char_id)
+        await self.redis_service.json_set(key, "$.state", state)
+
+    async def get_location(self, char_id: int) -> dict[str, Any] | None:
+        key = Rk.get_account_key(char_id)
+        res = await self.redis_service.json_get(key, "$.location")
+        return res[0] if res else None
+
+    async def set_location(self, char_id: int, location_id: str) -> None:
+        """
+        Обновляет current location.
+        """
+        key = Rk.get_account_key(char_id)
+        await self.redis_service.json_set(key, "$.location.current", location_id)
+
+    # --- Lobby Cache (lobby:user:{id}) ---
+
+    async def get_lobby_cache(self, user_id: int) -> list[dict[str, Any]] | None:
+        """
+        Получает кэш лобби (список персонажей).
+        """
+        key = Rk.get_lobby_session_key(user_id)
+        data = await self.redis_service.get_value(key)
+        if not data:
+            return None
+        try:
+            return json.loads(data)
+        except json.JSONDecodeError:
+            return None
+
+    async def set_lobby_cache(self, user_id: int, characters_data: list[dict[str, Any]]) -> None:
+        """
+        Сохраняет кэш лобби.
+        """
+        key = Rk.get_lobby_session_key(user_id)
+        data_json = json.dumps(characters_data)
+        await self.redis_service.set_value(key, data_json, ttl=600)  # 10 минут
+
+    async def delete_lobby_cache(self, user_id: int) -> None:
+        """
+        Удаляет кэш лобби.
+        """
+        key = Rk.get_lobby_session_key(user_id)
+        await self.redis_service.delete_key(key)
+
+    # --- Batch Operations (Combat & Context Assembler) ---
+
+    async def bulk_link_combat_session(self, char_ids: list[int], session_id: str) -> None:
+        """
+        Массово устанавливает combat_session_id для списка персонажей.
+        Используется при создании боя.
+        """
+        if not char_ids:
+            return
+
+        def _link_batch(pipe: Pipeline) -> None:
+            for cid in char_ids:
+                key = Rk.get_account_key(cid)
+                pipe.json().set(key, "$.sessions.combat_id", session_id)  # type: ignore
+
+        await self.redis_service.execute_pipeline(_link_batch)
+        log.info(f"AccountManager | action=bulk_link_combat char_ids={char_ids} session_id={session_id}")
+
+    async def bulk_unlink_combat_session(self, char_ids: list[int]) -> None:
+        """
+        Массово очищает combat_session_id для списка персонажей.
+        Используется при завершении боя.
+        """
+        if not char_ids:
+            return
+
+        def _unlink_batch(pipe: Pipeline) -> None:
+            for cid in char_ids:
+                key = Rk.get_account_key(cid)
+                pipe.json().set(key, "$.sessions.combat_id", None)  # type: ignore
+
+        await self.redis_service.execute_pipeline(_unlink_batch)
+        log.info(f"AccountManager | action=bulk_unlink_combat char_ids={char_ids}")
+
+    async def get_accounts_json_batch(self, char_ids: list[int], path: str = "$") -> list[Any]:
+        """
+        Пакетная загрузка JSON данных для списка персонажей.
+        Используется в PlayerAssembler для получения vitals и других данных.
+        """
+        if not char_ids:
+            return []
+
+        def _load_batch(pipe: Pipeline) -> None:
+            for cid in char_ids:
+                key = Rk.get_account_key(cid)
+                pipe.json().get(key, path)  # type: ignore
+
+        results = await self.redis_service.execute_pipeline(_load_batch)
+
+        # RedisJSON.GET возвращает список значений для каждого пути (даже если путь один)
+        # Если path="$", то вернется [full_json_dict]
+        # Если path="$.vitals", то вернется [vitals_dict]
+        # Нам нужно распаковать эти списки
+
+        unpacked_results = []
+        for res in results:
+            if res and isinstance(res, list) and len(res) > 0:
+                unpacked_results.append(res[0])
+            else:
+                unpacked_results.append(None)
+
+        return unpacked_results
