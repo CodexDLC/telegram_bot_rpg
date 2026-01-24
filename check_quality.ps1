@@ -4,8 +4,8 @@ Write-Host "🚀 Starting Local Quality Check..." -ForegroundColor Cyan
 # 1. Backend & Tests: Ruff
 Write-Host "`n🔍 Checking Style (Ruff)..." -ForegroundColor Yellow
 try {
-    # Проверяем backend
-    ruff check backend/ --fix
+    # Проверяем весь проект (backend, game_client, common, run.py)
+    ruff check . --fix
     if ($LASTEXITCODE -ne 0) { throw "Ruff found errors" }
     Write-Host "✅ Ruff passed!" -ForegroundColor Green
 } catch {
@@ -14,9 +14,10 @@ try {
 }
 
 # 2. Backend: Mypy
-Write-Host "`n🧠 Checking Backend Types (Mypy)..." -ForegroundColor Yellow
+Write-Host "`n🧠 Checking Types (Mypy)..." -ForegroundColor Yellow
 try {
-    mypy backend/
+    # Проверяем backend и common (game_client может требовать отдельной настройки)
+    mypy backend/ common/
     if ($LASTEXITCODE -ne 0) { throw "Mypy found errors" }
     Write-Host "✅ Mypy passed!" -ForegroundColor Green
 } catch {
