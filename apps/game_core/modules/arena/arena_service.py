@@ -1,8 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.services.redis import CombatManager
-from apps.common.services.redis.manager.account_manager import AccountManager
-from apps.common.services.redis.manager.arena_manager import ArenaManager
+from backend.database.redis import CombatManager
+from backend.database.redis.manager.account_manager import AccountManager
+from backend.database.redis.manager.arena_manager import ArenaManager
 from apps.game_core.modules.arena.service_1v1 import Arena1v1Service
 
 

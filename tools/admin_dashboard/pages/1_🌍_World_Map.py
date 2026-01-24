@@ -1,13 +1,13 @@
 import asyncio
 import os
 import sys
-from typing import Literal, cast
+from typing import cast
 
 import streamlit as st
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
 
-from apps.common.database.repositories import get_monster_repo, get_world_repo
+from backend.database.postgres.repositories import get_monster_repo, get_world_repo
 
 # Заменили импорт
 from tools.admin_dashboard.ui_core import apply_global_styles, get_dashboard_session, render_header

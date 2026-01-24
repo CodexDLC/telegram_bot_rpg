@@ -6,10 +6,10 @@ from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.schemas_dto.core_response_dto import CoreResponseDTO, GameStateHeader
-from apps.common.schemas_dto.game_state_enum import GameState
+from apps.common.schemas_dto.game_state_enum import CoreDomain
 from apps.common.schemas_dto.scenario_dto import ScenarioPayloadDTO
-from apps.common.services.redis.redis_fields import AccountFields as Af
-from apps.common.services.redis.redis_key import RedisKeys
+from backend.database.redis.redis_fields import AccountFields as Af
+from backend.database.redis.redis_key import RedisKeys
 
 # Импорт реестра хендлеров
 from apps.game_core.modules.scenario_orchestrator.handlers.handler_registry import get_handler
@@ -19,7 +19,7 @@ from apps.game_core.modules.scenario_orchestrator.logic.scenario_formatter impor
 from apps.game_core.modules.scenario_orchestrator.logic.scenario_manager import ScenarioManager
 
 if TYPE_CHECKING:
-    from apps.game_core.system.dispatcher.system_dispatcher import CoreRouter
+    pass
 
 
 class ScenarioCoreOrchestrator:
@@ -35,7 +35,7 @@ class ScenarioCoreOrchestrator:
         scenario_evaluator: ScenarioEvaluator,
         scenario_director: ScenarioDirector,
         scenario_formatter: ScenarioFormatter,
-        core_router: "CoreRouter | None" = None,
+        core_router: "SystemDispatcher | None" = None,
     ):
         self.manager = scenario_manager
         self.evaluator = scenario_evaluator
@@ -193,11 +193,11 @@ class ScenarioCoreOrchestrator:
         self, char_id: int, quest_key: str, prev_state: str | None = None, prev_loc: str | None = None
     ) -> CoreResponseDTO[ScenarioPayloadDTO]:
         payload = await self.initialize_scenario_payload(char_id, quest_key, prev_state, prev_loc)
-        return CoreResponseDTO(header=GameStateHeader(current_state=GameState.SCENARIO), payload=payload)
+        return CoreResponseDTO(header=GameStateHeader(current_state=CoreDomain.SCENARIO), payload=payload)
 
     async def resume_scenario(self, char_id: int) -> CoreResponseDTO[ScenarioPayloadDTO]:
         payload = await self.resume_scenario_payload(char_id)
-        return CoreResponseDTO(header=GameStateHeader(current_state=GameState.SCENARIO), payload=payload)
+        return CoreResponseDTO(header=GameStateHeader(current_state=CoreDomain.SCENARIO), payload=payload)
 
     async def step_scenario(self, char_id: int, action_id: str) -> CoreResponseDTO[ScenarioPayloadDTO]:
         result = await self.step_scenario_payload(char_id, action_id)
@@ -207,12 +207,12 @@ class ScenarioCoreOrchestrator:
             return result
 
         # Иначе оборачиваем payload
-        return CoreResponseDTO(header=GameStateHeader(current_state=GameState.SCENARIO), payload=result)
+        return CoreResponseDTO(header=GameStateHeader(current_state=CoreDomain.SCENARIO), payload=result)
 
     async def finalize_scenario(self, char_id: int) -> CoreResponseDTO:
         """
         Завершение квеста.
-        Делегирует логику перехода Хендлеру через CoreRouter.
+        Делегирует логику перехода Хендлеру через SystemDispatcher.
         """
         # Берем контекст только из Redis. Если его нет - это ошибка логики.
         context = await self.manager.get_session_context(char_id)
@@ -230,7 +230,7 @@ class ScenarioCoreOrchestrator:
             raise ValueError(f"Handler for {quest_key} not found")
 
         if not self.core_router:
-            raise RuntimeError("CoreRouter is not initialized in ScenarioCoreOrchestrator")
+            raise RuntimeError("SystemDispatcher is not initialized in ScenarioCoreOrchestrator")
 
         try:
             # 1. Логика хендлера (награды, статы, переход)

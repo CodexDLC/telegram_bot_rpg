@@ -5,12 +5,12 @@ from pathlib import Path
 # Добавляем корень проекта в sys.path, чтобы видеть пакеты apps
 sys.path.append(str(Path(__file__).parent.parent))
 
+# ВАЖНО: Импортируем модели, чтобы они зарегистрировались в Base.metadata перед созданием таблиц
+from apps.common.database import create_db_tables, get_async_session
 from loguru import logger as log
 from sqlalchemy import text
 
-# ВАЖНО: Импортируем модели, чтобы они зарегистрировались в Base.metadata перед созданием таблиц
-from apps.common.database.session import create_db_tables, get_async_session
-from apps.game_core.utils.scenario_loader import ScenarioLoader
+from backend.services.utils.scenario_loader import ScenarioLoader
 
 
 async def recreate_scenario_tables():

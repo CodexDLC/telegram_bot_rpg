@@ -10,14 +10,14 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 sys.path.append(project_root)
 
-from sqlalchemy import select  # noqa: E402
-from sqlalchemy.orm import selectinload  # noqa: E402
-
-from apps.common.database.model_orm.monster import GeneratedMonsterORM  # noqa: E402
-
 # Импорты проекта
 # ИСПОЛЬЗУЕМ ПРАВИЛЬНЫЙ ИМПОРТ СЕССИИ
-from apps.common.database.session import async_session_factory  # noqa: E402
+from apps.common.database import (
+    GeneratedMonsterORM,  # noqa: E402
+    async_session_factory,  # noqa: E402
+)
+from sqlalchemy import select  # noqa: E402
+from sqlalchemy.orm import selectinload  # noqa: E402
 
 
 class AlchemyEncoder(json.JSONEncoder):

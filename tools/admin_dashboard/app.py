@@ -16,7 +16,7 @@ if project_root not in sys.path:
 
 
 from apps.common.core.loguru_setup import setup_loguru  # noqa: E402
-from apps.game_core.utils.scenario_loader import ScenarioLoader  # noqa: E402
+from backend.services.utils.scenario_loader import ScenarioLoader  # noqa: E402
 
 # Заменили импорт
 from tools.admin_dashboard.ui_core import apply_global_styles, get_dashboard_session, render_header  # noqa: E402

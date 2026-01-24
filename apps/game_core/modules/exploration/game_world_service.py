@@ -4,7 +4,7 @@ from typing import Any
 
 from loguru import logger as log
 
-from apps.common.services.redis.manager.world_manager import WorldManager
+from backend.database.redis import WorldManager
 
 
 class GameWorldService:

@@ -4,18 +4,18 @@ from typing import Any, cast
 from loguru import logger as log
 
 from apps.common.schemas_dto.item_dto import ItemType
-from apps.game_core.resources.game_data.items import (
+from backend.resources.game_data.items import (
     get_base_by_id,
     get_material_for_tier,
     get_rarity_meta,
 )
-from apps.game_core.resources.game_data.items.affix_config import (
+from backend.resources.game_data.items import (
     BUNDLES_DB,
     EFFECTS_DB,
     BundleData,
 )
-from apps.game_core.resources.game_data.items.bases import BaseItemData
-from apps.game_core.resources.game_data.items.materials import MaterialStats
+from backend.resources.game_data.items.bases import BaseItemData
+from backend.resources.game_data.items import MaterialStats
 
 
 class ItemAssembler:

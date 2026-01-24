@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.schemas_dto.core_response_dto import CoreResponseDTO
-from apps.common.services.redis.manager.account_manager import AccountManager
+from backend.database.redis.manager.account_manager import AccountManager
 
 if TYPE_CHECKING:
     from apps.game_core.modules.scenario_orchestrator.logic.scenario_manager import ScenarioManager
-    from apps.game_core.system.dispatcher.system_dispatcher import CoreRouter
+    from backend.domains.internal_systems.dispatcher import SystemDispatcher
 
 
 class BaseScenarioHandler(ABC):
@@ -37,7 +37,7 @@ class BaseScenarioHandler(ABC):
         pass
 
     @abstractmethod
-    async def on_finalize(self, char_id: int, context: dict[str, Any], router: "CoreRouter") -> CoreResponseDTO:
+    async def on_finalize(self, char_id: int, context: dict[str, Any], router: "SystemDispatcher") -> CoreResponseDTO:
         """
         Логика завершения сценария.
         Должен:

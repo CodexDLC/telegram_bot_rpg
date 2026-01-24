@@ -31,7 +31,9 @@
 Низкоуровневая обертка над драйвером `redis-py`.
 
 ### Layer 4: Domain Managers (`*_manager.py`)
-Бизнес-логика (CombatManager, ContextManager).
+Бизнес-логика (AccountManager, CombatManager, WorldManager, ArenaManager).
+
+**Location:** `backend/database/redis/manager/`
 
 ---
 

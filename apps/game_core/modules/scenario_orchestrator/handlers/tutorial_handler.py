@@ -7,21 +7,21 @@ from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
 
 # Импортируем репозитории
-from apps.common.database.repositories.ORM.inventory_repo import InventoryRepo
-from apps.common.database.repositories.ORM.skill_repo import SkillProgressRepo
-from apps.common.database.repositories.ORM.world_repo import WorldRepoORM
+from apps.common.database import InventoryRepo
+from backend.database.postgres.repositories.skill_repo import SkillProgressRepo
+from apps.common.database import WorldRepoORM
 from apps.common.schemas_dto.core_response_dto import CoreResponseDTO, GameStateHeader
-from apps.common.schemas_dto.game_state_enum import GameState
-from apps.common.schemas_dto.monster_dto import GeneratedMonsterDTO
+from apps.common.schemas_dto.game_state_enum import CoreDomain
+from common.schemas.monster_dto import GeneratedMonsterDTO
 
 # Импортируем базы данных предметов для генерации
-from apps.game_core.resources.game_data.items.bases import BASES_DB
-from apps.game_core.system.factories.monster.encounter_pool_service import EncounterPoolService
+from backend.resources.game_data.items.bases import BASES_DB
+from backend.domains.internal_systems.factories import EncounterPoolService
 
 from .base_handler import BaseScenarioHandler
 
 if TYPE_CHECKING:
-    from apps.game_core.system.dispatcher.system_dispatcher import CoreRouter
+    from backend.domains.internal_systems.dispatcher import SystemDispatcher
 
 # Список точек выхода из туториала (окрестности Хаба 52_52, радиус ~6 клеток)
 TUTORIAL_EXIT_LOCATIONS = [
@@ -103,7 +103,7 @@ class TutorialScenarioHandler(BaseScenarioHandler):
         log.info(f"TutorialHandler | Start char={char_id} session={session_id}")
         return context
 
-    async def on_finalize(self, char_id: int, context: dict[str, Any], router: "CoreRouter") -> CoreResponseDTO:
+    async def on_finalize(self, char_id: int, context: dict[str, Any], router: "SystemDispatcher") -> CoreResponseDTO:
         """Финальная выдача наград и запуск боя."""
         log.info(f"TutorialHandler | Finalizing char={char_id}")
 
@@ -132,8 +132,8 @@ class TutorialScenarioHandler(BaseScenarioHandler):
         await self.am.update_account_fields(
             char_id,
             {
-                "state": GameState.COMBAT,
-                "prev_state": GameState.EXPLORATION,
+                "state": CoreDomain.COMBAT,
+                "prev_state": CoreDomain.EXPLORATION,
                 "location_id": target_exit_loc,
                 "prev_location_id": target_exit_loc,
             },
@@ -147,7 +147,7 @@ class TutorialScenarioHandler(BaseScenarioHandler):
         # 6. ПЕРЕХОД В БОЙ (Через Router)
         # Передаем DTO монстра в контекст
         payload = await router.get_initial_view(
-            target_state=GameState.COMBAT,
+            target_state=CoreDomain.COMBAT,
             char_id=char_id,
             session=self.db,
             action="initialize",
@@ -158,7 +158,7 @@ class TutorialScenarioHandler(BaseScenarioHandler):
             },
         )
 
-        return CoreResponseDTO(header=GameStateHeader(current_state=GameState.COMBAT), payload=payload)
+        return CoreResponseDTO(header=GameStateHeader(current_state=CoreDomain.COMBAT), payload=payload)
 
     async def _find_tutorial_monster(self, target_loc: str) -> GeneratedMonsterDTO | None:
         """

@@ -13,9 +13,9 @@
     *   **Key Features:** Атомарная регистрация ходов (Lua), пакетная загрузка контекста, управление очередями, Hot-Join.
 
 ### 👤 Account & Session
-*   **AccountManager** *(Docs Pending)*
-    *   **Role:** Управление состоянием игрока (State FSM) и сессионными данными.
-    *   **Key Features:** Переключение режимов (Exploration <-> Combat), хранение временных данных UI.
+*   [**AccountManager**](manager/Account_Manager.md)
+    *   **Role:** Управление игровыми сессиями персонажей (`ac:{char_id}`) и кэшем лобби.
+    *   **Key Features:** RedisJSON для точечных обновлений (Bio, Stats, Attributes, Sessions, State, Location), Cache-Aside для Lobby.
 
 ### 🌍 World & Exploration
 *   **WorldManager** *(Docs Pending)*

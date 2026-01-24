@@ -5,13 +5,11 @@ from pathlib import Path
 # Добавляем корень проекта в sys.path
 sys.path.append(str(Path(__file__).parent.parent))
 
+# Импортируем модели, чтобы они были в metadata
+from apps.common.database import create_db_tables, get_async_session
 from loguru import logger as log
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-
-# Импортируем модели, чтобы они были в metadata
-from apps.common.database.model_orm import *  # noqa: F403
-from apps.common.database.session import create_db_tables, get_async_session
 
 
 async def reset_character_tables():

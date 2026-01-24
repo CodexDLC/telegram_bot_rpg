@@ -9,7 +9,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from apps.common.database.model_orm.skill import SkillProgressState
+from backend.database.postgres.models.skill import SkillProgressState
 
 
 class SkillProgressDTO(BaseModel):

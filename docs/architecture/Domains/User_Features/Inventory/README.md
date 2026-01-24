@@ -13,7 +13,7 @@
 Обзор компонентов, принципы Redis-First и Dirty Flags.
 
 ### 📂 [API (Gateway)](./API/Gateway.md)
-Входные точки для CoreRouter и FastAPI.
+Входные точки для SystemDispatcher и FastAPI.
 
 ### 📂 [Orchestrator (Session)](./Orchestrator/Session_Manager.md)
 Управление Redis-сессией, кэширование и сохранение.

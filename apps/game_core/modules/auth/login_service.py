@@ -4,11 +4,10 @@ from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.database.repositories import get_character_repo
-from apps.common.schemas_dto.auth_dto import GameStage
-from apps.common.schemas_dto.game_state_enum import GameState
-from apps.common.services.redis.manager.account_manager import AccountManager
-from apps.common.services.redis.redis_fields import AccountFields as Af
+from backend.database.postgres.repositories import get_character_repo
+from apps.common.schemas_dto.game_state_enum import CoreDomain
+from backend.database.redis.manager.account_manager import AccountManager
+from backend.database.redis.redis_fields import AccountFields as Af
 
 
 class LoginService:
@@ -50,7 +49,16 @@ class LoginService:
             None в случае критической ошибки.
         """
         game_stage = await self._check_sql_game_stage(session)
-        if game_stage != GameStage.IN_GAME:
+
+        # Проверяем, находится ли игрок в одном из игровых состояний
+        # Если нет (например, ONBOARDING), возвращаем стадию для обработки в UI
+        if game_stage not in (
+            CoreDomain.EXPLORATION,
+            CoreDomain.INVENTORY,
+            CoreDomain.COMBAT,
+            CoreDomain.LOBBY,
+            "in_game",
+        ):
             log.info(f"LoginService | event=redirect_to_stage char_id={self.char_id} stage='{game_stage}'")
             return game_stage
 
@@ -92,16 +100,16 @@ class LoginService:
         if await self.account_manager.account_exists(self.char_id):
             data = await self.account_manager.get_account_data(self.char_id)
             if data:
-                state = data.get(Af.STATE, GameState.EXPLORATION)
+                state = data.get(Af.STATE, CoreDomain.EXPLORATION)
                 loc_id = data.get(Af.LOCATION_ID, "52_52")
 
                 # Миграция старого стейта 'world' -> 'exploration'
                 if state == "world":
                     log.warning(
-                        f"LoginService | event=state_migration char_id={self.char_id} old='world' new='{GameState.EXPLORATION}'"
+                        f"LoginService | event=state_migration char_id={self.char_id} old='world' new='{CoreDomain.EXPLORATION}'"
                     )
-                    state = GameState.EXPLORATION
-                    await self.account_manager.update_account_fields(self.char_id, {Af.STATE: GameState.EXPLORATION})
+                    state = CoreDomain.EXPLORATION
+                    await self.account_manager.update_account_fields(self.char_id, {Af.STATE: CoreDomain.EXPLORATION})
 
                 # Временная миграция для исправления неверного ID локации
                 if loc_id == "town_hall_in":
@@ -133,13 +141,13 @@ class LoginService:
         """
         start_loc_id = "52_52"
         initial_data = {
-            Af.STATE: GameState.EXPLORATION,
+            Af.STATE: CoreDomain.EXPLORATION,
             Af.LOCATION_ID: start_loc_id,
-            Af.PREV_STATE: GameState.EXPLORATION,
+            Af.PREV_STATE: CoreDomain.EXPLORATION,
             Af.PREV_LOCATION_ID: start_loc_id,
         }
         await self.account_manager.create_account(self.char_id, initial_data)
         log.info(
-            f"LoginService | event=redis_session_created char_id={self.char_id} state='{GameState.EXPLORATION}' location='{start_loc_id}'"
+            f"LoginService | event=redis_session_created char_id={self.char_id} state='{CoreDomain.EXPLORATION}' location='{start_loc_id}'"
         )
-        return GameState.EXPLORATION, start_loc_id
+        return CoreDomain.EXPLORATION, start_loc_id

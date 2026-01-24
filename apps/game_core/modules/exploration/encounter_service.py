@@ -5,9 +5,9 @@ from typing import Any
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.database.model_orm.monster import GeneratedClanORM
+from apps.common.database import GeneratedClanORM
 from apps.common.schemas_dto.exploration_dto import DetectionStatus, EncounterDTO, EncounterType
-from apps.game_core.system.factories.monster.encounter_pool_service import EncounterPoolService
+from backend.domains.internal_systems.factories import EncounterPoolService
 
 
 class EncounterService:
