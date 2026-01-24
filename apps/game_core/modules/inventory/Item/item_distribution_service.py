@@ -2,10 +2,10 @@ from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.core.settings import settings
-from apps.common.database.repositories import get_inventory_repo
+from backend.database.postgres.repositories import get_inventory_repo
 from apps.common.schemas_dto import InventoryItemDTO
 from apps.game_core.modules.inventory.Item.item_assembler import ItemAssembler
-from apps.game_core.resources.game_data.items import get_random_base
+from backend.resources.game_data.items import get_random_base
 
 
 class ItemDistributionService:

@@ -12,12 +12,23 @@ from loguru import logger as log
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from apps.common.database.model_orm.base import Base  # noqa: E402
-from apps.common.database.model_orm.world import WorldRegion, WorldZone  # noqa: E402
-from apps.common.database.repositories.ORM.world_repo import WorldRepoORM  # noqa: E402
-from apps.common.database.session import async_engine, async_session_factory  # noqa: E402
-from apps.game_core.resources.game_data.graf_data_world.start_vilage import STATIC_LOCATIONS  # noqa: E402
-from apps.game_core.resources.game_data.graf_data_world.world_config import (  # noqa: E402
+from apps.common.database import (  # noqa: E402  # noqa: E402
+    WorldRegion,
+    WorldRepoORM,  # noqa: E402
+    WorldZone,
+    async_engine,
+    async_session_factory,
+)
+
+from backend.database.model_orm import Base  # noqa: E402
+from backend.domains.internal_systems.factories import (
+    ContentGenerationService,  # noqa: E402
+    ZoneOrchestrator,  # noqa: E402
+)
+from backend.domains.internal_systems.factories.monster.clan_factory import ClanFactory  # noqa: E402
+from backend.domains.internal_systems.factories.world.gen_utils.path_finder import PathFinder  # noqa: E402
+from backend.domains.internal_systems.factories.world.threat_service import ThreatService  # noqa: E402
+from backend.resources.game_data import (  # noqa: E402
     BIOME_DEFINITIONS,
     HUB_CENTER,
     REGION_ROWS,
@@ -27,11 +38,7 @@ from apps.game_core.resources.game_data.graf_data_world.world_config import (  #
     ZONE_SIZE,
     TerrainMeta,
 )
-from apps.game_core.system.factories.monster.clan_factory import ClanFactory  # noqa: E402
-from apps.game_core.system.factories.world.content_gen_service import ContentGenerationService  # noqa: E402
-from apps.game_core.system.factories.world.gen_utils.path_finder import PathFinder  # noqa: E402
-from apps.game_core.system.factories.world.threat_service import ThreatService  # noqa: E402
-from apps.game_core.system.factories.world.zone_orchestrator import ZoneOrchestrator  # noqa: E402
+from backend.resources.game_data.graf_data_world.start_vilage import STATIC_LOCATIONS  # noqa: E402
 
 
 class WorldGenerator:

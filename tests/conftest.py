@@ -1,13 +1,12 @@
 from contextlib import suppress
 
 import pytest
+from apps.common.core.container import AppContainer
+from apps.common.core.settings import settings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from apps.common.core.container import AppContainer
-from apps.common.core.settings import settings
-from apps.common.database.model_orm import *  # noqa: F403
-from apps.common.database.model_orm.base import Base
+from backend.database.model_orm import Base
 
 TEST_DB_URL = settings.sqlalchemy_test_database_url
 

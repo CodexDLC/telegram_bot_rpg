@@ -16,7 +16,8 @@ sqlalchemy~=2.0.44
 # --- Хранилище состояний (Redis) ---
 # Асинхронный драйвер для Redis.
 # Aiogram будет использовать его для FSM (хранения состояний игрока)
-redis~=7.0.1
+# Downgraded to 5.x because arq requires redis < 6
+redis~=5.0.1
 
 # --- LLM Провайдеры ---
 # Клиент для API Google (Gemini)
@@ -35,3 +36,5 @@ streamlit~=1.52.1
 pandas~=2.3.3
 arq~=0.26.3
 plotly~=6.5.0
+fastapi~=0.128.0
+httpx~=0.28.1

@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.database.repositories import (
+from backend.database.postgres.repositories import (
     get_character_repo,
     get_character_stats_repo,
     get_skill_progress_repo,

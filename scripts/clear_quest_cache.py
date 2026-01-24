@@ -5,11 +5,11 @@ from pathlib import Path
 # Добавляем корень проекта в sys.path
 sys.path.append(str(Path(__file__).parent.parent))
 
+from apps.common.core.settings import settings
 from loguru import logger as log
 from redis.asyncio import Redis
 
-from apps.common.core.settings import settings
-from apps.common.services.redis.redis_service import RedisService
+from backend.database.redis import RedisService
 
 
 async def main():

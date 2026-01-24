@@ -19,8 +19,8 @@
 ## 2. Usage
 
 ```python
-from apps.common.services.gemini_service.gemini_service import gemini_answer
-from apps.common.resources.llm_data.mode_preset import ChatMode
+from common.services.gemini_service import gemini_answer
+from common.resources.llm_data.mode_preset import ChatMode
 
 # Генерация описания локации
 description = await gemini_answer(

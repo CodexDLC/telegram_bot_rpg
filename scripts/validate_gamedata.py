@@ -9,9 +9,12 @@ sys.path.insert(0, project_root)
 
 # --- MOCKS & IMPORTS SETUP ---
 
-from apps.game_core.resources.game_data.monsters import ALL_FAMILIES_RAW, get_family_config  # noqa: E402
-from apps.game_core.resources.game_data.monsters.skills_todo_list import SKILL_MAPPING  # noqa: E402
-from apps.game_core.resources.game_data.monsters.spawn_config import BIOME_FAMILIES, TIER_AVAILABILITY  # noqa: E402
+from backend.resources.game_data import (  # noqa: E402
+    ALL_FAMILIES_RAW,
+    SKILL_MAPPING,  # noqa: E402
+    get_family_config,
+)
+from backend.resources.game_data.monsters.spawn_config import BIOME_FAMILIES, TIER_AVAILABILITY  # noqa: E402
 
 
 def validate_monsters():

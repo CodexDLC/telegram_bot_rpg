@@ -3,10 +3,10 @@ import random
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.common.database.repositories import get_inventory_repo, get_wallet_repo
+from backend.database.postgres.repositories import get_inventory_repo, get_wallet_repo
 from apps.common.schemas_dto import ItemType
 from apps.game_core.modules.inventory.inventory_logic_helper import InventoryLogicHelpers
-from apps.game_core.resources.game_data.items import get_bundle_by_id
+from backend.resources.game_data.items import get_bundle_by_id
 
 # Настройки экономики
 BASE_DUST_PER_TIER = 10

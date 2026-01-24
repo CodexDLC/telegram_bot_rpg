@@ -33,6 +33,9 @@ exclude = [
     "dist",
     "build",
     "migrations",
+    "apps",    # Игнорируем Legacy код
+    "tools",   # Временно игнорируем инструменты
+    "scripts", # Временно игнорируем скрипты
 ]
 
 [tool.ruff.lint]
@@ -59,9 +62,9 @@ unfixable = []
 
 # --- Настройки сортировки импортов (Isort) ---
 [tool.ruff.lint.isort]
-# Я говорю Ruff, что папки 'app' и 'database' — это МОЙ код (First Party).
+# Я говорю Ruff, что папки 'backend', 'game_client' и 'common' — это МОЙ код (First Party).
 # Он будет отделять их от библиотек пустой строкой. Красота.
-known-first-party = ["app", "database"]
+known-first-party = ["backend", "game_client", "common"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 # --- Настройки форматтера (замена Black) ---
@@ -79,8 +82,11 @@ line-ending = "auto"
 # Мой строгий надзиратель. Не дает мне передавать строки туда, где нужны числа.
 # ==============================================================================
 [tool.mypy]
-# Убрал "tests" из списка проверяемых файлов
-files = ["apps", "main.py", "scripts", "tools"]
+# Проверяем только новый код
+files = ["backend", "game_client/telegram_bot", "common", "main.py"]
+# Исключаем Legacy явно (на всякий случай)
+exclude = ["apps", "tools", "scripts"]
+
 # Отключаем строгий режим (пока что)
 strict = false
 
@@ -115,3 +121,8 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "class"
 addopts = "-v"
+markers = [
+    "combat: Tests for Combat System (RBC)",
+    "integration: Integration tests (require DB/Redis)",
+    "unit: Unit tests (fast, no I/O)",
+]

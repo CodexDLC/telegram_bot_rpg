@@ -5,12 +5,12 @@ from typing import Any
 
 from loguru import logger as log
 
-from apps.common.database.db_contract.i_scenario_repo import IScenarioRepository
-from apps.common.schemas_dto.game_state_enum import GameState
-from apps.common.services.redis.manager.account_manager import AccountManager
-from apps.common.services.redis.redis_fields import AccountFields as Af
-from apps.common.services.redis.redis_key import RedisKeys
-from apps.common.services.redis.redis_service import RedisService
+from backend.database.db_contract.i_scenario_repo import IScenarioRepository
+from apps.common.schemas_dto.game_state_enum import CoreDomain
+from backend.database.redis.manager.account_manager import AccountManager
+from backend.database.redis.redis_fields import AccountFields as Af
+from backend.database.redis.redis_key import RedisKeys
+from backend.database.redis import RedisService
 
 
 class ScenarioManager:
@@ -256,13 +256,13 @@ class ScenarioManager:
         """Переводит аккаунт в режим сценария."""
         await self.account_manager.update_account_fields(
             char_id,
-            {Af.STATE: GameState.SCENARIO, Af.SCENARIO_SESSION_ID: session_id, Af.ACTIVE_QUEST_KEY: quest_key},
+            {Af.STATE: CoreDomain.SCENARIO, Af.SCENARIO_SESSION_ID: session_id, Af.ACTIVE_QUEST_KEY: quest_key},
         )
 
     async def clear_account_state(self, char_id: int):
         """Возвращает аккаунт в мир."""
         await self.account_manager.update_account_fields(
-            char_id, {Af.STATE: GameState.EXPLORATION, Af.SCENARIO_SESSION_ID: "", Af.ACTIVE_QUEST_KEY: ""}
+            char_id, {Af.STATE: CoreDomain.EXPLORATION, Af.SCENARIO_SESSION_ID: "", Af.ACTIVE_QUEST_KEY: ""}
         )
 
     async def backup_progress(self, char_id: int, quest_key: str, node_key: str, context: dict, session_id: uuid.UUID):

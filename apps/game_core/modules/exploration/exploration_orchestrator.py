@@ -1,10 +1,10 @@
 # apps/game_core/modules/exploration/exploration_orchestrator.py
 from typing import Any
 
-from apps.common.schemas_dto.auth_dto import GameStage
 from apps.common.schemas_dto.exploration_dto import EncounterDTO, WorldNavigationDTO
-from apps.common.services.redis.manager.account_manager import AccountManager
-from apps.common.services.redis.manager.world_manager import WorldManager
+from apps.common.schemas_dto.game_state_enum import CoreDomain
+from backend.database.redis.manager.account_manager import AccountManager
+from backend.database.redis import WorldManager
 from apps.game_core.modules.exploration.encounter_service import EncounterService
 from apps.game_core.modules.exploration.game_world_service import GameWorldService
 from apps.game_core.modules.exploration.movement_service import MovementService
@@ -43,7 +43,7 @@ class ExplorationOrchestrator:
         encounter = await self.encounter_svc.calculate_encounter(char_id, nav_data, target_loc_id)
 
         if encounter:
-            await self.account_mgr.update_account_fields(char_id, {"game_stage": GameStage.EXPLORATION_PENDING})
+            await self.account_mgr.update_account_fields(char_id, {"game_stage": CoreDomain.EXPLORATION})
             encounter.metadata["travel_time"] = travel_time
             return encounter
 

@@ -9,8 +9,8 @@ import streamlit as st
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
 
-from apps.common.database.repositories import get_monster_repo
-from apps.game_core.resources.game_data.items.bases import BASES_DB
+from backend.database.postgres.repositories import get_monster_repo
+from backend.resources.game_data.items.bases import BASES_DB
 
 # Заменили импорт
 from tools.admin_dashboard.ui_core import (

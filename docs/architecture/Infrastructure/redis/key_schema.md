@@ -2,7 +2,7 @@
 
 ⬅️ [Назад](README.md)
 
-> **Source:** `apps/common/services/redis/redis_key.py`
+> **Source:** `backend/database/redis/redis_key.py`
 
 Этот документ служит центральным реестром всех неймспейсов Redis, чтобы избежать коллизий.
 
@@ -15,11 +15,11 @@
 *   `...:q:actions` (List) — Очередь задач для воркера.
 *   `...:log` (List) — Логи боя.
 
-## 2. Session Data
-**Prefix:** `*:session:{cid}:*`
-*   `scen:session:{cid}:data` (Hash) — Данные сценария.
-*   `inv:session:{cid}:data` (Hash) — Данные инвентаря.
-*   `lobby_session:{uid}` (JSON) — Данные лобби.
+## 2. Account & Session Data
+**Prefix:** `ac:{cid}` and `lobby:user:{uid}`
+*   `ac:{cid}` (RedisJSON) — Игровая сессия персонажа (AccountContextDTO).
+    *   Contains: `state`, `bio`, `location`, `stats`, `attributes`, `sessions`, `skills`
+*   `lobby:user:{uid}` (String/JSON) — Кэш списка персонажей (TTL 600s).
 
 ## 3. World & Locations
 **Prefix:** `world:*`
@@ -35,7 +35,11 @@
 **Prefix:** `player:*`
 *   `player:status:{cid}` (String) — Текущий статус (Idle, Combat, Trade).
 
-## 6. Legacy (To Be Removed)
+## 6. Scenario & Inventory Sessions
+**Prefix:** `*:session:{cid}:*`
+*   `scen:session:{cid}:data` (Hash) — Данные сценария.
+*   `inv:session:{cid}:data` (Hash) — Данные инвентаря.
+
+## 7. Legacy (To Be Removed)
 *   `combat:sess:*` — Старая боевая система.
-*   `ac:{cid}` — Старый аккаунт.
 *   `s_d:*`, `g_d:*` — Старые данжи.
