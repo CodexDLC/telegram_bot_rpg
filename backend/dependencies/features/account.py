@@ -2,9 +2,8 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from backend.database.redis import RedisService
 from backend.database.redis.manager.account_manager import AccountManager
-from backend.dependencies.base import DbSessionDep, RedisDep
+from backend.dependencies.base import DbSessionDep, RedisContainerDep
 
 # Импортируем правильную зависимость диспетчера
 from backend.dependencies.internal.dispatcher import SystemDispatcherDep
@@ -22,20 +21,11 @@ from backend.domains.user_features.account.services.onboarding_service import On
 # Services
 from backend.domains.user_features.account.services.registration_service import RegistrationService
 
-
-# --- Helper: RedisService ---
-async def get_redis_service(redis: RedisDep) -> RedisService:
-    return RedisService(redis)
-
-
-RedisServiceDep = Annotated[RedisService, Depends(get_redis_service)]
-
-
 # --- 0. Core Account Services (Managers) ---
 
 
-async def get_account_manager(redis_service: RedisServiceDep) -> AccountManager:
-    return AccountManager(redis_service)
+async def get_account_manager(container: RedisContainerDep) -> AccountManager:
+    return container.account
 
 
 AccountManagerDep = Annotated[AccountManager, Depends(get_account_manager)]

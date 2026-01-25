@@ -8,11 +8,11 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger as log
 
 from game_client.bot.resources.keyboards.reply_kb import RESTART_BUTTON_TEXT, SETTINGS_BUTTON_TEXT
-from game_client.telegram_bot.common.resources.formatters import MessageInfoFormatter
-from game_client.telegram_bot.common.ui.view_sender import ViewSender
 from game_client.telegram_bot.core.container import BotContainer
 from game_client.telegram_bot.features.commands.system.orchestrator import StartBotOrchestrator
 from game_client.telegram_bot.features.commands.system.ui import StartUI
+from game_client.telegram_bot.resources.formatters import MessageInfoFormatter
+from game_client.telegram_bot.services.sender.view_sender import ViewSender
 
 router = Router(name="commands_router")
 

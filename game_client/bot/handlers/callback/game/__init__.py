@@ -6,7 +6,7 @@ from aiogram import Router
 # from .combats import combat_router
 # from .exploration import exploration_router_group
 # from .hub_entry import router as hub_entry_router
-from .scenario_handler import router as scenario_handler_router
+from game_client.telegram_bot.features.scenario.handlers.scenario_handler import router as scenario_handler_router
 
 game_router_group = Router(name="game_group")
 game_router_group.include_routers(

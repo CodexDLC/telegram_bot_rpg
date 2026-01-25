@@ -51,6 +51,33 @@ class AccountManager:
         key = Rk.get_account_key(char_id)
         await self.redis_service.delete_key(key)
 
+    async def get_account_field(self, char_id: int, field_path: str) -> Any:
+        """
+        Универсальный геттер для получения поля по JSONPath.
+        Пример: field_path="$.bio.name"
+        """
+        key = Rk.get_account_key(char_id)
+        # Если путь не начинается с $., добавляем
+        if not field_path.startswith("$"):
+            field_path = f"$.{field_path}" if not field_path.startswith(".") else f"${field_path}"
+
+        res = await self.redis_service.json_get(key, field_path)
+        return res[0] if res else None
+
+    async def update_account_fields(self, char_id: int, updates: dict[str, Any]) -> None:
+        """
+        Массовое обновление полей.
+        updates: {"stats": {...}, "tokens": {...}, "state": "SCENARIO"}
+        """
+        key = Rk.get_account_key(char_id)
+
+        def _update_batch(pipe: Pipeline) -> None:
+            for field, value in updates.items():
+                path = f"$.{field}"
+                pipe.json().set(key, path, value)  # type: ignore
+
+        await self.redis_service.execute_pipeline(_update_batch)
+
     # --- Bio ---
 
     async def get_bio(self, char_id: int) -> dict[str, Any] | None:
@@ -120,6 +147,50 @@ class AccountManager:
         key = Rk.get_account_key(char_id)
         await self.redis_service.json_set(key, "$.sessions.inventory_id", session_id)
 
+    # --- Scenario Integration ---
+
+    async def enter_scenario(self, char_id: int, session_id: str, quest_key: str) -> None:
+        """
+        Атомарный вход в сценарий.
+        Устанавливает state, session_id и active_quest.
+        """
+        key = Rk.get_account_key(char_id)
+
+        # 1. Получаем текущий стейт для истории
+        current_state = await self.get_state(char_id)
+
+        def _enter_batch(pipe: Pipeline) -> None:
+            # Сохраняем историю
+            if current_state:
+                pipe.json().set(key, "$.prev_state", current_state)  # type: ignore
+
+            # Устанавливаем новый контекст
+            pipe.json().set(key, "$.state", "SCENARIO")  # type: ignore
+            pipe.json().set(key, "$.sessions.scenario_id", session_id)  # type: ignore
+            pipe.json().set(key, "$.active_quest", quest_key)  # type: ignore
+
+        await self.redis_service.execute_pipeline(_enter_batch)
+
+    async def leave_scenario(self, char_id: int) -> None:
+        """
+        Атомарный выход из сценария.
+        Сбрасывает state в EXPLORATION и очищает сессию.
+        """
+        key = Rk.get_account_key(char_id)
+
+        # 1. Получаем текущий стейт (SCENARIO)
+        current_state = await self.get_state(char_id)
+
+        def _leave_batch(pipe: Pipeline) -> None:
+            if current_state:
+                pipe.json().set(key, "$.prev_state", current_state)  # type: ignore
+
+            pipe.json().set(key, "$.state", "EXPLORATION")  # type: ignore
+            pipe.json().set(key, "$.sessions.scenario_id", None)  # type: ignore
+            pipe.json().set(key, "$.active_quest", None)  # type: ignore
+
+        await self.redis_service.execute_pipeline(_leave_batch)
+
     # --- State & Location ---
 
     async def get_state(self, char_id: int) -> str | None:
@@ -130,6 +201,20 @@ class AccountManager:
     async def set_state(self, char_id: int, state: str) -> None:
         key = Rk.get_account_key(char_id)
         await self.redis_service.json_set(key, "$.state", state)
+
+    async def transition_to_state(self, char_id: int, state: str) -> None:
+        """
+        Меняет стейт аккаунта с сохранением истории (prev_state).
+        """
+        key = Rk.get_account_key(char_id)
+        current_state = await self.get_state(char_id)
+
+        def _transition_batch(pipe: Pipeline) -> None:
+            if current_state:
+                pipe.json().set(key, "$.prev_state", current_state)  # type: ignore
+            pipe.json().set(key, "$.state", state)  # type: ignore
+
+        await self.redis_service.execute_pipeline(_transition_batch)
 
     async def get_location(self, char_id: int) -> dict[str, Any] | None:
         key = Rk.get_account_key(char_id)

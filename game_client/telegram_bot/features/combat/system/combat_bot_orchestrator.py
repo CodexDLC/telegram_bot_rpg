@@ -4,12 +4,10 @@ from typing import Any
 
 from aiogram.types import User
 
+from common.schemas.combat import CombatDashboardDTO, CombatLogDTO
 from common.schemas.enums import CoreDomain
-from game_client.telegram_bot.common.dto.view_dto import UnifiedViewDTO
-from game_client.telegram_bot.common.schemas.combat import CombatDashboardDTO, CombatLogDTO
-from game_client.telegram_bot.common.services.error.logic.orchestrator import ErrorBotOrchestrator
-from game_client.telegram_bot.common.services.error.ui.texts import ErrorKeys
-from game_client.telegram_bot.common.ui.base_orchestrator import BaseBotOrchestrator
+from game_client.telegram_bot.base.base_orchestrator import BaseBotOrchestrator
+from game_client.telegram_bot.base.view_dto import UnifiedViewDTO
 from game_client.telegram_bot.features.combat.client import CombatClient
 from game_client.telegram_bot.features.combat.resources.keyboards.combat_callback import (
     CombatControlCallback,
@@ -20,6 +18,8 @@ from game_client.telegram_bot.features.combat.system.combat_state_manager import
 from game_client.telegram_bot.features.combat.system.components.content_ui import CombatContentUI
 from game_client.telegram_bot.features.combat.system.components.flow_ui import CombatFlowUI
 from game_client.telegram_bot.features.combat.system.components.menu_ui import CombatMenuUI
+from game_client.telegram_bot.services.error.logic.orchestrator import ErrorBotOrchestrator
+from game_client.telegram_bot.services.error.ui.texts import ErrorKeys
 
 
 class CombatBotOrchestrator(BaseBotOrchestrator):

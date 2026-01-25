@@ -129,6 +129,7 @@ class AccountSessionService:
             sessions=SessionsDict(
                 combat_id=character.active_sessions.get("combat_id") if character.active_sessions else None,
                 inventory_id=character.active_sessions.get("inventory_id") if character.active_sessions else None,
+                scenario_id=character.active_sessions.get("scenario_id") if character.active_sessions else None,
             ),
             skills={},
         )

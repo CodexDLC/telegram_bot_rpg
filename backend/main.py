@@ -9,8 +9,9 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 from backend.core.config import settings
-from backend.core.database import async_engine, run_alembic_migrations
+from backend.core.database import async_engine, get_session_context, run_alembic_migrations
 from backend.core.exceptions import BaseAPIException, api_exception_handler
+from backend.domains.user_features.scenario.resources.loaders.scenario_loader import ScenarioLoader
 from backend.router import api_router, tags_metadata
 from common.core.logger import setup_logging
 from common.schemas.errors import ErrorResponse
@@ -33,6 +34,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await run_alembic_migrations()
     else:
         logger.warning("⚠️ AUTO_MIGRATE=False: Skipping migrations. Run 'alembic upgrade head' manually.")
+
+    # --- SCENARIO LOADER ---
+    logger.info("Loading scenarios...")
+    try:
+        async with get_session_context() as session:
+            loader = ScenarioLoader(session)
+            await loader.load_all_scenarios()
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Failed to load scenarios on startup: {e}")
 
     yield
 

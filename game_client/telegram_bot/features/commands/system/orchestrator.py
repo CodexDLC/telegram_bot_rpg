@@ -1,8 +1,8 @@
 from aiogram.types import User
 
 from apps.common.schemas_dto.user_dto import UserUpsertDTO
-from game_client.telegram_bot.common.dto.view_dto import UnifiedViewDTO
-from game_client.telegram_bot.common.ui.base_orchestrator import BaseBotOrchestrator
+from game_client.telegram_bot.base.base_orchestrator import BaseBotOrchestrator
+from game_client.telegram_bot.base.view_dto import UnifiedViewDTO
 from game_client.telegram_bot.features.commands.client import AuthClient
 from game_client.telegram_bot.features.commands.system.ui import StartUI
 

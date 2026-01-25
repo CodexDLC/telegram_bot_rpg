@@ -6,9 +6,6 @@ from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.schemas.enums import CoreDomain
-from game_client.telegram_bot.common.ui.animation_service import UIAnimationService
-from game_client.telegram_bot.common.ui.director import GameDirector
-from game_client.telegram_bot.common.ui.view_sender import ViewSender
 from game_client.telegram_bot.core.container import BotContainer
 from game_client.telegram_bot.features.combat.resources.keyboards.combat_callback import (
     CombatControlCallback,
@@ -17,6 +14,9 @@ from game_client.telegram_bot.features.combat.resources.keyboards.combat_callbac
 )
 from game_client.telegram_bot.features.combat.system.combat_bot_orchestrator import CombatBotOrchestrator
 from game_client.telegram_bot.features.combat.system.combat_state_manager import CombatStateManager
+from game_client.telegram_bot.services.animation.animation_service import UIAnimationService
+from game_client.telegram_bot.services.director.director import GameDirector
+from game_client.telegram_bot.services.sender.view_sender import ViewSender
 
 router = Router(name="combat_handlers")
 

@@ -1,1 +1,0 @@
-# DEPRECATED: Moved to backend/domains/user_features/account/gateway/onboarding_gateway.py

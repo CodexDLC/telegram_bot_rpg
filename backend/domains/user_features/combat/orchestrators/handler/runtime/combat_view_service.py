@@ -9,7 +9,7 @@ from collections import defaultdict
 from backend.domains.user_features.combat.combat_engine.mechanics.feint_service import FeintService
 from backend.domains.user_features.combat.dto.combat_actor_dto import ActorSnapshot
 from backend.domains.user_features.combat.dto.combat_session_dto import BattleContext
-from game_client.telegram_bot.common.schemas.combat import (
+from common.schemas.combat import (
     ActorFullInfo,
     ActorShortInfo,
     CombatDashboardDTO,

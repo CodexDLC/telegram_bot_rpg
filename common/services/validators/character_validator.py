@@ -2,7 +2,7 @@ import re
 
 from loguru import logger as log
 
-from common.resources import FORBIDDEN_WORDS
+from common.resources.profanity_list import FORBIDDEN_WORDS
 
 # Константы выносим в начало для удобной настройки
 MIN_NAME_LENGTH = 3
