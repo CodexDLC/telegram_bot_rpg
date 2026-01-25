@@ -51,7 +51,10 @@ async def main() -> None:
     Основная функция запуска Telegram Bot.
     """
     # 1. Загрузка настроек
-    settings = BotSettings()
+    # Mypy ругался на отсутствие bot_token, но Pydantic Settings читает его из env.
+    # Чтобы успокоить mypy, можно использовать ignore или явно передать None (если поле Optional),
+    # но лучше просто подавить ошибку, так как мы знаем, что env загрузится.
+    settings = BotSettings()  # type: ignore[call-arg]
 
     # 2. Инициализация Redis
     redis_client = Redis.from_url(

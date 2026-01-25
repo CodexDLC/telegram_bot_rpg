@@ -20,7 +20,8 @@ class ScenarioBotOrchestrator(BaseBotOrchestrator):
     """
 
     def __init__(self, client: ScenarioClient):
-        super().__init__(expected_state=GameState.scenario)
+        # Исправлено: передаем строковое значение стейта, а не объект State
+        super().__init__(expected_state=str(GameState.scenario.state))
         self._client = client
         self._ui_service = ScenarioUIService()
         self._error_orchestrator = ErrorBotOrchestrator()
