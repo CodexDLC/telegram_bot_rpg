@@ -36,6 +36,7 @@ exclude = [
     "apps",    # Игнорируем Legacy код
     "tools",   # Временно игнорируем инструменты
     "scripts", # Временно игнорируем скрипты
+    "game_client/bot", # Игнорируем старый клиент бота
 ]
 
 [tool.ruff.lint]
@@ -85,7 +86,7 @@ line-ending = "auto"
 # Проверяем только новый код
 files = ["backend", "game_client/telegram_bot", "common", "main.py"]
 # Исключаем Legacy явно (на всякий случай)
-exclude = ["apps", "tools", "scripts"]
+exclude = ["apps", "tools", "scripts", "game_client/bot"]
 
 # Отключаем строгий режим (пока что)
 strict = false
