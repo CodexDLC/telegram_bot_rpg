@@ -15,6 +15,7 @@ class CoreDomain(StrEnum):
     SCENARIO = "scenario"
     ONBOARDING = "onboarding"
     LOBBY = "lobby"
+    ARENA = "arena"
 
     # --- Служебные / Специфичные домены ---
     COMBAT_ENTRY = "combat_entry"  # Вход в бой, создание сессии

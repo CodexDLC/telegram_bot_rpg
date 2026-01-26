@@ -1,11 +1,12 @@
 import json
 from typing import Any
 
-from apps.common.database import WorldGrid, get_async_session
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
 
+from backend.database.postgres.models import WorldGrid
 from backend.database.postgres.repositories import get_world_repo
+from tests.conftest import get_async_session
 
 
 class WorldLoaderService:

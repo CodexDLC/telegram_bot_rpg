@@ -33,7 +33,9 @@ def main():
         print("🚀 Starting Backend API...")
         import uvicorn
 
-        uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")
+        # reload=False для стабильной работы Ctrl+C на Windows и ускорения старта
+        # Включите reload=True, если нужна авто-перезагрузка при изменении кода
+        uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=False, log_level="info")
 
     elif service == "bot":
         print("🤖 Starting Telegram Bot...")

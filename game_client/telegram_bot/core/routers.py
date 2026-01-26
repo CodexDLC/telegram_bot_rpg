@@ -8,6 +8,7 @@ from aiogram import Router
 
 # --- Account (Lobby, Onboarding) ---
 from game_client.telegram_bot.features.account import handlers as account_handlers
+from game_client.telegram_bot.features.arena.handlers.arena_handler import router as arena_router
 
 # --- Game Features ---
 from game_client.telegram_bot.features.combat.handlers.combat_handlers import router as combat_router
@@ -31,6 +32,7 @@ main_router.include_routers(
     account_handlers.router,
     # Game Features
     combat_router,
+    arena_router,
     scenario_router,
     # Common Services (последним чтобы не перехватывал текст раньше времени)
     common_fsm_router,

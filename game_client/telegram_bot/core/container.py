@@ -2,6 +2,9 @@ from redis.asyncio import Redis
 
 from game_client.telegram_bot.core.config import BotSettings
 from game_client.telegram_bot.features.account.client import AccountClient
+from game_client.telegram_bot.features.arena.client import ArenaClient
+from game_client.telegram_bot.features.arena.system.arena_bot_orchestrator import ArenaBotOrchestrator
+from game_client.telegram_bot.features.arena.system.arena_ui_service import ArenaUIService
 from game_client.telegram_bot.features.combat.client import CombatClient
 from game_client.telegram_bot.features.scenario.client import ScenarioClient
 
@@ -27,6 +30,14 @@ class BotContainer:
         self.scenario = ScenarioClient(
             base_url=settings.backend_api_url, api_key=settings.backend_api_key, timeout=settings.backend_api_timeout
         )
+        self.arena_client = ArenaClient(
+            base_url=settings.backend_api_url, api_key=settings.backend_api_key, timeout=settings.backend_api_timeout
+        )
+
+    @property
+    def arena(self) -> ArenaBotOrchestrator:
+        """Фабрика для ArenaBotOrchestrator"""
+        return ArenaBotOrchestrator(self.arena_client, ArenaUIService())
 
     async def shutdown(self):
         if self.redis_client:

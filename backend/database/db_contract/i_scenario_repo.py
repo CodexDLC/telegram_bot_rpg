@@ -16,6 +16,11 @@ class IScenarioRepository(ABC):
         """Получает глобальные настройки квеста, init_sync и export_sync."""
         pass
 
+    @abstractmethod
+    async def upsert_master(self, master_data: dict[str, Any]) -> None:
+        """Создает или обновляет мастер-запись квеста."""
+        pass
+
     # --- 2. Работа с Scenario_Nodes (Table B) ---
 
     @abstractmethod
@@ -31,6 +36,21 @@ class IScenarioRepository(ABC):
     @abstractmethod
     async def get_all_quest_nodes(self, quest_key: str) -> list[dict[str, Any]]:
         """Загружает все ноды квеста (используется для первичного кэширования в Redis)."""
+        pass
+
+    @abstractmethod
+    async def upsert_node(self, node_data: dict[str, Any]) -> None:
+        """Создает или обновляет ноду."""
+        pass
+
+    @abstractmethod
+    async def bulk_insert_nodes(self, nodes_data: list[dict[str, Any]]) -> None:
+        """Массовая вставка нод (оптимизация загрузки)."""
+        pass
+
+    @abstractmethod
+    async def delete_quest_nodes(self, quest_key: str) -> None:
+        """Удаляет все ноды квеста (для перезаливки)."""
         pass
 
     # --- 3. Работа с Character_Quest_State (Table C) ---

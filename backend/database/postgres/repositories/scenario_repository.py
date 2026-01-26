@@ -118,6 +118,28 @@ class ScenarioRepositoryORM(IScenarioRepository):
             )
             raise
 
+    async def bulk_insert_nodes(self, nodes_data: list[dict[str, Any]]) -> None:
+        """
+        Массовая вставка нод.
+        Предполагается, что старые ноды уже удалены (или это новые данные).
+        Использует ON CONFLICT DO NOTHING для безопасности.
+        """
+        if not nodes_data:
+            return
+
+        quest_key = nodes_data[0].get("quest_key", "unknown")
+        count = len(nodes_data)
+        log.debug(f"ScenarioRepositoryORM | action=bulk_insert_nodes quest='{quest_key}' count={count}")
+
+        stmt = insert(ScenarioNode).values(nodes_data)
+        stmt = stmt.on_conflict_do_nothing(constraint="uq_quest_node_key")
+
+        try:
+            await self.session.execute(stmt)
+        except SQLAlchemyError:
+            log.exception(f"ScenarioRepositoryORM | action=bulk_insert_nodes status=failed quest='{quest_key}'")
+            raise
+
     async def delete_quest_nodes(self, quest_key: str) -> None:
         """Удаляет все ноды квеста (для перезаливки)."""
         log.debug(f"ScenarioRepositoryORM | action=delete_quest_nodes quest='{quest_key}'")

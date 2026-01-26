@@ -45,6 +45,16 @@ class SessionsDict(TypedDict):
     scenario_id: str | None  # Добавил scenario_id, так как мы его используем
 
 
+class MetricsDict(TypedDict, total=False):
+    """Производные метрики персонажа (gear_score, arena_rating, etc.)."""
+
+    gear_score: int
+    arena_rating: int
+    arena_wins: int
+    arena_losses: int
+    win_streak: int
+
+
 class AccountContextDTO(BaseModel):
     """
     DTO для структуры ac:{char_id} в Redis.
@@ -57,6 +67,7 @@ class AccountContextDTO(BaseModel):
     stats: StatsDict
     attributes: AttributesDict
     sessions: SessionsDict
+    metrics: MetricsDict
 
     # Дополнительные поля (skills, etc.) можно добавить позже
     skills: dict[str, Any] = {}

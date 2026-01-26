@@ -1,4 +1,8 @@
-# Account Domain - Roadmap
+# 📂 Account Roadmap
+
+[⬅️ Назад: Account Domain](../README.md)
+
+---
 
 ## Текущий статус
 
@@ -37,93 +41,46 @@
   - `POST /account/onboarding/{char_id}/action`
   - `POST /account/lobby/{user_id}/characters/{char_id}/login`
 
+### ✅ Phase 3: Bot Client Migration
+**Цель:** Обновить Telegram Bot для использования новых сервисов.
+
+**HTTP Client / Gateway Access:**
+- [x] `AccountClient` (обертка над HTTP API)
+- [x] `StartBotOrchestrator`
+- [x] `LobbyOrchestrator`
+- [x] `OnboardingOrchestrator`
+- [x] Handlers & UI Components
+
+**Cleanup:**
+- [x] Удален легаси код (`apps/game_core/...`)
+
 ---
 
 ## TODO (Post-MVP)
 
-### Phase 3: Bot Client Migration
-
-**Цель:** Обновить Telegram Bot для использования новых сервисов.
-
-**HTTP Client / Gateway Access:**
-- [ ] `AccountClient` (обертка над HTTP API)
-  - [ ] `register_user`
-  - [ ] `initialize_lobby`
-  - [ ] `list_characters`, `create_character`, `delete_character`
-  - [ ] `login`
-  - [ ] `onboarding_action`
-
-**Bot Orchestrators:**
-- [ ] `StartBotOrchestrator` → использует AccountClient
-- [ ] `LobbyBotOrchestrator` → использует AccountClient
-- [ ] `OnboardingBotOrchestrator` → использует AccountClient
-
-**Handlers:**
-- [ ] Обновить хендлеры `/start`, Lobby, Onboarding
-- [ ] FSM states для Onboarding
-
-**Cleanup:**
-- [ ] Удалить `apps/game_core/modules/auth/`
-- [ ] Удалить `apps/game_core/modules/lobby/`
-- [ ] Удалить `apps/game_core/modules/onboarding/`
-
----
-
 ### Phase 4: Testing
+**Цель:** Стабилизация и покрытие тестами.
 
-**Цель:** Полное тестирование всех потоков.
-
-**Unit Tests:**
-- [ ] Services tests (Registration, Lobby, Onboarding, Login, AccountSessionService)
-- [ ] Gateway tests
-- [ ] Repository tests
-
-**Integration Tests:**
-- [ ] Full flow: Register → Initialize Lobby → Create Character → Onboarding → Login
-- [ ] Cache invalidation tests
-- [ ] RedisJSON updates tests
-
-**E2E Tests:**
-- [ ] Bot → HTTP API → PostgreSQL + Redis
-- [ ] Character limit (4 персонажа)
-- [ ] Ownership validation (403 на чужого персонажа)
+- [ ] **[Task: Testing Plan](./Task_Testing_Plan.md)** — Выполнение плана тестирования (Unit, Integration, E2E).
 
 ---
 
-### Phase 5: Finalize Implementation (Зависит от Scenario Domain)
+### Phase 5: Domain Integration (Finalize)
+**Цель:** Подключение всех отрефакторенных доменов к единой системе аккаунта.
 
-**Цель:** Завершить недоделанные части.
-
-- [ ] `OnboardingService.finalize()` - переход в Scenario
-- [ ] ARQ Worker для сохранения данных из Redis в БД
-- [ ] Scenario Domain интеграция (интро сценарий)
-- [ ] Update `game_stage` в БД при finalize
+- [ ] **Scenario Integration:**
+  - [ ] `OnboardingService.finalize()` -> Переход в Scenario (Intro Quest).
+  - [ ] Обновление `game_stage` в БД при завершении онбординга.
+- [ ] **Persistence:**
+  - [ ] ARQ Worker для асинхронного сохранения данных из Redis (`ac:{char_id}`) в PostgreSQL.
+- [ ] **Routing:**
+  - [ ] Настройка `LoginService` для корректного перехода в Combat/Exploration.
 
 ---
 
 ### Phase 6: Logout & Cleanup (FUTURE)
-
 **Цель:** Реализовать корректный выход из игры.
 
 - [ ] `POST /account/logout` endpoint
 - [ ] Сохранение состояния из `ac:{char_id}` в БД
 - [ ] Очистка временных сессий
-
----
-
-## Success Criteria (MVP 0.1.0) - ✅ DONE
-
-- [x] Registration работает
-- [x] Lobby работает (Initialize + CRUD + Cache)
-- [x] Onboarding работает (Wizard + RedisJSON) **Кроме finalize - зависит от Scenario**
-- [x] Login работает (Resume Session + Routing)
-- [x] AccountSessionService работает (центральный сервис для ac:{char_id})
-- [ ] Старый код удален (Phase 3 - Bot Migration)
-
----
-
-## Примечания
-
-- **finalize() - TODO:** Зависит от миграции Scenario Domain и создания ARQ Worker для сохранения в БД
-- **Post-MVP Tasks:** Все задачи выше Phase 3 - для версий после 0.1.0
-- **Current Focus:** Миграция других доменов (Combat, Scenario, Exploration) для полной интеграции

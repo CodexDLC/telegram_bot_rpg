@@ -228,6 +228,54 @@ class AccountManager:
         key = Rk.get_account_key(char_id)
         await self.redis_service.json_set(key, "$.location.current", location_id)
 
+    # --- Metrics ---
+
+    async def get_metrics(self, char_id: int) -> dict[str, Any] | None:
+        """Получает все метрики персонажа."""
+        key = Rk.get_account_key(char_id)
+        res = await self.redis_service.json_get(key, "$.metrics")
+        return res[0] if res else None
+
+    async def get_gear_score(self, char_id: int) -> int:
+        """Получает GearScore персонажа. Возвращает 0 если не установлен."""
+        key = Rk.get_account_key(char_id)
+        res = await self.redis_service.json_get(key, "$.metrics.gear_score")
+        return res[0] if res and res[0] is not None else 0
+
+    async def set_gear_score(self, char_id: int, value: int) -> None:
+        """Устанавливает GearScore персонажа."""
+        key = Rk.get_account_key(char_id)
+        await self.redis_service.json_set(key, "$.metrics.gear_score", value)
+
+    async def update_metrics(self, char_id: int, updates: dict[str, Any]) -> None:
+        """
+        Обновляет несколько метрик за раз.
+        updates: {"gear_score": 150, "arena_rating": 1200}
+        """
+        key = Rk.get_account_key(char_id)
+
+        def _metrics_batch(pipe: Pipeline) -> None:
+            for field, value in updates.items():
+                pipe.json().set(key, f"$.metrics.{field}", value)  # type: ignore
+
+        await self.redis_service.execute_pipeline(_metrics_batch)
+
+    async def increment_metric(self, char_id: int, metric: str, delta: int = 1) -> int:
+        """
+        Инкрементирует метрику (arena_wins, win_streak, etc.).
+        Возвращает новое значение.
+        """
+        key = Rk.get_account_key(char_id)
+        path = f"$.metrics.{metric}"
+
+        # Получаем текущее значение
+        res = await self.redis_service.json_get(key, path)
+        current = res[0] if res and res[0] is not None else 0
+
+        new_value = current + delta
+        await self.redis_service.json_set(key, path, new_value)
+        return new_value
+
     # --- Lobby Cache (lobby:user:{id}) ---
 
     async def get_lobby_cache(self, user_id: int) -> list[dict[str, Any]] | None:

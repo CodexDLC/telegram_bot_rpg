@@ -4,6 +4,7 @@ from common.schemas.account_context import (
     AttributesDict,
     BioDict,
     LocationDict,
+    MetricsDict,
     SessionsDict,
     StatsDict,
 )
@@ -131,5 +132,6 @@ class AccountSessionService:
                 inventory_id=character.active_sessions.get("inventory_id") if character.active_sessions else None,
                 scenario_id=character.active_sessions.get("scenario_id") if character.active_sessions else None,
             ),
+            metrics=MetricsDict(gear_score=0),
             skills={},
         )
