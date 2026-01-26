@@ -2,6 +2,7 @@ from redis.asyncio import Redis
 
 # Managers
 from backend.database.redis.manager.account_manager import AccountManager
+from backend.database.redis.manager.arena_manager import ArenaManager
 from backend.database.redis.manager.combat_manager import CombatManager
 from backend.database.redis.manager.context_manager import ContextRedisManager
 from backend.database.redis.manager.scenario_manager import ScenarioManager
@@ -23,6 +24,7 @@ class RedisContainer:
 
         # 2. Managers
         self.account = AccountManager(self.service)
+        self.arena = ArenaManager(self.service)
         self.combat = CombatManager(self.service)
         self.context = ContextRedisManager(self.service)
         self.scenario = ScenarioManager(self.service)

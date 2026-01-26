@@ -3,10 +3,11 @@ import random
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from apps.common.database import GeneratedClanORM, MonsterRepository
 from loguru import logger as log
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.database.postgres.models import GeneratedClanORM
+from backend.database.postgres.repositories import MonsterRepository
 from backend.domains.internal_systems.factories.monster.clan_hashing import compute_context_hash, normalize_tags
 from common.schemas.monster_dto import GeneratedMonsterDTO
 

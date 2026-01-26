@@ -1,28 +1,39 @@
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue" # Изменил на Continue, чтобы обрабатывать ошибки вручную
 Write-Host "🚀 Starting Local Quality Check..." -ForegroundColor Cyan
 
 # 1. Backend & Tests: Ruff
 Write-Host "`n🔍 Checking Style (Ruff)..." -ForegroundColor Yellow
-try {
-    # Проверяем весь проект, используя настройки из pyproject.toml
+
+# Сначала пробуем проверить
+ruff check
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "⚠️ Ruff found errors. Attempting to fix..." -ForegroundColor Yellow
+
+    # Пытаемся исправить
+    ruff check --fix
+
+    # Проверяем снова после исправления
+    Write-Host "🔍 Re-checking Style (Ruff)..." -ForegroundColor Yellow
     ruff check
-    if ($LASTEXITCODE -ne 0) { throw "Ruff found errors" }
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "❌ Ruff failed even after fix!" -ForegroundColor Red
+        exit 1
+    } else {
+        Write-Host "✅ Ruff fixed issues and passed!" -ForegroundColor Green
+    }
+} else {
     Write-Host "✅ Ruff passed!" -ForegroundColor Green
-} catch {
-    Write-Host "❌ Ruff failed!" -ForegroundColor Red
-    exit 1
 }
 
 # 2. Backend: Mypy
 Write-Host "`n🧠 Checking Types (Mypy)..." -ForegroundColor Yellow
-try {
-    # Запускаем mypy без аргументов, чтобы он взял настройки (files, exclude) из pyproject.toml
-    mypy
-    if ($LASTEXITCODE -ne 0) { throw "Mypy found errors" }
-    Write-Host "✅ Mypy passed!" -ForegroundColor Green
-} catch {
+mypy
+if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ Mypy failed!" -ForegroundColor Red
     exit 1
+} else {
+    Write-Host "✅ Mypy passed!" -ForegroundColor Green
 }
 
 # 3. Backend: Pytest (Skipped)
