@@ -26,9 +26,36 @@ class SystemDispatcher:
         self._registry[domain] = factory
         log.debug(f"SystemDispatcher | Registered domain: {domain}")
 
+    async def get_initial_view(
+        self,
+        target_state: str,
+        char_id: int,
+        action: str = "initialize",
+        context: dict[str, Any] | None = None,
+        # session аргумент удален, так как он не нужен
+        **kwargs,
+    ) -> Any:
+        """
+        Алиас для route, совместимый со старым кодом (но без session).
+        """
+        return await self.route(target_state, char_id, action, context)
+
+    async def process_action(
+        self,
+        domain: str,
+        char_id: int,
+        action: str,
+        context: dict[str, Any] | None = None,
+    ) -> Any:
+        """
+        Алиас для route.
+        """
+        return await self.route(domain, char_id, action, context)
+
     async def route(
         self,
         domain: str,
+        char_id: int,
         action: str,
         context: dict[str, Any] | None = None,
     ) -> Any:
@@ -44,9 +71,9 @@ class SystemDispatcher:
             raise ValueError(f"Unknown domain for router: {domain}")
 
         # 2. Выполняем
-        return await self._execute(factory, action, context)
+        return await self._execute(factory, char_id, action, context)
 
-    async def _execute(self, factory: OrchestratorFactory, action: str, context: dict) -> Any:
+    async def _execute(self, factory: OrchestratorFactory, char_id: int, action: str, context: dict) -> Any:
         """Внутренний метод выполнения."""
         # Создаем/получаем оркестратор через фабрику
         orchestrator = factory()
@@ -55,4 +82,5 @@ class SystemDispatcher:
             log.warning("SystemDispatcher | Orchestrator for domain does not implement get_entry_point")
             return None
 
-        return await orchestrator.get_entry_point(action, context)
+        # Передаем char_id в get_entry_point
+        return await orchestrator.get_entry_point(char_id, action, context)

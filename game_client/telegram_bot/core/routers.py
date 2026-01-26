@@ -6,18 +6,18 @@
 
 from aiogram import Router
 
-# --- Common Services ---
-from game_client.telegram_bot.common.services.common_fsm_handlers import router as common_fsm_router
+# --- Account (Lobby, Onboarding) ---
+from game_client.telegram_bot.features.account import handlers as account_handlers
 
 # --- Game Features ---
 from game_client.telegram_bot.features.combat.handlers.combat_handlers import router as combat_router
 
 # --- System Commands ---
-from game_client.telegram_bot.features.commands.handlers.router import router as commands_router
+from game_client.telegram_bot.features.commands import handlers as commands_handlers
+from game_client.telegram_bot.features.scenario.handlers.scenario_handler import router as scenario_router
 
-# from game_client.telegram_bot.features.arena.handlers.arena_handlers import router as arena_router  # TODO
-# from game_client.telegram_bot.features.exploration.handlers.exploration_handlers import router as exploration_router  # TODO
-# from game_client.telegram_bot.features.inventory.handlers.inventory_handlers import router as inventory_router  # TODO
+# --- Common Services ---
+from game_client.telegram_bot.services.fsm.common_fsm_handlers import router as common_fsm_router
 
 # Главный роутер приложения
 main_router = Router(name="main_router")
@@ -26,12 +26,12 @@ main_router = Router(name="main_router")
 # Порядок важен: сначала системные, потом игровые фичи, последним - garbage collector
 main_router.include_routers(
     # System
-    commands_router,
+    commands_handlers.router,
+    # Account
+    account_handlers.router,
     # Game Features
     combat_router,
-    # arena_router,  # TODO
-    # exploration_router,  # TODO
-    # inventory_router,  # TODO
+    scenario_router,
     # Common Services (последним чтобы не перехватывал текст раньше времени)
     common_fsm_router,
 )

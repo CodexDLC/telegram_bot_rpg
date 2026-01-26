@@ -27,6 +27,7 @@ from backend.database.postgres.repositories.skill_repo import SkillProgressRepo
 from backend.database.postgres.repositories.symbiote_repo import SymbioteRepoORM
 from backend.database.postgres.repositories.users_repo_orm import UsersRepoORM
 from backend.database.postgres.repositories.wallet_repo import WalletRepoORM
+from backend.database.postgres.repositories.world_repo import WorldRepoORM
 
 # Explicit export to satisfy linter (F401)
 __all__ = [
@@ -47,6 +48,8 @@ __all__ = [
     "SymbioteRepoORM",
     "UsersRepoORM",
     "WalletRepoORM",
+    "InventoryRepo",  # Added
+    "WorldRepoORM",  # Added
     "get_user_repo",
     "get_character_repo",
     "get_character_attributes_repo",
@@ -59,8 +62,6 @@ __all__ = [
     "get_world_repo",
     "get_monster_repo",
 ]
-
-from backend.database.postgres.repositories.world_repo import WorldRepoORM
 
 
 def get_user_repo(session: AsyncSession) -> IUserRepo:

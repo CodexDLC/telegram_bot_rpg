@@ -2,8 +2,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from game_client.bot.resources.texts.buttons_callback import Buttons
 from game_client.bot.resources.texts.ui_messages import START_GREETING
-from game_client.telegram_bot.common.dto.view_dto import ViewResultDTO
-from game_client.telegram_bot.common.services.error.ui.keyboards import StartMenuCallback
+from game_client.telegram_bot.base.view_dto import ViewResultDTO
+from game_client.telegram_bot.features.account.resources.keyboards.account_callbacks import LobbyEntryCallback
+from game_client.telegram_bot.features.commands.resources.keyboards.commands_callbacks import SettingsCallback
 
 
 class StartUI:
@@ -17,24 +18,18 @@ class StartUI:
         Renders the main Title Screen (Start Menu).
         :param user_name: Safe string name of the user.
         """
-        # Безопасное форматирование. Если START_GREETING не содержит плейсхолдера, format игнорирует аргументы.
-        # Если содержит {first_name} - подставит user_name.
         text = START_GREETING.format(first_name=user_name)
-
         kb = self._get_title_keyboard()
-
         return ViewResultDTO(text=text, kb=kb)
 
     def _get_title_keyboard(self):
         builder = InlineKeyboardBuilder()
 
-        # Ключи в Buttons.START теперь совпадают с action в StartMenuCallback
-        # "adventure": "⚔️ Начать приключение"
-        # "settings": "⚙️ Настройки"
+        # Adventure -> Account (Lobby)
+        builder.button(text=Buttons.START["adventure"], callback_data=LobbyEntryCallback(action="enter").pack())
 
-        for action, text in Buttons.START.items():
-            cb = StartMenuCallback(action=action).pack()
-            builder.button(text=text, callback_data=cb)
+        # Settings -> Commands feature
+        builder.button(text=Buttons.START["settings"], callback_data=SettingsCallback(action="open").pack())
 
         builder.adjust(1)
         return builder.as_markup()

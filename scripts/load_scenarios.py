@@ -10,7 +10,7 @@ from apps.common.database import create_db_tables, get_async_session
 from loguru import logger as log
 from sqlalchemy import text
 
-from backend.services.utils.scenario_loader import ScenarioLoader
+from backend.domains.user_features.scenario.resources.loaders.scenario_loader import ScenarioLoader
 
 
 async def recreate_scenario_tables():

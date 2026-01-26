@@ -21,7 +21,7 @@ from backend.domains.user_features.combat.dto.combat_session_dto import (
 # Менеджеры и сервисы
 from backend.domains.user_features.combat.orchestrators.handler.runtime.combat_turn_manager import CombatTurnManager
 from backend.domains.user_features.combat.orchestrators.handler.runtime.combat_view_service import CombatViewService
-from game_client.telegram_bot.common.schemas.combat import CombatDashboardDTO, CombatLogDTO
+from common.schemas.combat import CombatDashboardDTO, CombatLogDTO
 
 
 class CombatSessionService:
@@ -220,7 +220,10 @@ class CombatSessionService:
     # --- LIFECYCLE ---
 
     async def link_players_to_session(self, char_ids: list[int], session_id: str) -> None:
+        # TODO: REFACTOR: Add state transition to COMBAT here (via AccountManager.transition_to_state)
+        # Currently state is changed by the caller (e.g. TutorialHandler)
         await self.account_manager.bulk_link_combat_session(char_ids, session_id)
 
     async def unlink_players_from_session(self, char_ids: list[int]) -> None:
+        # TODO: REFACTOR: Add state transition to EXPLORATION/LOBBY here
         await self.account_manager.bulk_unlink_combat_session(char_ids)

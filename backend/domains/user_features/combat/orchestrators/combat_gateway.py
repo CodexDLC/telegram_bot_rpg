@@ -6,9 +6,9 @@ from loguru import logger as log
 # DTOs
 # Services
 from backend.domains.user_features.combat.orchestrators.handler.combat_session_service import CombatSessionService
+from common.schemas.combat import CombatDashboardDTO, CombatLogDTO
 from common.schemas.enums import CoreDomain
 from common.schemas.response import CoreResponseDTO, GameStateHeader
-from game_client.telegram_bot.common.schemas.combat import CombatDashboardDTO, CombatLogDTO
 
 
 class CombatGateway:

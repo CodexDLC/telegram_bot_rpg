@@ -42,6 +42,7 @@ class AttributesDict(TypedDict):
 class SessionsDict(TypedDict):
     combat_id: str | None
     inventory_id: str | None
+    scenario_id: str | None  # Добавил scenario_id, так как мы его используем
 
 
 class AccountContextDTO(BaseModel):
@@ -50,6 +51,7 @@ class AccountContextDTO(BaseModel):
     """
 
     state: CoreDomain
+    prev_state: CoreDomain | None = None  # Добавлено поле
     bio: BioDict
     location: LocationDict
     stats: StatsDict

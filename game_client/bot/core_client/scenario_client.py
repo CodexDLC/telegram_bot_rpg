@@ -1,11 +1,8 @@
 from typing import TYPE_CHECKING
 
-from apps.common.schemas_dto.core_response_dto import CoreResponseDTO
+from common.schemas.response import CoreResponseDTO
+from common.schemas.scenario import ScenarioPayloadDTO
 
-from apps.common.schemas_dto.scenario_dto import ScenarioPayloadDTO
-
-if TYPE_CHECKING:
-    from apps.game_core.core_container import CoreContainer
 
 
 class ScenarioClient:

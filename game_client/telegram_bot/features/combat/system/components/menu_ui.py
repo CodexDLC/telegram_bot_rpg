@@ -3,8 +3,8 @@ from typing import Any
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from game_client.telegram_bot.common.dto.view_dto import ViewResultDTO
-from game_client.telegram_bot.common.schemas.combat import CombatLogDTO
+from common.schemas.combat import CombatLogDTO
+from game_client.telegram_bot.base.view_dto import ViewResultDTO
 from game_client.telegram_bot.features.combat.resources.formatters.combat_formatters import CombatFormatter
 from game_client.telegram_bot.features.combat.resources.keyboards.combat_callback import CombatMenuCallback
 

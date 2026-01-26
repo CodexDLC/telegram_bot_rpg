@@ -1,1 +1,0 @@
-# DEPRECATED: Logic moved to OnboardingService (RedisJSON)

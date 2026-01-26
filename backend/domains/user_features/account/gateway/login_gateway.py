@@ -38,7 +38,10 @@ class LoginGateway:
             elif state == CoreDomain.COMBAT:
                 try:
                     payload = await self.dispatcher.route(
-                        domain=CoreDomain.COMBAT, action="resume", context={"char_id": char_id, "sessions": sessions}
+                        domain=CoreDomain.COMBAT,
+                        char_id=char_id,
+                        action="resume",
+                        context={"char_id": char_id, "sessions": sessions},
                     )
                     return CoreResponseDTO(header=GameStateHeader(current_state=CoreDomain.COMBAT), payload=payload)
                 except Exception as e:  # noqa: BLE001
@@ -48,7 +51,10 @@ class LoginGateway:
             elif state == CoreDomain.SCENARIO:
                 try:
                     payload = await self.dispatcher.route(
-                        domain=CoreDomain.SCENARIO, action="resume", context={"char_id": char_id, "sessions": sessions}
+                        domain=CoreDomain.SCENARIO,
+                        char_id=char_id,
+                        action="resume",
+                        context={"char_id": char_id, "sessions": sessions},
                     )
                     return CoreResponseDTO(header=GameStateHeader(current_state=CoreDomain.SCENARIO), payload=payload)
                 except Exception as e:  # noqa: BLE001
@@ -59,6 +65,7 @@ class LoginGateway:
                 try:
                     payload = await self.dispatcher.route(
                         domain=CoreDomain.EXPLORATION,
+                        char_id=char_id,
                         action="resume",
                         context={"char_id": char_id, "sessions": sessions},
                     )

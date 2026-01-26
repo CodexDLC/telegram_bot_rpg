@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.database.postgres.models.base import Base, TimestampMixin
-from game_client.bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
+from game_client.telegram_bot.resources.texts.ui_messages import DEFAULT_ACTOR_NAME
 
 if TYPE_CHECKING:
     from .character import Character

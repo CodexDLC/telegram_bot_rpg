@@ -1,8 +1,10 @@
+from typing import Any
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from game_client.telegram_bot.common.dto.view_dto import ViewResultDTO
-from game_client.telegram_bot.common.schemas.combat import CombatDashboardDTO
+from common.schemas.combat import CombatDashboardDTO
+from game_client.telegram_bot.base.view_dto import ViewResultDTO
 from game_client.telegram_bot.features.combat.resources.formatters.combat_formatters import CombatFormatter
 from game_client.telegram_bot.features.combat.resources.keyboards.combat_callback import (
     CombatControlCallback,
@@ -75,7 +77,7 @@ class CombatContentUI:
     async def _render_items_menu(self, snapshot: CombatDashboardDTO) -> ViewResultDTO:
         """Меню предметов в поясе (Заглушка)."""
         # TODO: Получать belt_items из DTO
-        belt_items = []  # snapshot.belt_items
+        belt_items: list[dict[str, Any]] = []  # snapshot.belt_items
 
         text = "🎒 <b>Выберите предмет:</b>\n\n"
         if not belt_items:

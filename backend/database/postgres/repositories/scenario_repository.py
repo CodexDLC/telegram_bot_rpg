@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database.db_contract.i_scenario_repo import IScenarioRepository
-from backend.database.model_orm import CharacterScenarioState, ScenarioMaster, ScenarioNode
+from backend.database.postgres.models.scenario import CharacterScenarioState, ScenarioMaster, ScenarioNode
 
 
 class ScenarioRepositoryORM(IScenarioRepository):
