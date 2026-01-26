@@ -71,8 +71,8 @@ class ScenarioLoader:
             # 2. Очищаем старые ноды этого квеста
             await self.repo.delete_quest_nodes(quest_key)
 
-            # 3. Сохраняем Nodes
-            nodes_count = 0
+            # 3. Подготовка данных для Bulk Insert
+            nodes_to_insert = []
             for node in data["nodes"]:
                 node["quest_key"] = quest_key
 
@@ -80,13 +80,16 @@ class ScenarioLoader:
                 if "text_content" not in node or node["text_content"] is None:
                     node["text_content"] = "[System: Logic Processing...]"
 
-                await self.repo.upsert_node(node)
-                nodes_count += 1
+                nodes_to_insert.append(node)
+
+            # 4. Массовая вставка
+            if nodes_to_insert:
+                await self.repo.bulk_insert_nodes(nodes_to_insert)
 
             # Коммитим транзакцию
             await self.repo.session.commit()
 
-            log.success(f"ScenarioLoader | Quest '{quest_key}' loaded successfully. Nodes: {nodes_count}")
+            log.success(f"ScenarioLoader | Quest '{quest_key}' loaded successfully. Nodes: {len(nodes_to_insert)}")
 
         except Exception as e:  # noqa: BLE001
             log.exception(f"ScenarioLoader | Failed to load {file_path.name}: {e}")
