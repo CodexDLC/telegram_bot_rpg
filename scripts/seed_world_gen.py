@@ -20,15 +20,15 @@ from apps.common.database import (  # noqa: E402  # noqa: E402
     async_session_factory,
 )
 
-from backend.database.model_orm import Base  # noqa: E402
-from backend.domains.internal_systems.factories import (
+from src.backend import Base  # noqa: E402
+from src.backend.domains.internal_systems import (
     ContentGenerationService,  # noqa: E402
     ZoneOrchestrator,  # noqa: E402
 )
-from backend.domains.internal_systems.factories.monster.clan_factory import ClanFactory  # noqa: E402
-from backend.domains.internal_systems.factories.world.gen_utils.path_finder import PathFinder  # noqa: E402
-from backend.domains.internal_systems.factories.world.threat_service import ThreatService  # noqa: E402
-from backend.resources.game_data import (  # noqa: E402
+from src.backend.domains.internal_systems.factories.monster.clan_factory import ClanFactory  # noqa: E402
+from src.backend.domains.internal_systems.factories.world.gen_utils.path_finder import PathFinder  # noqa: E402
+from src.backend.domains.internal_systems.factories.world.threat_service import ThreatService  # noqa: E402
+from src.backend.resources import (  # noqa: E402
     BIOME_DEFINITIONS,
     HUB_CENTER,
     REGION_ROWS,
@@ -38,7 +38,7 @@ from backend.resources.game_data import (  # noqa: E402
     ZONE_SIZE,
     TerrainMeta,
 )
-from backend.resources.game_data.graf_data_world.start_vilage import STATIC_LOCATIONS  # noqa: E402
+from src.backend.resources.game_data.graf_data_world.start_vilage import STATIC_LOCATIONS  # noqa: E402
 
 
 class WorldGenerator:

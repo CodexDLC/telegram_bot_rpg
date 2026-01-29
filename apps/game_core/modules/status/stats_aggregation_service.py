@@ -5,8 +5,8 @@
 # from sqlalchemy.exc import SQLAlchemyError
 # from sqlalchemy.ext.asyncio import AsyncSession
 #
-# from apps.common.database.repositories import get_character_stats_repo, get_inventory_repo
-# from apps.common.schemas_dto import CharacterStatsReadDTO, InventoryItemDTO, ItemType
+# from apps.shared.database.repositories import get_character_stats_repo, get_inventory_repo
+# from apps.shared.schemas_dto import CharacterStatsReadDTO, InventoryItemDTO, ItemType
 # from apps.game_core.modules.status.modifiers_calculator_service import ModifiersCalculatorService
 #
 #

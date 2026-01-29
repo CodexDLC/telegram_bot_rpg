@@ -2,8 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.domains.user_features.combat.combat_engine import FeintService
-from backend.resources.game_data.feints.schemas import FeintConfigDTO, FeintCostDTO
+from src.backend.domains.user_features.combat.combat_engine import FeintService
+from src.backend.resources.game_data.feints.schemas import FeintConfigDTO, FeintCostDTO
 
 
 @pytest.mark.combat

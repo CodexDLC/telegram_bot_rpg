@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from backend.domains.user_features.combat.combat_engine.logic.combat_pipeline import CombatPipeline
+from src.backend.domains.user_features.combat.combat_engine.logic.combat_pipeline import CombatPipeline
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,6 @@
 # from typing import Any
 #
-# from apps.common.schemas_dto import CharacterModifiersSaveDto, CharacterStatsReadDTO
+# from apps.shared.schemas_dto import CharacterModifiersSaveDto, CharacterStatsReadDTO
 # from apps.game_core.resources.game_data.stats_formulas import DEFAULT_VALUES, MODIFIER_RULES
 #
 #

@@ -4,7 +4,7 @@ import sys
 import pandas as pd
 import streamlit as st
 
-from backend.resources.game_data import ALL_FAMILIES_RAW
+from src.backend.resources import ALL_FAMILIES_RAW
 from tools.admin_dashboard.ui_core import apply_global_styles, render_header, render_rpg_stat_chart
 
 # --- Адаптация под структуру проекта ---

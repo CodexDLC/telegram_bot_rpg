@@ -2,8 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.domains.user_features.combat.combat_engine.logic.context_builder import ContextBuilder
-from backend.domains.user_features.combat.dto import CombatMoveDTO
+from src.backend.domains.user_features.combat.combat_engine.logic.context_builder import ContextBuilder
+from src.backend.domains.user_features import CombatMoveDTO
 
 
 @pytest.mark.combat

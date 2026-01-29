@@ -2,15 +2,18 @@ import asyncio
 import sys
 from pathlib import Path
 
+from src.backend.core.database import create_db_tables
+from tests.conftest import get_async_session
+
 # Добавляем корень проекта в sys.path, чтобы видеть пакеты apps
 sys.path.append(str(Path(__file__).parent.parent))
 
 # ВАЖНО: Импортируем модели, чтобы они зарегистрировались в Base.metadata перед созданием таблиц
-from apps.common.database import create_db_tables, get_async_session
+
 from loguru import logger as log
 from sqlalchemy import text
 
-from backend.domains.user_features.scenario.resources.loaders.scenario_loader import ScenarioLoader
+from src.backend.domains.user_features.scenario.resources.loaders.scenario_loader import ScenarioLoader
 
 
 async def recreate_scenario_tables():

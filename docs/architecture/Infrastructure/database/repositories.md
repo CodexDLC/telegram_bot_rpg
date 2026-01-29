@@ -14,7 +14,7 @@
 
 ### Пример
 ```python
-# apps/common/database/repositories/__init__.py
+# apps/shared/database/repositories/__init__.py
 
 def get_user_repo(session: AsyncSession) -> IUserRepo:
     """

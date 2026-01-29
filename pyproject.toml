@@ -64,9 +64,9 @@ unfixable = []
 
 # --- Настройки сортировки импортов (Isort) ---
 [tool.ruff.lint.isort]
-# Я говорю Ruff, что папки 'backend', 'game_client' и 'common' — это МОЙ код (First Party).
-# Он будет отделять их от библиотек пустой строкой. Красота.
-known-first-party = ["backend", "game_client", "common"]
+# Я говорю Ruff, что папка 'src' — это МОЙ код (First Party).
+# Он будет отделять её от библиотек пустой строкой. Красота.
+known-first-party = ["src"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 # --- Настройки форматтера (замена Black) ---
@@ -84,9 +84,8 @@ line-ending = "auto"
 # Мой строгий надзиратель. Не дает мне передавать строки туда, где нужны числа.
 # ==============================================================================
 [tool.mypy]
-# Проверяем только новый код
-# Исправлено: main.py -> run.py (так как main.py лежит в backend/ и уже проверяется)
-files = ["backend", "game_client/telegram_bot", "common", "run.py"]
+# Проверяем только новый код в src/ и точку входа
+files = ["src", "run.py"]
 # Исключаем Legacy явно (на всякий случай)
 exclude = ["apps", "tools", "scripts", "game_client/bot", "tests"]
 

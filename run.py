@@ -39,7 +39,7 @@ def main():
 
     elif service == "bot":
         print("🤖 Starting Telegram Bot...")
-        from game_client.telegram_bot.app_telegram import main as bot_main
+        from src.frontend.telegram_bot.app_telegram import main as bot_main
 
         try:
             asyncio.run(bot_main())

@@ -7,9 +7,9 @@ import streamlit as st
 from loguru import logger as log
 from sqlalchemy.exc import SQLAlchemyError
 
-from game_client.bot.resources.status_menu.modifer_group_data import MODIFIER_HIERARCHY
-from game_client.bot.resources.status_menu.skill_group_data import SKILL_HIERARCHY
-from backend.database.postgres.repositories import (
+from src.frontend.bot.resources.status_menu.modifer_group_data import MODIFIER_HIERARCHY
+from src.frontend.bot.resources import SKILL_HIERARCHY
+from src.backend.database.postgres.repositories import (
     get_inventory_repo,
     get_skill_progress_repo,
     get_symbiote_repo,

@@ -2,9 +2,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from backend.domains.user_features.combat.combat_engine.logic.ability_service import AbilityService
-from backend.resources.game_data.abilities.schemas import AbilityConfigDTO, AbilityCostDTO
-from backend.resources.game_data.effects.schemas import EffectDTO, EffectType
+from src.backend.domains.user_features.combat.combat_engine.logic.ability_service import AbilityService
+from src.backend.resources.game_data.abilities.schemas import AbilityConfigDTO, AbilityCostDTO
+from src.backend.resources.game_data.effects.schemas import EffectDTO, EffectType
 
 
 @pytest.mark.combat
