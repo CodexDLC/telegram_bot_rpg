@@ -1,7 +1,10 @@
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.backend.core.exceptions import SessionExpiredException
 from src.backend.database.postgres.repositories.characters_repo_orm import CharactersRepoORM
+from src.backend.domains.internal_systems.dispatcher.system_dispatcher import SystemDispatcher
 from src.backend.domains.user_features.account.data.locales.onboarding_resources import OnboardingResources
 from src.backend.domains.user_features.account.services.account_session_service import AccountSessionService
 from src.shared.enums.domain_enums import CoreDomain
@@ -17,9 +20,15 @@ class OnboardingService:
     Возвращает готовые UI Payload (Текст + Кнопки).
     """
 
-    def __init__(self, session: AsyncSession, session_service: AccountSessionService):
+    def __init__(
+        self,
+        session: AsyncSession,
+        session_service: AccountSessionService,
+        dispatcher: SystemDispatcher,
+    ):
         self.repo = CharactersRepoORM(session)
         self.session_service = session_service
+        self.dispatcher = dispatcher
 
     async def initialize(self, character: CharacterReadDTO) -> OnboardingUIPayloadDTO:
         """
@@ -44,20 +53,6 @@ class OnboardingService:
         gender = context.bio.get("gender")
 
         # Логика определения шага
-        # Если имя дефолтное ("Новый персонаж" или None) -> NAME
-        # Если имя есть, но пол дефолтный ("other") -> GENDER
-        # Если все есть -> CONFIRM
-
-        # Предполагаем, что "Новый персонаж" и "other" - это дефолты из БД.
-        # Но лучше проверять на None или пустую строку, если мы их очищаем.
-        # В CharacterReadDTO дефолты могут быть.
-
-        # Упрощенная логика:
-        # Если мы на шаге NAME, то имя еще не введено (или дефолтное).
-        # Но как отличить "ввел имя" от "еще не ввел"?
-        # Мы можем хранить step в ac: (но мы храним только state=ONBOARDING).
-
-        # Давай смотреть по факту:
         if not name or name == "Новый персонаж":
             return self._get_name_payload()
 
@@ -96,15 +91,27 @@ class OnboardingService:
         name = context.bio["name"] or "Hero"
         return self._get_confirm_payload(name, gender)
 
-    async def finalize(self, char_id: int) -> None:
+    async def finalize(self, char_id: int) -> Any:
         """
         Завершает создание.
+        Переводит игрока в SCENARIO и запускает интро.
         """
-        # TODO:
-        # 1. Обновить state в Redis -> SCENARIO
-        # 2. Вызвать SystemDispatcher / ScenarioService для старта интро
-        # 3. Запустить ARQ Worker для сохранения в БД
-        pass
+        # 1. Обновляем state в Redis -> SCENARIO
+        await self.session_service.update_state(char_id, CoreDomain.SCENARIO)
+
+        # 2. Вызываем SystemDispatcher для старта интро
+        # Передаем управление в ScenarioDomain
+        result = await self.dispatcher.dispatch(
+            domain=CoreDomain.SCENARIO,
+            char_id=char_id,
+            action="initialize",  # или "start_tutorial"
+            context={"source": "onboarding"},
+        )
+
+        # 3. Запустить ARQ Worker для сохранения в БД (TODO: Реализовать позже)
+        # await self.arq.enqueue_job("save_character", char_id)
+
+        return result
 
     # --- Private View Generators (Static) ---
 

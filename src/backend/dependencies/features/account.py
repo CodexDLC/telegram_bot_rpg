@@ -51,9 +51,13 @@ async def get_registration_service(session: DbSessionDep) -> RegistrationService
 RegistrationServiceDep = Annotated[RegistrationService, Depends(get_registration_service)]
 
 
-async def get_onboarding_service(session: DbSessionDep, session_service: AccountSessionServiceDep) -> OnboardingService:
+async def get_onboarding_service(
+    session: DbSessionDep,
+    session_service: AccountSessionServiceDep,
+    dispatcher: SystemDispatcherDep,  # <--- NEW
+) -> OnboardingService:
     """Возвращает сервис онбординга."""
-    return OnboardingService(session, session_service)
+    return OnboardingService(session, session_service, dispatcher)
 
 
 OnboardingServiceDep = Annotated[OnboardingService, Depends(get_onboarding_service)]

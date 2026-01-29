@@ -1,6 +1,8 @@
 """
 Модуль содержит DTO (Data Transfer Objects) для модификаторов характеристик персонажа.
 Определяет структуру боевых и небоевых модификаторов.
+
+СИНХРОНИЗИРОВАНО С: src/shared/enums/stats_enums.py
 """
 
 from pydantic import BaseModel, ConfigDict
@@ -11,14 +13,19 @@ from pydantic import BaseModel, ConfigDict
 
 
 class VitalsDTO(BaseModel):
-    """Ресурсы (HP, Energy) и Инициатива."""
+    """Ресурсы (HP, Energy, Stamina) и Инициатива."""
 
-    hp_max: int = 0
-    hp_regen: float = 0.0
-    energy_max: int = 0
-    energy_regen: float = 0.0
+    hp: int = 0  # StatKey.HP
+    hp_regen: float = 0.0  # StatKey.HP_REGEN
+
+    en: int = 0  # StatKey.EN
+    en_regen: float = 0.0  # StatKey.EN_REGEN
+
+    stamina: int = 0  # StatKey.STAMINA
+    stamina_regen: float = 0.0  # StatKey.STAMINA_REGEN
+
     resource_cost_reduction: float = 0.0
-    initiative: float = 0.0
+    initiative: float = 0.0  # StatKey.INITIATIVE
 
 
 class CombatSkillsDTO(BaseModel):
@@ -117,19 +124,26 @@ class PhysicalStatsDTO(BaseModel):
     Глобальные физические бонусы (работают на обе руки).
     """
 
-    physical_damage_bonus: float = 0.0  # Глобальный +DMG
-    physical_accuracy_bonus: float = 0.0  # Глобальная точность
+    physical_damage: float = 0.0  # StatKey.PHYSICAL_DAMAGE (Base Bonus)
+    physical_damage_bonus: float = 0.0  # % Bonus
+
+    accuracy: float = 0.0  # StatKey.ACCURACY (Global)
+    armor_penetration: float = 0.0  # StatKey.ARMOR_PENETRATION (Global)
+
+    crit_chance: float = 0.0  # StatKey.CRIT_CHANCE (Global)
+    crit_power: float = 0.0  # StatKey.CRIT_POWER
 
 
 class MagicalStatsDTO(BaseModel):
     """Магическая атака (База)."""
 
-    magical_damage_base: float = 0.0
+    magical_damage: float = 0.0  # StatKey.MAGICAL_DAMAGE
     magical_damage_spread: float = 0.1
     magical_damage_bonus: float = 0.0
-    magical_penetration: float = 0.0
+
     magical_accuracy: float = 0.0
     magical_damage_power: float = 0.0
+    magical_penetration: float = 0.0  # <--- RESTORED
     spell_land_chance: float = 0.0
 
     # Magical Crit (Пока общий)
@@ -141,19 +155,18 @@ class DefensiveStatsDTO(BaseModel):
     Активная защита (Avoidance).
     """
 
-    # Dodge
-    dodge_chance: float = 0.0
+    # Dodge / Evasion
+    evasion: float = 0.0  # StatKey.EVASION
     dodge_cap: float = 0.75
     anti_dodge_chance: float = 0.0
 
     # Parry
-    parry_chance: float = 0.0
+    parry: float = 0.0  # StatKey.PARRY
     parry_cap: float = 0.50
 
     # Block
-    shield_block_chance: float = 0.0
+    block: float = 0.0  # StatKey.BLOCK
     shield_block_cap: float = 0.75
-    # shield_block_power удален
 
 
 class MitigationStatsDTO(BaseModel):
@@ -163,11 +176,11 @@ class MitigationStatsDTO(BaseModel):
 
     # Resists
     physical_resistance: float = 0.0
-    magical_resistance: float = 0.0
+    magic_resist: float = 0.0  # StatKey.MAGIC_RESIST
     resistance_cap: float = 0.85
 
     # Armor (Flat)
-    damage_reduction_flat: float = 0.0
+    armor: float = 0.0  # StatKey.ARMOR
 
 
 class ElementalStatsDTO(BaseModel):
@@ -253,6 +266,14 @@ class EnvironmentalStatsDTO(BaseModel):
     environment_bio_resistance: float = 0.0
 
 
+class SpeedStatsDTO(BaseModel):
+    """Скоростные характеристики."""
+
+    attack_speed: float = 0.0  # StatKey.ATTACK_SPEED
+    cast_speed: float = 0.0  # StatKey.CAST_SPEED
+    movement_speed: float = 0.0  # StatKey.MOVEMENT_SPEED
+
+
 # ==============================================================================
 # 2. COMBAT MODIFIERS (Основной DTO)
 # ==============================================================================
@@ -263,7 +284,7 @@ class CombatModifiersDTO(
     # CombatSkillsDTO удален отсюда!
     MainHandStatsDTO,
     OffHandStatsDTO,
-    ItemStatsDTO,  # <--- NEW
+    ItemStatsDTO,
     PhysicalStatsDTO,
     MagicalStatsDTO,
     DefensiveStatsDTO,
@@ -272,13 +293,14 @@ class CombatModifiersDTO(
     StatusStatsDTO,
     SpecialStatsDTO,
     EnvironmentalStatsDTO,
+    SpeedStatsDTO,  # <--- NEW
 ):
     """
     Только боевые модификаторы (без скиллов).
     Используются в ActorStats.mods.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")  # Изменил на ignore, чтобы не падать от лишних ключей
 
 
 class CharacterWorldStatsDTO(BaseModel):
@@ -287,7 +309,7 @@ class CharacterWorldStatsDTO(BaseModel):
     Загружается из Redis для проверок в диалогах, магазинах и мастерских.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     # ==========================================================================
     # 💰 ЭКОНОМИКА И СОЦИУМ

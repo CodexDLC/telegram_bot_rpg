@@ -87,7 +87,7 @@ class CombatResolver:
             if source == "off_hand":
                 return stats.mods.off_hand_damage_base
             elif source == "magic":
-                return stats.mods.magical_damage_base
+                return stats.mods.magical_damage  # FIXED: magical_damage_base -> magical_damage
             return stats.mods.main_hand_damage_base
 
         if key == "crit_chance":
@@ -172,7 +172,7 @@ class CombatResolver:
             CombatResolver._resolve_triggers(ctx, res, "ON_DODGE_FAIL")
             return False
 
-        base_evasion = def_stats.mods.dodge_chance
+        base_evasion = def_stats.mods.evasion  # FIXED: dodge_chance -> evasion
         evasion_cap = def_stats.mods.dodge_cap
         anti_evasion = def_stats.mods.anti_dodge_chance
 
@@ -226,7 +226,7 @@ class CombatResolver:
                 ctx.flags.state.check_counter = True
             return True
 
-        parry_chance = def_stats.mods.parry_chance
+        parry_chance = def_stats.mods.parry  # FIXED: parry_chance -> parry
         parry_cap = def_stats.mods.parry_cap
 
         if ctx.flags.formula.parry_halved:
@@ -275,7 +275,7 @@ class CombatResolver:
             CombatResolver._resolve_triggers(ctx, res, "ON_BLOCK")
             return True
 
-        block_chance = def_stats.mods.shield_block_chance
+        block_chance = def_stats.mods.block  # FIXED: shield_block_chance -> block
         block_cap = def_stats.mods.shield_block_cap
 
         if ctx.flags.formula.block_halved:
@@ -423,7 +423,7 @@ class CombatResolver:
             mitigation_pct = max(0.0, phys_res_pct - phys_pen_pct)
             phys_dmg *= 1.0 - mitigation_pct
 
-            armor_flat = def_stats.mods.damage_reduction_flat
+            armor_flat = def_stats.mods.armor  # FIXED: damage_reduction_flat -> armor
             phys_dmg = max(0.0, phys_dmg - armor_flat)
 
             if res.is_crit:
@@ -507,7 +507,7 @@ class CombatResolver:
         else:
             # Если нет override, берем магическую базу (или 0)
             # TODO: Можно добавить healing_base в статы
-            base = atk_stats.mods.magical_damage_base
+            base = atk_stats.mods.magical_damage  # FIXED: magical_damage_base -> magical_damage
             min_h = base * 0.9
             max_h = base * 1.1
 

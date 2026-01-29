@@ -45,26 +45,20 @@ class StatsEngine:
         skills_data = actor.skills
 
         # Создаем DTO
-        # Используем from_flat_dict или конструктор напрямую?
-        # Так как у нас есть четкое разделение (mods vs skills), лучше напрямую.
-
-        # Важно: calculated_mods может содержать лишние поля (от bridge),
-        # но Pydantic (CombatModifiersDTO) их отфильтрует, если extra='ignore'.
-        # У нас extra='forbid' в CombatModifiersDTO, поэтому надо быть аккуратным.
-        # Но Waterfall возвращает только то, что мы просили (плюс derived).
-        # Если derived ключи совпадают с полями DTO -> все ок.
-
-        # Чтобы избежать ошибок валидации, можно профильтровать calculated_mods
-        # по полям CombatModifiersDTO. Но это дорого.
-        # Доверимся тому, что Waterfall возвращает корректные ключи.
+        # Теперь ключи в calculated_mods (из StatsWaterfallCalculator -> stats_formulas -> StatKey)
+        # должны совпадать с полями CombatModifiersDTO (которые мы синхронизировали).
+        # extra='ignore' в DTO защитит от лишних полей.
 
         try:
-            mods_dto = CombatModifiersDTO(**calculated_mods)  # type: ignore # TODO: Fix later when refactoring Combat Engine
-        except (ValidationError, TypeError):
-            # Fallback: если Waterfall вернул мусор, фильтруем вручную
+            # Pydantic handles float->int conversion for HP/EN
+            mods_dto = CombatModifiersDTO(**calculated_mods)  # type: ignore
+        except (ValidationError, TypeError) as e:
+            # Логируем ошибку, но пытаемся продолжить с частичными данными
+            # В реальном проде тут нужен алерт
+            print(f"StatsEngine Error: {e}")
             valid_keys = CombatModifiersDTO.model_fields.keys()
             filtered_mods = {k: v for k, v in calculated_mods.items() if k in valid_keys}
-            mods_dto = CombatModifiersDTO(**filtered_mods)  # type: ignore # TODO: Fix later when refactoring Combat Engine
+            mods_dto = CombatModifiersDTO(**filtered_mods)  # type: ignore
 
         skills_dto = CombatSkillsDTO(**skills_data)
 

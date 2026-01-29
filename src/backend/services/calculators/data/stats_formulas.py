@@ -2,84 +2,78 @@
 Модуль содержит правила для расчета производных характеристик (модификаторов)
 на основе базовых характеристик персонажа.
 
-СИНХРОНИЗИРОВАНО С: apps/shared/schemas_dto/modifier_dto.py
+СИНХРОНИЗИРОВАНО С: src/shared/enums/stats_enums.py
 """
+
+from src.shared.enums.stats_enums import StatKey
 
 MODIFIER_RULES: dict[str, dict[str, float]] = {
     # ==========================================================================
     # ⚔️ 1. УРОН (Damage Base)
     # ==========================================================================
-    # Сила дает чистый урон обеим рукам
-    "main_hand_damage_base": {"strength": 1.0},
-    "off_hand_damage_base": {"strength": 1.0},
-    # Глобальный бонус урона (%)
-    "physical_damage_bonus": {"strength": 0.002},
+    # Сила дает чистый урон (Body)
+    StatKey.PHYSICAL_DAMAGE: {StatKey.STRENGTH: 1.0},
     # ==========================================================================
     # 🎯 2. ТОЧНОСТЬ И ПРОБИТИЕ (Accuracy & Penetration)
     # ==========================================================================
-    # Точность для обеих рук
-    "main_hand_accuracy": {"perception": 0.02, "agility": 0.005},
-    "off_hand_accuracy": {"perception": 0.02, "agility": 0.005},
-    # Пробивание брони
-    "main_hand_penetration": {"perception": 0.01},
-    "off_hand_penetration": {"perception": 0.01},
+    # Точность (Sensor: Perception + Prediction)
+    StatKey.ACCURACY: {StatKey.PERCEPTION: 0.02, StatKey.PREDICTION: 0.01},
+    # Пробивание брони (Sensor: Perception)
+    StatKey.ARMOR_PENETRATION: {StatKey.PERCEPTION: 0.01},
     # ==========================================================================
     # 💥 3. КРИТ (Crit Chance)
     # ==========================================================================
-    "main_hand_crit_chance": {"luck": 0.02},
-    "off_hand_crit_chance": {"luck": 0.02},
+    # Крит шанс (Sensor: Prediction - предвидение уязвимостей)
+    StatKey.CRIT_CHANCE: {StatKey.PREDICTION: 0.02},
+    # Крит сила (Core: Memory - знание анатомии/слабостей)
+    StatKey.CRIT_POWER: {StatKey.MEMORY: 0.01},
     # ==========================================================================
     # 🛡️ 4. ЗАЩИТА (Defense)
     # ==========================================================================
-    # Уворот
-    "dodge_chance": {"agility": 0.02},
-    # Анти-Крит (нужно добавить в DTO, если нет)
-    # "anti_crit_chance": {"endurance": 0.015, "luck": 0.005},
-    # Броня (Flat)
-    "damage_reduction_flat": {"endurance": 0.5},
-    # Резисты (%)
-    "physical_resistance": {"endurance": 0.005},
+    # Уворот (Body: Agility + Sensor: Prediction)
+    StatKey.EVASION: {StatKey.AGILITY: 0.015, StatKey.PREDICTION: 0.005},
+    # Броня (Body: Endurance)
+    StatKey.ARMOR: {StatKey.ENDURANCE: 0.5},
+    # Блок (Body: Strength)
+    StatKey.BLOCK: {StatKey.STRENGTH: 0.02},
+    # Парирование (Body: Agility)
+    StatKey.PARRY: {StatKey.AGILITY: 0.02},
     # ==========================================================================
     # 🔮 5. МАГИЯ (Magic)
     # ==========================================================================
-    "magical_damage_power": {"intelligence": 1.0},
-    "magical_accuracy": {"wisdom": 0.02},
-    "magical_crit_chance": {"luck": 0.02},  # Пока общий
-    "magical_resistance": {"wisdom": 0.01, "men": 0.005},
-    # Стихии
-    "fire_damage_bonus": {"intelligence": 0.005},
-    "water_damage_bonus": {"intelligence": 0.005},
-    "air_damage_bonus": {"intelligence": 0.005},
-    "earth_damage_bonus": {"intelligence": 0.005},
-    "light_damage_bonus": {"intelligence": 0.005},
-    "dark_damage_bonus": {"intelligence": 0.005},
-    "fire_resistance": {"wisdom": 0.01},
-    "water_resistance": {"wisdom": 0.01},
-    "air_resistance": {"wisdom": 0.01},
-    "earth_resistance": {"wisdom": 0.01},
-    "light_resistance": {"wisdom": 0.01},
-    "dark_resistance": {"wisdom": 0.01},
+    # Маг. урон (Core: Intellect)
+    StatKey.MAGICAL_DAMAGE: {StatKey.INTELLECT: 1.0},
+    # Маг. резист (Core: Mental)
+    StatKey.MAGIC_RESIST: {StatKey.MENTAL: 0.01},
     # ==========================================================================
-    # 💀 6. СПЕЦ-ЭФФЕКТЫ (Special)
+    # 💀 6. РЕСУРСЫ (Vitals)
     # ==========================================================================
-    "control_resistance": {"men": 0.02},
-    "debuff_avoidance": {"men": 0.015},
-    "healing_power": {"men": 0.02},
-    "energy_max": {"men": 10},
-    "energy_regen": {"men": 0.5},
-    "thorns_damage_flat": {"endurance": 0.5},
-    # Резисты к статусам
-    "poison_resistance": {"endurance": 0.02},
-    "bleed_resistance": {"endurance": 0.02},
-    "shock_resistance": {"endurance": 0.02},
+    # HP (Body: Endurance + Strength)
+    StatKey.HP: {StatKey.ENDURANCE: 10.0, StatKey.STRENGTH: 2.0},
+    # EN (Core: Mental + Body: Endurance)
+    StatKey.EN: {StatKey.MENTAL: 5.0, StatKey.ENDURANCE: 2.0},
+    # Stamina (Body: Endurance)
+    StatKey.STAMINA: {StatKey.ENDURANCE: 10.0},
+    # Реген
+    StatKey.HP_REGEN: {StatKey.ENDURANCE: 0.1},
+    StatKey.EN_REGEN: {StatKey.MENTAL: 0.1},
+    StatKey.STAMINA_REGEN: {StatKey.ENDURANCE: 0.2},
     # ==========================================================================
-    # 💰 7. УТИЛИТЫ (Utility)
+    # ⚡ 7. СКОРОСТЬ (Speed)
     # ==========================================================================
-    "inventory_slots_bonus": {"perception": 1},
-    "weight_limit_bonus": {"strength": 2.0},
-    "trade_discount": {"charisma": 0.01},
-    "find_loot_chance": {"luck": 0.02},
-    "pet_efficiency_mult": {"charisma": 0.03},  # pet_damage/health -> efficiency
+    # Инициатива (Sensor: Prediction + Body: Agility)
+    StatKey.INITIATIVE: {StatKey.PREDICTION: 1.0, StatKey.AGILITY: 0.5},
+    # Скорость атаки (Body: Agility)
+    StatKey.ATTACK_SPEED: {StatKey.AGILITY: 0.005},
+    # Скорость каста (Core: Memory - мышечная память формул)
+    StatKey.CAST_SPEED: {StatKey.MEMORY: 0.005},
+    # Скорость движения (Body: Agility)
+    StatKey.MOVEMENT_SPEED: {StatKey.AGILITY: 0.01},
+    # ==========================================================================
+    # 🎭 8. СОЦИАЛКА И ПРОЧЕЕ (Misc)
+    # ==========================================================================
+    # Проекция (Влияние/Харизма) влияет на торговлю? Пока оставим пустым или привяжем к Projection
+    # "trade_discount": {StatKey.PROJECTION: 0.01},
 }
 
 DEFAULT_VALUES = {

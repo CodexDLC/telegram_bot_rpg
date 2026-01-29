@@ -9,6 +9,8 @@ from src.backend.domains.user_features.combat.dto import (
     ActorSnapshot,
     CombatEventDTO,
     CombatMoveDTO,
+    ExchangePayload,
+    InstantPayload,
     PipelineContextDTO,
 )
 from src.backend.resources.game_data import GameData
@@ -51,9 +53,9 @@ class AbilityService:
 
         # 4. [ROUTING & LOGIC]
         if ctx.phases.run_calculator:
-            # Используем getattr для безопасного доступа к полям payload (объект или dict)
-            ability_id: str | None = getattr(move.payload, "ability_id", None)  # type: ignore # TODO: Fix later when refactoring Combat Engine
-            feint_id: str | None = getattr(move.payload, "feint_id", None)  # type: ignore # TODO: Fix later when refactoring Combat Engine
+            # Строгая типизация извлечения ID
+            ability_id = self._extract_action_id(move, mode="ability")
+            feint_id = self._extract_action_id(move, mode="feint")
 
             if ability_id:
                 self._process_action_logic(ctx, move, source, target, mode="ability")
@@ -123,6 +125,36 @@ class AbilityService:
     # ==============================================================================
 
     @staticmethod
+    def _extract_action_id(move: CombatMoveDTO, mode: Literal["ability", "feint"]) -> str | None:
+        """
+        Безопасное извлечение ID действия из payload с проверкой типов.
+        """
+        payload = move.payload
+
+        # 1. Fallback для словарей (если Pydantic не сработал или legacy)
+        if isinstance(payload, dict):
+            if mode == "ability":
+                return payload.get("ability_id")
+            if mode == "feint":
+                return payload.get("feint_id")
+            return None
+
+        # 2. Строгая проверка DTO
+        if mode == "ability":
+            # Ability ID есть только в InstantPayload
+            if isinstance(payload, InstantPayload):
+                return payload.ability_id
+            return None
+
+        if mode == "feint":
+            # Feint ID есть и в ExchangePayload, и в InstantPayload
+            if isinstance(payload, (ExchangePayload, InstantPayload)):
+                return payload.feint_id
+            return None
+
+        return None
+
+    @staticmethod
     def _process_action_logic(
         ctx: PipelineContextDTO,
         move: CombatMoveDTO,
@@ -138,7 +170,7 @@ class AbilityService:
         action_id: str | None = None
 
         if mode == "ability":
-            action_id = getattr(move.payload, "ability_id", None)  # type: ignore # TODO: Fix later when refactoring Combat Engine
+            action_id = AbilityService._extract_action_id(move, mode="ability")
             if not action_id:
                 return
 
@@ -153,7 +185,7 @@ class AbilityService:
                     log.info(f"AbilityService | Not enough resources for ability {config.ability_id}")
 
         elif mode == "feint":
-            action_id = getattr(move.payload, "feint_id", None)  # type: ignore # TODO: Fix later when refactoring Combat Engine
+            action_id = AbilityService._extract_action_id(move, mode="feint")
             if not action_id:
                 return
 
@@ -192,7 +224,7 @@ class AbilityService:
 
         active_ability = ActiveAbilityDTO(
             uid=ability_uid,
-            ability_id=active_id,  # type: ignore # TODO: Fix later when refactoring Combat Engine
+            ability_id=active_id,  # type: ignore # Pydantic validator handles this usually
             source_id=actor.char_id,
             expire_at_exchange=actor.meta.exchange_counter,
             modified_keys=modified_keys,
