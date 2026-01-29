@@ -15,6 +15,7 @@ async def get_context_assembler_service(
     return ContextAssemblerService(
         account_manager=redis_container.account,
         context_manager=redis_container.context,
+        inventory_manager=redis_container.inventory,  # Добавляем зависимость
     )
 
 

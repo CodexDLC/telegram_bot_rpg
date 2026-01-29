@@ -111,7 +111,7 @@ class CombatContentUI:
                 is_selected = f_id == selected_feint
                 label = f"✅ {f_name}" if is_selected else f"⭕ {f_name}"
 
-                # Используем layer="feint" для обработки в Orchestrator
+                # Используем layer="feint" для обработки в service
                 cb = CombatControlCallback(action="zone", layer="feint", value=f_id).pack()
                 kb.row(InlineKeyboardButton(text=label, callback_data=cb))
 

@@ -84,3 +84,27 @@ class WorldManager:
         """
         key = Rk.get_world_location_players_key(loc_id)
         return await self.redis_service.get_set_members(key)
+
+    # --- Battles Management (Hash: battle_id -> description) ---
+
+    async def add_battle_to_location(self, loc_id: str, battle_id: str, description: str) -> None:
+        """
+        Добавляет бой в список активных боев локации.
+        Использует Hash, где ключ=battle_id, значение=описание.
+        """
+        key = Rk.get_world_location_battles_key(loc_id)
+        await self.redis_service.set_hash_field(key, battle_id, description)
+
+    async def remove_battle_from_location(self, loc_id: str, battle_id: str) -> None:
+        """
+        Удаляет бой из списка активных боев локации.
+        """
+        key = Rk.get_world_location_battles_key(loc_id)
+        await self.redis_service.delete_hash_field(key, battle_id)
+
+    async def get_battles_in_location(self, loc_id: str) -> dict[str, str]:
+        """
+        Получает словарь активных боев: {battle_id: description}.
+        """
+        key = Rk.get_world_location_battles_key(loc_id)
+        return await self.redis_service.get_all_hash(key) or {}

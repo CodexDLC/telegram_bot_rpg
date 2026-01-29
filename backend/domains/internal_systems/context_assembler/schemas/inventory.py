@@ -3,69 +3,92 @@ from typing import Any
 from pydantic import computed_field
 
 from backend.domains.internal_systems.context_assembler.schemas.base import BaseTempContext
+from common.schemas.inventory.schemas import InventoryStatsDTO, WalletDTO
 
 
 class InventoryTempContext(BaseTempContext):
     """
-    Контекст для UI инвентаря.
+    Контекст для сборки сессии инвентаря.
+    Преобразует сырые данные из БД в структуру InventorySessionDTO.
     """
 
-    @computed_field(alias="items_by_slot")
-    def inventory_view(self) -> dict[str, Any]:
+    @computed_field
+    def char_id(self) -> int:
+        return self.core_meta.character_id if self.core_meta else 0
+
+    @computed_field
+    def items(self) -> dict[int, Any]:
+        """
+        Все предметы (Сумка + Экипировка).
+        Key: inventory_id
+        Value: InventoryItemDTO (dict)
+        """
         if not self.core_inventory:
             return {}
 
-        slots = {}
+        items_map = {}
         for item in self.core_inventory:
             # item может быть dict или DTO
             item_data = item.model_dump() if hasattr(item, "model_dump") else item
+            inv_id = item_data.get("inventory_id")
+            if inv_id:
+                items_map[inv_id] = item_data
+        return items_map
 
-            if item_data.get("location") == "equipped" and item_data.get("equipped_slot"):
-                slots[item_data["equipped_slot"]] = {
-                    "item_id": item_data.get("inventory_id"),
-                    "name": item_data.get("data", {}).get("name", "Unknown"),
-                    "type": item_data.get("item_type"),
-                    "rarity": item_data.get("rarity"),
-                }
-        return slots
-
-    @computed_field(alias="items_by_type")
-    def type_groups(self) -> dict[str, list]:
+    @computed_field
+    def equipped(self) -> dict[str, int]:
+        """
+        Только ссылки на надетые предметы.
+        Key: slot_name
+        Value: inventory_id
+        """
         if not self.core_inventory:
             return {}
 
-        groups: dict[str, list] = {
-            "weapon": [],
-            "armor": [],
-            "consumable": [],
-            "material": [],
-            "other": [],
-        }
-
+        equipped_map = {}
         for item in self.core_inventory:
             item_data = item.model_dump() if hasattr(item, "model_dump") else item
-            item_type = item_data.get("item_type", "other")
 
-            if item_type not in groups:
-                item_type = "other"
+            # Проверяем, что предмет надет и имеет слот
+            if item_data.get("location") == "equipped" and item_data.get("equipped_slot"):
+                slot = item_data["equipped_slot"]
+                inv_id = item_data.get("inventory_id")
+                if slot and inv_id:
+                    equipped_map[slot] = inv_id
+        return equipped_map
 
-            groups[item_type].append(
-                {
-                    "item_id": item_data.get("inventory_id"),
-                    "name": item_data.get("data", {}).get("name", "Unknown"),
-                    "quantity": item_data.get("quantity"),
-                    "rarity": item_data.get("rarity"),
-                }
-            )
-        return groups
-
-    @computed_field(alias="wallet_display")
-    def wallet_view(self) -> dict[str, Any]:
+    @computed_field
+    def wallet(self) -> WalletDTO:
+        """
+        Кошелек.
+        """
         if not self.core_wallet:
-            return {"currency": {}, "resources": {}, "components": {}}
+            return WalletDTO()
 
-        return {
-            "currency": self.core_wallet.get("currency", {}),
-            "resources": self.core_wallet.get("resources", {}),
-            "components": self.core_wallet.get("components", {}),
-        }
+        return WalletDTO(
+            currency=self.core_wallet.get("currency", {}),
+            resources=self.core_wallet.get("resources", {}),
+            components=self.core_wallet.get("components", {}),
+        )
+
+    @computed_field
+    def stats(self) -> InventoryStatsDTO:
+        """
+        Базовые статы инвентаря (вес, слоты).
+        """
+        # TODO: Рассчитать реальный вес на основе items
+        current_weight = 0.0
+        slots_used = 0
+
+        if self.core_inventory:
+            slots_used = len(self.core_inventory)
+            # Пример расчета веса (если бы у нас были данные о весе в item.data)
+            # for item in self.core_inventory:
+            #     item_data = ...
+            #     current_weight += item_data.get("weight", 0) * item_data.get("quantity", 1)
+
+        return InventoryStatsDTO(
+            current_weight=current_weight,
+            slots_used=slots_used,
+            # max_weight и slots_total берутся дефолтные или из атрибутов (если переданы)
+        )

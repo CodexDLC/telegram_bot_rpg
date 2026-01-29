@@ -84,6 +84,10 @@ domains/user_features/{domain}/
 ├── gateway/                # 🔴 ОБЯЗАТЕЛЬНО — Точки входа
 │   └── {feature}_gateway.py
 │
+├── services/               # 🔴 ОБЯЗАТЕЛЬНО — Бизнес-логика
+│   ├── {feature}_service.py        # Основная логика
+│   └── {feature}_session_service.py # Работа с Redis (опционально)
+│
 ├── dto/                    # 🔴 ОБЯЗАТЕЛЬНО — DTO домена
 │   └── {feature}_dto.py
 │
@@ -99,7 +103,6 @@ domains/user_features/{domain}/
 
 | Папка | Когда нужна | Пример |
 |-------|-------------|--------|
-| `services/` | Бизнес-логика | `login_service.py` |
 | `orchestrators/` | Координация flow | `combat_entry_orchestrator.py` |
 | `engine/` | Чистая логика/математика | `combat_engine/logic/` |
 | `workers/` | Фоновые задачи (ARQ) | `workers/tasks/` |
@@ -126,87 +129,85 @@ domains/internal_systems/{system}/
 
 ---
 
-## 📊 Примеры реальных доменов
+## 🧩 Паттерны реализации (Backend Patterns)
 
-### Account (простой User Feature)
+### 1. Gateway (Шлюз)
+**Ответственность:**
+*   Принимает запрос от API.
+*   Маршрутизирует запрос на нужный метод Service.
+*   Упаковывает результат в `CoreResponseDTO`.
+*   Обрабатывает ошибки и логирует их.
 
-```plaintext
-domains/user_features/account/
-├── api/
-│   ├── lobby.py
-│   ├── onboarding.py
-│   └── registration.py
-├── gateway/
-│   ├── lobby_gateway.py
-│   ├── login_gateway.py
-│   ├── onboarding_gateway.py
-│   └── registration_gateway.py
-├── services/
-│   ├── lobby_service.py
-│   ├── login_service.py
-│   └── ...
-├── dto/                    # (или в shared)
-└── tests/
-    ├── unit/
-    └── integration/
+**Пример:**
+```python
+class ArenaGateway:
+    async def handle_action(self, char_id: int, action: str, ...) -> CoreResponseDTO:
+        try:
+            if action == "join_queue":
+                return self._success(await self.service.join_queue(...))
+            # ...
+        except Exception as e:
+            logger.exception(...)
+            return self._error("Internal Error")
 ```
 
-### Combat (сложный User Feature)
+### 2. Service (Сервис Домена)
+**Ответственность:**
+*   Реализует бизнес-логику (правила игры).
+*   Работает с DTO.
+*   Не знает про HTTP/API.
+*   Делегирует работу с данными в SessionService или Repository.
+*   Вызывает другие домены через Dispatcher.
 
-```plaintext
-domains/user_features/combat/
-├── api/
-│   └── router.py
-├── gateway/                # Gateway layer
-│   └── combat_gateway.py
-├── orchestrators/          # Initialization layer
-│   ├── combat_entry_orchestrator.py
-│   └── handler/
-│       ├── combat_session_service.py
-│       ├── initialization/
-│       └── runtime/
-├── combat_engine/          # Engine layer
-│   ├── logic/
-│   ├── processors/
-│   ├── mechanics/
-│   └── workers/
-├── dto/
-└── tests/
-    ├── unit/
-    └── integration/
+**Пример:**
+```python
+class ArenaService:
+    async def join_queue(self, char_id: int, mode: str) -> ArenaUIPayloadDTO:
+        gs = await self.session.get_gear_score(char_id)
+        await self.session.add_to_queue(char_id, mode, gs)
+        return ArenaUIPayloadDTO(...)
 ```
 
-### Context Assembler (Internal System)
+### 3. SessionService (Сервис Сессии)
+**Ответственность:**
+*   Инкапсулирует работу с Redis (Managers).
+*   Объединяет несколько менеджеров (например, ArenaManager + AccountManager).
+*   Предоставляет удобный интерфейс для Service.
 
-```plaintext
-domains/internal_systems/context_assembler/
-├── service.py
-├── dtos.py
-├── logic/
-│   ├── base_assembler.py
-│   ├── player_assembler.py
-│   └── monster_assembler.py
-└── tests/
-    └── unit/
+**Пример:**
+```python
+class ArenaSessionService:
+    def __init__(self, arena_manager: ArenaManager, account_manager: AccountManager): ...
+
+    async def join_queue(self, char_id: int, mode: str) -> int:
+        gs = await self.account_manager.get_gear_score(char_id)
+        await self.arena_manager.add_to_queue(mode, char_id, gs)
+        return gs
 ```
+
+### 4. Manager (Redis Manager)
+**Ответственность:**
+*   Прямой доступ к Redis (get, set, zadd).
+*   Знает структуру ключей (`arena:queue:{mode}`).
+*   Находится в `backend/database/redis/manager/`.
 
 ---
 
 ## 🔄 Слои и направление зависимостей
 
 ```
-API → Gateway → Orchestrator → Service → Engine
-                    ↓
-              Repository (DB/Redis)
+API → Gateway → Service → SessionService → Manager (Redis)
+                                     ↘ Repository (DB)
+                                     ↘ Dispatcher (Other Domains)
 ```
 
 | Слой | Знает о | Не знает о |
 |------|---------|------------|
 | API | Gateway, DTO | Services, Engine |
 | Gateway | Services, Orchestrators | Engine internals |
-| Orchestrator | Services, Engine | API, другие домены |
-| Service | Repository, Engine | API, Gateway |
-| Engine | Ничего (stateless) | Всё остальное |
+| Service | SessionService, Repository, Engine | API, Gateway |
+| SessionService | Managers | Service, API |
+| Manager | Redis | Service, Logic |
 
 ---
 
@@ -237,6 +238,7 @@ domain/tests/
 - [ ] Создать папку в `domains/user_features/{name}/`
 - [ ] Создать `api/` с роутерами
 - [ ] Создать `gateway/` с точками входа
+- [ ] Создать `services/` с бизнес-логикой
 - [ ] Создать `dto/` (или использовать shared)
 - [ ] Создать `tests/` с базовой структурой
 - [ ] Подключить роутер в главный `router.py`

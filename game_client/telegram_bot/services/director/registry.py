@@ -6,22 +6,58 @@ from common.schemas.enums import CoreDomain
 from game_client.bot.resources.fsm_states.states import BotState
 
 
-# Config для режиссера: какой стейт включить и какой метод контейнера дернуть, чтобы получить Оркестратор
+# Config для режиссера: какой стейт включить и какой сервис вызвать при входе
 class SceneConfig(NamedTuple):
     fsm_state: State
-    container_getter: str  # Имя метода в BotContainer (ex: "get_combat_bot_orchestrator")
+    entry_service: str  # Ключ в RENDER_ROUTES[feature] для entry point
 
 
-# O(1) карта сцен
-DIRECTOR_ROUTES: dict[str, SceneConfig] = {
-    # --- Battle Scenes ---
-    CoreDomain.COMBAT: SceneConfig(fsm_state=BotState.combat, container_getter="get_combat_bot_orchestrator"),
-    # --- TODO: Migrate other domains ---
-    # CoreDomain.EXPLORATION: SceneConfig(fsm_state=BotState.exploration, container_getter="get_exploration_bot_orchestrator"),
-    # CoreDomain.SCENARIO: SceneConfig(fsm_state=BotState.scenario, container_getter="get_scenario_bot_orchestrator"),
-    # CoreDomain.INVENTORY: SceneConfig(fsm_state=BotState.inventory, container_getter="get_inventory_bot_orchestrator"),
-    # CoreDomain.LOBBY: SceneConfig(fsm_state=BotState.lobby, container_getter="get_lobby_bot_orchestrator"),
-    # CoreDomain.STATUS: SceneConfig(fsm_state=BotState.status, container_getter="get_status_bot_orchestrator"),
-    # CoreDomain.ONBOARDING: SceneConfig(fsm_state=BotState.onboarding, container_getter="get_onboarding_bot_orchestrator"),
-    # CoreDomain.ARENA: SceneConfig(fsm_state=BotState.arena, container_getter="get_arena_bot_orchestrator"),
+# =============================================================================
+# SCENE_ROUTES: Межфичевые переходы (смена FSM State)
+# =============================================================================
+SCENE_ROUTES: dict[str, SceneConfig] = {
+    CoreDomain.COMBAT: SceneConfig(fsm_state=BotState.combat, entry_service="hud"),
+    CoreDomain.EXPLORATION: SceneConfig(fsm_state=BotState.exploration, entry_service="navigation"),
+    CoreDomain.SCENARIO: SceneConfig(fsm_state=BotState.scenario, entry_service="main"),
+    CoreDomain.INVENTORY: SceneConfig(fsm_state=BotState.inventory, entry_service="main"),
+    CoreDomain.LOBBY: SceneConfig(fsm_state=BotState.lobby, entry_service="main"),
+    CoreDomain.STATUS: SceneConfig(fsm_state=BotState.status, entry_service="main"),
+    CoreDomain.ONBOARDING: SceneConfig(fsm_state=BotState.onboarding, entry_service="main"),
+    CoreDomain.ARENA: SceneConfig(fsm_state=BotState.arena, entry_service="main"),
+}
+
+# Alias для обратной совместимости
+DIRECTOR_ROUTES = SCENE_ROUTES
+
+
+# =============================================================================
+# RENDER_ROUTES: Внутрифичевые переходы (без смены FSM State)
+# feature -> service -> container_getter
+# =============================================================================
+RENDER_ROUTES: dict[str, dict[str, str]] = {
+    CoreDomain.COMBAT: {
+        "hud": "get_combat_bot_orchestrator",
+    },
+    CoreDomain.EXPLORATION: {
+        "navigation": "get_navigation_orchestrator",
+        "interaction": "get_interaction_orchestrator",
+    },
+    CoreDomain.SCENARIO: {
+        "main": "get_scenario_bot_orchestrator",
+    },
+    CoreDomain.INVENTORY: {
+        "main": "get_inventory_bot_orchestrator",
+    },
+    CoreDomain.LOBBY: {
+        "main": "get_lobby_bot_orchestrator",
+    },
+    CoreDomain.STATUS: {
+        "main": "get_status_bot_orchestrator",
+    },
+    CoreDomain.ONBOARDING: {
+        "main": "get_onboarding_bot_orchestrator",
+    },
+    CoreDomain.ARENA: {
+        "main": "get_arena_bot_orchestrator",
+    },
 }

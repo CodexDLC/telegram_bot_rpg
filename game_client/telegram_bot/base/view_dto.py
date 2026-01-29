@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 from aiogram.types import InlineKeyboardMarkup
 from pydantic import BaseModel, ConfigDict
 
@@ -16,8 +14,16 @@ class ViewResultDTO(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
-@dataclass
-class UnifiedViewDTO:
+class MessageCoordsDTO(BaseModel):
+    """
+    Координаты сообщения в Telegram.
+    """
+
+    chat_id: int
+    message_id: int
+
+
+class UnifiedViewDTO(BaseModel):
     """
     Единый DTO ответа от Оркестратора.
     Содержит данные для двух сообщений (Content и Menu) и флаги управления.
@@ -28,9 +34,10 @@ class UnifiedViewDTO:
     clean_history: bool = False
     alert_text: str | None = None  # Для всплывающих уведомлений (answer_callback_query)
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-@dataclass
-class MenuViewDTO:
+
+class MenuViewDTO(BaseModel):
     """
     Универсальный DTO для передачи готового UI (текст + клавиатура)
     от сервисного слоя к хендлерам.
@@ -38,3 +45,5 @@ class MenuViewDTO:
 
     text: str
     keyboard: InlineKeyboardMarkup | None = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)

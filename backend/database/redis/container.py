@@ -5,11 +5,10 @@ from backend.database.redis.manager.account_manager import AccountManager
 from backend.database.redis.manager.arena_manager import ArenaManager
 from backend.database.redis.manager.combat_manager import CombatManager
 from backend.database.redis.manager.context_manager import ContextRedisManager
+from backend.database.redis.manager.inventory_manager import InventoryManager
 from backend.database.redis.manager.scenario_manager import ScenarioManager
+from backend.database.redis.manager.world_manager import WorldManager
 from backend.database.redis.redis_service import RedisService
-
-# from backend.database.redis.manager.world_manager import WorldManager # TODO: Add when moved
-# from backend.database.redis.manager.inventory_manager import InventoryManager # TODO: Add when moved
 
 
 class RedisContainer:
@@ -28,7 +27,5 @@ class RedisContainer:
         self.combat = CombatManager(self.service)
         self.context = ContextRedisManager(self.service)
         self.scenario = ScenarioManager(self.service)
-
-        # TODO: Initialize other managers
-        # self.world = WorldManager(self.service)
-        # self.inventory = InventoryManager(self.service)
+        self.inventory = InventoryManager(self.service)
+        self.world = WorldManager(self.service)

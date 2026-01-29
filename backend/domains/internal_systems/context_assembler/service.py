@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.database import get_session_context
 from backend.database.redis.manager.account_manager import AccountManager
 from backend.database.redis.manager.context_manager import ContextRedisManager
+from backend.database.redis.manager.inventory_manager import InventoryManager
 from backend.domains.internal_systems.context_assembler.dtos import ContextRequestDTO, ContextResponseDTO
 from backend.domains.internal_systems.context_assembler.logic.monster_assembler import MonsterAssembler
 from backend.domains.internal_systems.context_assembler.logic.player_assembler import PlayerAssembler
@@ -22,9 +23,11 @@ class ContextAssemblerService:
         self,
         account_manager: AccountManager,
         context_manager: ContextRedisManager,
+        inventory_manager: InventoryManager,  # Добавляем зависимость
     ):
         self.account_manager = account_manager
         self.context_manager = context_manager
+        self.inventory_manager = inventory_manager
 
     async def assemble(self, request: ContextRequestDTO) -> ContextResponseDTO:
         """
@@ -45,9 +48,9 @@ class ContextAssemblerService:
         """
         Внутренняя логика распределения задач по стратегиям.
         """
-        # Инициализируем стратегии с текущей сессией
+        # Инициализируем стратегии с текущей сессией и менеджерами
         strategies = {
-            "player": PlayerAssembler(session, self.account_manager, self.context_manager),
+            "player": PlayerAssembler(session, self.account_manager, self.context_manager, self.inventory_manager),
             "monster": MonsterAssembler(session, self.account_manager, self.context_manager),
         }
 

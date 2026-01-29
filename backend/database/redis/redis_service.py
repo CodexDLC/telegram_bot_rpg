@@ -97,6 +97,19 @@ class RedisService:
             log.exception(f"RedisJSON | action=arrappend status=failed reason='Redis error' key='{key}'")
             return 0
 
+    async def json_del(self, key: str, path: str = "$") -> int:
+        """
+        Удаляет значение JSON по указанному пути.
+        """
+        try:
+            # redis-py stubs issue with async json
+            result = await self.redis_client.json().delete(key, path)  # type: ignore
+            log.debug(f"RedisJSON | action=del status=success key='{key}' path='{path}' count={result}")
+            return int(result)
+        except RedisError:
+            log.exception(f"RedisJSON | action=del status=failed reason='Redis error' key='{key}'")
+            return 0
+
     # --- Standard Methods ---
 
     async def eval_script(self, script: str, keys: list[str], args: list[Any]) -> Any:
@@ -170,6 +183,23 @@ class RedisService:
             log.debug(f"RedisHash | action=set_fields status=success key='{key}' fields={list(data.keys())}")
         except RedisError:
             log.exception(f"RedisHash | action=set_fields status=failed reason='Redis error' key='{key}'")
+
+    async def set_hash_field(self, key: str, field: str, value: str) -> None:
+        """
+        Устанавливает значение одного поля в хеше Redis.
+
+        Args:
+            key: Ключ хеша Redis.
+            field: Поле внутри хеша.
+            value: Значение поля.
+        """
+        try:
+            await self.redis_client.hset(key, field, value)  # type: ignore
+            log.debug(f"RedisHash | action=set_field status=success key='{key}' field='{field}'")
+        except RedisError:
+            log.exception(
+                f"RedisHash | action=set_field status=failed reason='Redis error' key='{key}' field='{field}'"
+            )
 
     async def get_hash_json(self, key: str, field: str) -> dict[str, Any] | None:
         """

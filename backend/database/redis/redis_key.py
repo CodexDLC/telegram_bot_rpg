@@ -78,11 +78,12 @@ class RedisKeys:
         return f"scen:session:{char_id}:data"
 
     @staticmethod
-    def get_inventory_session_key(char_id: int) -> str:
+    def get_inventory_key(char_id: int) -> str:
         """
-        Генерирует ключ для хранения данных сессии инвентаря (тип HASH).
+        Генерирует ключ для хранения данных сессии инвентаря (тип JSON).
+        Format: ac:{char_id}:inventory
         """
-        return f"inv:session:{char_id}:data"
+        return f"ac:{char_id}:inventory"
 
     @staticmethod
     def get_lobby_session_key(user_id: int) -> str:
@@ -122,6 +123,13 @@ class RedisKeys:
         Генерирует ключ для хранения идентификаторов игроков, находящихся в данной локации (тип SET).
         """
         return f"world:players_loc:{loc_id}"
+
+    @staticmethod
+    def get_world_location_battles_key(loc_id: str) -> str:
+        """
+        Генерирует ключ для хранения идентификаторов активных боев в данной локации (тип SET).
+        """
+        return f"world:battles_loc:{loc_id}"
 
     @staticmethod
     def get_solo_dungeon_key(char_id: int) -> str:

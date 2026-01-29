@@ -1,45 +1,66 @@
-# 🛠️ Task: Migration to Session-Based Inventory
+# 🛠️ Task: Migration to Session-Based Inventory & Composite UI
 
-> **Status:** Planned
-> **Priority:** High
-> **Goal:** Переход от CRUD-модели (прямые запросы в БД) к Session-Based модели (Redis Cache).
+> **Status:** 🟡 In Progress
+> **Priority:** Critical
+> **Goal:** Переход на Session-Based архитектуру (RedisJSON) и внедрение Composite Response для поддержки двухпанельного UI (Content + Menu).
 
-## 1. Проблема (Current State)
-*   **Direct DB Access:** `InventoryService` обращается к PostgreSQL при каждой операции (equip, move, get).
-*   **Performance:** Пересчет статов и проверка слотов (`get_capacity`) нагружают базу.
-*   **Consistency:** Нет единого транзакционного контекста для серии операций.
+---
+
+## 1. Контекст и Проблемы
+*   **Legacy:** Текущая (или планируемая ранее) реализация подразумевала прямой CRUD в БД или отсутствие четкого разделения слоев.
+*   **UI Limitation:** Базовый оркестратор не умеет обрабатывать сложные ответы, содержащие данные и для контента, и для меню одновременно.
+*   **Performance:** Необходим кэш сессии, чтобы не нагружать БД при каждом открытии инвентаря.
+
+---
 
 ## 2. Целевая Архитектура (Target State)
 
-### 2.1. Компоненты
-1.  **InventoryGateway (API):** Единая точка входа. Принимает команды (`EquipRequest`, `MoveRequest`).
-2.  **InventoryOrchestrator (Session):**
-    *   `load_session(char_id)`: Загружает инвентарь из БД в Redis (`inventory:session:{uuid}`).
-    *   `save_session(char_id)`: Сбрасывает изменения из Redis в БД (асинхронно или при выходе).
-3.  **InventoryEngine (Logic):**
-    *   Работает **только** с DTO в памяти (`InventorySessionDTO`).
-    *   Не знает про базу данных.
-    *   Выполняет проверки: "Влезет ли предмет?", "Можно ли надеть?".
+### 2.1. Data Layer (RedisJSON)
+*   **Storage:** Инвентарь хранится как единый JSON-документ в Redis.
+*   **Key:** `ac:{char_id}:inventory`
+*   **Structure:** `InventorySessionDTO` (Items, Equipment, Wallet, Stats).
+*   **Persistence:**
+    *   **Read:** Redis -> (Miss) -> ContextAssembler (DB) -> Redis.
+    *   **Write:** Redis -> Dirty Flag -> Async Worker (Future) / Explicit Save.
 
-### 2.2. Взаимодействие с Item System
-*   Инвентарь хранит только `item_id` (instance) и `template_id`.
-*   Данные о предмете (название, статы) запрашиваются через `ItemGateway` (кэшируемый).
+### 2.2. API Layer (Composite Response)
+*   **DTO:** `CoreCompositeResponseDTO[T, M]`
+    *   `header`: GameStateHeader
+    *   `payload`: T (Content DTO, например `InventoryBagViewDTO`)
+    *   `menu_payload`: M (Menu DTO, например `HUDMenuDTO`)
+*   **Gateway:** Оборачивает ответы сервиса в CompositeDTO.
 
-## 3. План Миграции
+### 2.3. Client Layer (Thin Client)
+*   **BaseBotOrchestrator:** Получает метод `process_response`, который умеет разделять CompositeDTO на Content и Menu.
+*   **InventoryOrchestrator:** Делегирует рендеринг `InventoryUIService`.
 
-### Step 1: Session Manager Implementation
-*   Создать `InventorySessionManager` в слое Orchestrator.
-*   Реализовать сериализацию/десериализацию `InventorySessionDTO` <-> Redis JSON.
+---
 
-### Step 2: Engine Refactoring
-*   Переписать методы `equip_item`, `move_item` в `InventoryService` (или новом `InventoryEngine`), чтобы они принимали `SessionDTO` и возвращали измененный `SessionDTO`.
-*   Убрать SQL-запросы из логики.
+## 3. План Реализации (Implementation Plan)
 
-### Step 3: Gateway Integration
-*   Настроить `InventoryGateway` на использование Оркестратора.
-*   Обеспечить вызов `load_session` перед началом работы с инвентарем (Middleware или явный вызов).
+### Phase 1: Shared Kernel (Infrastructure)
+*   [x] **DTO Update:** Добавить `CoreCompositeResponseDTO` в `common/schemas/response.py`.
+*   [x] **Base Orchestrator:**
+    *   Реализовать `process_response(response)`.
+    *   Добавить логику обработки CompositeDTO (вызов рендера контента и меню).
+    *   Добавить абстрактный метод `render_content`.
 
-## 4. Задействованные файлы
-*   `apps/game_core/modules/inventory/inventory_orchestrator.py`
-*   `apps/game_core/modules/inventory/inventory_service.py`
-*   `apps/game_core/modules/inventory/logic/bag_logic.py`
+### Phase 2: Inventory Domain (Data & Logic)
+*   [x] **Domain DTOs:** Создать схемы `InventorySessionDTO`, `InventoryItemDTO`, `InventoryViewDTO` (Bag, Doll, Details).
+*   [ ] **Resources:** Реализовать `InventoryResources` (тексты, кнопки).
+*   [ ] **Session Manager:** Реализовать `InventorySessionManager` (Redis operations, Lazy Load stub).
+*   [ ] **Enricher:** Реализовать `InventoryEnricher` (превращение ID -> Name/Icon).
+*   [ ] **Service:** Реализовать бизнес-логику (`get_view`, `equip`, `unequip`, `move`) работающую с сессией.
+*   [ ] **Gateway:** Реализовать `InventoryGateway` с возвратом `CoreCompositeResponseDTO`.
+
+### Phase 3: Client Implementation
+*   [ ] **UI Components:** Создать `DollUI`, `BagUI`, `DetailsUI`.
+*   [ ] **UI Service:** Реализовать `InventoryUIService` (Facade).
+*   [ ] **Orchestrator:** Реализовать `InventoryBotOrchestrator` (наследник Base, реализация `render_content`).
+*   [ ] **Handlers:** Создать `InventoryViewHandler` и `InventoryActionHandler`.
+
+---
+
+## 4. Зависимости
+*   `ContextAssembler` (будет использоваться как Stub/Mock на первом этапе, либо вызов существующего кода).
+*   `MenuService` (для получения данных HUD).

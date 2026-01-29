@@ -11,6 +11,7 @@ class CoreDomain(StrEnum):
     # --- Игровые домены (совпадают с GameState) ---
     EXPLORATION = "exploration"
     INVENTORY = "inventory"
+    STATUS = "status"
     COMBAT = "combats"  # Обычно это CombatTurnOrchestrator
     SCENARIO = "scenario"
     ONBOARDING = "onboarding"
@@ -19,3 +20,4 @@ class CoreDomain(StrEnum):
 
     # --- Служебные / Специфичные домены ---
     COMBAT_ENTRY = "combat_entry"  # Вход в бой, создание сессии
+    MENU = "game_menu"  # Добавлено для Game Menu

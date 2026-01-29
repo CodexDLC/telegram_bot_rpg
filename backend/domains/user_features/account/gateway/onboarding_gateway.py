@@ -10,7 +10,7 @@ from common.schemas.response import CoreResponseDTO, GameStateHeader
 class OnboardingGateway:
     """
     Gateway для Onboarding.
-    Принимает запросы от клиента (через Bot Orchestrator), вызывает Service и возвращает DTO.
+    Принимает запросы от клиента (через Bot service), вызывает Service и возвращает DTO.
     """
 
     def __init__(self, service: OnboardingService):

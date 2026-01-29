@@ -84,3 +84,13 @@
 - [ ] `POST /account/logout` endpoint
 - [ ] Сохранение состояния из `ac:{char_id}` в БД
 - [ ] Очистка временных сессий
+
+---
+
+### Phase 7: Optimization (High Load)
+**Цель:** Оптимизация высоконагруженных операций.
+
+- [ ] **[Spec: Nickname Bloom Filter](../Specs/Nickname_BloomFilter.md)** — Внедрение фильтра Блума для быстрой проверки уникальности никнеймов.
+  - [ ] Реализация Redis Bitset + Hashlib.
+  - [ ] Worker для инициализации (Cold Start).
+  - [ ] Интеграция в `RegistrationService`.

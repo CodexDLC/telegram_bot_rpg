@@ -69,17 +69,6 @@ src/game_client/
 └── bot/                    # ⚠️ LEGACY — удалить после миграции
 ```
 
-### Описание папок
-
-| Папка | Назначение |
-|-------|-----------|
-| `core/` | Инфраструктура: config, DI, factory |
-| `services/` | Общие сервисы: director, sender, animation, error, fsm, reporting |
-| `base/` | Базовые классы для наследования (BaseOrchestrator, UnifiedViewDTO) |
-| `resources/` | Константы, FSM states |
-| `features/` | Фичи (доменный подход) |
-| `middlewares/` | Aiogram middlewares |
-
 ---
 
 ## 🏰 Структура фичи (Feature)
@@ -101,10 +90,7 @@ features/{feature}/
 ├── system/                 # 🟡 ОПЦИОНАЛЬНО — Логика UI (для сложных фич)
 │   ├── {feature}_bot_orchestrator.py  # Координация: API + UI + FSM
 │   ├── {feature}_state_manager.py     # Работа с FSM (драфт, состояние)
-│   └── components/         # Stateless UI рендереры
-│       ├── content_ui.py   # Основной контент
-│       ├── menu_ui.py      # Меню/логи
-│       └── flow_ui.py      # Спец. режимы
+│   └── {feature}_ui_service.py        # Рендеринг UI
 │
 ├── tests/                  # 🔴 ОБЯЗАТЕЛЬНО — Тесты фичи
 │   ├── unit/
@@ -115,39 +101,87 @@ features/{feature}/
 
 ---
 
-## 📊 Пример: Combat Feature (эталон)
+## 🧩 Паттерны реализации (Client Patterns)
 
-```plaintext
-features/combat/
-├── client.py                   # API клиент к backend/combat
-├── handlers/
-│   └── combat_handlers.py      # Callback handlers (как роутеры)
-├── resources/
-│   ├── formatters/
-│   │   └── combat_formatters.py    # Форматирование текста
-│   └── keyboards/
-│       └── combat_callback.py      # CallbackData классы
-├── system/
-│   ├── combat_bot_orchestrator.py  # Главный координатор
-│   ├── combat_state_manager.py     # FSM (драфт хода)
-│   └── components/                 # Stateless UI рендереры
-│       ├── content_ui.py           # Нижнее сообщение (дашборд)
-│       ├── menu_ui.py              # Верхнее сообщение (логи)
-│       └── flow_ui.py              # Спец. режимы (spectator)
-└── tests/
-    └── unit/
+### 1. Handler (Обработчик)
+**Ответственность:**
+*   Принимает callback/message от Aiogram.
+*   Действует как роутер: минимум логики.
+*   Создает `GameDirector`.
+*   Получает `Orchestrator` из `container`.
+*   Вызывает метод `Orchestrator`.
+*   Отправляет результат через `ViewSender`.
+
+**Пример:**
+```python
+@router.callback_query(...)
+async def handle_arena_action(call, callback_data, state, user, container):
+    orchestrator = container.arena
+    director = GameDirector(container, state)
+    orchestrator.set_director(director)
+    
+    view_result = await orchestrator.handle_request(user.id, callback_data)
+    
+    if view_result:
+        sender = ViewSender(...)
+        await sender.send(view_result)
 ```
 
-### Как это работает:
+### 2. Orchestrator (Оркестратор)
+**Ответственность:**
+*   Координирует всю логику фичи.
+*   Вызывает API через `client.py`.
+*   Вызывает `UIService` для рендеринга.
+*   Работает с FSM через `StateManager` (если нужно).
+*   Возвращает `UnifiedViewDTO`.
 
-1. **Handler** получает callback от Telegram
-2. **Handler** вызывает метод **Orchestrator** (`handle_menu_event`, `handle_control_event`...)
-3. **Orchestrator**:
-   - Вызывает `client.py` → получает данные от backend
-   - Вызывает UI компоненты (`content_ui`, `menu_ui`) → получает ViewDTO
-   - Работает с FSM через `state_manager`
-4. **Orchestrator** возвращает `UnifiedViewDTO` (menu + content)
-5. **Handler** отправляет результат в Telegram
+**Пример:**
+```python
+class ArenaBotOrchestrator(BaseBotOrchestrator):
+    async def handle_request(self, user_id, callback_data) -> UnifiedViewDTO:
+        char_id = await self.director.get_char_id()
+        response = await self.client.action(...)
+        
+        redirect = await self.check_and_switch_state(response)
+        if redirect:
+            return redirect
+            
+        return await self.render(response.payload)
+```
+
+### 3. UIService (Сервис UI)
+**Ответственность:**
+*   Преобразует DTO от бэкенда в `ViewResultDTO`.
+*   Использует `Formatter` для текста.
+*   Использует `Callback` классы для клавиатур.
+
+**Пример:**
+```python
+class ArenaUIService:
+    def render_screen(self, payload: ArenaUIPayloadDTO) -> ViewResultDTO:
+        text = self.formatter.format_text(payload)
+        keyboard = self._build_keyboard(payload.buttons)
+        return ViewResultDTO(text=text, kb=keyboard)
+```
+
+### 4. Formatter (Форматтер)
+**Ответственность:**
+*   Форматирует текст (HTML, смайлики, подстановка данных).
+*   Stateless.
+
+**Пример:**
+```python
+class ArenaFormatter:
+    @staticmethod
+    def format_text(payload: ArenaUIPayloadDTO) -> str:
+        return f"<b>{payload.title}</b>\n{payload.description}"
+```
+
+### 5. Client (API Клиент)
+**Ответственность:**
+*   Отправляет HTTP запросы к backend.
+*   Наследуется от `BaseApiClient`.
+*   Парсит ответ в `CoreResponseDTO`.
 
 ---
 
@@ -158,10 +192,11 @@ Handler (callback/message)
     ↓
 Orchestrator
     ├── client.py → Backend API
-    ├── UI Components (content_ui, menu_ui, flow_ui)
+    ├── UIService
+    │   └── Formatter
     └── StateManager (FSM)
     ↓
-UnifiedViewDTO (menu + content) → Handler → Telegram
+UnifiedViewDTO (menu + content) → Handler → ViewSender → Telegram
 ```
 
 | Слой | Роль | Файлы |
@@ -169,43 +204,9 @@ UnifiedViewDTO (menu + content) → Handler → Telegram
 | **Handler** | Принимает callback/message, как роутер в FastAPI | `handlers/*.py` |
 | **Orchestrator** | Координация: вызов API, UI компонентов, FSM | `system/*_orchestrator.py` |
 | **API Client** | HTTP запросы к backend | `client.py` |
-| **UI Components** | Stateless рендереры (текст + клавиатуры) | `system/components/` |
+| **UIService** | Stateless рендерер UI | `system/*_ui_service.py` |
 | **StateManager** | Работа с FSM (драфт, состояние) | `system/*_state_manager.py` |
 | **Resources** | Keyboards, formatters, callbacks | `resources/` |
-
-### UnifiedViewDTO
-
-Orchestrator возвращает `UnifiedViewDTO` — унифицированный ответ:
-
-```python
-class UnifiedViewDTO:
-    menu: ViewDTO | None      # Верхнее сообщение (лог, инфо)
-    content: ViewDTO | None   # Нижнее сообщение (основной UI)
-```
-
-Handler получает готовый DTO и отправляет в Telegram.
-
-### API контракты (Shared DTO)
-
-DTO которые используются **и backend, и client** — живут в `src/shared/schemas/`:
-
-```python
-# src/shared/schemas/combat.py
-from shared.schemas.combat import CombatDashboardDTO, CombatLogDTO
-```
-
-Это API контракт — backend формирует, client потребляет.
-
----
-
-## ⚠️ Legacy код
-
-| Папка | Статус | Действие |
-|-------|--------|----------|
-| `bot/handlers/` | 🔴 Legacy | Мигрировать в `telegram_bot/features/` |
-| `bot/ui_service/` | 🔴 Legacy | Мигрировать в `telegram_bot/features/{f}/system/` |
-| `bot/resources/` | 🔴 Legacy | Мигрировать в `telegram_bot/common/` или `features/{f}/resources/` |
-| `bot/core_client/` | 🔴 Legacy | Мигрировать в `telegram_bot/features/{f}/client.py` |
 
 ---
 
@@ -215,17 +216,6 @@ from shared.schemas.combat import CombatDashboardDTO, CombatLogDTO
 - [ ] Создать `client.py` — API клиент
 - [ ] Создать `handlers/` — обработчики
 - [ ] Создать `resources/` — keyboards, formatters (если нужно)
-- [ ] Создать `system/` — orchestrator, components (если сложная)
+- [ ] Создать `system/` — orchestrator, ui_service (если сложная)
 - [ ] Создать `tests/`
 - [ ] Подключить роутер в `core/routers.py`
-
----
-
-## 📋 Чеклист миграции из bot/
-
-- [ ] Перенести handler из `bot/handlers/callback/{name}/` → `telegram_bot/features/{name}/handlers/`
-- [ ] Перенести ui_service из `bot/ui_service/{name}/` → `telegram_bot/features/{name}/system/`
-- [ ] Перенести client из `bot/core_client/{name}_client.py` → `telegram_bot/features/{name}/client.py`
-- [ ] Перенести resources → `features/{name}/resources/` или `common/`
-- [ ] Обновить импорты
-- [ ] Удалить старые файлы из `bot/`

@@ -18,5 +18,5 @@
 | :--- | :--- | :--- |
 | **View** | [📂 Client_Interface](./Client_Interface/README.md) | Отображение (Telegram). |
 | **API** | [📂 API](./API/README.md) | Входные точки (Gateway). |
-| **Session** | [📂 Orchestrator](./Orchestrator/README.md) | Управление сессией и кэшем. |
+| **Session** | [📂 Orchestrator](service/README.md) | Управление сессией и кэшем. |
 | **Logic** | [📂 Engine](./Engine/README.md) | Механики предметов (Use, Equip). |

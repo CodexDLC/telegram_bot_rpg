@@ -73,7 +73,7 @@ async def get_combat_lifecycle_service(redis_container: RedisContainerDep) -> Co
 
 CombatLifecycleServiceDep = Annotated[CombatLifecycleService, Depends(get_combat_lifecycle_service)]
 
-# --- 3. Entry Orchestrator ---
+# --- 3. Entry service ---
 
 
 async def get_combat_entry_orchestrator(

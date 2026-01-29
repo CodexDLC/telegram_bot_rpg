@@ -1,15 +1,27 @@
 # 🧭 Domain: Exploration
 
-> **Status:** ⚠️ Needs Refactoring (Legacy Code)
+> **Status:** 🚧 In Progress (Refactoring V2)
+> **Owner:** Backend Team
 
 ## 🎯 Описание
-Перемещение по миру, карта, случайные встречи (Encounters) и взаимодействие с объектами (NPC, Chests).
+Домен отвечает за перемещение игрока по миру, отображение карты, навигацию и генерацию случайных событий (Encounters).
 
-## 📂 Структура (V2 Target)
-*   **API:** Move (North/South...), Interact.
-*   **Engine:** Pathfinding, Encounter Generator.
-*   **Data:** World Graph, Zone Config.
+## 📚 Документация (V2)
 
-## 🔗 Current Code (Legacy)
-*   `apps/game_core/modules/exploration/`
-*   `apps/bot/handlers/callback/game/exploration/`
+### 🏗️ Архитектура и Реализация
+*   [**API**](./API/README.md) — Контракты и точки входа.
+*   [**Engine**](./Engine/README.md) — Логика энкаунтеров и правил.
+*   [**Data**](./Data/README.md) — DTO и схемы данных.
+*   [**Client Interface**](./Client_Interface/README.md) — UI спецификации.
+
+### 🔗 Legacy (Old Code)
+*   `apps/game_core/modules/exploration/` — Старый бэкенд.
+*   `game_client/bot/ui_service/exploration/` — Старый UI.
+
+## 🔄 Roadmap
+1.  [x] Анализ легаси кода.
+2.  [ ] Утверждение архитектуры V2.
+3.  [ ] Реализация DTO и API Contracts.
+4.  [ ] Реализация `ExplorationService` и `Gateway`.
+5.  [ ] Миграция логики Энкаунтеров.
+6.  [ ] Обновление Клиента (Bot UI).

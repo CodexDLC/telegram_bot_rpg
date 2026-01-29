@@ -1,6 +1,5 @@
 # apps/game_core/system/context_assembler/logic/player_assembler.py
 import asyncio
-import uuid
 from typing import Any, cast
 
 from loguru import logger as log
@@ -21,7 +20,9 @@ from backend.database.postgres.repositories import (
 )
 from backend.database.redis.manager.account_manager import AccountManager
 from backend.database.redis.manager.context_manager import ContextRedisManager
+from backend.database.redis.manager.inventory_manager import InventoryManager
 from backend.domains.internal_systems.context_assembler.logic.base_assembler import BaseAssembler
+from backend.domains.internal_systems.context_assembler.logic.context_session_manager import ContextSessionManager
 from backend.domains.internal_systems.context_assembler.logic.query_plan import get_query_plan
 from backend.domains.internal_systems.context_assembler.schemas.base import BaseTempContext
 from backend.domains.internal_systems.context_assembler.schemas.combat import CombatTempContext
@@ -35,10 +36,17 @@ class PlayerAssembler(BaseAssembler):
     Собирает данные из PostgreSQL (Attributes, Inventory, Skills) и формирует JSON для Redis.
     """
 
-    def __init__(self, session: AsyncSession, account_manager: AccountManager, context_manager: ContextRedisManager):
+    def __init__(
+        self,
+        session: AsyncSession,
+        account_manager: AccountManager,
+        context_manager: ContextRedisManager,
+        inventory_manager: InventoryManager,  # Добавлено
+    ):
         self.session = session
         self.account_manager = account_manager
-        self.context_manager = context_manager
+        # Используем новый фасад
+        self.session_manager = ContextSessionManager(context_manager, inventory_manager)  # Передаем inventory_manager
         self.char_repo = get_character_repo(session)
         self.attributes_repo = get_character_attributes_repo(session)
         self.inv_repo = get_inventory_repo(session)
@@ -58,9 +66,6 @@ class PlayerAssembler(BaseAssembler):
         query_plan = get_query_plan(scope)
 
         # 1. Пакетный сбор данных (Conditional Loading)
-        # TODO: Исправить типизацию tasks - использовать TypeVar или Protocol
-        # Проблема: tasks содержит корутины разных типов (characters, attributes, inventory, etc.)
-        # Решение: Создать Union type или использовать list[Coroutine[Any, Any, Any]]
         tasks: list[Any] = []  # type: ignore[var-annotated]
         task_mapping = []
 
@@ -74,7 +79,6 @@ class PlayerAssembler(BaseAssembler):
 
         if "inventory" in query_plan:
             # Всегда грузим весь инвентарь (equipped + inventory)
-            # Фильтрация (только equipped для боя) происходит внутри DTO
             t1 = self.inv_repo.get_items_by_location_batch(int_ids, "equipped")
             t2 = self.inv_repo.get_items_by_location_batch(int_ids, "inventory")
             tasks.append(asyncio.gather(t1, t2))
@@ -103,10 +107,6 @@ class PlayerAssembler(BaseAssembler):
         raw_data: dict[str, Any] = {}
         for key, result in zip(task_mapping, results, strict=False):
             if key == "inventory_complex":
-                # TODO: Типизировать result для inventory_complex
-                # Проблема: result имеет тип Future[tuple[dict, dict]], но mypy не понимает
-                # Решение: Добавить явную типизацию в task_mapping или использовать cast
-                # result is tuple(equipped_dict, inventory_dict)
                 equipped, inventory = result  # type: ignore[misc]
                 combined = {}
                 for cid in int_ids:
@@ -131,9 +131,8 @@ class PlayerAssembler(BaseAssembler):
             vitals_map = {char_id: vitals for char_id, vitals in zip(int_ids, vitals_list, strict=False)}
 
         # 2. Трансформация и подготовка к сохранению
-        success_map = {}
         error_list = []
-        contexts_to_save = {}
+        contexts_to_save: dict[int, dict[str, Any]] = {}
 
         # Выбор класса DTO
         dto_class = self._select_dto_class(scope)
@@ -148,9 +147,6 @@ class PlayerAssembler(BaseAssembler):
                 char_info = chars_map.get(char_id)
                 attributes = attributes_map.get(char_id)
                 skills = skills_map.get(char_id)
-                # TODO: Исправить тип inventory_map - должен быть dict[int, list[ItemDTO]]
-                # Проблема: inventory приходит как Any из-за сложного gather с двумя задачами
-                # Решение: Явно типизировать equipped/inventory после распаковки
                 inventory = inventory_map.get(char_id)  # type: ignore[assignment]
                 vitals = vitals_map.get(char_id)
                 symbiote = symbiotes_map.get(char_id)
@@ -165,9 +161,6 @@ class PlayerAssembler(BaseAssembler):
                         "elements_resonance": symbiote.elements_resonance,
                     }
 
-                # TODO: Исправить типы аргументов для dto_class
-                # Проблема: dto_class ожидает строгие типы, но получает Optional типы из .get()
-                # Решение: Добавить проверки на None или обновить сигнатуру DTO класса
                 # Создание контекста
                 context_schema = dto_class(  # type: ignore[arg-type]
                     core_meta=char_info,
@@ -176,7 +169,6 @@ class PlayerAssembler(BaseAssembler):
                     core_skills=skills,
                     core_vitals=vitals,
                     core_symbiote=symbiote_data,
-                    # core_wallet пока не реализован в репо
                 )
 
                 # Сериализация (exclude убирает core_* поля)
@@ -193,28 +185,25 @@ class PlayerAssembler(BaseAssembler):
                     },
                 )
 
-                redis_key = f"temp:setup:{uuid.uuid4()}"
-                success_map[char_id] = redis_key
-                contexts_to_save[char_id] = (redis_key, context_data)
+                # Собираем данные для сохранения
+                contexts_to_save[char_id] = context_data
 
             except (ValidationError, ValueError, TypeError) as e:
                 log.error(f"PlayerAssembler | transform failed for {char_id}: {e}")
                 error_list.append(char_id)
 
-        # 3. Массовое сохранение через ContextManager
+        # 3. Массовое сохранение через Фасад (ContextSessionManager)
+        success_map = {}
         if contexts_to_save:
             try:
-                # TODO: Исправить тип contexts_to_save - должен быть dict[int|str, tuple[str, dict]]
-                # Проблема: ContextManager.save_context_batch ожидает ключи int|str, но получает только int
-                # Решение: Обновить сигнатуру save_context_batch для поддержки только int ключей
-                await self.context_manager.save_context_batch(contexts_to_save)  # type: ignore[arg-type]
+                # Фасад сам решит, какие ключи использовать и как сохранять
+                success_map = await self.session_manager.save_player_batch(scope, contexts_to_save)
             except Exception as e:  # noqa: BLE001
                 log.error(f"PlayerAssembler | batch save failed: {e}")
                 # Если сохранение упало, считаем всех ошибочными
                 for char_id in contexts_to_save:
                     if char_id not in error_list:
                         error_list.append(char_id)
-                    success_map.pop(char_id, None)
 
         log.info(f"PlayerAssembler | batch processed. success={len(success_map)}, errors={len(error_list)}")
         return success_map, error_list

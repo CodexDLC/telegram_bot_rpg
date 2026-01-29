@@ -19,12 +19,14 @@ class LocationDict(TypedDict):
 class VitalsDict(TypedDict):
     cur: int
     max: int
+    regen: float  # Скорость регенерации (ед/сек)
 
 
 class StatsDict(TypedDict):
     hp: VitalsDict
     mp: VitalsDict
     stamina: VitalsDict
+    last_update: float | None  # Timestamp последнего пересчета регенерации
 
 
 class AttributesDict(TypedDict):
@@ -42,7 +44,7 @@ class AttributesDict(TypedDict):
 class SessionsDict(TypedDict):
     combat_id: str | None
     inventory_id: str | None
-    scenario_id: str | None  # Добавил scenario_id, так как мы его используем
+    scenario_id: str | None
 
 
 class MetricsDict(TypedDict, total=False):
@@ -61,7 +63,7 @@ class AccountContextDTO(BaseModel):
     """
 
     state: CoreDomain
-    prev_state: CoreDomain | None = None  # Добавлено поле
+    prev_state: CoreDomain | None = None
     bio: BioDict
     location: LocationDict
     stats: StatsDict

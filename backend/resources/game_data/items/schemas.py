@@ -18,6 +18,7 @@ class MaterialDTO(BaseModel):
     tier_mult: float
     slots: int
     narrative_tags: list[str] = Field(default_factory=list)
+    narrative_description: str | None = None  # Добавлено для унификации
 
 
 class BaseItemDTO(BaseModel):

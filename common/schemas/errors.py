@@ -22,3 +22,12 @@ class ErrorResponse(BaseModel):
     """
 
     error: ErrorDetails
+
+
+class SessionExpiredError(Exception):
+    """
+    Исключение для истекшей сессии (Redis).
+    Используется в сервисах для сигнала о необходимости релогина.
+    """
+
+    pass

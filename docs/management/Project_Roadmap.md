@@ -49,7 +49,7 @@
 *   **[/] API Facade (`core_client`):**
     *   Инкапсуляция вызовов к `game_core` для подготовки к микросервисам.
 *   **[ ] Game Sync & Session State:**
-    *   [Architecture](../architecture/Core/Game_Sync/Architecture_Session_State.md)
+    *   [Architecture](../architecture/Domains/Internal_Systems/Game_Sync/Architecture_Session_State.md)
     *   Реализация `GameStateOrchestrator` для управления жизненным циклом сессий.
 
 ---

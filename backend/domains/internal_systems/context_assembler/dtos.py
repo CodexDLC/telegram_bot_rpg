@@ -17,7 +17,9 @@ class ContextRequestDTO(BaseModel):
     # 'full' - всё (статы, инвентарь, скиллы).
     # 'combats' - только боевые статы, надетые вещи, боевые скиллы.
     # 'exploration' - статы для проверок в мире (восприятие, удача).
-    scope: Literal["full", "combats", "exploration"] = "full"
+    # 'inventory' - полный инвентарь (сумка + экипировка) для UI.
+    # 'status' - данные для экрана статуса.
+    scope: Literal["full", "combats", "exploration", "inventory", "status"] = "full"
 
 
 def _default_errors() -> dict[str, list[str | int]]:

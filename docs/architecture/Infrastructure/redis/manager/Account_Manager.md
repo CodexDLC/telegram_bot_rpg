@@ -41,8 +41,8 @@
   "stats": {
     "hp": {"cur": 100, "max": 100},
     "mp": {"cur": 50, "max": 50},
-    "stamina": {"cur": 100, "max": 100}
-  },
+    "stamina": {"cur": 100, "max": 100},
+    "last_update": 1715000000.0},
   "attributes": {
     "strength": 8,
     "agility": 8,
@@ -169,14 +169,15 @@ await account_manager.update_bio_field(42, "name", "Legolas")
 ### Stats Section (Vitals)
 
 #### `get_stats(char_id: int) -> dict[str, Any] | None`
-Получает все статы (HP, MP, Stamina).
+Получает все статы (HP, MP, Stamina) и метку времени.
 
 **Returns:**
 ```python
 {
   "hp": {"cur": 85, "max": 100},
   "mp": {"cur": 30, "max": 50},
-  "stamina": {"cur": 100, "max": 100}
+  "stamina": {"cur": 100, "max": 100},
+  "last_update": 1715000000.0
 }
 ```
 

@@ -3,6 +3,7 @@ from typing import Any
 
 from loguru import logger as log
 from redis.asyncio.client import Pipeline
+from redis.exceptions import RedisError
 
 from backend.database.redis.redis_service import RedisService
 
@@ -16,9 +17,10 @@ class ContextRedisManager:
     def __init__(self, redis_service: RedisService):
         self.redis_service = redis_service
 
-    async def save_context_batch(self, data_map: dict[int | str, tuple[str, dict[str, Any]]], ttl: int = 90) -> None:
+    async def save_context_batch(self, data_map: dict[Any, tuple[str, dict[str, Any]]], ttl: int = 90) -> None:
         """
-        Массовое сохранение контекстов в Redis.
+        Массовое сохранение контекстов в Redis (как String JSON).
+        Используется для временных контекстов (temp:setup:...).
 
         Args:
             data_map: Словарь {entity_id: (redis_key, context_data_dict)}.
@@ -37,6 +39,32 @@ class ContextRedisManager:
 
         await self.redis_service.execute_pipeline(_fill_pipeline)
         log.debug(f"ContextRedisManager | saved batch count={len(data_map)}")
+
+    async def save_json_batch(self, data_map: dict[Any, tuple[str, dict[str, Any]]], ttl: int = 3600) -> None:
+        """
+        Массовое сохранение контекстов в Redis как RedisJSON (ReJSON).
+        Используется для постоянных сессий (например, Inventory).
+
+        Args:
+            data_map: Словарь {entity_id: (redis_key, context_data_dict)}.
+            ttl: Время жизни ключа в секундах.
+        """
+        if not data_map:
+            return
+
+        def _fill_pipeline(pipe: Pipeline) -> None:
+            for _, (key, data) in data_map.items():
+                try:
+                    # Используем JSON.SET key $ data
+                    pipe.json().set(key, "$", data)  # type: ignore
+                    pipe.expire(key, ttl)
+                except RedisError as e:
+                    log.error(f"ContextRedisManager | json save failed key={key} error={e}")
+                except Exception as e:  # noqa: BLE001
+                    log.error(f"ContextRedisManager | unexpected error key={key} error={e}")
+
+        await self.redis_service.execute_pipeline(_fill_pipeline)
+        log.debug(f"ContextRedisManager | saved json batch count={len(data_map)}")
 
     async def get_context(self, key: str) -> dict[str, Any] | None:
         """Получение контекста по ключу."""

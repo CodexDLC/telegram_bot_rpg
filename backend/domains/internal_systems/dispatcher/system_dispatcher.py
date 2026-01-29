@@ -26,6 +26,19 @@ class SystemDispatcher:
         self._registry[domain] = factory
         log.debug(f"SystemDispatcher | Registered domain: {domain}")
 
+    async def dispatch(
+        self,
+        domain: str,
+        char_id: int,
+        action: str,
+        context: dict[str, Any] | None = None,
+    ) -> Any:
+        """
+        Универсальный метод вызова домена/оркестратора.
+        (Основной метод маршрутизации).
+        """
+        return await self.route(domain, char_id, action, context)
+
     async def get_initial_view(
         self,
         target_state: str,
@@ -60,7 +73,7 @@ class SystemDispatcher:
         context: dict[str, Any] | None = None,
     ) -> Any:
         """
-        Универсальный метод вызова домена/оркестратора.
+        Внутренняя логика маршрутизации.
         """
         context = context or {}
 
@@ -79,7 +92,7 @@ class SystemDispatcher:
         orchestrator = factory()
 
         if not hasattr(orchestrator, "get_entry_point"):
-            log.warning("SystemDispatcher | Orchestrator for domain does not implement get_entry_point")
+            log.warning("SystemDispatcher | service for domain does not implement get_entry_point")
             return None
 
         # Передаем char_id в get_entry_point

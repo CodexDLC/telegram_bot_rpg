@@ -115,4 +115,6 @@ async def on_combat_flow(
     # Запускаем анимацию
     anim_service = UIAnimationService(sender)
 
-    await anim_service.start_combat_polling(check_func=poller, timeout=60, step_delay=2.0)
+    await anim_service.run_polling_loop(
+        check_func=poller, timeout=60.0, step_interval=2.0, loading_text="⏳ <b>Ожидание хода</b>"
+    )

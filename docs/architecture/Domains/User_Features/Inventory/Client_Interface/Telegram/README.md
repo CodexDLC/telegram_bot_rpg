@@ -6,32 +6,69 @@
 
 ## 🎯 Описание
 Реализация интерфейса инвентаря для Telegram бота (Aiogram).
-Этот слой отвечает за получение DTO от ядра и рендеринг сообщений (Текст + Кнопки).
+Этот слой является **"Тонким клиентом" (Thin Client)**. Его задача — отобразить данные, полученные от Backend, и отправить команды пользователя.
+
+**Принципы:**
+1.  **Backend-Driven Data:** Бэкенд присылает **структурированные данные (DTO)**, а не готовый HTML.
+2.  **Client-Side Presentation:** Клиентский слой (`UIService` + `Formatters`) отвечает за превращение данных в красивый HTML-текст.
+3.  **Facade UI Service:** Для сложных доменов, как Инвентарь, основной `UIService` действует как фасад, делегируя рендеринг специализированным UI-компонентам.
 
 ---
 
-## 🏗️ Структура Кода (Frontend)
+## 🏗️ Структура Кода (Client)
 
-### 1. Handlers (Контроллеры)
-**Путь:** `apps/bot/handlers/callback/ui/inventory/`
-Обрабатывают нажатия кнопок (Callback Query).
-*   `inventory_main.py`: Главное меню.
-*   `inventory_list.py`: Пагинация и фильтры.
-*   `inventory_details.py`: Действия с предметом.
+### 1. Feature Root
+**Путь:** `src/game_client/telegram_bot/features/inventory/`
 
-### 2. UI Service (Рендереры)
-**Путь:** `apps/bot/ui_service/inventory/`
-Отвечают за формирование текста сообщения и клавиатур.
-*   `inventory_main_menu_ui.py`: Рисует главное меню.
-*   `inventory_list_ui.py`: Рисует сетку предметов.
-*   `inventory_details_ui.py`: Рисует карточку предмета.
+### 2. System (UI Logic)
+**Путь:** `features/inventory/system/`
+*   `inventory_bot_orchestrator.py`: Координатор.
+*   `inventory_ui_service.py`: **Фасад**, который вызывает компоненты.
+
+### 3. UI Components
+**Путь:** `features/inventory/components/`
+*   `doll_ui.py`: Рендерит экран "Кукла".
+*   `bag_ui.py`: Рендерит список предметов.
+*   `details_ui.py`: Рендерит карточку предмета.
+
+### 4. Resources
+**Путь:** `features/inventory/resources/`
+*   `keyboards/`: Фабрики `CallbackData`.
+*   `formatters/`: Классы со статическими методами для генерации HTML из DTO.
 
 ---
 
-## 🔄 Поток данных (Frontend Flow)
+## 🛠️ Implementation Details (Specs)
 
-1.  **User:** Нажимает кнопку "Инвентарь".
-2.  **Handler:** Ловит callback.
-3.  **Client:** Вызывает `InventoryGateway.get_view(...)`.
-4.  **UI Service:** Получает DTO, генерирует текст и клавиатуру.
-5.  **Bot:** Отправляет `edit_message_text`.
+### InventoryUIService (Facade)
+```python
+class InventoryUIService(BaseUIService):
+    def __init__(self, ...):
+        self.doll_ui = DollUI(...)
+        self.bag_ui = BagUI(...)
+        self.details_ui = DetailsUI(...)
+
+    def render(self, payload: InventoryUIPayloadDTO) -> ViewResultDTO:
+        # Делегирование на основе экрана
+        if payload.screen == "main":
+            return self.doll_ui.render(payload)
+        elif payload.screen == "bag":
+            return self.bag_ui.render(payload)
+        elif payload.screen == "details":
+            return self.details_ui.render(payload)
+        
+        raise ValueError(f"Unknown screen: {payload.screen}")
+```
+
+### DetailsUI (Component Example)
+```python
+class DetailsUI:
+    def render(self, payload: InventoryUIPayloadDTO) -> ViewResultDTO:
+        # 1. Генерация HTML через Formatter
+        text = InventoryFormatter.format_details(payload.context)
+        
+        # 2. Генерация клавиатуры
+        kb = self._build_keyboard(payload.buttons)
+            
+        return ViewResultDTO(text=text, kb=kb)
+```

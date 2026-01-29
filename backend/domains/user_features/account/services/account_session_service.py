@@ -1,3 +1,6 @@
+import time
+from typing import cast
+
 from backend.database.redis.manager.account_manager import AccountManager
 from common.schemas.account_context import (
     AccountContextDTO,
@@ -10,6 +13,7 @@ from common.schemas.account_context import (
 )
 from common.schemas.character import CharacterReadDTO
 from common.schemas.enums import CoreDomain
+from common.schemas.errors import SessionExpiredError
 
 
 class AccountSessionService:
@@ -39,28 +43,24 @@ class AccountSessionService:
 
         return context
 
-    async def get_session(self, char_id: int) -> AccountContextDTO | None:
+    async def get_session(self, char_id: int) -> AccountContextDTO:
         """
         Получает сессию персонажа.
         """
         data = await self.account_manager.get_full_account(char_id)
         if not data:
-            return None
+            raise SessionExpiredError(f"Session expired for char_id {char_id}")
 
         try:
             return AccountContextDTO.model_validate(data)
         except Exception:  # noqa: BLE001
-            # Логирование ошибки валидации можно добавить здесь
-            return None
+            # Если данные битые, считаем сессию невалидной
+            raise SessionExpiredError(f"Invalid session data for char_id {char_id}") from None
 
     async def update_bio(self, char_id: int, bio: BioDict) -> None:
         """
         Обновляет секцию bio.
         """
-        # AccountManager.update_bio принимает dict[str, Any].
-        # BioDict (TypedDict) совместим с dict, но mypy требует явного cast.
-        from typing import cast
-
         await self.account_manager.update_bio(char_id, cast(dict, bio))
 
     async def update_state(self, char_id: int, state: CoreDomain) -> None:
@@ -68,6 +68,22 @@ class AccountSessionService:
         Обновляет стейт.
         """
         await self.account_manager.set_state(char_id, state)
+
+    async def update_stats(self, char_id: int, stats: StatsDict) -> None:
+        """
+        Обновляет статы в сессии.
+        """
+        # Добавляем last_update, если его нет
+        if "last_update" not in stats:
+            stats["last_update"] = time.time()
+
+        await self.account_manager.update_account_fields(char_id, {"stats": stats})
+
+    async def get_state(self, char_id: int) -> str:
+        state = await self.account_manager.get_state(char_id)
+        if not state:
+            raise SessionExpiredError(f"Session expired for char_id {char_id}")
+        return state
 
     # --- Lobby Cache ---
 
@@ -124,7 +140,10 @@ class AccountSessionService:
             ),
             location=LocationDict(current=character.location_id, prev=character.prev_location_id),
             stats=StatsDict(
-                hp={"cur": hp_cur, "max": hp_max}, mp={"cur": mp_cur, "max": mp_max}, stamina={"cur": 100, "max": 100}
+                hp={"cur": hp_cur, "max": hp_max, "regen": 1.0},
+                mp={"cur": mp_cur, "max": mp_max, "regen": 1.0},
+                stamina={"cur": 100, "max": 100, "regen": 5.0},
+                last_update=time.time(),
             ),
             attributes=attributes,
             sessions=SessionsDict(
