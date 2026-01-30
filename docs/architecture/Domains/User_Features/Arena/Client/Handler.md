@@ -66,8 +66,11 @@
 **Файл:** `game_client/telegram_bot/core/routers.py`
 
 Добавить импорт и include:
+
 ```python
-from game_client.telegram_bot.features.arena.handlers import arena_handler
+
+from src.frontend.telegram_bot.features.arena.handlers import arena_handler
+
 main_router.include_router(arena_handler.router)
 ```
 

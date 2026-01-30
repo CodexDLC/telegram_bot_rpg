@@ -1,23 +1,24 @@
 # --- Core Bot ---
-# Основной фреймворк бота, как и в вашем текущем проекте
+# Основной фреймворк бота
 aiogram~=3.22.0
-# валидация данных
+# Валидация данных
 pydantic~=2.11.10
 pydantic_settings~=2.12.0
 
+# Выражения (безопасный eval)
 simpleeval~=1.0.3
-# --- База данных (SQLite) ---
-# Асинхронный драйвер для нашей основной БД (игроки, подземелья)
-aiosqlite
+
+# --- Database (PostgreSQL Only) ---
+# Асинхронный драйвер для PostgreSQL
 asyncpg
 # ORM для SQLAlchemy
 sqlalchemy~=2.0.44
 
 # --- Хранилище состояний (Redis) ---
-# Асинхронный драйвер для Redis.
-# Aiogram будет использовать его для FSM (хранения состояний игрока)
-# Downgraded to 5.x because arq requires redis < 6
+# Асинхронный драйвер для Redis
 redis~=5.0.1
+# Очереди задач (Redis)
+arq~=0.26.3
 
 # --- LLM Провайдеры ---
 # Клиент для API Google (Gemini)
@@ -26,15 +27,15 @@ google-genai
 # --- Конфигурация и Логи ---
 # Для загрузки токенов из .env файла
 python-dotenv~=1.2.1
-# Для красивых логов в консоли, как у вас сейчас
-
+# Для красивых логов
 loguru~=0.7.3
 
-protobuf~=6.33.2
-pytest~=8.4.2
-streamlit~=1.52.1
-pandas~=2.3.3
-arq~=0.26.3
-plotly~=6.5.0
+# --- Web & API ---
 fastapi~=0.128.0
 httpx~=0.28.1
+
+
+# --- Data & Analytics ---
+pandas~=2.3.3
+plotly~=6.5.0
+streamlit~=1.52.1

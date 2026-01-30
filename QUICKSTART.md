@@ -78,7 +78,7 @@ docker-compose up -d
 python -m uvicorn backend.main:app --reload
 
 # Bot (добавьте корень в PYTHONPATH вручную)
-python -m game_client.telegram_bot.app_telegram
+python -m frontend.telegram_bot.app_telegram
 ```
 
 ---
@@ -116,7 +116,7 @@ python run.py bot
 
 Или запускайте из корня проекта:
 ```bash
-python -m game_client.telegram_bot.app_telegram
+python -m frontend.telegram_bot.app_telegram
 ```
 
 ---

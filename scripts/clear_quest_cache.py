@@ -9,7 +9,7 @@ from apps.common.core.settings import settings
 from loguru import logger as log
 from redis.asyncio import Redis
 
-from backend.database.redis import RedisService
+from src.backend.database.redis import RedisService
 
 
 async def main():

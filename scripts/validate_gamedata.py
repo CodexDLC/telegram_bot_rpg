@@ -1,6 +1,9 @@
 import os
 import sys
 
+from src.backend.resources.game_data.monsters import ALL_FAMILIES_RAW, get_family_config
+from src.backend.resources.game_data.monsters.skills_todo_list import SKILL_MAPPING
+
 # --- Адаптация под структуру проекта ---
 # Добавляем корень проекта в sys.path, чтобы можно было импортировать из 'apps'
 # Скрипт находится в /scripts, корень проекта - на уровень выше
@@ -9,12 +12,8 @@ sys.path.insert(0, project_root)
 
 # --- MOCKS & IMPORTS SETUP ---
 
-from backend.resources.game_data import (  # noqa: E402
-    ALL_FAMILIES_RAW,
-    SKILL_MAPPING,  # noqa: E402
-    get_family_config,
-)
-from backend.resources.game_data.monsters.spawn_config import BIOME_FAMILIES, TIER_AVAILABILITY  # noqa: E402
+
+from src.backend.resources.game_data.monsters.spawn_config import BIOME_FAMILIES, TIER_AVAILABILITY  # noqa: E402
 
 
 def validate_monsters():

@@ -19,7 +19,7 @@ Telegram_Bot_RPG/
 │
 ├── src/                        # 📦 Production код
 │   ├── backend/                # Игровой сервер (API, domains, database)
-│   ├── game_client/            # Telegram клиент (handlers, UI)
+│   ├── frontend/               # Telegram клиент (handlers, UI)
 │   └── shared/                 # Shared библиотека (schemas, enums, config)
 │
 ├── docs/                       # 📚 Документация
@@ -45,10 +45,10 @@ Telegram_Bot_RPG/
 | Папка | Статус | Действие |
 |-------|--------|----------|
 | `apps/` | 🔴 Legacy | Рефакторится → `src/`, потом удалить |
-| `game_client/bot/` | 🔴 Legacy | Мигрирует в `game_client/telegram_bot/features/` |
+| `frontend/bot/` | 🔴 Legacy | Мигрирует в `frontend/telegram_bot/features/` |
 | `.streamlit/` | 🟡 Migrate | Перенести конфиг в `pyproject.toml` или `tools/` |
 | `backend/` (корень) | 🟡 Move | Перенести в `src/backend/` |
-| `game_client/` (корень) | 🟡 Move | Перенести в `src/game_client/` |
+| `game_client/` (корень) | 🟡 Move | Перенести в `src/frontend/` |
 | `common/` (корень) | 🟡 Move | Переименовать и перенести в `src/shared/` |
 
 ---
@@ -60,7 +60,7 @@ Telegram_Bot_RPG/
 | Папка | Назначение | Подробнее |
 |-------|-----------|-----------|
 | `src/backend/` | Игровой сервер: API, domains, database, resources | [Backend_Structure.md](./Backend_Structure.md) |
-| `src/game_client/` | Telegram клиент: handlers, UI services, formatters | [Client_Structure.md](./Client_Structure.md) |
+| `src/frontend/` | Telegram клиент: handlers, UI services, formatters | [Client_Structure.md](./Client_Structure.md) |
 | `src/shared/` | Shared библиотека: schemas, enums, config, exceptions | [Shared_Layer.md](./Shared_Layer.md) |
 
 ### `docs/` — Документация
@@ -128,7 +128,7 @@ from src.shared.schemas import UserDTO      # или настроить чере
 
 - [ ] Создать `src/` директорию
 - [ ] Перенести `backend/` → `src/backend/`
-- [ ] Перенести `game_client/` → `src/game_client/`
+- [ ] Перенести `game_client/` → `src/frontend/`
 - [ ] Перенести `common/` → `src/shared/`
 - [ ] Обновить импорты
 - [ ] Перенести Docker файлы в `deploy/`

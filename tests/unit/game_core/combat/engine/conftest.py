@@ -1,6 +1,6 @@
 import pytest
 
-from backend.domains.user_features.combat.dto import (
+from src.backend.domains.user_features import (
     ActorLoadoutDTO,
     ActorMetaDTO,
     ActorRawDTO,
@@ -16,7 +16,7 @@ from backend.domains.user_features.combat.dto import (
     PipelineStagesDTO,
     TriggerRulesFlagsDTO,
 )
-from common.schemas.modifier_dto import CombatModifiersDTO, CombatSkillsDTO
+from src.shared.schemas import CombatModifiersDTO, CombatSkillsDTO
 
 
 @pytest.fixture

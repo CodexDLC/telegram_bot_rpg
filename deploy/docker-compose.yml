@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+
+  rbc_redis:
+    image: redis/redis-stack-server:latest # Тут уже есть RedisJSON
+    container_name: rbc_redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+  worker:
+    build: ..
+    container_name: rbc_worker
+    # Запуск ARQ воркера с указанием пути к настройкам
+    command: arq apps.shared.services.arq.worker.WorkerSettings
+    volumes:
+      - .:/app
+    env_file:
+      - ../.env
+    environment:
+      # Переопределяем хост Redis для контейнера, так как внутри сети докера он доступен по имени сервиса
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+    restart: always
+
+volumes:
+  redis_data:

@@ -7,8 +7,8 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 try:
-    from backend.resources.game_data import BIOME_DEFINITIONS
-    from backend.resources.game_data.monsters.spawn_config import BIOME_FAMILIES
+    from src.backend.resources import BIOME_DEFINITIONS
+    from src.backend.resources.game_data.monsters.spawn_config import BIOME_FAMILIES
 except ImportError as e:
     print(f"❌ ОШИБКА ИМПОРТА: Не удалось загрузить конфигурацию мира. {e}")
     sys.exit(1)

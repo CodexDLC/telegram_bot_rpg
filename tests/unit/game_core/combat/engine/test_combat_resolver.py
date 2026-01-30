@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.domains.user_features.combat.combat_engine.logic.combat_resolver import CombatResolver
+from src.backend.domains.user_features.combat.combat_engine.logic import CombatResolver
 
 
 @pytest.mark.combat
